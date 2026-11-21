@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AFCD Homepage Wireframe</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body class="font-sans">
+<a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:bg-white focus:px-4 focus:py-2 focus:text-sm">Skip to content</a>
+
+<!-- ============ 1. TOP BAR + NAVIGATION ============ -->
+<header id="site-header" class="sticky z-50" style="top: env(safe-area-inset-top, 0px)">
+  <div class="bg-ink-pure text-white on-dark">
+    <div class="wrap flex h-9 items-center justify-between">
+      <p class="label text-[10.5px] text-white/80">AFCD Foundation · Morocco</p>
+      <div class="flex items-center gap-1 text-[11px] font-medium tracking-[0.12em]" role="group" aria-label="Language">
+        <button class="lang-btn px-1.5 py-1 text-white" data-lang="en" aria-pressed="true">EN</button>
+        <span class="text-white/30" aria-hidden="true">/</span>
+        <button class="lang-btn px-1.5 py-1 text-white/50 hover:text-white" data-lang="fr" aria-pressed="false">FR</button>
+        <span class="text-white/30" aria-hidden="true">/</span>
+        <button class="lang-btn px-1.5 py-1 text-white/50 hover:text-white" data-lang="ar" aria-pressed="false">AR</button>
+      </div>
+    </div>
+  </div>
+  <div class="border-b border-ink-light bg-white">
+    <nav class="wrap flex h-[68px] items-center justify-between gap-6" aria-label="Main">
+      <a href="#top" class="flex shrink-0 items-center gap-3" aria-label="AFCD Foundation home">
+        <span class="ph grid h-10 w-[132px] place-items-center border border-ink-light" style="--ph:#FAFAFA">
+          <span class="relative z-[1] text-[15px] font-bold tracking-[-0.02em]">AFCD<span class="font-normal text-ink-mid"> Foundation</span></span>
+        </span>
+      </a>
+
+      <ul class="hidden items-center gap-1 xl:gap-2 lg:flex text-[14px]" id="desk-nav">
+        <li><a href="#top" class="nav-a block px-2.5 py-2 font-medium" aria-current="page">Home</a></li>
+        <li class="dd relative">
+          <button class="dd-btn flex items-center gap-1 px-2.5 py-2 text-ink-dark hover:text-ink-pure" aria-expanded="false" aria-controls="dd-about">About Us <svg class="dd-chev h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button>
+          <div id="dd-about" class="dd-panel absolute left-0 top-full mt-2 w-60 border border-ink-light bg-white p-2">
+            <a class="block px-3 py-2.5 hover:bg-ink-faint" href="#who-we-are">Our Story</a>
+            <a class="block px-3 py-2.5 hover:bg-ink-faint" href="#purpose">Mission &amp; Vision</a>
+            <a class="block px-3 py-2.5 hover:bg-ink-faint" href="#who-we-are">Our Team</a>
+            <p class="px-3 pb-1 pt-2 text-[11px] text-ink-mid">Governance: no page on the current site, so it's left out.</p>
+          </div>
+        </li>
+        <li class="dd relative">
+          <button class="dd-btn flex items-center gap-1 px-2.5 py-2 text-ink-dark hover:text-ink-pure" aria-expanded="false" aria-controls="dd-pillars">Our Pillars <svg class="dd-chev h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button>
+          <div id="dd-pillars" class="dd-panel absolute left-0 top-full mt-2 w-72 border border-ink-light bg-white p-2">
+            <a class="flex items-baseline gap-3 px-3 py-2.5 hover:bg-ink-faint" href="#pillars" data-goto-pillar="0"><span class="text-[11px] text-ink-mid tabular-nums">01</span>Youth Empowerment</a>
+            <a class="flex items-baseline gap-3 px-3 py-2.5 hover:bg-ink-faint" href="#pillars" data-goto-pillar="1"><span class="text-[11px] text-ink-mid tabular-nums">02</span>Women Empowerment</a>
+            <a class="flex items-baseline gap-3 px-3 py-2.5 hover:bg-ink-faint" href="#pillars" data-goto-pillar="2"><span class="text-[11px] text-ink-mid tabular-nums">03</span>Green Thumbs</a>
+            <a class="flex items-baseline gap-3 px-3 py-2.5 hover:bg-ink-faint" href="#pillars" data-goto-pillar="3"><span class="text-[11px] text-ink-mid tabular-nums">04</span>Digital Empowerment</a>
+          </div>
+        </li>
+        <li class="dd relative">
+          <button class="dd-btn flex items-center gap-1 px-2.5 py-2 text-ink-dark hover:text-ink-pure" aria-expanded="false" aria-controls="dd-projects">Projects <svg class="dd-chev h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button>
+          <div id="dd-projects" class="dd-panel absolute left-0 top-full mt-2 w-60 border border-ink-light bg-white p-2">
+            <a class="block px-3 py-2.5 hover:bg-ink-faint" href="#projects">All Projects</a>
+            <a class="block px-3 py-2.5 hover:bg-ink-faint" href="#pillars">Projects by Pillar</a>
+            <a class="block px-3 py-2.5 hover:bg-ink-faint" href="#projects">Featured Projects</a>
+          </div>
+        </li>
+        <li><a href="#news" class="nav-a block px-2.5 py-2 text-ink-dark hover:text-ink-pure">News &amp; Stories</a></li>
+        <li><a href="#partners" class="nav-a block px-2.5 py-2 text-ink-dark hover:text-ink-pure">Partners</a></li>
+        <li><a href="#footer" class="nav-a block px-2.5 py-2 text-ink-dark hover:text-ink-pure">Contact</a></li>
+      </ul>
+
+      <div class="flex items-center gap-2">
+        <a href="#get-involved" class="btn-dark hidden sm:inline-flex">Get Involved</a>
+        <button id="menu-open" class="grid h-11 w-11 place-items-center lg:hidden" aria-label="Open menu" aria-expanded="false" aria-controls="drawer">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 7h16M3 15h16"/></svg>
+        </button>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<!-- Mobile drawer -->
+<div id="drawer-scrim" class="fixed inset-0 z-[70] hidden bg-black/40"></div>
+<aside id="drawer" class="fixed inset-y-0 right-0 z-[80] flex w-full max-w-[420px] flex-col bg-white" aria-label="Menu" aria-hidden="true" inert style="padding-top: env(safe-area-inset-top,0px); padding-bottom: env(safe-area-inset-bottom,0px)">
+  <div class="flex h-[68px] items-center justify-between border-b border-ink-light px-5">
+    <span class="text-[15px] font-bold tracking-[-0.02em]">AFCD<span class="font-normal text-ink-mid"> Foundation</span></span>
+    <button id="menu-close" class="grid h-11 w-11 place-items-center" aria-label="Close menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 4l12 12M16 4 4 16"/></svg>
+    </button>
+  </div>
+  <nav class="flex-1 overflow-y-auto px-5 py-2 text-[17px]" aria-label="Mobile">
+    <a href="#top" class="m-link flex min-h-[56px] items-center border-b border-ink-light font-medium">Home</a>
+    <div class="border-b border-ink-light">
+      <button class="m-acc flex min-h-[56px] w-full items-center justify-between font-medium" aria-expanded="false">About Us <span class="m-plus text-xl font-light" aria-hidden="true">+</span></button>
+      <div class="m-panel hidden pb-3 text-[15px] text-ink-dark">
+        <a class="m-link block py-2.5" href="#who-we-are">Our Story</a><a class="m-link block py-2.5" href="#purpose">Mission &amp; Vision</a><a class="m-link block py-2.5" href="#who-we-are">Our Team</a>
+      </div>
+    </div>
+    <div class="border-b border-ink-light">
+      <button class="m-acc flex min-h-[56px] w-full items-center justify-between font-medium" aria-expanded="false">Our Pillars <span class="m-plus text-xl font-light" aria-hidden="true">+</span></button>
+      <div class="m-panel hidden pb-3 text-[15px] text-ink-dark">
+        <a class="m-link block py-2.5" href="#pillars" data-goto-pillar="0">Youth Empowerment</a><a class="m-link block py-2.5" href="#pillars" data-goto-pillar="1">Women Empowerment</a><a class="m-link block py-2.5" href="#pillars" data-goto-pillar="2">Green Thumbs</a><a class="m-link block py-2.5" href="#pillars" data-goto-pillar="3">Digital Empowerment</a>
+      </div>
+    </div>
+    <div class="border-b border-ink-light">
+      <button class="m-acc flex min-h-[56px] w-full items-center justify-between font-medium" aria-expanded="false">Projects <span class="m-plus text-xl font-light" aria-hidden="true">+</span></button>
+      <div class="m-panel hidden pb-3 text-[15px] text-ink-dark">
+        <a class="m-link block py-2.5" href="#projects">All Projects</a><a class="m-link block py-2.5" href="#pillars">Projects by Pillar</a><a class="m-link block py-2.5" href="#projects">Featured Projects</a>
+      </div>
+    </div>
+    <a href="#news" class="m-link flex min-h-[56px] items-center border-b border-ink-light font-medium">News &amp; Stories</a>
+    <a href="#partners" class="m-link flex min-h-[56px] items-center border-b border-ink-light font-medium">Partners</a>
+    <a href="#footer" class="m-link flex min-h-[56px] items-center border-b border-ink-light font-medium">Contact</a>
+  </nav>
+  <div class="space-y-4 border-t border-ink-light px-5 py-5">
+    <div class="flex items-center gap-2 text-sm font-medium" role="group" aria-label="Language">
+      <button class="lang-btn min-h-[44px] min-w-[52px] border border-ink-pure bg-ink-pure px-3 text-white" data-lang="en" aria-pressed="true">EN</button>
+      <button class="lang-btn min-h-[44px] min-w-[52px] border border-ink-light px-3" data-lang="fr" aria-pressed="false">FR</button>
+      <button class="lang-btn min-h-[44px] min-w-[52px] border border-ink-light px-3" data-lang="ar" aria-pressed="false">AR</button>
+    </div>
+    <a href="#get-involved" class="m-link btn-dark w-full">Get Involved</a>
+  </div>
+</aside>
+
+<main id="main">
+<span id="top"></span>
+
+<!-- ============ 2. CINEMATIC HERO SLIDER ============ -->
+<section id="hero" class="relative overflow-hidden bg-ink-pure text-white on-dark" aria-roledescription="carousel" aria-label="AFCD Foundation highlights">
+  <div class="relative h-[min(86vh,880px)] min-h-[560px] md:min-h-[620px]" id="hero-track">
+    <!-- Slide 1 -->
+    <div class="hero-slide active absolute inset-0" role="group" aria-roledescription="slide" aria-label="1 of 3">
+      <div class="ph is-dark absolute inset-0" style="--ph:#2a2a2a"><span class="ph-cap" style="top:auto;bottom:auto;top:16px;left:auto;right:20px;text-align:right"><b>Photo</b> · banner-1.jpg · community gathering, afcdfoundation.org</span></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10"></div>
+      <div class="wrap relative flex h-full items-end pb-28 md:pb-32">
+        <div class="hero-copy max-w-[880px]">
+          <p class="label text-white/75">AFCD Foundation · Est. 2007</p>
+          <h1 class="mt-5 font-semibold tracking-tightest leading-[0.98] text-[44px] sm:text-6xl lg:text-[88px] xl:text-[100px]" style="text-wrap:balance">We Serve Our Community with Love.</h1>
+          <p class="mt-6 max-w-[520px] text-base md:text-lg leading-relaxed text-white/80">Empowering people, strengthening communities, and creating opportunities for sustainable development.</p>
+          <div class="mt-8"><a href="#who-we-are" class="btn-light">Discover AFCD <span aria-hidden="true">↗</span></a></div>
+        </div>
+      </div>
+    </div>
+    <!-- Slide 2 -->
+    <div class="hero-slide absolute inset-0" role="group" aria-roledescription="slide" aria-label="2 of 3" aria-hidden="true" inert>
+      <div class="ph is-dark absolute inset-0" style="--ph:#333"><span class="ph-cap" style="top:16px;bottom:auto;left:auto;right:20px;text-align:right"><b>Photo</b> · houria-afcd.jpg · youth workshop, afcdfoundation.org</span></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10"></div>
+      <div class="wrap relative flex h-full items-end pb-28 md:pb-32">
+        <div class="hero-copy max-w-[880px]">
+          <p class="label text-white/75">Youth · Leadership · Participation</p>
+          <h2 class="mt-5 font-semibold tracking-tightest leading-[0.98] text-[44px] sm:text-6xl lg:text-[88px] xl:text-[100px]" style="text-wrap:balance">The Future Begins with People.</h2>
+          <p class="mt-6 max-w-[520px] text-base md:text-lg leading-relaxed text-white/80">Supporting young people to learn, lead, innovate and shape their communities.</p>
+          <div class="mt-8"><a href="#pillars" class="btn-light">Explore Our Programs <span aria-hidden="true">↗</span></a></div>
+        </div>
+      </div>
+    </div>
+    <!-- Slide 3 -->
+    <div class="hero-slide absolute inset-0" role="group" aria-roledescription="slide" aria-label="3 of 3" aria-hidden="true" inert>
+      <div class="ph is-dark absolute inset-0" style="--ph:#262626"><span class="ph-cap" style="top:16px;bottom:auto;left:auto;right:20px;text-align:right"><b>Photo</b> · Eco Citizen field day, Ait Ourir, afcdfoundation.org</span></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10"></div>
+      <div class="wrap relative flex h-full items-end pb-28 md:pb-32">
+        <div class="hero-copy max-w-[880px]">
+          <p class="label text-white/75">Environment · Community Action</p>
+          <h2 class="mt-5 font-semibold tracking-tightest leading-[0.98] text-[44px] sm:text-6xl lg:text-[88px] xl:text-[100px]" style="text-wrap:balance">Local Action. Lasting Change.</h2>
+          <p class="mt-6 max-w-[520px] text-base md:text-lg leading-relaxed text-white/80">Working alongside communities to advance inclusion, environmental responsibility and sustainable development.</p>
+          <div class="mt-8"><a href="#impact" class="btn-light">Discover Our Impact <span aria-hidden="true">↗</span></a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="absolute inset-x-0 bottom-0 z-10">
+    <div class="wrap flex items-center gap-5 pb-8 md:pb-10">
+      <p class="w-16 shrink-0 text-sm tabular-nums text-white/80" aria-live="polite"><span id="hero-cur" class="text-white">01</span> / 03</p>
+      <div class="flex flex-1 gap-2" id="hero-dots">
+        <button class="hero-dot group relative h-8 flex-1" aria-label="Go to slide 1" aria-current="true"><span class="absolute inset-x-0 top-1/2 h-px bg-white/25"></span><span class="hero-progress-bar absolute inset-x-0 top-1/2 h-px bg-white"></span></button>
+        <button class="hero-dot group relative h-8 flex-1" aria-label="Go to slide 2"><span class="absolute inset-x-0 top-1/2 h-px bg-white/25"></span><span class="hero-progress-bar absolute inset-x-0 top-1/2 h-px bg-white"></span></button>
+        <button class="hero-dot group relative h-8 flex-1" aria-label="Go to slide 3"><span class="absolute inset-x-0 top-1/2 h-px bg-white/25"></span><span class="hero-progress-bar absolute inset-x-0 top-1/2 h-px bg-white"></span></button>
+      </div>
+      <div class="flex shrink-0 gap-2">
+        <button id="hero-pause" class="grid h-11 w-11 place-items-center border border-white/30 hover:border-white" aria-label="Pause slideshow">
+          <svg id="ico-pause" width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><rect x="2" y="1" width="2.5" height="10"/><rect x="7.5" y="1" width="2.5" height="10"/></svg>
+          <svg id="ico-play" class="hidden" width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2.5 1 11 6l-8.5 5z"/></svg>
+        </button>
+        <button id="hero-prev" class="grid h-11 w-11 place-items-center border border-white/30 hover:border-white" aria-label="Previous slide"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" class="rtl:-scale-x-100" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>
+        <button id="hero-next" class="grid h-11 w-11 place-items-center border border-white/30 hover:border-white" aria-label="Next slide"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" class="rtl:-scale-x-100" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg></button>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="wrap note mt-4 text-ink-dark"><b>Hero</b>Manual-first slider: autoplay 7s, pauses on hover, focus, touch or the pause button, and stays off with reduced motion. Arrow keys work when the slider has focus; swipe on touch. Photos named in each slide are the real files on afcdfoundation.org; they show as grey placeholders here.</div>
+
+<!-- ============ 3. WHO WE ARE ============ -->
+<section id="who-we-are" class="py-20 lg:py-28">
+  <div class="wrap">
+    <div class="flex items-center justify-between gap-6 border-t border-ink-pure pt-5">
+      <p class="label">01 / Who We Are</p>
+      <p class="label hidden text-ink-mid sm:block">Ait Ourir · El Haouz</p>
+    </div>
+    <h2 class="h2 reveal mt-10 max-w-[1000px] lg:mt-14">Local Roots. Shared Purpose. Lasting Impact.</h2>
+
+    <div class="mt-12 grid gap-12 lg:mt-20 lg:grid-cols-12 lg:gap-16">
+      <figure class="reveal lg:col-span-5">
+        <div class="ph aspect-[4/5] w-full" style="--ph:#D4D4D4"><span class="ph-cap"><b>Photo</b> · YFA-Closing-ceremony.jpg · Youth First Academy, afcdfoundation.org</span></div>
+        <figcaption class="mt-5 flex items-baseline gap-5 border-t border-ink-light pt-4">
+          <span class="text-[44px] font-semibold leading-none tracking-tightest tabular-nums">2007</span>
+          <span class="text-sm text-ink-dark">The beginning of our journey.</span>
+        </figcaption>
+      </figure>
+
+      <div class="flex min-w-0 flex-col lg:col-span-6 lg:col-start-7 lg:pt-6">
+        <div class="body space-y-6 text-ink-charcoal">
+          <p class="text-xl md:text-2xl leading-[1.45] tracking-[-0.01em] text-ink-pure">Founded in 2007 by a group of committed young volunteers, AFCD Foundation is a Moroccan nonprofit organization dedicated to empowering individuals and strengthening communities.</p>
+          <p>Rooted in Ait Ourir and active through initiatives across Morocco, our work focuses on youth and women's empowerment, environmental education, digital inclusion, and participatory local development.</p>
+          <p>We believe sustainable change happens when people, institutions and communities work together to create opportunities and shape their own future.</p>
+        </div>
+        <blockquote class="mt-10 border-l-2 border-ink-pure pl-5 text-lg font-medium tracking-[-0.01em] rtl:border-l-0 rtl:border-r-2 rtl:pl-0 rtl:pr-5">With communities, not simply for communities.</blockquote>
+        <dl class="mt-10 grid grid-cols-2 border-t border-ink-light text-sm">
+          <div class="border-r border-ink-light py-4 pr-4 rtl:border-l rtl:border-r-0"><dt class="label text-ink-mid">Legal name</dt><dd class="mt-1.5 leading-snug">Association le Futur pour les Chantiers et le Développement</dd></div>
+          <div class="py-4 pl-4"><dt class="label text-ink-mid">Base</dt><dd class="mt-1.5 leading-snug">Avenue Hassan II, Ait Ourir, El Haouz</dd></div>
+        </dl>
+        <div class="mt-8"><a href="#purpose" class="link-arrow">Discover Our Story <span class="arr" aria-hidden="true">↗</span></a></div>
+      </div>
+    </div>
+    <div class="note mt-10 text-ink-dark"><b>Copy</b>Body copy is the proposed text from the brief. Legal name and address are as shown on afcdfoundation.org. "Discover Our Story" links to /about-us/ on the live site.</div>
+  </div>
+</section>
+
+<!-- ============ 4. MISSION, VISION & VALUES ============ -->
+<section id="purpose" class="bg-ink-off py-20 lg:py-28">
+  <div class="wrap">
+    <div class="flex flex-wrap items-center justify-between gap-4 border-t border-ink-pure pt-5">
+      <p class="label">02 / Our Purpose</p>
+      <div class="flex items-center gap-1 text-xs" role="group" aria-label="Wording">
+        <span class="mr-2 text-ink-mid">Wording:</span>
+        <button class="wording-btn min-h-[36px] border border-ink-pure bg-ink-pure px-3 text-white" data-w="proposed" aria-pressed="true">Proposed</button>
+        <button class="wording-btn min-h-[36px] border border-ink-light px-3" data-w="official" aria-pressed="false">Current site</button>
+      </div>
+    </div>
+    <h2 class="h2 reveal mt-10 lg:mt-14">What Guides Our Work.</h2>
+
+    <div class="mt-12 lg:mt-20">
+      <div class="grid gap-4 border-t border-ink-light py-8 md:grid-cols-12 md:gap-8 lg:py-10">
+        <p class="label text-ink-mid md:col-span-3 md:pt-2">Our Mission</p>
+        <p class="text-2xl md:text-[32px] leading-[1.2] tracking-[-0.025em] md:col-span-9" data-proposed="Advance sustainable community development by strengthening people's capacities through education, empowerment and innovation." data-official="AFCD Foundation is a Moroccan non-profit organization that aims to promote sustainable development through strengthening youth and women's capacity in environmental education, economic empowerment and innovation.">Advance sustainable community development by strengthening people's capacities through education, empowerment and innovation.</p>
+      </div>
+      <div class="grid gap-4 border-t border-ink-light py-8 md:grid-cols-12 md:gap-8 lg:py-10">
+        <p class="label text-ink-mid md:col-span-3 md:pt-2">Our Vision</p>
+        <p class="text-2xl md:text-[32px] leading-[1.2] tracking-[-0.025em] md:col-span-9" data-proposed="Inclusive communities where individuals can realize their potential and participate in shaping their future." data-official="A community free from all forms of exploitation and discrimination where everyone has the opportunity to realize their potential.">Inclusive communities where individuals can realize their potential and participate in shaping their future.</p>
+      </div>
+      <div class="grid gap-6 border-y border-ink-light py-8 md:grid-cols-12 md:gap-8 lg:py-10">
+        <p class="label text-ink-mid md:col-span-3 md:pt-2">Our Values</p>
+        <ul class="grid grid-cols-2 gap-x-8 gap-y-6 md:col-span-9 lg:grid-cols-4">
+          <li><span class="block text-[11px] tabular-nums text-ink-mid">I</span><span class="mt-1 block text-xl font-medium tracking-[-0.02em]">Integrity</span></li>
+          <li><span class="block text-[11px] tabular-nums text-ink-mid">II</span><span class="mt-1 block text-xl font-medium tracking-[-0.02em]">Inclusiveness</span></li>
+          <li><span class="block text-[11px] tabular-nums text-ink-mid">III</span><span class="mt-1 block text-xl font-medium tracking-[-0.02em]">Transparency</span></li>
+          <li><span class="block text-[11px] tabular-nums text-ink-mid">IV</span><span class="mt-1 block text-xl font-medium tracking-[-0.02em]">Effectiveness</span></li>
+        </ul>
+      </div>
+    </div>
+    <p class="mt-6 text-xs text-ink-mid" id="wording-flag">Proposed editorial summary. To approve against AFCD's official texts.</p>
+  </div>
+</section>
+
+<!-- ============ 5. FOUR PILLARS ============ -->
+<section id="pillars" class="py-20 lg:py-28">
+  <div class="wrap">
+    <div class="flex items-center justify-between border-t border-ink-pure pt-5">
+      <p class="label">03 / Our Pillars</p>
+      <a href="#projects" class="label hidden text-ink-mid hover:text-ink-pure sm:block">All pillar pages ↗</a>
+    </div>
+    <h2 class="h2 reveal mt-10 max-w-[900px] lg:mt-14">Four Pillars. One Shared Future.</h2>
+
+    <div class="mt-12 grid gap-10 lg:mt-20 lg:grid-cols-12 lg:gap-16">
+      <!-- Desktop image stage -->
+      <div class="relative hidden lg:col-span-6 lg:block" aria-hidden="true">
+        <div class="relative aspect-[5/6] w-full" id="pillar-stage"></div>
+      </div>
+      <!-- Index -->
+      <div class="min-w-0 lg:col-span-6">
+        <div role="tablist" aria-label="Our pillars" aria-orientation="vertical" id="pillar-list" class="border-b border-ink-light"></div>
+        <!-- Desktop detail -->
+        <div class="hidden lg:block" id="pillar-detail" role="tabpanel" aria-live="polite"></div>
+      </div>
+    </div>
+    <div class="note mt-10 text-ink-dark"><b>Interaction</b>Desktop: a vertical tab list drives the photo and detail (click or arrow keys). Mobile: each row opens like an accordion with its own photo. Descriptions are the brief's proposed copy; the current site has its own wording per pillar.</div>
+  </div>
+</section>
+
+<!-- ============ 6. FEATURED PROJECTS (STACKED) ============ -->
+<section id="projects" class="overflow-hidden bg-ink-faint py-20 lg:py-28">
+  <div class="wrap">
+    <div class="flex items-center justify-between border-t border-ink-pure pt-5">
+      <p class="label">04 / Featured Projects</p>
+      <a href="#projects" class="label hidden text-ink-mid hover:text-ink-pure sm:block">15 projects on the current site ↗</a>
+    </div>
+    <div class="mt-10 grid gap-6 lg:mt-14 lg:grid-cols-12 lg:items-end">
+      <h2 class="h2 reveal lg:col-span-7">Our Work in Action.</h2>
+      <p class="body text-ink-dark lg:col-span-4 lg:col-start-9">Explore how shared ideas become meaningful community initiatives.</p>
+    </div>
+
+    <div class="mt-12 lg:mt-16">
+      <div class="stack" id="stack"></div>
+
+      <!-- Controls (mobile + desktop) -->
+      <div class="mt-6 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-2" id="stack-dots" role="group" aria-label="Choose project"></div>
+        <div class="flex items-center gap-4">
+          <p class="text-sm tabular-nums text-ink-dark" aria-live="polite"><span id="stack-cur">01</span> / 03</p>
+          <button id="stack-prev" class="grid h-11 w-11 place-items-center border border-ink-light bg-white hover:border-ink-pure" aria-label="Previous project"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" class="rtl:-scale-x-100" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>
+          <button id="stack-next" class="grid h-11 w-11 place-items-center border border-ink-light bg-white hover:border-ink-pure" aria-label="Next project"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" class="rtl:-scale-x-100" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <div class="note mt-10 text-ink-dark"><b>Content</b>Leadership Lab 2.0 and Eco Citizen use text from their project pages on afcdfoundation.org. Youth Green Generation only has a blog post (Nov 2023), so its approach and results are marked to fill. Click a card's edge, use the arrows, or swipe on mobile.</div>
+  </div>
+</section>
+
+<!-- ============ 7. OUR IMPACT ============ -->
+<section id="impact" class="bg-ink text-white on-dark py-20 lg:py-28">
+  <div class="wrap">
+    <div class="flex items-center justify-between border-t border-white pt-5">
+      <p class="label">05 / Our Impact</p>
+      <span class="tag-todo">Figures to confirm</span>
+    </div>
+    <h2 class="h2 reveal mt-10 max-w-[1000px] lg:mt-14">Our Impact Is a Story of People.</h2>
+
+    <dl class="mt-12 grid grid-cols-2 lg:mt-20 lg:grid-cols-4">
+      <div class="border-t border-white/20 py-6 pr-4 lg:border-r lg:pr-8 rtl:lg:border-l rtl:lg:border-r-0"><dd class="text-5xl md:text-6xl font-semibold tracking-tightest tabular-nums">2,700</dd><dt class="mt-3 text-sm text-white/65">Alumni of AFCD programs</dt></div>
+      <div class="border-t border-white/20 py-6 pl-4 lg:border-r lg:px-8 rtl:lg:border-l rtl:lg:border-r-0"><dd class="text-5xl md:text-6xl font-semibold tracking-tightest tabular-nums">400</dd><dt class="mt-3 text-sm text-white/65">Ambassadors across Morocco</dt></div>
+      <div class="border-t border-white/20 py-6 pr-4 lg:border-r lg:px-8 rtl:lg:border-l rtl:lg:border-r-0"><dd class="text-5xl md:text-6xl font-semibold tracking-tightest tabular-nums">24</dd><dt class="mt-3 text-sm text-white/65">Projects completed</dt></div>
+      <div class="border-t border-white/20 py-6 pl-4 lg:pl-8"><dd class="text-5xl md:text-6xl font-semibold tracking-tightest tabular-nums" id="years-since">19</dd><dt class="mt-3 text-sm text-white/65">Years of community work, since 2007</dt></div>
+    </dl>
+    <p class="mt-3 text-xs text-white/50">Counters as published on the current homepage (2021). The FAQ there says "over 500 ambassadors", so the ambassador figure needs one source before launch.</p>
+
+    <div class="mt-16 grid gap-10 lg:mt-24 lg:grid-cols-12 lg:gap-16">
+      <div class="ph is-dark aspect-[4/3] lg:col-span-7 lg:aspect-auto lg:min-h-[520px]" style="--ph:#262626"><span class="ph-cap"><b>Photo</b> · DSC04067 · Leadership Lab cohort, afcdfoundation.org (2023)</span></div>
+      <div class="flex min-w-0 flex-col justify-between gap-10 lg:col-span-5">
+        <p class="body text-white/80">In Ait Ourir, the Eco Citizen project brought residents, local NGOs and elected representatives into one participatory process on household waste. Leadership Lab 2.0 trains young Moroccans in civic engagement and entrepreneurship over a full year. The measure of this work is the people who carry it on.</p>
+        <figure class="border-t border-white/20 pt-8">
+          <blockquote class="text-xl md:text-2xl leading-[1.35] tracking-[-0.015em]">“It was a good experience where I got the chance to learn new things and skills while meeting new people and making friends.”</blockquote>
+          <figcaption class="mt-6 flex items-center gap-4">
+            <span class="ph is-dark h-12 w-12 shrink-0 rounded-full" style="--ph:#404040"></span>
+            <span class="text-sm"><span class="block font-medium">Ikram Fatna Elfenn</span><span class="block text-white/60">Let's Dialogue bootcamp, February 2021</span></span>
+          </figcaption>
+        </figure>
+        <a href="#impact" class="link-arrow self-start">Explore Our Impact <span class="arr" aria-hidden="true">↗</span></a>
+      </div>
+    </div>
+    <div class="note mt-10 text-white/70"><b>Source</b>The quote is published in the testimonials on afcdfoundation.org. Confirm with AFCD that it can be reused before launch.</div>
+  </div>
+</section>
+
+<!-- ============ 8. NEWS & STORIES ============ -->
+<section id="news" class="py-20 lg:py-28">
+  <div class="wrap">
+    <div class="flex items-center justify-between border-t border-ink-pure pt-5">
+      <p class="label">06 / News &amp; Stories</p>
+      <a href="#news" class="link-arrow text-sm">All stories <span class="arr" aria-hidden="true">↗</span></a>
+    </div>
+    <h2 class="h2 reveal mt-10 max-w-[900px] lg:mt-14">Stories from Our Communities.</h2>
+
+    <div class="mt-12 grid gap-12 lg:mt-20 lg:grid-cols-12 lg:gap-16">
+      <article class="group lg:col-span-7">
+        <a href="#news" class="block">
+          <div class="ph aspect-[16/10] w-full transition-[filter] duration-300 group-hover:brightness-95" style="--ph:#D4D4D4"><span class="ph-cap"><b>Photo</b> · call-for-application.jpg · afcdfoundation.org</span></div>
+          <div class="mt-6 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs"><span class="label">Youth Empowerment</span><span class="text-ink-mid" aria-hidden="true">·</span><time class="text-ink-mid" datetime="2023-11-02">November 2, 2023</time></div>
+          <h3 class="mt-3 text-[28px] md:text-[40px] font-semibold leading-[1.08] tracking-[-0.035em]" style="text-wrap:balance">Solutions to Climate Change: The Youth Green Generation Project 2024</h3>
+          <p class="body mt-4 max-w-[60ch] text-ink-dark">AFCD has spent recent years on projects that address climate change locally and nationally. This post introduces the Youth Green Generation project and its call for young applicants.</p>
+          <span class="link-arrow mt-6">Read More <span class="arr" aria-hidden="true">↗</span></span>
+        </a>
+      </article>
+      <div class="flex min-w-0 flex-col lg:col-span-5">
+        <article class="group border-t border-ink-light py-8 first:border-t-0 first:pt-0 lg:first:border-t lg:first:pt-8">
+          <a href="#news" class="grid grid-cols-[1fr_120px] gap-5 sm:grid-cols-[1fr_160px]">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-x-3 text-xs"><span class="label">Youth Empowerment</span><time class="text-ink-mid" datetime="2023-10-01">Oct 1, 2023</time></div>
+              <h3 class="mt-3 text-xl font-semibold leading-[1.2] tracking-[-0.02em]">A Journey of a Thousand Miles Begins with a Single Step</h3>
+              <p class="mt-2 line-clamp-2 text-sm leading-relaxed text-ink-dark">A participant's account of joining a one-year AFCD program on the last day of registration.</p>
+              <span class="link-arrow mt-4 text-sm">Read More <span class="arr" aria-hidden="true">↗</span></span>
+            </div>
+            <div class="ph aspect-square w-full" style="--ph:#D4D4D4"><span class="ph-cap" style="font-size:9px">DSC04067</span></div>
+          </a>
+        </article>
+        <article class="group border-t border-ink-light py-8">
+          <a href="#news" class="grid grid-cols-[1fr_120px] gap-5 sm:grid-cols-[1fr_160px]">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-x-3 text-xs"><span class="label">Women Empowerment</span><time class="text-ink-mid" datetime="2023-10-01">Oct 1, 2023</time></div>
+              <h3 class="mt-3 text-xl font-semibold leading-[1.2] tracking-[-0.02em]">Journey with the AFCD Family</h3>
+              <p class="mt-2 line-clamp-2 text-sm leading-relaxed text-ink-dark">A Leadership Lab participant on a year of networking, capacity building and social entrepreneurship.</p>
+              <span class="link-arrow mt-4 text-sm">Read More <span class="arr" aria-hidden="true">↗</span></span>
+            </div>
+            <div class="ph aspect-square w-full" style="--ph:#D4D4D4"><span class="ph-cap" style="font-size:9px">DSC03718</span></div>
+          </a>
+        </article>
+        <div class="note mt-auto text-ink-dark"><b>Source</b>The three most recent posts on afcdfoundation.org/blog. The newest is from November 2023; the CMS feed will replace these.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 9. PARTNERS ============ -->
+<section id="partners" class="bg-ink-off py-20 lg:py-28">
+  <div class="wrap">
+    <div class="flex items-center justify-between border-t border-ink-pure pt-5">
+      <p class="label">07 / Our Partners</p>
+      <span class="tag-todo text-ink-dark">Confirm current partners</span>
+    </div>
+    <div class="mt-10 grid gap-6 lg:mt-14 lg:grid-cols-12 lg:items-end">
+      <h2 class="h2 reveal lg:col-span-6">Stronger Together.</h2>
+      <p class="body text-ink-dark lg:col-span-5 lg:col-start-8">International, national and local organizations that have supported AFCD's programs, as listed on the current Our Partners page.</p>
+    </div>
+
+    <div class="mt-12 lg:mt-16" id="partner-groups"></div>
+    <div class="mt-8"><a href="#partners" class="link-arrow">View all partners <span class="arr" aria-hidden="true">↗</span></a></div>
+    <div class="note mt-8 text-ink-dark"><b>Logos</b>Each cell holds the partner's logo at its own proportions inside a fixed box. Names come from afcdfoundation.org/our-partners. AFCD should mark which partners are current before launch; past ones can move to the partners page.</div>
+  </div>
+</section>
+
+<!-- ============ 10. GET INVOLVED ============ -->
+<section id="get-involved" class="bg-ink-pure text-white on-dark">
+  <div class="wrap py-20 lg:py-32">
+    <div class="flex items-center justify-between border-t border-white pt-5">
+      <p class="label">08 / Get Involved</p>
+    </div>
+    <div class="mt-10 grid gap-10 lg:mt-14 lg:grid-cols-12">
+      <h2 class="reveal font-semibold tracking-tightest leading-[0.98] text-[44px] sm:text-6xl lg:text-[96px] lg:col-span-9" style="text-wrap:balance">Let's Create Change Together.</h2>
+    </div>
+    <div class="mt-10 grid gap-10 lg:mt-14 lg:grid-cols-12">
+      <p class="body text-white/75 lg:col-span-5">Join our community, explore opportunities or collaborate with AFCD Foundation to create meaningful and lasting impact.</p>
+      <div class="flex flex-wrap items-center gap-x-8 gap-y-4 lg:col-span-6 lg:col-start-7 lg:justify-end">
+        <a href="#footer" class="btn-light min-h-[52px] px-7 text-[15px]">Get Involved <span aria-hidden="true">↗</span></a>
+        <a href="#footer" class="link-arrow text-white">Partner With Us <span class="arr" aria-hidden="true">↗</span></a>
+      </div>
+    </div>
+    <ul class="mt-16 grid border-t border-white/20 sm:grid-cols-3 lg:mt-24">
+      <li class="border-b border-white/20 py-6 sm:border-b-0 sm:border-r sm:pr-6 rtl:sm:border-l rtl:sm:border-r-0"><p class="label text-white/50">Volunteer</p><p class="mt-2 text-lg">Give time to activities in Ait Ourir and beyond.</p></li>
+      <li class="border-b border-white/20 py-6 sm:border-b-0 sm:border-r sm:px-6 rtl:sm:border-l rtl:sm:border-r-0"><p class="label text-white/50">Join a program</p><p class="mt-2 text-lg">Apply when calls open for youth and women's programs.</p></li>
+      <li class="py-6 sm:pl-6"><p class="label text-white/50">Partner</p><p class="mt-2 text-lg">Co-design and fund community initiatives.</p></li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ 11. FOOTER ============ -->
+<footer id="footer" class="bg-ink text-white on-dark" style="padding-bottom: env(safe-area-inset-bottom,0px)">
+  <div class="wrap">
+    <!-- Upper CTA: deliberately compact so it doesn't repeat section 08 -->
+    <div class="grid gap-8 border-t border-white/20 py-14 lg:grid-cols-12 lg:items-end lg:py-20">
+      <div class="lg:col-span-8">
+        <p class="label text-white/55">Let's make a difference</p>
+        <p class="mt-4 text-4xl md:text-5xl font-semibold tracking-tightest leading-[1.02]">Change Starts with Us.</p>
+        <p class="mt-4 max-w-[46ch] text-white/65">Join the volunteers, alumni and partners who carry AFCD's work forward.</p>
+      </div>
+      <div class="lg:col-span-4 lg:text-right"><a href="#get-involved" class="btn-light">Get Involved <span aria-hidden="true">↗</span></a></div>
+    </div>
+
+    <div class="grid gap-12 border-t border-white/20 py-14 md:grid-cols-2 lg:grid-cols-12 lg:gap-8 lg:py-20">
+      <div class="lg:col-span-4">
+        <span class="ph is-dark grid h-12 w-[156px] place-items-center border border-white/20" style="--ph:#171717"><span class="relative z-[1] text-[17px] font-bold tracking-[-0.02em]">AFCD<span class="font-normal text-white/55"> Foundation</span></span></span>
+        <p class="mt-6 text-lg font-medium">“We serve our community with love.”</p>
+        <p class="mt-3 max-w-[38ch] text-sm leading-relaxed text-white/60">A Moroccan nonprofit founded in 2007 in Ait Ourir, working on youth and women's empowerment, the environment and digital inclusion.</p>
+        <p class="mt-4 label text-white/45">Established 2007</p>
+      </div>
+      <nav class="lg:col-span-2" aria-label="Explore">
+        <p class="label text-white/45">Explore</p>
+        <ul class="mt-5 space-y-3 text-[15px] text-white/80">
+          <li><a class="hover:text-white" href="#who-we-are">About Us</a></li><li><a class="hover:text-white" href="#pillars">Our Pillars</a></li><li><a class="hover:text-white" href="#projects">Projects</a></li><li><a class="hover:text-white" href="#news">News &amp; Stories</a></li><li><a class="hover:text-white" href="#partners">Partners</a></li>
+        </ul>
+      </nav>
+      <nav class="lg:col-span-2" aria-label="Our pillars">
+        <p class="label text-white/45">Our Pillars</p>
+        <ul class="mt-5 space-y-3 text-[15px] text-white/80">
+          <li><a class="hover:text-white" href="#pillars" data-goto-pillar="0">Youth Empowerment</a></li><li><a class="hover:text-white" href="#pillars" data-goto-pillar="1">Women Empowerment</a></li><li><a class="hover:text-white" href="#pillars" data-goto-pillar="2">Green Thumbs</a></li><li><a class="hover:text-white" href="#pillars" data-goto-pillar="3">Digital Empowerment</a></li>
+        </ul>
+      </nav>
+      <nav class="lg:col-span-2" aria-label="Get involved">
+        <p class="label text-white/45">Get Involved</p>
+        <ul class="mt-5 space-y-3 text-[15px] text-white/80">
+          <li><a class="hover:text-white" href="#get-involved">Volunteer</a> <span class="text-[10px] text-white/40">new page</span></li>
+          <li><a class="hover:text-white" href="#get-involved">Opportunities</a> <span class="text-[10px] text-white/40">new page</span></li>
+          <li><a class="hover:text-white" href="#get-involved">Alumni Club</a> <span class="text-[10px] text-white/40">new page</span></li>
+          <li><a class="hover:text-white" href="#get-involved">Partnerships</a></li>
+          <li><a class="hover:text-white" href="#footer">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="md:col-span-2 lg:col-span-2">
+        <p class="label text-white/45">Contact</p>
+        <address class="mt-5 space-y-3 text-[15px] not-italic text-white/80">
+          <p>Avenue Hassan II<br>Ait Ourir, El Haouz<br>Morocco</p>
+          <p class="tabular-nums select-all">+212 6 63 61 85 36</p>
+          <p class="tabular-nums select-all">+212 6 63 66 27 68</p>
+          <p class="text-white/50 text-sm">Email and social accounts: <span class="whitespace-nowrap">to confirm</span></p>
+        </address>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-5 border-t border-white/20 py-8 text-sm text-white/55 md:flex-row md:items-center md:justify-between">
+      <p>© <span id="year">2026</span> AFCD Foundation. All rights reserved.</p>
+      <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <a class="hover:text-white" href="#footer">Privacy Policy</a>
+        <a class="hover:text-white" href="#footer">Accessibility <span class="text-[10px] text-white/40">new page</span></a>
+        <div class="flex items-center gap-1 text-[12px] font-medium tracking-[0.12em]" role="group" aria-label="Language">
+          <button class="lang-btn px-1.5 py-1 text-white" data-lang="en" aria-pressed="true">EN</button><span class="text-white/30">/</span>
+          <button class="lang-btn px-1.5 py-1 text-white/50 hover:text-white" data-lang="fr" aria-pressed="false">FR</button><span class="text-white/30">/</span>
+          <button class="lang-btn px-1.5 py-1 text-white/50 hover:text-white" data-lang="ar" aria-pressed="false">AR</button>
+        </div>
+      </div>
+    </div>
+    <div class="note mb-8 text-white/70"><b>Contact</b>Address and phone numbers are from afcdfoundation.org. The email shown there (askaafcd@gmail.org) looks mistyped and the social icons have no links, so both wait for AFCD to confirm.</div>
+  </div>
+</footer>
+
+<!-- Wireframe toolbar -->
+<div class="fixed z-[90] flex items-center gap-2" style="right: max(16px, calc(env(safe-area-inset-right,0px) + 16px)); bottom: calc(env(safe-area-inset-bottom,0px) + 16px)">
+  <button id="notes-toggle" class="min-h-[44px] border border-ink-pure bg-white px-4 text-xs font-medium uppercase tracking-[0.12em] shadow-[0_8px_24px_-12px_rgba(0,0,0,.4)]" aria-pressed="false">Show notes</button>
+</div>
+<div id="toast" class="pointer-events-none fixed left-1/2 z-[95] -translate-x-1/2 bg-ink-pure px-4 py-3 text-sm text-white opacity-0 transition-opacity duration-300" style="bottom: calc(env(safe-area-inset-bottom,0px) + 76px); max-width: calc(100% - 32px)" role="status"></div>
+
+<script src="assets/main.js"></script>
+</body>
+</html>

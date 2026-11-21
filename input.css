@@ -215,6 +215,44 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .gi-tile:hover .gi-arr { background: #fff; color: #000; transform: rotate(45deg); }
 @media (min-width: 1024px) { .gi-tile { padding: 26px; min-height: 260px; } }
 
+.ab-pdot { width: 9px; height: 9px; border-radius: 9999px; background: var(--c); flex-shrink: 0; }
+
+/* Hero slider */
+.hero-shade { background:
+    linear-gradient(0deg, rgba(0,0,0,.88) 0%, rgba(0,0,0,.4) 45%, rgba(0,0,0,.12) 100%),
+    linear-gradient(90deg, rgba(0,0,0,.45) 0%, transparent 62%); }
+.hero-eyebrow { display: inline-flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 14px; border-radius: 9999px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); font-size: 11.5px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.9); }
+.hero-eyebrow-dot { width: 6px; height: 6px; border-radius: 9999px; background: #5CC26E; box-shadow: 0 0 0 4px rgba(92,194,110,.22); }
+.hero-btn { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 9999px; border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.04); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
+.hero-btn:hover { background: #fff; color: #000; border-color: #fff; }
+.hero-scroll { align-items: center; gap: 10px; font-size: 13px; color: rgba(255,255,255,.7); transition: color .2s ease; }
+.hero-scroll:hover { color: #fff; }
+.hero-scroll-dot { position: relative; width: 18px; height: 28px; border-radius: 9999px; border: 1.5px solid rgba(255,255,255,.5); }
+.hero-scroll-dot::after { content: ""; position: absolute; left: 50%; top: 6px; width: 3px; height: 6px; margin-left: -1.5px; border-radius: 9999px; background: #fff; animation: hero-scroll 1.8s ease-in-out infinite; }
+@keyframes hero-scroll { 0% { opacity: 0; transform: translateY(0); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(9px); } }
+
+/* Navigator: slim bars on mobile */
+.hero-nav { position: absolute; z-index: 10; left: 20px; right: 20px; bottom: 86px; display: flex; gap: 6px; }
+.hero-thumb { position: relative; flex: 1; height: 24px; }
+.hero-thumb-img, .hero-thumb-text { display: none; }
+.hero-thumb-track { position: absolute; left: 0; right: 0; top: 50%; height: 2px; border-radius: 9999px; background: rgba(255,255,255,.22); overflow: hidden; }
+.hero-thumb-track .hero-progress-bar { position: absolute; inset: 0; background: #fff; }
+@media (min-width: 768px) { .hero-nav { left: 32px; right: 32px; bottom: 100px; } }
+
+/* Navigator: frosted cards on desktop */
+@media (min-width: 1024px) {
+  .hero-nav { left: auto; right: clamp(40px, 4vw, 80px); bottom: 118px; width: 360px; flex-direction: column; gap: 10px; }
+  .hero-thumb { height: auto; display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 14px; padding: 10px 14px 14px 10px; border-radius: 18px; text-align: left; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); transition: background-color .25s ease, border-color .25s ease, transform .3s ease; }
+  .hero-thumb:hover { background: rgba(255,255,255,.12); transform: translateX(-3px); }
+  .hero-thumb[aria-current="true"] { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.38); }
+  .hero-thumb-img { display: block; width: 64px; height: 64px; border-radius: 12px; }
+  .hero-thumb-text { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+  .hero-thumb-num { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.6); }
+  .hero-thumb-title { font-size: 15px; font-weight: 600; line-height: 1.25; letter-spacing: -.01em; }
+  .hero-thumb-track { top: auto; bottom: 7px; left: 88px; right: 14px; }
+  [dir="rtl"] .hero-thumb { text-align: right; }
+}
+
 /* Partners: compact strip + filters */
 .pt-filter { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 16px; border-radius: 9999px; border: 1px solid var(--light); background: #fff; font-size: 13px; font-weight: 500; transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
 .pt-filter span { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 9999px; background: #F3F3F3; font-size: 11px; font-variant-numeric: tabular-nums; }

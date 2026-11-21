@@ -302,7 +302,7 @@
   (function () {
     if (!$('#stack')) return;
   var PROJECTS = [
-    { n: '01', name: 'Leadership Lab 2.0', href: 'project-leadership-lab.html', pillar: 'Youth Empowerment', cat: 'Youth Leadership', surface: 'pc-1', phTone: '#E2E2E2', dark: false,
+    { n: '01', name: 'Leadership Lab 2.0', dot: '#DCC5FA', href: 'project-leadership-lab.html', pillar: 'Youth Empowerment', cat: 'Youth Leadership', surface: 'pc-1', phTone: '#E2E2E2', dark: false,
       photo: 'Leadership Lab 2.0 · project page photo',
       lede: 'Supporting emerging leaders through entrepreneurship and civic engagement.',
       rows: [
@@ -311,7 +311,7 @@
         ['Activities', 'Year-long civic engagement and entrepreneurship training tracks for selected young people.'],
         ['Results', 'Participant stories shared on the AFCD blog (2023).']
       ] },
-    { n: '02', name: 'Eco Citizen', href: 'project-eco-citizen.html', pillar: 'Green Thumbs', cat: 'Environment', surface: 'pc-2', phTone: '#E6E6E6', dark: false,
+    { n: '02', name: 'Eco Citizen', dot: '#82E591', href: 'project-eco-citizen.html', pillar: 'Green Thumbs', cat: 'Environment', surface: 'pc-2', phTone: '#E6E6E6', dark: false,
       photo: 'Eco Citizen · Ait Ourir 2021',
       lede: 'Encouraging environmental awareness and community-led action.',
       rows: [
@@ -320,7 +320,7 @@
         ['Activities', 'Awareness campaigns (2020), then workshops on waste sorting and recycling and training for new local committees (2021).'],
         ['Results', 'Alternative waste-management proposals developed with the community.']
       ] },
-    { n: '03', name: 'Youth Green Generation', href: 'project-youth-green-generation.html', pillar: 'Green Thumbs', cat: 'Climate Action', surface: 'pc-3', phTone: '#DADADA', dark: false,
+    { n: '03', name: 'Youth Green Generation', dot: '#82E591', href: 'project-youth-green-generation.html', pillar: 'Green Thumbs', cat: 'Climate Action', surface: 'pc-3', phTone: '#DADADA', dark: false,
       photo: 'call-for-application.jpg · 2024 call',
       lede: 'Supporting young people in developing responses to climate challenges.',
       rows: [
@@ -342,22 +342,27 @@
         '<span class="grid h-10 w-10 place-items-center rounded-full bg-white/60 text-base" aria-hidden="true">→</span>' +
       '</button>' +
       '<div class="pcard-body flex h-full flex-col p-6 md:p-8 lg:p-10">' +
-        '<header class="grid grid-cols-[auto_1fr] items-center gap-x-6 gap-y-4 md:grid-cols-[auto_1fr_auto]">' +
-          '<span class="text-[22px] font-medium tabular-nums md:text-[26px]">' + p.n + '</span>' +
-          '<h3 class="text-[22px] font-semibold leading-[1.1] tracking-[-0.025em] md:text-center md:text-[28px]">' + p.name + '</h3>' +
-          '<span class="hidden text-sm font-medium md:block">' + p.pillar + '</span>' +
+        '<header class="flex flex-wrap items-center justify-between gap-4">' +
+          '<div class="flex min-w-0 items-center gap-4">' +
+            '<span class="pc-no tabular-nums">' + p.n + '</span>' +
+            '<h3 class="text-[26px] font-semibold leading-[1.05] tracking-[-0.035em] md:text-[36px] lg:text-[42px]">' + p.name + '</h3>' +
+          '</div>' +
+          '<span class="pc-pillar"><span class="pc-pillar-dot" style="--c:' + p.dot + '" aria-hidden="true"></span>' + p.pillar + '</span>' +
         '</header>' +
         '<div class="mt-5 flex flex-wrap gap-2"><span class="pc-pill">Case study</span><span class="pc-pill">' + p.cat + '</span></div>' +
-        '<div class="mt-6 grid min-h-0 flex-1 gap-6 md:grid-cols-12 md:gap-10">' +
-          '<div class="pc-inner flex min-h-[260px] flex-col justify-between rounded-[22px] p-5 md:col-span-5 md:p-6">' +
-            '<div class="ph aspect-[4/3] w-full rounded-2xl md:aspect-auto md:flex-1" style="--ph:' + p.phTone + ';--ph-line:rgba(0,0,0,.08)"><span class="ph-cap"><b>Photo</b> · ' + p.photo + '</span></div>' +
-            '<p class="mt-5 text-[17px] font-medium leading-snug tracking-[-0.01em] md:text-lg">' + p.lede + '</p>' +
+        '<div class="mt-6 grid min-h-0 flex-1 gap-5 md:grid-cols-12 md:gap-6">' +
+          '<div class="pc-inner flex min-h-[280px] flex-col rounded-[24px] p-4 md:col-span-5 md:p-5">' +
+            '<div class="ph aspect-[4/3] w-full rounded-[18px] md:aspect-auto md:flex-1" style="--ph:' + p.phTone + ';--ph-line:rgba(0,0,0,.08)"><span class="ph-cap"><b>Photo</b> · ' + p.photo + '</span></div>' +
+            '<p class="mt-4 px-1 text-[17px] font-medium leading-snug tracking-[-0.01em] md:text-[19px]">' + p.lede + '</p>' +
           '</div>' +
           '<div class="flex min-w-0 flex-col md:col-span-7">' +
-            '<dl class="space-y-5 text-[15px] leading-relaxed">' + p.rows.map(function (r) {
-              return '<div class="border-l-2 border-black/15 pl-5 rtl:border-l-0 rtl:border-r-2 rtl:pl-0 rtl:pr-5"><dt class="text-[11px] font-medium uppercase tracking-[0.16em] text-black/55">' + r[0] + '</dt><dd class="mt-1.5">' + r[1] + '</dd></div>';
+            '<dl class="grid flex-1 gap-3 sm:grid-cols-2">' + p.rows.map(function (r, k) {
+              return '<div class="pc-tile"><dt class="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-black/55"><span class="pc-tile-n tabular-nums">0' + (k + 1) + '</span>' + r[0] + '</dt><dd class="mt-3 text-[15px] leading-relaxed">' + r[1] + '</dd></div>';
             }).join('') + '</dl>' +
-            '<a href="' + p.href + '" class="pc-btn mt-auto self-end">Explore project <span class="pc-arr" aria-hidden="true">→</span></a>' +
+            '<div class="mt-5 flex flex-wrap items-center justify-end gap-x-6 gap-y-3">' +
+              '<a href="projects.html" class="link-arrow text-[14px]">All projects <span class="arr" aria-hidden="true">↗</span></a>' +
+              '<a href="' + p.href + '" class="pc-btn">Explore project <span class="pc-arr" aria-hidden="true">→</span></a>' +
+            '</div>' +
           '</div>' +
         '</div>' +
       '</div>';

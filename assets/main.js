@@ -248,9 +248,10 @@
   /* ---------- Pillars: expanding panel explorer ---------- */
   (function () {
     var root = $('#pillar-explorer'); if (!root) return;
-    var panels = $$('.pl-panel', root), heads = $$('.pl-head', root), hoverT;
+    var panels = $$('.pl-panel', root), heads = $$('.pl-head', root), hoverT, cur = 0;
     var fine = window.matchMedia('(hover: hover) and (pointer: fine)');
     function open(i, focus) {
+      cur = i;
       panels.forEach(function (p, k) {
         var on = k === i;
         p.classList.toggle('is-open', on);
@@ -283,6 +284,16 @@
     });
     $$('[data-goto-pillar]').forEach(function (a) {
       a.addEventListener('click', function () { open(+a.dataset.gotoPillar); });
+    });
+    // Previous / next arrows on the open panel; keep focus on the matching arrow of the new panel
+    $$('.pl-step', root).forEach(function (b) {
+      b.addEventListener('click', function () {
+        var step = +b.dataset.step;
+        var next = (cur + step + panels.length) % panels.length;
+        open(next);
+        var same = $('.pl-step[data-step="' + step + '"]', panels[next]);
+        if (same) setTimeout(function () { same.focus({ preventScroll: true }); }, 50);
+      });
     });
     open(0);
   })();

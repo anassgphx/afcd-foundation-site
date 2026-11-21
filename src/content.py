@@ -10,18 +10,40 @@ from pathlib import Path
 OUT = Path(__file__).parent / 'pages'
 ARR = '<span class="arr" aria-hidden="true">↗</span>'
 
+# Official values (AFCD Connect institutional profile)
+VALUES = [
+    ('I', 'Integrity', 'We act with honesty and uphold strong ethical principles in all our work.'),
+    ('II', 'Inclusiveness', 'We respect diversity, promote equal opportunities, and ensure that everyone has a voice.'),
+    ('III', 'Transparency', 'We communicate openly and remain accountable for our decisions, actions, and use of resources.'),
+    ('IV', 'Effectiveness', 'We focus on practical actions that create meaningful and lasting benefits for communities.'),
+]
+
+# Strategic objectives (AFCD Connect). Stable references for reporting and cross-linking.
+OBJECTIVES = [
+    ('SO-01', 'Strengthen youth leadership and civic participation.', [('Youth Empowerment', 'youth-empowerment')]),
+    ('SO-02', 'Advance women’s empowerment and equal opportunities.', [('Women’s Empowerment', 'women-empowerment')]),
+    ('SO-03', 'Promote environmental sustainability and climate action.', [('Environment and Climate', 'green-thumbs')]),
+    ('SO-04', 'Expand digital inclusion and innovation.', [('Digital Inclusion and Innovation', 'digital-empowerment')]),
+    ('SO-05', 'Support entrepreneurship and economic empowerment.', [('Youth Empowerment', 'youth-empowerment'), ('Women’s Empowerment', 'women-empowerment')]),
+    ('SO-06', 'Strengthen civil society capacity and inclusive policy dialogue.', []),
+]
+
+BENEFICIARIES = ['Young people and students', 'Women and young women', 'Children and adolescents, depending on the programme',
+                 'Aspiring entrepreneurs', 'Community initiative leaders', 'Civil society organizations and community associations',
+                 'Youth workers', 'Rural and underserved communities']
+
 PILLARS = [
     ('youth-empowerment', '01', 'Youth Empowerment',
-     'Developing leadership, civic participation, entrepreneurship and skills among young people.',
+     'Support young people in building leadership and civic skills, participating in community life, and developing initiatives that respond to local needs.',
      ['Leadership Lab 2.0', 'Youth First Academy', 'Let’s Dialogue']),
-    ('women-empowerment', '02', 'Women Empowerment',
-     'Supporting economic opportunities, entrepreneurship, leadership and inclusion for women.',
+    ('women-empowerment', '02', 'Women’s Empowerment',
+     'Strengthen women’s capacities, confidence, and access to learning, leadership and economic opportunities.',
      ['META Skills for Women Empowerment', 'TOT: Gender-based violence']),
-    ('green-thumbs', '03', 'Green Thumbs',
-     'Promoting environmental education, climate action and sustainable communities.',
+    ('green-thumbs', '03', 'Environment and Climate',
+     'Promote environmental education, sustainable practices and community climate action, connecting local perspectives with Morocco’s climate priorities.',
      ['Eco Citizen', 'Oxygen', 'Al Haouz Environmental Film Festival', 'Youth Green Generation']),
-    ('digital-empowerment', '04', 'Digital Empowerment',
-     'Expanding access to digital knowledge, technology, innovation and learning.',
+    ('digital-empowerment', '04', 'Digital Inclusion and Innovation',
+     'Improve access to digital knowledge and skills, enabling communities to explore artificial intelligence, science and emerging technologies.',
      ['SAADA Initiative Project']),
 ]
 
@@ -33,19 +55,19 @@ PROJECTS = [
      ''),
     ('Let’s Dialogue', 'youth-empowerment', 'Youth Empowerment', 'Bootcamp', None,
      ''),
-    ('META Skills for Women Empowerment', 'women-empowerment', 'Women Empowerment', 'Skills Training', None,
+    ('META Skills for Women Empowerment', 'women-empowerment', 'Women’s Empowerment', 'Skills Training', None,
      ''),
-    ('TOT: Gender-based violence', 'women-empowerment', 'Women Empowerment', 'Training of Trainers', None,
+    ('TOT: Gender-based violence', 'women-empowerment', 'Women’s Empowerment', 'Training of Trainers', None,
      ''),
-    ('Eco Citizen', 'green-thumbs', 'Green Thumbs', 'Environment', 'project-eco-citizen.html',
+    ('Eco Citizen', 'green-thumbs', 'Environment and Climate', 'Environment', 'project-eco-citizen.html',
      'Encouraging environmental awareness and community-led action.'),
-    ('Oxygen', 'green-thumbs', 'Green Thumbs', 'Environment', None,
+    ('Oxygen', 'green-thumbs', 'Environment and Climate', 'Environment', None,
      ''),
-    ('Al Haouz Environmental Film Festival', 'green-thumbs', 'Green Thumbs', 'Culture & Environment', None,
+    ('Al Haouz Environmental Film Festival', 'green-thumbs', 'Environment and Climate', 'Culture & Environment', None,
      ''),
-    ('Youth Green Generation', 'green-thumbs', 'Green Thumbs', 'Climate Action', 'project-youth-green-generation.html',
+    ('Youth Green Generation', 'green-thumbs', 'Environment and Climate', 'Climate Action', 'project-youth-green-generation.html',
      'Supporting young people in developing responses to climate challenges.'),
-    ('SAADA Initiative Project', 'digital-empowerment', 'Digital Empowerment', 'Digital Skills', None,
+    ('SAADA Initiative Project', 'digital-empowerment', 'Digital Inclusion and Innovation', 'Digital Skills', None,
      ''),
 ]
 
@@ -142,8 +164,19 @@ def about():
         f'<div class="border-t border-white/20 py-6 pr-4"><dd class="text-5xl font-semibold tracking-tightest tabular-nums md:text-6xl">{n}</dd><dt class="mt-3 text-sm text-white/65">{t}</dt></div>'
         for n, t in impact)
     values = ''.join(
-        f'<li class="rounded-2xl border border-ink-light bg-white p-6"><span class="text-[11px] tabular-nums text-ink-mid">{r}</span><span class="mt-6 block text-2xl font-semibold tracking-[-0.03em]">{v}</span></li>'
-        for r, v in [('I', 'Integrity'), ('II', 'Inclusiveness'), ('III', 'Transparency'), ('IV', 'Effectiveness')])
+        f'<li class="rounded-2xl border border-ink-light bg-white p-6"><span class="text-[11px] tabular-nums text-ink-mid">{r}</span><span class="mt-6 block text-2xl font-semibold tracking-[-0.03em]">{v}</span><span class="mt-2 block text-[14px] leading-relaxed text-ink-dark">{d}</span></li>'
+        for r, v, d in VALUES)
+    def obj_links(links):
+        if not links:
+            return '<span class="text-[13px] text-ink-mid">Cross-cutting, all pillars</span>'
+        return ''.join(f'<a class="inline-flex min-h-[30px] items-center rounded-full border border-ink-light bg-white px-3 text-[12.5px] font-medium hover:border-ink-pure" href="pillars.html#{slug}">{name}</a>' for name, slug in links)
+    objectives = ''.join(f'''
+      <li id="{ref.lower()}" class="flex flex-col rounded-3xl border border-ink-light bg-white p-6 md:p-7">
+        <span class="inline-flex self-start rounded-full bg-ink-pure px-3 py-1 text-[12px] font-semibold tabular-nums text-white">{ref}</span>
+        <span class="mt-5 block text-[19px] font-semibold leading-snug tracking-[-0.015em]">{text}</span>
+        <span class="mt-auto flex flex-wrap gap-2 pt-5">{obj_links(links)}</span>
+      </li>''' for ref, text, links in OBJECTIVES)
+    beneficiaries = ''.join(f'<li class="inline-flex min-h-[38px] items-center rounded-full bg-ink-faint px-4 text-[14px] font-medium">{b}</li>' for b in BENEFICIARIES)
     team = ''.join(f'''
         <li>
           {ph('Team portrait', 'aspect-[4/5] w-full', '#DADADA')}
@@ -152,7 +185,7 @@ def about():
         </li>''' for _ in range(4))
     body = page_header([('About Us', 'about.html')], 'About Us',
                        'Local roots. <span class="text-ink-mid">Shared purpose.</span> Lasting impact.',
-                       'A Moroccan nonprofit founded in 2007 by young volunteers in Ait Ourir, El Haouz.', points=('Since <b>2007</b>', 'Ait Ourir', '<b>4</b> Pillars')) + f'''
+                       'A Moroccan nonprofit association founded in 2007 by young volunteers in Ait Ourir, Al Haouz, with its main office in Marrakech.', points=('Since <b>2007</b>', 'Marrakech', '<b>4</b> Pillars', '<b>6</b> Objectives')) + f'''
 
 <section id="story" class="py-14 lg:py-16">
   <div class="wrap">{sec_head('01 / Our Story', 'It started with young volunteers <span class="sh-soft">in Ait Ourir.</span>', 'Since 2007', desc='From a group of committed young volunteers in 2007 to programmes across Morocco.')}
@@ -164,7 +197,7 @@ def about():
         <p class="body mt-4 text-ink-dark">We believe sustainable change happens when people, institutions and communities work together to create opportunities and shape their own future.</p>
         <dl class="aura-a mt-10 grid gap-5 rounded-2xl border border-ink-light p-5 text-sm sm:grid-cols-2 md:p-6">
           <div><dt class="label text-ink-mid">Legal name</dt><dd class="mt-1.5 leading-snug">Association le Futur pour les Chantiers et le Développement</dd></div>
-          <div><dt class="label text-ink-mid">Address</dt><dd class="mt-1.5 leading-snug">Avenue Hassan II, Ait Ourir, El Haouz, Morocco</dd></div>
+          <div><dt class="label text-ink-mid">Main office</dt><dd class="mt-1.5 leading-snug">Marrakech, Morocco · roots in Ait Ourir, Al Haouz</dd></div>
         </dl>
       </div>
     </div>
@@ -176,11 +209,11 @@ def about():
     <div class="mt-8 lg:mt-10">
       <div class="grid gap-4 border-t border-ink-light py-8 md:grid-cols-12 md:gap-8 lg:py-10">
         <p class="label text-ink-mid md:col-span-3 md:pt-2">Our Mission</p>
-        <p class="text-2xl leading-[1.2] tracking-[-0.025em] md:col-span-9 md:text-[32px]">Advance sustainable community development by strengthening people’s capacities through education, empowerment and innovation.</p>
+        <p class="text-2xl leading-[1.2] tracking-[-0.025em] md:col-span-9 md:text-[32px]">To promote sustainable development by strengthening the capacities of young people and women through environmental education, economic empowerment, and innovation.</p>
       </div>
       <div class="grid gap-4 border-y border-ink-light py-8 md:grid-cols-12 md:gap-8 lg:py-10">
         <p class="label text-ink-mid md:col-span-3 md:pt-2">Our Vision</p>
-        <p class="text-2xl leading-[1.2] tracking-[-0.025em] md:col-span-9 md:text-[32px]">Inclusive communities where individuals can realize their potential and participate in shaping their future.</p>
+        <p class="text-2xl leading-[1.2] tracking-[-0.025em] md:col-span-9 md:text-[32px]">A society free from exploitation and discrimination, where everyone has equal opportunities to grow, contribute, and realise their full potential.</p>
       </div>
       <p class="label mt-14 text-ink-mid">Our Values</p>
       <ul class="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">{values}</ul>
@@ -200,8 +233,30 @@ def about():
   </div>
 </section>
 
+<section id="strategy" class="scroll-mt-28 border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('04 / Strategy', 'Six strategic <span class="sh-soft">objectives.</span>', 'SO-01 to SO-06', desc='Our institutional objectives guide programme design and reporting. They connect to our four pillars; they are not additional pillars.')}
+    <ol class="mt-8 grid gap-3 md:grid-cols-2 lg:mt-10 lg:grid-cols-3">{objectives}</ol>
+  </div>
+</section>
+
+<section id="who-we-serve" class="scroll-mt-28 py-14 lg:py-16">
+  <div class="wrap">{sec_head('05 / Who We Work With', 'People and places <span class="sh-soft">we serve.</span>', 'Across Morocco', desc='Each programme defines its own participants; not every activity serves every group.')}
+    <div class="mt-8 grid gap-4 lg:mt-10 lg:grid-cols-12">
+      <div class="rounded-3xl border border-ink-light p-6 md:p-8 lg:col-span-7">
+        <p class="label text-ink-mid">Who we work with</p>
+        <ul class="mt-5 flex flex-wrap gap-2">{beneficiaries}</ul>
+      </div>
+      <dl class="grid gap-3 lg:col-span-5">
+        <div class="rounded-3xl bg-ink-pure p-6 text-white on-dark md:p-7"><dt class="label text-white/60">Main office</dt><dd class="mt-2 text-xl font-semibold tracking-[-0.02em]">Marrakech, Morocco</dd></div>
+        <div class="rounded-3xl border border-ink-light p-6 md:p-7"><dt class="label text-ink-mid">Community roots</dt><dd class="mt-2 text-xl font-semibold tracking-[-0.02em]">Ait Ourir and Al Haouz</dd></div>
+        <div class="rounded-3xl border border-ink-light p-6 md:p-7"><dt class="label text-ink-mid">Where we work</dt><dd class="mt-2 text-[15px] leading-relaxed text-ink-dark">Local, regional and national programmes across Morocco. Locations for each programme are listed on its project page. International partners are not AFCD offices.</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
 <section id="team" class="py-14 lg:py-16">
-  <div class="wrap">{sec_head('04 / Our Team', 'The people who carry <span class="sh-soft">our work forward.</span>', ('Join us', 'get-involved.html'))}
+  <div class="wrap">{sec_head('06 / Our Team', 'The people who carry <span class="sh-soft">our work forward.</span>', ('Join us', 'get-involved.html'))}
     <ul class="mt-12 grid grid-cols-2 gap-x-5 gap-y-10 lg:mt-16 lg:grid-cols-4">{team}
     </ul>
     {placeholder_note('Team names, roles and portraits to be supplied by AFCD.')}
@@ -209,7 +264,7 @@ def about():
 </section>
 
 <section id="impact" class="bg-ink text-white on-dark py-14 lg:py-16">
-  <div class="wrap">{sec_head('05 / Our Impact', 'Our impact is <span class="sh-soft">a story of people.</span>', 'Since 2007', dark=True, desc='The measure of this work is the people who carry it on.')}
+  <div class="wrap">{sec_head('07 / Our Impact', 'Our impact is <span class="sh-soft">a story of people.</span>', 'Since 2007', dark=True, desc='The measure of this work is the people who carry it on.')}
     <dl class="mt-12 grid grid-cols-2 gap-x-6 lg:mt-16 lg:grid-cols-4">{stats}</dl>
   </div>
 </section>
@@ -236,7 +291,7 @@ def pillars():
     <div class="lg:col-span-5 {'lg:order-1' if flip else 'lg:col-start-8'}">
       <p class="label text-ink-mid">Pillar {n} / 04</p>
       <h2 class="mt-5 text-[40px] font-semibold leading-[1.02] tracking-tightest md:text-[56px]">{t}</h2>
-      <p class="body mt-6 text-ink-dark">{d}</p>
+      <p class="body mt-6 text-ink-dark">{d}</p>{'<p class="mt-3 text-[13px] text-ink-mid">Programme brand: Green Thumbs</p>' if slug == 'green-thumbs' else ''}
       <p class="label mt-10 text-ink-mid">Related projects</p>
       <ul class="mt-3 border-b border-ink-light">{rel_items}</ul>
       <a href="projects.html?pillar={slug}#by-pillar" class="btn-dark btn-cta mt-8">See {t} projects {ARR}</a>
@@ -251,7 +306,7 @@ def pillars():
         'Find your place in our work.', 'Volunteer, join a programme when calls open, or partner with us on a pillar.',
         ('Get Involved', 'get-involved.html'), ('All projects', 'projects.html'))
     page('pillars.html', 'Our Pillars · AFCD Foundation',
-         'Youth Empowerment, Women Empowerment, Green Thumbs and Digital Empowerment: the four pillars of AFCD Foundation’s work.',
+         'Youth Empowerment, Women’s Empowerment, Environment and Climate and Digital Inclusion and Innovation: the four pillars of AFCD Foundation’s work.',
          'pillars', body)
 
 
@@ -315,18 +370,18 @@ DETAILS = {
               ('Results', 'Participant stories shared on the AFCD blog (2023).')],
         photo='Leadership Lab 2.0 · project photo', next_='project-eco-citizen.html', next_name='Eco Citizen'),
     'project-eco-citizen.html': dict(
-        name='Eco Citizen', pillar='Green Thumbs', slug='green-thumbs', cat='Environment',
+        name='Eco Citizen', pillar='Environment and Climate', slug='green-thumbs', cat='Environment',
         lede='Encouraging environmental awareness and community-led action.',
-        facts=[('Pillar', 'Green Thumbs'), ('Category', 'Environment'), ('Location', 'Ait Ourir'), ('Years', '2020 – 2021')],
+        facts=[('Pillar', 'Environment and Climate'), ('Category', 'Environment'), ('Location', 'Ait Ourir'), ('Years', '2020 – 2021')],
         rows=[('Context', 'Residents and decision-makers in Ait Ourir describe household waste management as a persistent problem.'),
               ('Approach', 'A participatory process bringing residents, local NGOs and elected representatives together.'),
               ('Activities', 'Awareness campaigns (2020), then workshops on waste sorting and recycling and training for new local committees (2021).'),
               ('Results', 'Alternative waste-management proposals developed with the community.')],
         photo='Eco Citizen · Ait Ourir 2021', next_='project-youth-green-generation.html', next_name='Youth Green Generation'),
     'project-youth-green-generation.html': dict(
-        name='Youth Green Generation', pillar='Green Thumbs', slug='green-thumbs', cat='Climate Action',
+        name='Youth Green Generation', pillar='Environment and Climate', slug='green-thumbs', cat='Climate Action',
         lede='Supporting young people in developing responses to climate challenges.',
-        facts=[('Pillar', 'Green Thumbs'), ('Category', 'Climate Action'), ('Cohort', '2024')],
+        facts=[('Pillar', 'Environment and Climate'), ('Category', 'Climate Action'), ('Cohort', '2024')],
         rows=[('Context', 'Builds on AFCD’s earlier climate projects, locally and nationally (blog, November 2023).'),
               ('Approach', 'Empowering young people to take the lead on climate action in their communities.'),
               ('Activities', 'Call for applications for the 2024 cohort.')],
@@ -382,7 +437,7 @@ NEWS = [
      'AFCD has spent recent years on projects that address climate change locally and nationally. This post introduces the Youth Green Generation project and its call for young applicants.', 'call-for-application'),
     ('Youth Empowerment', '2023-10-01', 'October 1, 2023', 'A Journey of a Thousand Miles Begins with a Single Step',
      'A participant’s account of joining a one-year AFCD program on the last day of registration.', 'DSC04067'),
-    ('Women Empowerment', '2023-10-01', 'October 1, 2023', 'Journey with the AFCD Family',
+    ('Women’s Empowerment', '2023-10-01', 'October 1, 2023', 'Journey with the AFCD Family',
      'A Leadership Lab participant on a year of networking, capacity building and social entrepreneurship.', 'DSC03718'),
 ]
 
@@ -499,18 +554,19 @@ def involved():
 def contact():
     body = page_header([('Contact', 'contact.html')], 'Contact',
                        'Let’s <span class="text-ink-mid">talk.</span>',
-                       'Questions, partnerships, volunteering or press: we’d like to hear from you.', points=('Ait Ourir, El Haouz', 'Morocco')) + f'''
+                       'Questions, partnerships, volunteering or press: we’d like to hear from you.', points=('Marrakech', 'contact@afcdteam.com')) + f'''
 
 <section class="py-14 lg:py-16">
   <div class="wrap grid gap-12 lg:grid-cols-12 lg:gap-16">
     <div class="lg:col-span-5">
       <p class="label">Visit or call</p>
       <dl class="mt-5 border-b border-ink-light text-[15px]">
-        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Address</dt><dd>Avenue Hassan II<br>Ait Ourir, El Haouz<br>Morocco</dd></div>
-        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Phone</dt><dd class="tabular-nums"><a class="hover:underline" href="tel:+212663618536">+212 6 63 61 85 36</a><br><a class="hover:underline" href="tel:+212663662768">+212 6 63 66 27 68</a></dd></div>
-        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Email</dt><dd class="text-ink-mid">Official address to be confirmed</dd></div>
+        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Main office</dt><dd>Marrakech, Morocco<br><span class="text-ink-mid">Full street address to be confirmed before publication</span></dd></div>
+        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Roots</dt><dd>Ait Ourir, Al Haouz</dd></div>
+        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Phone</dt><dd class="tabular-nums"><a class="hover:underline" href="tel:+212663618536">+212 663 618 536</a></dd></div>
+        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Email</dt><dd><a class="hover:underline" href="mailto:contact@afcdteam.com">contact@afcdteam.com</a></dd></div>
       </dl>
-      {ph('Map · Avenue Hassan II, Ait Ourir', 'mt-8 aspect-[4/3] w-full rounded-3xl', '#E5E5E5')}
+      {ph('Map · Marrakech main office', 'mt-8 aspect-[4/3] w-full rounded-3xl', '#E5E5E5')}
     </div>
 
     <div class="lg:col-span-6 lg:col-start-7">
@@ -543,7 +599,7 @@ def contact():
   </div>
 </section>'''
     page('contact.html', 'Contact · AFCD Foundation',
-         'Contact AFCD Foundation in Ait Ourir, El Haouz, Morocco.', 'contact', body)
+         'Contact AFCD Foundation: main office in Marrakech, Morocco. Email contact@afcdteam.com or call +212 663 618 536.', 'contact', body)
 
 
 if __name__ == '__main__':

@@ -311,7 +311,7 @@
         ['Activities', 'Year-long civic engagement and entrepreneurship training tracks for selected young people.'],
         ['Results', 'Participant stories shared on the AFCD blog (2023).']
       ] },
-    { n: '02', name: 'Eco Citizen', dot: '#82E591', href: 'project-eco-citizen.html', pillar: 'Green Thumbs', cat: 'Environment', surface: 'pc-2', phTone: '#E6E6E6', dark: false,
+    { n: '02', name: 'Eco Citizen', dot: '#82E591', href: 'project-eco-citizen.html', pillar: 'Environment and Climate', cat: 'Environment', surface: 'pc-2', phTone: '#E6E6E6', dark: false,
       photo: 'Eco Citizen · Ait Ourir 2021',
       lede: 'Encouraging environmental awareness and community-led action.',
       rows: [
@@ -320,7 +320,7 @@
         ['Activities', 'Awareness campaigns (2020), then workshops on waste sorting and recycling and training for new local committees (2021).'],
         ['Results', 'Alternative waste-management proposals developed with the community.']
       ] },
-    { n: '03', name: 'Youth Green Generation', dot: '#82E591', href: 'project-youth-green-generation.html', pillar: 'Green Thumbs', cat: 'Climate Action', surface: 'pc-3', phTone: '#DADADA', dark: false,
+    { n: '03', name: 'Youth Green Generation', dot: '#82E591', href: 'project-youth-green-generation.html', pillar: 'Environment and Climate', cat: 'Climate Action', surface: 'pc-3', phTone: '#DADADA', dark: false,
       photo: 'call-for-application.jpg · 2024 call',
       lede: 'Supporting young people in developing responses to climate challenges.',
       rows: [

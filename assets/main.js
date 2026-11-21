@@ -385,13 +385,47 @@
   })();
 
   /* ---------- Partners ---------- */
-  (function () {
-    if (!$('#partner-groups')) return;
-  var GROUPS = [
+  var PARTNER_GROUPS = [
     ['International', ['World Denver', 'Danish Youth Council', 'Embassy of Switzerland in Morocco', 'U.S. Embassy Morocco', 'Embassy of France in Morocco', 'Service Civil International (Germany)', 'Plugged In Band Program', 'Rebild Ungdomsskole', 'MapWorks Learning']],
     ['National', ['High Atlas Foundation', 'Heinrich Böll Stiftung Rabat', 'Moroccan Institute for Policy Analysis', 'Dar America Casablanca', 'Anoual Association', 'International Youth Council Morocco', 'Student Voice', 'Y-PEER PETRI Morocco']],
     ['Local', ['Commune of Ait Ourir']]
   ];
+
+  /* Homepage: compact strip with filters */
+  (function () {
+    var strip = $('#partner-strip'); if (!strip) return;
+    function tile(name, group) {
+      return '<li class="pt-tile"><span class="pt-logo">Logo</span><span class="pt-name">' + name + '</span><span class="pt-tag">' + group + '</span></li>';
+    }
+    function list(groups) {
+      var out = [];
+      PARTNER_GROUPS.forEach(function (g) { if (groups.indexOf(g[0]) > -1) g[1].forEach(function (n) { out.push(tile(n, g[0])); }); });
+      return out.join('');
+    }
+    function row(groups, dir) {
+      var items = list(groups);
+      if (reduce) return '<div class="pt-row is-static"><ul class="pt-track">' + items + '</ul></div>';
+      return '<div class="pt-row" data-dir="' + dir + '"><ul class="pt-track">' + items + '</ul><ul class="pt-track" aria-hidden="true">' + items + '</ul></div>';
+    }
+    function render(key) {
+      strip.innerHTML = key === 'all'
+        ? row(['International'], 'left') + row(['National', 'Local'], 'right')
+        : '<ul class="pt-grid">' + list([key]) + '</ul>';
+    }
+    var btns = $$('.pt-filter');
+    btns.forEach(function (b) {
+      b.addEventListener('click', function () {
+        btns.forEach(function (x) { var on = x === b; x.classList.toggle('is-on', on); x.setAttribute('aria-pressed', String(on)); });
+        render(b.dataset.g);
+      });
+    });
+    render('all');
+  })();
+
+  /* Partners page: grouped list */
+  (function () {
+    if (!$('#partner-groups')) return;
+  var GROUPS = PARTNER_GROUPS;
   var pg = $('#partner-groups');
   GROUPS.forEach(function (g) {
     var cells = g[1].map(function (name) {

@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./index.html', './assets/main.js'],
+  content: ['./src/**/*.html', './assets/main.js'],
   theme: {
     extend: {
       fontFamily: {
@@ -9,7 +9,7 @@ module.exports = {
       colors: {
         ink: { DEFAULT: '#0B0B0B', pure: '#000000', charcoal: '#171717', dark: '#404040', mid: '#737373', light: '#D4D4D4', faint: '#F5F5F5', off: '#FAFAFA' },
       },
-      maxWidth: { site: '1320px' },
+      maxWidth: { site: '1600px' },
       letterSpacing: { tightest: '-0.045em', label: '0.14em' },
     },
   },

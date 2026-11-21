@@ -1,10 +1,11 @@
 {
   "name": "afcd-foundation-site",
   "version": "1.0.0",
-  "description": "AFCD Foundation homepage (HTML, Tailwind, JavaScript)",
-  "main": "index.js",
+  "description": "AFCD Foundation website (HTML, Tailwind, JavaScript)",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node build.mjs && tailwindcss -i input.css -o assets/styles.css --minify",
+    "build:pages": "node build.mjs",
+    "build:css": "tailwindcss -i input.css -o assets/styles.css --minify"
   },
   "keywords": [],
   "author": "",

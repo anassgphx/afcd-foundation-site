@@ -7,10 +7,18 @@
 //   ---
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 
 const SRC = 'src';
 const partial = (name) => readFileSync(join(SRC, 'partials', `${name}.html`), 'utf8');
-const head = partial('head');
+
+// Cache-busting: a short content hash on the CSS/JS links, so browsers and GitHub Pages
+// visitors always load the latest build. Run after the CSS is compiled (see npm run build).
+const version = (file) => createHash('sha1').update(readFileSync(file)).digest('hex').slice(0, 8);
+const CSS_V = version('assets/styles.css');
+const JS_V = version('assets/main.js');
+
+const head = partial('head').replace('href="assets/styles.css"', `href="assets/styles.css?v=${CSS_V}"`);
 const header = partial('header');
 const footer = partial('footer');
 
@@ -58,7 +66,7 @@ for (const file of pages) {
     '',
     markActive(footer, meta.active).trimEnd(),
     '',
-    '<script src="assets/main.js"></script>',
+    `<script src="assets/main.js?v=${JS_V}"></script>`,
     '</body>',
     '</html>',
     '',

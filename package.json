@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "AFCD Foundation website (HTML, Tailwind, JavaScript)",
   "scripts": {
-    "build": "node build.mjs && tailwindcss -i input.css -o assets/styles.css --minify",
+    "build": "tailwindcss -i input.css -o assets/styles.css --minify && node build.mjs",
     "build:pages": "node build.mjs",
     "build:css": "tailwindcss -i input.css -o assets/styles.css --minify"
   },

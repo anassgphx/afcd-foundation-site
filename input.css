@@ -336,6 +336,23 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .ns-feature .pc-btn { transition: transform .25s ease; }
 .ns-feature:hover .pc-btn .pc-arr { transform: translateX(3px); }
 
+/* Purpose: dark gradient band */
+.pv-band { background:
+    radial-gradient(900px 420px at 15% 0%, rgba(255,255,255,.08), transparent 70%),
+    radial-gradient(700px 420px at 100% 100%, rgba(255,255,255,.05), transparent 70%),
+    linear-gradient(180deg, #141414 0%, #0A0A0A 50%, #000000 100%); }
+.pv-card { display: flex; flex-direction: column; padding: 26px; border-radius: 28px; background: linear-gradient(160deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,.02) 100%); border: 1px solid rgba(255,255,255,.1); }
+.pv-mission { background: linear-gradient(160deg, rgba(255,255,255,.13) 0%, rgba(255,255,255,.04) 100%); border-color: rgba(255,255,255,.16); }
+@media (min-width: 768px) { .pv-card { padding: 34px; } }
+@media (min-width: 1024px) { .pv-card { min-height: 360px; } }
+.pv-num { display: inline-grid; place-items: center; min-width: 30px; height: 22px; padding: 0 7px; border-radius: 9999px; border: 1px solid rgba(255,255,255,.2); font-size: 11px; font-variant-numeric: tabular-nums; color: rgba(255,255,255,.7); }
+.pv-pill { display: inline-flex; align-items: center; min-height: 36px; padding: 0 16px; border-radius: 9999px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); font-size: 13px; font-weight: 500; }
+.pv-value { position: relative; overflow: hidden; padding: 22px; min-height: 170px; display: flex; flex-direction: column; justify-content: flex-end; border-radius: 22px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09); transition: background-color .25s ease, border-color .25s ease, transform .35s cubic-bezier(.2,.7,.2,1); }
+.pv-value:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.22); transform: translateY(-3px); }
+.pv-roman { position: absolute; top: 10px; right: 18px; font-size: 64px; font-weight: 700; line-height: 1; letter-spacing: -.04em; color: rgba(255,255,255,.07); transition: color .25s ease; }
+.pv-value:hover .pv-roman { color: rgba(255,255,255,.14); }
+[dir="rtl"] .pv-roman { right: auto; left: 18px; }
+
 /* Our Impact: bento */
 .im-card { position: relative; display: flex; flex-direction: column-reverse; justify-content: flex-start; min-height: 168px; padding: 20px; border-radius: 24px; background: #F5F5F5; border: 1px solid #ECECEC; transition: background-color .25s ease, border-color .25s ease; }
 .im-card:hover { background: #fff; border-color: var(--light); }

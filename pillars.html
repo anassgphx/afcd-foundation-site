@@ -269,68 +269,90 @@
 </main>
 
 <!-- ============ 11. FOOTER ============ -->
-<footer id="footer" class="bg-ink text-white on-dark" style="padding-bottom: env(safe-area-inset-bottom,0px)">
+<footer id="footer" class="ft relative overflow-hidden bg-ink text-white on-dark" style="padding-bottom: env(safe-area-inset-bottom,0px)">
   <div class="brand-line" aria-hidden="true"></div>
   <div class="wrap">
-    <!-- Upper CTA: deliberately compact so it doesn't repeat section 08 -->
-    <div class="grid gap-8 border-t border-white/20 py-14 lg:grid-cols-12 lg:items-end lg:py-20">
-      <div class="lg:col-span-8">
-        <p class="label text-white/55">Let's make a difference</p>
-        <p class="mt-4 text-4xl md:text-5xl font-semibold tracking-tightest leading-[1.02]">Change Starts with Us.</p>
-        <p class="mt-4 max-w-[46ch] text-white/65">Join the volunteers, alumni and partners who carry AFCD's work forward.</p>
-      </div>
-      <div class="lg:col-span-4 lg:text-right"><a href="get-involved.html" class="btn-light">Get Involved <span aria-hidden="true">↗</span></a></div>
-    </div>
 
-    <div class="grid gap-12 border-t border-white/20 py-14 md:grid-cols-2 lg:grid-cols-12 lg:gap-8 lg:py-20">
-      <div class="lg:col-span-4">
-        <img src="assets/brand/afcd-logo-white.png" alt="AFCD Foundation" width="1525" height="318" class="h-14 w-auto">
-        <p class="mt-6 text-lg font-medium">“We serve our community with love.”</p>
-        <p class="mt-3 max-w-[38ch] text-sm leading-relaxed text-white/60">A Moroccan nonprofit founded in 2007 in Ait Ourir, working on youth and women's empowerment, the environment and digital inclusion.</p>
-        <p class="mt-4 label text-white/45">Established 2007</p>
+    <!-- Newsletter -->
+    <section class="ft-news mt-10 grid gap-8 rounded-[28px] p-6 md:p-10 lg:mt-14 lg:grid-cols-12 lg:items-center lg:gap-12 lg:p-12" aria-labelledby="ft-news-title">
+      <div class="lg:col-span-6">
+        <p class="flex items-center gap-3"><span class="ft-dot" aria-hidden="true"></span><span class="label text-white/60">Newsletter</span></p>
+        <h2 id="ft-news-title" class="mt-4 text-[32px] font-semibold leading-[1.04] tracking-[-0.04em] md:text-[44px]">Stay close to <span class="text-white/45">our community.</span></h2>
+        <p class="mt-4 max-w-[46ch] text-[15px] leading-relaxed text-white/65 md:text-base">Calls for applications, programme news and stories from Ait Ourir and across Morocco, a few times a year.</p>
       </div>
-      <nav class="lg:col-span-2" aria-label="Explore">
-        <p class="label text-white/45">Explore</p>
-        <ul class="mt-5 space-y-3 text-[15px] text-white/80">
-          <li><a class="hover:text-white" href="about.html">About Us</a></li><li><a class="hover:text-white" href="pillars.html">Our Pillars</a></li><li><a class="hover:text-white" href="projects.html">Projects</a></li><li><a class="hover:text-white" href="news.html">News &amp; Stories</a></li><li><a class="hover:text-white" href="partners.html">Partners</a></li>
+      <div class="lg:col-span-6">
+        <form id="newsletter-form" class="ft-form" novalidate>
+          <label for="nl-email" class="sr-only">Email address</label>
+          <input id="nl-email" name="email" type="email" autocomplete="email" placeholder="Your email address" required>
+          <button type="submit" class="ft-submit">Subscribe <span class="ft-arr" aria-hidden="true">→</span></button>
+        </form>
+        <p class="ft-error mt-3 hidden text-[13px] text-[#FCA5A5]" role="alert">Please enter a valid email address.</p>
+        <ul class="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-white/55">
+          <li class="flex items-center gap-2"><span class="ft-check" aria-hidden="true">✓</span>No spam</li>
+          <li class="flex items-center gap-2"><span class="ft-check" aria-hidden="true">✓</span>Unsubscribe anytime</li>
+          <li class="flex items-center gap-2"><span class="ft-check" aria-hidden="true">✓</span>English for now; French and Arabic soon</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Main -->
+    <div class="grid gap-12 py-14 md:grid-cols-2 lg:grid-cols-12 lg:gap-8 lg:py-16">
+      <div class="lg:col-span-4">
+        <a href="index.html" aria-label="AFCD Foundation home" class="inline-block"><img src="assets/brand/afcd-logo-white.png" alt="AFCD Foundation" width="1525" height="318" class="h-14 w-auto"></a>
+        <p class="mt-6 text-xl font-medium tracking-[-0.015em]">“We serve our community with love.”</p>
+        <p class="mt-3 max-w-[40ch] text-sm leading-relaxed text-white/60">A Moroccan nonprofit founded in 2007 in Ait Ourir, working on youth and women’s empowerment, the environment and digital inclusion.</p>
+        <div class="mt-6 flex flex-wrap items-center gap-3">
+          <span class="ft-chip">Est. 2007</span><span class="ft-chip">Ait Ourir · El Haouz</span>
+        </div>
+        <a href="get-involved.html" class="btn-light btn-cta mt-7">Get Involved <span class="arr" aria-hidden="true">↗</span></a>
+      </div>
+
+      <nav class="ft-col lg:col-span-2" aria-label="Explore">
+        <p class="ft-head">Explore</p>
+        <ul>
+          <li><a href="about.html">About Us</a></li><li><a href="pillars.html">Our Pillars</a></li><li><a href="projects.html">Projects</a></li><li><a href="news.html">News &amp; Stories</a></li><li><a href="partners.html">Partners</a></li>
         </ul>
       </nav>
-      <nav class="lg:col-span-2" aria-label="Our pillars">
-        <p class="label text-white/45">Our Pillars</p>
-        <ul class="mt-5 space-y-3 text-[15px] text-white/80">
-          <li><a class="hover:text-white" href="pillars.html#youth-empowerment">Youth Empowerment</a></li><li><a class="hover:text-white" href="pillars.html#women-empowerment">Women Empowerment</a></li><li><a class="hover:text-white" href="pillars.html#green-thumbs">Green Thumbs</a></li><li><a class="hover:text-white" href="pillars.html#digital-empowerment">Digital Empowerment</a></li>
+      <nav class="ft-col lg:col-span-2" aria-label="Our pillars">
+        <p class="ft-head">Our Pillars</p>
+        <ul>
+          <li><a href="pillars.html#youth-empowerment">Youth Empowerment</a></li><li><a href="pillars.html#women-empowerment">Women Empowerment</a></li><li><a href="pillars.html#green-thumbs">Green Thumbs</a></li><li><a href="pillars.html#digital-empowerment">Digital Empowerment</a></li>
         </ul>
       </nav>
-      <nav class="lg:col-span-2" aria-label="Get involved">
-        <p class="label text-white/45">Get Involved</p>
-        <ul class="mt-5 space-y-3 text-[15px] text-white/80">
-          <li><a class="hover:text-white" href="get-involved.html#volunteer">Volunteer</a></li>
-          <li><a class="hover:text-white" href="get-involved.html#programs">Opportunities</a></li>
-          <li><a class="hover:text-white" href="get-involved.html#alumni">Alumni Club</a></li>
-          <li><a class="hover:text-white" href="get-involved.html#partner">Partnerships</a></li>
-          <li><a class="hover:text-white" href="contact.html">Contact</a></li>
+      <nav class="ft-col lg:col-span-2" aria-label="Get involved">
+        <p class="ft-head">Get Involved</p>
+        <ul>
+          <li><a href="get-involved.html#volunteer">Volunteer</a></li><li><a href="get-involved.html#programs">Opportunities</a></li><li><a href="get-involved.html#alumni">Alumni Club</a></li><li><a href="get-involved.html#partner">Partnerships</a></li><li><a href="contact.html">Contact</a></li>
         </ul>
       </nav>
-      <div class="md:col-span-2 lg:col-span-2">
-        <p class="label text-white/45">Contact</p>
-        <address class="mt-5 space-y-3 text-[15px] not-italic text-white/80">
-          <p>Avenue Hassan II<br>Ait Ourir, El Haouz<br>Morocco</p>
-          <p class="tabular-nums select-all">+212 6 63 61 85 36</p>
-          <p class="tabular-nums select-all">+212 6 63 66 27 68</p>
+      <div class="ft-col md:col-span-2 lg:col-span-2">
+        <p class="ft-head">Contact</p>
+        <address class="not-italic">
+          <ul>
+            <li class="text-white/80">Avenue Hassan II<br>Ait Ourir, El Haouz<br>Morocco</li>
+            <li><a class="tabular-nums" href="tel:+212663618536">+212 6 63 61 85 36</a></li>
+            <li><a class="tabular-nums" href="tel:+212663662768">+212 6 63 66 27 68</a></li>
+            <li><a href="contact.html">Send a message ↗</a></li>
+          </ul>
         </address>
       </div>
     </div>
 
-    <div class="flex flex-col gap-5 border-t border-white/20 py-8 text-sm text-white/55 md:flex-row md:items-center md:justify-between">
+    <!-- Signature wordmark -->
+    <svg class="ft-mark" viewBox="0 0 1200 170" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false"><text x="0" y="140" textLength="1200" lengthAdjust="spacingAndGlyphs">AFCD Foundation</text></svg>
+
+    <!-- Bottom bar -->
+    <div class="flex flex-col gap-5 border-t border-white/15 py-7 text-sm text-white/55 md:flex-row md:items-center md:justify-between">
       <p>© <span id="year">2026</span> AFCD Foundation. All rights reserved.</p>
       <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
         <a class="hover:text-white" href="contact.html#privacy">Privacy Policy</a>
         <a class="hover:text-white" href="contact.html#accessibility">Accessibility</a>
         <div class="flex items-center gap-1 text-[12px] font-medium tracking-[0.12em]" role="group" aria-label="Language">
-          <button class="lang-btn px-1.5 py-1 text-white" data-lang="en" aria-pressed="true">EN</button><span class="text-white/30">/</span>
-          <button class="lang-btn px-1.5 py-1 text-white/50 hover:text-white" data-lang="fr" aria-pressed="false">FR</button><span class="text-white/30">/</span>
-          <button class="lang-btn px-1.5 py-1 text-white/50 hover:text-white" data-lang="ar" aria-pressed="false">AR</button>
+          <button class="lang-btn px-1.5 py-1 text-white" data-lang="en" aria-pressed="true">EN</button><span class="text-white/30" aria-hidden="true">/</span>
+          <button class="lang-btn px-1.5 py-1 text-white/50 hover:text-white" data-lang="fr" aria-disabled="true" title="Version française bientôt disponible">FR<span class="sr-only"> (coming soon)</span></button><span class="text-white/30" aria-hidden="true">/</span>
+          <button class="lang-btn px-1.5 py-1 text-white/50 hover:text-white" data-lang="ar" aria-disabled="true" title="النسخة العربية قريبًا">AR<span class="sr-only"> (coming soon)</span></button>
         </div>
+        <a href="#top" class="ft-top" id="back-to-top">Back to top <span aria-hidden="true">↑</span></a>
       </div>
     </div>
   </div>

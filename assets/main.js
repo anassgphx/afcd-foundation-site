@@ -48,6 +48,30 @@
     apply(buttons.some(function (b) { return b.dataset.filter === fromUrl; }) ? fromUrl : 'all');
   })();
 
+  /* ---------- Newsletter (footer): client-side check only, no service connected yet ---------- */
+  (function () {
+    var form = $('#newsletter-form'); if (!form) return;
+    var err = $('.ft-error');
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.value.trim());
+      if (err) err.classList.toggle('hidden', ok);
+      form.email.setAttribute('aria-invalid', String(!ok));
+      if (ok) { toast('Thanks! The newsletter isn’t connected yet, so nothing was sent.'); form.reset(); }
+      else form.email.focus();
+    });
+  })();
+
+  /* ---------- Back to top ---------- */
+  (function () {
+    var b = $('#back-to-top'); if (!b) return;
+    b.addEventListener('click', function (e) {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+      var skip = $('a[href="#main"]'); if (skip) skip.focus({ preventScroll: true });
+    });
+  })();
+
   /* ---------- Contact form: client-side checks only (no backend yet) ---------- */
   (function () {
     var form = $('#contact-form'); if (!form) return;

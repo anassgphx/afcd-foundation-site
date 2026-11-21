@@ -20,6 +20,19 @@
   var yrs = $('#years-since'); if (yrs) yrs.textContent = (y - 2007);
   $$('[data-years-since]').forEach(function (el) { el.textContent = y - 2007; });
 
+  /* ---------- Scroll reveal for [data-reveal] (skipped with reduced motion) ---------- */
+  (function () {
+    var els = $$('[data-reveal]');
+    if (!els.length || reduce || !('IntersectionObserver' in window)) return;
+    doc.classList.add('rv-ready');
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); }
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.12 });
+    els.forEach(function (el) { io.observe(el); });
+  })();
+
   /* ---------- Projects page: filter by pillar (also reads ?pillar= from the URL) ---------- */
   (function () {
     var grid = $('#proj-grid'); if (!grid) return;

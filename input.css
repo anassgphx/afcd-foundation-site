@@ -148,6 +148,19 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 }
 [dir="rtl"] .im-metric:nth-child(odd) { border-right: 0; border-left: 1px solid rgba(255,255,255,.15); }
 
+/* News & Stories */
+.ns-card { border: 1px solid var(--light); border-radius: 24px; padding: 14px; background: #fff; transition: border-color .25s ease, box-shadow .35s ease, transform .35s cubic-bezier(.2,.7,.2,1); }
+.ns-card:hover { border-color: var(--mid); box-shadow: 0 24px 40px -32px rgba(0,0,0,.35); transform: translateY(-2px); }
+.ns-thumb { transition: filter .4s ease; }
+.ns-card:hover .ns-thumb { filter: brightness(.95); }
+.ns-tag { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: 9999px; background: #F3F3F3; font-size: 10.5px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; }
+.ns-more svg { transition: transform .25s ease; }
+.ns-card:hover .ns-more svg { transform: translateX(3px); }
+.ns-feature-img { transform: scale(1.02); transition: transform 1.2s cubic-bezier(.2,.7,.2,1); }
+.ns-feature:hover .ns-feature-img { transform: scale(1.06); }
+.ns-feature .pc-btn { transition: transform .25s ease; }
+.ns-feature:hover .pc-btn .pc-arr { transform: translateX(3px); }
+
 /* Scroll reveal (only when motion is allowed; content is visible without JS) */
 .rv-ready [data-reveal] { opacity: 0; transform: translateY(18px); transition: opacity .7s ease var(--d, 0ms), transform .8s cubic-bezier(.2,.7,.2,1) var(--d, 0ms); }
 .rv-ready [data-reveal].is-in { opacity: 1; transform: none; }
@@ -209,7 +222,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .gv-value:hover .gv-line { width: calc(100% - 48px); }
 
 /* Project cards: neutral surfaces */
-.pc-1 { background: #FFFFFF; box-shadow: inset 0 0 0 1px var(--light); }
+.pc-1 { background: #FFFFFF; }
 .pc-2 { background: #F3F3F3; }
 .pc-3 { background: #E8E8E8; }
 .pc-1 .pc-inner { background: #F5F5F5; }
@@ -221,7 +234,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .pc-btn .pc-arr { font-size: 18px; transition: transform .25s ease; }
 .pc-btn:hover .pc-arr { transform: translateX(3px); }
 [dir="rtl"] .pc-btn .pc-arr { transform: scaleX(-1); }
-.pcard { border: 0; }
+.pcard { border: 1px solid var(--light); }
+.pcard .pc-inner { border: 1px solid #E6E6E6; }
 .pcard .pc-pill { background: rgba(0,0,0,.06); }
 .pcard .pc-btn { background: #000; color: #fff; }
 @media (min-width: 1024px) {

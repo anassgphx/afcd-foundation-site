@@ -495,6 +495,8 @@ export const pageContents = pgTable('page_contents', {
   id: id(),
   file: text('file').notNull(),                                    // e.g. 'index.html'
   values: jsonb('values').$type<Record<string, unknown>>().notNull().default({}),   // only edited fields; others keep the page's own text
+  // Section list (Studio V2): site sections by id and registry blocks, in page order. null = the page as written.
+  layout: jsonb('layout').$type<unknown[] | null>(),
   status: workflowEnum('status').notNull().default('draft'),
   publishedRevisionId: uuid('published_revision_id'),
   approvedRevisionId: uuid('approved_revision_id'),

@@ -25,7 +25,10 @@ import * as OP from './modules/opportunities/service.ts';
 import * as FM from './modules/forms/service.ts';
 import * as SEO from './modules/seo/service.ts';
 import * as HM from './modules/home/service.ts';
-import { readFields, SECTION_LABEL } from './modules/home/fields.ts';
+import { readFields, SECTION_LABEL, siteSections } from './modules/home/fields.ts';
+import { currentLayout, validateLayout, HOME_BLOCKS } from './modules/home/layout.ts';
+import { homeCanvas } from './modules/home/render.ts';
+import { docMediaIds } from './modules/pages/render.ts';
 import { importPartners } from './modules/partners/import.ts';
 import { blockCatalog } from './modules/pages/blocks.ts';
 import { Publisher, type BuildRunner } from './modules/publish/service.ts';
@@ -393,10 +396,21 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
     const content = await HM.loadContent(db);
     const ids = Object.values(content?.values ?? {}).flatMap((v) => (v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId] : []));
     const mediaRows = ids.length ? await db.select().from(t.media).where(inArray(t.media.id, ids)) : [];
-    return c.json({ fields, sections: SECTION_LABEL, content, media: mediaRows.map(withUrl),
-      problems: content ? await HM.contentProblems(db, cfg, content.values) : [], history: content ? await HM.contentHistory(db, content.id) : { revisions: [], comments: [] } });
+    const layout = currentLayout(cfg.siteRoot, HM.HOME, content?.layout ?? null);
+    const blockIds = layout.flatMap((e) => (e.kind === 'block' ? docMediaIds({ blocks: [e] }) : []));
+    const extra = blockIds.length ? await db.select().from(t.media).where(inArray(t.media.id, blockIds)) : [];
+    return c.json({ fields, sections: SECTION_LABEL, siteSections: siteSections(cfg.siteRoot, HM.HOME), layout, content, media: [...mediaRows, ...extra].map(withUrl),
+      catalog: blockCatalog().filter((b) => HOME_BLOCKS.includes(b.type)),
+      problems: content ? await HM.contentProblems(db, cfg, content.values, content.layout) : [], history: content ? await HM.contentHistory(db, content.id) : { revisions: [], comments: [] } });
   });
   api.put('/home', perm('page.update'), async (c) => c.json(await HM.saveContent(db, cfg, actor(c), await c.req.json())));
+  // Live canvas of the unsaved working copy (no files written): the real page, composed by the same code as the build.
+  api.post('/home/canvas', perm('page.read'), bodyLimit({ maxSize: 512 * 1024 }), async (c) => {
+    const b = await c.req.json().catch(() => ({})) as { values?: unknown; layout?: unknown };
+    const values = HM.validateValues(readFields(cfg.siteRoot, HM.HOME), b.values ?? {});
+    const { layout } = validateLayout(cfg.siteRoot, HM.HOME, b.layout ?? currentLayout(cfg.siteRoot, HM.HOME, null));
+    return c.json({ html: await homeCanvas(db, cfg, HM.HOME, values, layout) });
+  });
   api.post('/home/transition', async (c) => {
     const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
     if (!body.success || !HM.homeTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');

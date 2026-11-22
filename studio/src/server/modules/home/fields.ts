@@ -2,9 +2,10 @@
 // The page source is the single source of the default values: when the website team changes a text, Studio shows it.
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { splitSections } from '../../../../../lib/page-fields.mjs';
 
 export type FieldType = 'text' | 'split' | 'rich' | 'link' | 'tail' | 'image';
-export type FieldDef = { key: string; type: FieldType; section: string; label: string; default: unknown; tag: string };
+export type FieldDef = { key: string; type: FieldType; section: string; sectionId: string | null; label: string; default: unknown; tag: string };
 
 const decode = (s: string) => s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ');
 const strip = (s: string) => decode(s.replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
@@ -35,6 +36,11 @@ export function readFields(siteRoot: string, file: string): FieldDef[] {
   if (!/^[a-z0-9-]+\.html$/.test(file) || !existsSync(p)) return [];
   const html = readFileSync(p, 'utf8');
   const out = new Map<string, FieldDef>();
+  // which top-level <section> each marker sits in (the homepage editor shows a section's fields when it is selected)
+  const fm = html.match(/^---\n[\s\S]*?\n---\n/)?.[0] ?? '';
+  const ranges: { id: string | null; from: number; to: number }[] = []; let pos = fm.length;
+  for (const part of splitSections(html.slice(fm.length)).parts) { ranges.push({ id: part.id, from: pos, to: pos + part.html.length }); pos += part.html.length; }
+  const sectionAt = (i: number) => ranges.find((r) => i >= r.from && i < r.to)?.id ?? null;
   const re = /<([a-z][a-z0-9]*)\b[^>]*\sdata-sf="([^"]+)"[^>]*>/gi; let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {
     const [raw, tag, key] = m;
@@ -54,7 +60,21 @@ export function readFields(siteRoot: string, file: string): FieldDef[] {
     }
     const dot = key.indexOf('.'); const section = key.startsWith('hero.') ? key.split('.').slice(0, 2).join('.') : key.slice(0, dot);
     const rest = key.slice(section.length + 1);
-    out.set(key, { key, type: (type === 'plain' ? 'text' : type) as FieldType, section, label: FIELD_LABEL[rest] ?? rest, default: def, tag });
+    out.set(key, { key, type: (type === 'plain' ? 'text' : type) as FieldType, section, sectionId: sectionAt(m.index), label: FIELD_LABEL[rest] ?? rest, default: def, tag });
   }
   return [...out.values()];
+}
+
+/** The page's top-level sections in source order, with readable names. */
+export const SITE_SECTION_LABEL: Record<string, string> = {
+  hero: 'Hero slider', 'who-we-are': 'Who we are', purpose: 'Our purpose', pillars: 'Strategic pillars', projects: 'Featured projects', impact: 'Our impact',
+  news: 'News & stories', events: 'Upcoming events', partners: 'Partners', 'get-involved': 'Get involved', opportunities: 'Opportunities',
+};
+export function pageBody(siteRoot: string, file: string) {
+  const p = resolve(siteRoot, 'src/pages', file);
+  if (!/^[a-z0-9-]+\.html$/.test(file) || !existsSync(p)) return '';
+  return readFileSync(p, 'utf8').replace(/^---\n[\s\S]*?\n---\n/, '').trim();
+}
+export function siteSections(siteRoot: string, file: string) {
+  return splitSections(pageBody(siteRoot, file)).parts.filter((p) => p.id).map((p) => ({ id: p.id as string, label: SITE_SECTION_LABEL[p.id as string] ?? (p.id as string).replace(/-/g, ' ') }));
 }

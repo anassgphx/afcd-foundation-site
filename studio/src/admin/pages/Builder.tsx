@@ -5,8 +5,8 @@ import { Badge, Icon, LiveBadge, Modal, fmtDate, navigate, useCan, useMe, useToa
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 
-type Field = { key: string; label: string; type: string; max?: number; hint?: string; required?: boolean; options?: [string, string][]; itemLabel?: string; min?: number; fields?: Field[] };
-type BlockDef = { type: string; version: number; label: string; group: string; description: string; fields: Field[]; defaults: Record<string, any> };
+export type Field = { key: string; label: string; type: string; max?: number; hint?: string; required?: boolean; options?: [string, string][]; itemLabel?: string; min?: number; fields?: Field[] };
+export type BlockDef = { type: string; version: number; label: string; group: string; description: string; fields: Field[]; defaults: Record<string, any> };
 type Block = { id: string; type: string; v: number; hidden: boolean; props: Record<string, any> };
 type Doc = { version: number; blocks: Block[] };
 type Settings = { title: string; slug: string; description: string; navSection: string; noindex: boolean };
@@ -252,7 +252,7 @@ function Labeled({ label, hint, children }: { label: string; hint?: string; chil
 }
 
 // ---------------------------------------------------------------- Field editors (driven by block metadata)
-function FieldEditor({ f, value, onChange, links }: { f: Field; value: any; onChange: (v: any) => void; links: string[] }) {
+export function FieldEditor({ f, value, onChange, links }: { f: Field; value: any; onChange: (v: any) => void; links: string[] }) {
   const [picker, setPicker] = useState(false);
   const [mediaInfo, setMediaInfo] = useState<MediaItem | null>(null);
   const [pillars, setPillars] = useState<{ key: string; name: string }[]>([]);

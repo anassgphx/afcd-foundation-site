@@ -1,0 +1,69 @@
+// Homepage output for build.mjs (page-fields.json entry) and the editor canvas. Both use lib/page-fields.mjs, the code
+// build.mjs runs, so the canvas shows what will be published.
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import type { DB } from '../../db/client.ts';
+import type { Config } from '../../config.ts';
+import { applyFields, composeSections, type LayoutItem } from '../../../../../lib/page-fields.mjs';
+import { esc, renderBlocks } from '../pages/blocks.ts';
+import { buildCtx } from '../pages/render.ts';
+import { inArray } from 'drizzle-orm';
+import { media } from '../../db/schema.ts';
+import { publicRef } from '../media/service.ts';
+import { pageBody } from './fields.ts';
+import { layoutBlocks, type LayoutEntry } from './layout.ts';
+
+/** Layout as build.mjs reads it: sections by id, blocks as HTML from the registry (hidden blocks left out). */
+export async function exportLayout(db: DB, layout: LayoutEntry[] | null, opts: { mediaPrefix?: string; projectOverride?: { projectId: string; revisionId: string | null } } = {}) {
+  if (!layout) return undefined;
+  const blocks = layoutBlocks(layout);
+  const ctx = await buildCtx(db, [{ blocks }], opts);
+  return layout.flatMap((e): LayoutItem[] => {
+    if (e.kind === 'section') return [{ section: e.id, ...(e.hidden ? { hidden: true } : {}) }];
+    if (e.hidden) return [];
+    const html = renderBlocks({ version: 1, blocks: [{ id: e.id, type: e.type, v: e.v, hidden: false, props: e.props }] }, { ...ctx, pageTitle: 'Home' });
+    return html ? [{ block: e.id, html }] : [];
+  });
+}
+
+const CANVAS_CSS = `<style>
+[data-block-id]{position:relative;cursor:pointer}
+[data-block-id]:hover{outline:2px dashed rgba(37,99,235,.55);outline-offset:-2px}
+[data-block-id].is-selected{outline:2px solid #2563EB;outline-offset:-2px}
+[data-block-id][data-hidden]{opacity:.3;filter:grayscale(1)}
+[data-block-id][data-hidden]::before{content:"Hidden";position:absolute;z-index:5;top:12px;left:12px;padding:4px 10px;border-radius:999px;background:#111;color:#fff;font:600 11px/1.4 system-ui}
+[data-block-id] a,[data-block-id] summary,[data-block-id] button{pointer-events:none}
+[data-reveal],.reveal{opacity:1!important;transform:none!important}
+.hx-slide:not(.is-on),.hx-copy[hidden]{display:none}
+</style>`;
+
+/** Field values for lib/page-fields.mjs: chosen photos ({ mediaId }) become { src, srcset, w, h, alt, fx, fy }. */
+export async function resolveFieldValues(db: DB, values: Record<string, unknown>) {
+  const ids = Object.values(values).flatMap((v) => (v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId] : []));
+  const rows = ids.length ? await db.select().from(media).where(inArray(media.id, ids)) : [];
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(values)) {
+    if (v && typeof v === 'object' && 'mediaId' in v) {
+      const m = rows.find((r) => r.id === (v as { mediaId: string }).mediaId); if (!m) continue;
+      const ref = publicRef(m, 'assets/media/');
+      out[k] = { src: ref.src, srcset: ref.srcset, w: ref.w, h: ref.h, alt: m.alt, fx: m.focalX, fy: m.focalY };
+    } else out[k] = v;
+  }
+  return out;
+}
+
+/** The whole homepage, with the working copy applied, marked for selection. No scripts run in the canvas. */
+export async function homeCanvas(db: DB, cfg: Config, file: string, values: Record<string, unknown>, layout: LayoutEntry[]) {
+  const part = (n: string) => readFileSync(resolve(cfg.siteRoot, 'src/partials', `${n}.html`), 'utf8');
+  const mark = (h: string) => h.replace(/\{\{cur:([a-z]+)\}\}/g, (_m, k) => (k === 'home' ? 'is-current' : '')).replace(/\{\{aria:([a-z]+)\}\}/g, (_m, k) => (k === 'home' ? ' aria-current="page"' : ''));
+  const head = part('head').replace('{{title}}', 'Homepage · AFCD Studio').replace('{{description}}', '')
+    .replace('<head>', '<head>\n<base href="/studio/site/">').replace('</head>', `${CANVAS_CSS}\n</head>`);
+  const blocks = layoutBlocks(layout);
+  const ctx = await buildCtx(db, [{ blocks }], { editor: true });
+  const blockHtml = new Map(blocks.map((b) => [b.id, renderBlocks({ version: 1, blocks: [{ ...b, hidden: false }] }, { ...ctx, pageTitle: 'Home', editor: true })
+    .replace(/^<div data-block-id="[^"]+"(?: data-hidden="1")?>|<\/div>$/g, '')]));
+  const items: LayoutItem[] = layout.map((e) => (e.kind === 'section' ? { section: e.id, hidden: e.hidden } : { block: e.id, html: blockHtml.get(e.id) ?? '', hidden: e.hidden }));
+  const body = composeSections(applyFields(pageBody(cfg.siteRoot, file), await resolveFieldValues(db, values)), items,
+    (id, html, kind) => `<div data-block-id="${esc(id)}"${kind.startsWith('hidden') ? ' data-hidden="1"' : ''}>${html}</div>`);
+  return [head.trimEnd(), '<body class="font-sans">', mark(part('header')).trimEnd(), `<main id="main" data-page="home">${body}</main>`, mark(part('footer')).trimEnd(), '</body></html>'].join('\n');
+}

@@ -71,6 +71,13 @@
       "when": 1795343924472,
       "tag": "0009_local_only_password",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795344846961,
+      "tag": "0010_homepage_layout",
+      "breakpoints": true
     }
   ]
 }

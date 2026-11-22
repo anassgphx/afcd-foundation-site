@@ -19,6 +19,8 @@ import { partners, partnerRevisions, events, eventRevisions, opportunities, oppo
 import type { OverrideSnapshot } from '../seo/service.ts';
 import { pageContents, pageContentRevisions } from '../../db/schema.ts';
 import { HOME } from '../home/service.ts';
+import { exportLayout } from '../home/render.ts';
+import { currentLayout, layoutBlocks, type LayoutEntry } from '../home/layout.ts';
 import { publicRef } from '../media/service.ts';
 import { detailSource, listingSource, oppCtx, oppState, opportunityFile, type LiveOpp } from '../opportunities/render.ts';
 import type { OpportunitySnapshot } from '../opportunities/service.ts';
@@ -254,10 +256,14 @@ export class Publisher {
     const revId = override ? override.revisionId : c?.publishedRevisionId ?? null;
     if (!revId) { if (existsSync(this.fieldsFile)) rmSync(this.fieldsFile); return [] as string[]; }
     const [rev] = await this.db.select().from(pageContentRevisions).where(eq(pageContentRevisions.id, revId));
-    const [values, ids] = await this.resolveFields((rev.snapshot as { values: Record<string, unknown> }).values);
+    const snap = rev.snapshot as { values: Record<string, unknown>; layout?: unknown };
+    const [values, fieldIds] = await this.resolveFields(snap.values);
+    const layout = snap.layout ? currentLayout(this.cfg.siteRoot, HOME, snap.layout) : null;
+    const exported = await exportLayout(this.db, layout);
+    const ids = [...fieldIds, ...(layout ? docMediaIds({ blocks: layoutBlocks(layout) }) : [])];
     const tmp = `${this.fieldsFile}.${randomBytes(4).toString('hex')}.tmp`;
     mkdirSync(resolve(this.fieldsFile, '..'), { recursive: true });
-    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), pages: { [HOME]: { revision: revId, fields: values } } }, null, 2) + '\n'); renameSync(tmp, this.fieldsFile);
+    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), pages: { [HOME]: { revision: revId, fields: values, ...(exported ? { layout: exported } : {}) } } }, null, 2) + '\n'); renameSync(tmp, this.fieldsFile);
     return ids;
   }
 
@@ -966,7 +972,9 @@ export class Publisher {
       this.writeData(dataFile, await this.liveEntries());
       copyFileSync(resolve(this.cfg.siteRoot, 'src/pages', HOME), resolve(pagesDir, HOME));
       const [values] = await this.resolveFields(c?.values ?? {});
-      writeFileSync(fieldsFile, JSON.stringify({ version: 1, source: 'AFCD Studio (preview)', pages: { [HOME]: { revision: 'preview', fields: values } } }, null, 2));
+      const layout = c?.layout ? currentLayout(this.cfg.siteRoot, HOME, c.layout) : null;
+      const exported = await exportLayout(this.db, layout);
+      writeFileSync(fieldsFile, JSON.stringify({ version: 1, source: 'AFCD Studio (preview)', pages: { [HOME]: { revision: 'preview', fields: values, ...(exported ? { layout: exported } : {}) } } }, null, 2));
       await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, only: 'pages', fieldsFile });
       if (!existsSync(resolve(outDir, HOME))) throw new AppError(409, 'The preview could not be generated.');
       return { token, file: HOME };

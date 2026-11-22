@@ -171,7 +171,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 }
 
 function route(path: string): { title: string; el: React.ReactElement; full?: boolean } {
-  if (path.startsWith('/studio/home')) return { title: 'Homepage', el: <HomeEditor /> };
+  if (path.startsWith('/studio/home')) return { title: 'Homepage', el: <HomeEditor />, full: true };
   if (path.startsWith('/studio/seo')) return { title: 'SEO', el: <SeoPage key={path} /> };
   if (path.startsWith('/studio/forms')) return { title: 'Forms', el: <FormsPage /> };
   const op = path.match(/^\/studio\/opportunities\/([0-9a-f-]{36})$/);

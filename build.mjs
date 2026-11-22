@@ -9,6 +9,7 @@ import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { renderPage } from './lib/page-fields.mjs';
+import { activeLangs, decorateEnglish, buildLanguages } from './lib/i18n.mjs';
 import { execSync } from 'node:child_process';
 
 const SRC = 'src';
@@ -112,6 +113,22 @@ function applySeo(file, meta) {
 const FIELDS_FILE = process.env.PAGE_FIELDS_JSON || join(SRC, 'data', 'page-fields.json');
 const FIELDS = existsSync(FIELDS_FILE) ? JSON.parse(readFileSync(FIELDS_FILE, 'utf8')).pages ?? {} : {};
 
+// Studio structured data (owned by AFCD Studio): src/data/schema.json (or env SCHEMA_JSON), written only after reviewed
+// settings are published, adds Organization fields to the homepage markup and Article/Event markup to Studio pages.
+// Without it pages build exactly as written. Only public organization fields pass (never tax, CNSS or registration
+// numbers, the legal representative or the street address), and only the foundation's public email addresses.
+const SCHEMA_FILE = process.env.SCHEMA_JSON || join(SRC, 'data', 'schema.json');
+const SCHEMA = existsSync(SCHEMA_FILE) ? JSON.parse(readFileSync(SCHEMA_FILE, 'utf8')) : null;
+const SCHEMA_ORG_KEYS = ['alternateName', 'legalName', 'description', 'email', 'telephone', 'foundingDate', 'sameAs'];
+const PUBLIC_EMAILS = ['contact@afcdteam.com', 'akaya@afcdteam.com'];
+function schemaOrg() {
+  const o = SCHEMA?.organization ?? {}; const out = { ...ORG };
+  for (const k of SCHEMA_ORG_KEYS) if (o[k] !== undefined && o[k] !== '' && (k !== 'email' || PUBLIC_EMAILS.includes(o[k]))) out[k] = o[k];
+  return out;
+}
+const schemaPage = (file) => (SCHEMA?.pages?.[file] ?? []).filter((x) => x && (x['@type'] === 'Article' || x['@type'] === 'Event'));
+const jsonLd = (obj) => JSON.stringify(obj).replace(/</g, '\\u003c');   // editor text can never close the script tag
+
 function seoTags(file, meta) {
   const noindex = !PRODUCTION || meta.noindex === 'true';
   const title = escapeAttr(meta.title), desc = escapeAttr(meta.description);
@@ -137,12 +154,14 @@ function seoTags(file, meta) {
   if (FORMS_ENDPOINT) tags.push(`<meta name="afcd-forms" content="${escapeAttr(FORMS_ENDPOINT)}">`);
   const ld = [];
   if (file === 'index.html') {
-    ld.push(ORG, WEBSITE);
+    ld.push(SCHEMA ? schemaOrg() : ORG, WEBSITE);
+    if (SCHEMA?.revision) tags.push(`<meta name="studio-schema-rev" content="${escapeAttr(String(SCHEMA.revision))}">`);
     tags.push('<link rel="preload" as="image" href="assets/img/hero-leadership-lab.webp" fetchpriority="high">');
   }
   const bc = breadcrumbs(file, meta);
   if (bc) ld.push(bc);
-  for (const obj of ld) tags.push(`<script type="application/ld+json">${JSON.stringify(obj)}</script>`);
+  ld.push(...schemaPage(file));
+  for (const obj of ld) tags.push(`<script type="application/ld+json">${jsonLd(obj)}</script>`);
   return tags.join('\n');
 }
 
@@ -159,11 +178,16 @@ const sitemap = [];
 const PAGES_DIR = process.env.PAGES_DIR || join(SRC, 'pages');
 const OUT_DIR = process.env.OUT_DIR || '.';
 const pages = readdirSync(PAGES_DIR).filter((f) => f.endsWith('.html'));
+// Site languages (lib/i18n.mjs, src/i18n/*.json): only for full builds of the site root, where assets/ sits next to the pages.
+const WITH_LANGS = existsSync(join(OUT_DIR, 'assets', 'main.js')) && process.env.SKIP_LANGS !== '1';
+const LANGS = WITH_LANGS ? activeLangs(SRC, PRODUCTION) : [];
+const noindexFiles = new Set();
 for (const file of pages) {
   const { meta: meta0, body } = parse(file);
   const meta = applySeo(file, meta0);
   if (!NAV.includes(meta.active)) throw new Error(`${file}: unknown active "${meta.active}"`);
   if (meta.noindex !== 'true') sitemap.push(`  <url><loc>${pageUrl(file)}</loc><lastmod>${lastmod(file)}</lastmod></url>`);
+  else noindexFiles.add(file);
   const html = [
     head.replace('{{title}}', meta.title).replace('{{description}}', escapeAttr(meta.description)).replace('</head>', seoTags(file, meta) + '\n</head>').trimEnd(),
     '<body class="font-sans">',
@@ -183,8 +207,12 @@ for (const file of pages) {
     '</html>',
     '',
   ].join('\n');
-  writeFileSync(join(OUT_DIR, file), html);
+  writeFileSync(join(OUT_DIR, file), LANGS.length ? decorateEnglish(html, file, { site: SITE, langs: LANGS, pageUrl }) : html);
   console.log('built', file);
+}
+if (LANGS.length) {
+  const r = buildLanguages({ src: SRC, outDir: OUT_DIR, files: pages, site: SITE, production: PRODUCTION, lastmod, noindexFiles });
+  sitemap.push(...r.sitemap);
 }
 
 // Sitemap: indexable canonical pages only, absolute production URLs.

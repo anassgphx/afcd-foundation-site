@@ -714,6 +714,20 @@
     pick();
   })();
 
+  /* ---------- Social sharing ([data-shr]): links follow this language's canonical URL; native share where available ---------- */
+  (function () {
+    var bars = $$('[data-shr]'); if (!bars.length) return;
+    var can = document.querySelector('link[rel="canonical"]'), url = (can && can.href) || location.href.split('#')[0];
+    var title = (document.querySelector('h1') || {}).textContent || document.title; title = title.trim();
+    var u = encodeURIComponent(url), t = encodeURIComponent(title);
+    var map = { facebook: 'https://www.facebook.com/sharer/sharer.php?u=' + u, linkedin: 'https://www.linkedin.com/sharing/share-offsite/?url=' + u,
+      x: 'https://twitter.com/intent/tweet?url=' + u + '&text=' + t, whatsapp: 'https://wa.me/?text=' + t + '%20' + u };
+    bars.forEach(function (b) {
+      $$('[data-net]', b).forEach(function (a) { if (map[a.dataset.net]) a.href = map[a.dataset.net]; });
+      if (navigator.share) $$('[data-shr-native]', b).forEach(function (n) { n.hidden = false; });
+    });
+  })();
+
   /* ---------- Count-up numbers ([data-countup]) and gentle parallax ([data-par]) ---------- */
   (function () {
     var nums = $$('[data-countup]');

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import { EditorHeader, Field, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
 import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
@@ -116,57 +117,65 @@ export function PartnerEditor({ id }: { id: string }) {
   }
 
   return <>
-    <div className="page-h">
-      <div><Link to="/studio/partners" className="muted" style={{ fontSize: 13 }}>← Partners</Link><h1>{f.name || 'Partner'}</h1>
-        <p><span className="pills">{live && status !== 'published' && <LiveBadge />}<Badge s={status} /></span>{dirty && <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>Unsaved</span>}</p></div>
-      <div className="pills">
+    <EditorHeader back={{ to: '/studio/partners', label: 'Partners' }} title={f.name} status={status} live={live} dirty={dirty}
+      extra={<span className="pill">{SCOPES.find((x) => x[0] === f.scope)?.[1]}</span>}
+      actions={<>
         <button className="btn" onClick={preview} disabled={!!busy}><Icon n="eye" />{busy === 'preview' ? 'Building…' : 'Preview'}</button>
         {editable && <button className="btn btn-primary" onClick={save} disabled={!dirty || !!busy}><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save'}</button>}
-      </div>
-    </div>
+      </>} />
     {errs.length > 0 && <div className="notice n-warn" role="alert"><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErrs([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
-    {!editable && can('partner.update') && <div className="notice n-info"><div>{status === 'in_review' ? 'In review: read-only. Withdraw it to edit.' : 'Archived. Restore it to edit.'}</div></div>}
-
-    <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(280px,1fr)', gap: 16, alignItems: 'start' }}>
-      <fieldset className="card stack" style={{ padding: 20, border: 0, margin: 0 }} disabled={!editable}>
-        <Fld label="Organisation name"><input className="input" maxLength={140} value={f.name} onChange={(e) => set('name', e.target.value)} aria-label="Organisation name" /></Fld>
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Fld label="Scope" hint="Groups the partner on the website."><select className="select" value={f.scope} onChange={(e) => set('scope', e.target.value)} aria-label="Scope">{SCOPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Fld>
-          <Fld label="Type of organisation" hint="e.g. Embassy, Foundation, Association"><input className="input" maxLength={60} value={f.category} onChange={(e) => set('category', e.target.value)} aria-label="Type of organisation" /></Fld>
-        </div>
-        <Fld label="What we do together" hint={`${f.description.length} / 400 · only facts AFCD can confirm`}><textarea className="textarea" maxLength={400} value={f.description} onChange={(e) => set('description', e.target.value)} aria-label="What we do together" /></Fld>
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-          <Fld label="Website"><input className="input mono" maxLength={300} placeholder="https://…" value={f.websiteUrl} onChange={(e) => set('websiteUrl', e.target.value.trim())} aria-label="Website" /></Fld>
-          <Fld label="Partner since"><input className="input" type="number" min={2000} max={2100} placeholder="Year" value={f.sinceYear ?? ''} onChange={(e) => set('sinceYear', e.target.value ? Number(e.target.value) : null)} aria-label="Partner since" /></Fld>
-        </div>
-        <label className="check"><input type="checkbox" checked={f.current} onChange={(e) => set('current', e.target.checked)} /><span><b>Current partnership</b><br /><small className="muted">Untick for organisations that supported past programmes.</small></span></label>
-        <Fld label="Logo" hint="Upload logos only with the partner’s permission, then confirm rights in Media. Without a logo the site shows initials.">
-          {f.logoMediaId && logo ? <div className="thumb" style={{ width: 180, background: '#fff' }}><img src={logo.url} alt={logo.alt} style={{ objectFit: 'contain' }} /><button type="button" aria-label="Remove logo" onClick={() => set('logoMediaId', null)}>×</button></div> : <div className="muted">No logo</div>}
-          <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('logo')}><Icon n="image" />{f.logoMediaId ? 'Change' : 'Choose'} logo</button></Fld>
-        <Fld label="Projects with this partner" hint="Live projects only."><div className="b-checks">{projects.map((x) => <label key={x.slug} className="check"><input type="checkbox" checked={f.projectSlugs.includes(x.slug)} onChange={(e) => set('projectSlugs', e.target.checked ? [...f.projectSlugs, x.slug] : f.projectSlugs.filter((s) => s !== x.slug))} /><span>{x.name}</span></label>)}</div></Fld>
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
-          <Fld label="Order" hint="Lower comes first."><input className="input" type="number" min={0} max={10000} value={f.sort} onChange={(e) => set('sort', Number(e.target.value) || 0)} aria-label="Order" /></Fld>
-          <Fld label="Source (internal)" hint="Where these details come from. Not shown on the website."><input className="input" maxLength={300} value={f.provenance} onChange={(e) => set('provenance', e.target.value)} aria-label="Source" /></Fld>
-        </div>
-        <Fld label="Record key" hint={live ? 'A live partner’s key cannot change.' : 'Used for links and to prevent duplicates.'}><input className="input mono" disabled={live} value={f.slug} onChange={(e) => set('slug', slugify(e.target.value))} aria-label="Record key" /></Fld>
+    {status === 'in_review' && can('partner.update') && <div className="notice n-info"><div>In review: read-only. Withdraw it to edit.</div></div>}
+    <div className="ed-layout">
+      <SectionNav sections={[
+        { id: 'basics', label: 'Organisation', icon: 'partner', done: !!f.name },
+        { id: 'about', label: 'About the partnership', icon: 'log', optional: true, done: f.description || f.websiteUrl ? true : undefined },
+        { id: 'logo', label: 'Logo', icon: 'image', optional: true, done: f.logoMediaId ? true : undefined },
+        { id: 'projects', label: 'Projects', icon: 'folder', optional: true, done: f.projectSlugs.length ? true : undefined },
+        { id: 'internal', label: 'Internal', icon: 'lock', optional: true },
+      ]} />
+      <fieldset className="ed-main" disabled={!editable}>
+        <Section id="basics" title="Organisation" desc="One record per organisation. Use its official name.">
+          <Field label="Organisation name" span={3} count={[f.name.length, 140]}><input className="input input-lg" maxLength={140} value={f.name} onChange={(x) => set('name', x.target.value)} aria-label="Organisation name" /></Field>
+          <Field label="Scope" hint="Groups the partner on the website."><select className="select" value={f.scope} onChange={(x) => set('scope', x.target.value)} aria-label="Scope">{SCOPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+          <Field label="Type of organisation" hint="e.g. Embassy, Foundation, Association"><input className="input" maxLength={60} value={f.category} onChange={(x) => set('category', x.target.value)} aria-label="Type of organisation" /></Field>
+          <Field label="Status"><label className="ed-toggle"><input type="checkbox" checked={f.current} onChange={(x) => set('current', x.target.checked)} /><span>Current partnership</span></label></Field>
+        </Section>
+        <Section id="about" title="About the partnership" desc="Only facts AFCD can confirm.">
+          <Field label="What we do together" span={3} count={[f.description.length, 400]}><textarea className="textarea" rows={3} maxLength={400} value={f.description} onChange={(x) => set('description', x.target.value)} aria-label="What we do together" /></Field>
+          <Field label="Website" span={2}><input className="input mono" maxLength={300} placeholder="https://…" value={f.websiteUrl} onChange={(x) => set('websiteUrl', x.target.value.trim())} aria-label="Website" /></Field>
+          <Field label="Partner since"><input className="input" type="number" min={2000} max={2100} placeholder="Year" value={f.sinceYear ?? ''} onChange={(x) => set('sinceYear', x.target.value ? Number(x.target.value) : null)} aria-label="Partner since" /></Field>
+        </Section>
+        <Section id="logo" title="Logo" desc="Only with the partner’s permission; confirm the rights in the Media Library. Without a logo the site shows initials.">
+          <div className="ed-media s3">
+            {f.logoMediaId && logo ? <div className="ed-media-img" style={{ background: '#fff' }}><img src={logo.url} alt={logo.alt} style={{ objectFit: 'contain', aspectRatio: '3 / 2', padding: 12 }} /><button type="button" className="btn btn-sm" onClick={() => set('logoMediaId', null)}><Icon n="x" />Remove</button></div>
+              : <button type="button" className="ed-drop" onClick={() => setDialog('logo')}><Icon n="image" /><b>Choose a logo</b><small>From the media library.</small></button>}
+            {f.logoMediaId && <button type="button" className="btn btn-sm" onClick={() => setDialog('logo')}><Icon n="image" />Change logo</button>}
+          </div>
+        </Section>
+        <Section id="projects" title="Projects with this partner" desc="Live projects only.">
+          <div className="ed-checks s3">{projects.map((x) => <label key={x.slug} className={f.projectSlugs.includes(x.slug) ? 'on' : ''}><input type="checkbox" checked={f.projectSlugs.includes(x.slug)} onChange={(e) => set('projectSlugs', e.target.checked ? [...f.projectSlugs, x.slug] : f.projectSlugs.filter((s) => s !== x.slug))} /><span>{x.name}</span></label>)}</div>
+        </Section>
+        <Section id="internal" title="Internal" desc="Not shown on the website.">
+          <Field label="Source" span={2} hint="Where these details come from."><input className="input" maxLength={300} value={f.provenance} onChange={(x) => set('provenance', x.target.value)} aria-label="Source" /></Field>
+          <Field label="Order" hint="Lower comes first."><input className="input" type="number" min={0} max={10000} value={f.sort} onChange={(x) => set('sort', Number(x.target.value) || 0)} aria-label="Order" /></Field>
+          <Field label="Record key" span={3} hint={live ? 'A live partner’s key cannot change.' : 'Used for links and to prevent duplicates.'}><input className="input mono" disabled={live} value={f.slug} onChange={(x) => set('slug', slugify(x.target.value))} aria-label="Record key" /></Field>
+        </Section>
       </fieldset>
-
-      <section className="card stack" style={{ padding: 20 }}>
-        <dl className="kv"><dt>Website</dt><dd>{live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'}</dd>{p.publishedAt && <><dt>Published</dt><dd>{fmtDate(p.publishedAt)}</dd></>}{p.verifiedAt && <><dt>Last approved</dt><dd>{fmtDate(p.verifiedAt)}</dd></>}</dl>
+      <WorkflowPanel status={status} live={live} problems={p.problems}
+        facts={[['Website', live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'], ...(p.publishedAt ? [['Published', fmtDate(p.publishedAt)] as [string, string]] : []), ...(p.verifiedAt ? [['Last approved', fmtDate(p.verifiedAt)] as [string, string]] : [])]}>
         {live && <a className="btn btn-sm" href={me.siteUrl + 'partners.html'} target="_blank" rel="noopener"><Icon n="ext" />Open Our Partners</a>}
-        {p.problems.length > 0 && status !== 'archived' && <div className="notice n-warn"><div><b>Before review</b><ul>{p.problems.map((x) => <li key={x}>{x}</li>)}</ul></div></div>}
         {['draft', 'changes_requested'].includes(status) && can('partner.update') && <button className="btn btn-primary" disabled={!!busy} onClick={() => act('submit')}><Icon n="send" />Submit for review</button>}
         {status === 'in_review' && can('partner.approve') && <><button className="btn btn-ok" disabled={!!busy} onClick={() => act('approve')}><Icon n="check" />Approve</button><button className="btn" onClick={() => setDialog('changes')}>Request changes</button></>}
         {status === 'approved' && can('partner.publish') && <button className="btn btn-ok" disabled={!!busy} onClick={() => setDialog('publish')}><Icon n="rocket" />Publish</button>}
         {['in_review', 'approved'].includes(status) && can('partner.update') && <button className="btn btn-ghost" onClick={() => act('withdraw')}><Icon n="undo" />Withdraw to draft</button>}
         {live && can('partner.publish') && <button className="btn btn-ghost btn-danger" onClick={() => setDialog('unpublish')}>Remove from website</button>}
-        {!live && status !== 'archived' && can('partner.update') && <button className="btn btn-ghost" onClick={() => { if (confirm('Archive this partner?')) act('archive'); }}><Icon n="archive" />Archive</button>}
+        {!live && status !== 'archived' && can('partner.update') && <button className="btn btn-ghost" onClick={() => { if (confirm('Archive this record?')) act('archive'); }}><Icon n="archive" />Archive</button>}
         {status === 'archived' && can('partner.update') && <button className="btn" onClick={() => act('restore')}>Restore as draft</button>}
-        <small className="muted">History</small>
-        <ol className="timeline">{p.history.revisions.slice(0, 6).map((r) => <li key={r.id}><b>Revision {r.number} · {r.reason}{r.id === p.publishedRevisionId ? ' · live' : ''}</b><small>{fmtDate(r.createdAt)}</small>
-          {editable && <button className="btn btn-sm btn-ghost" style={{ padding: 0, height: 'auto' }} onClick={async () => { if (confirm(`Copy revision ${r.number} into the draft?`)) { await post(`/partners/${id}/revisions/${r.id}/restore`); await load(); toast('Revision restored as a draft'); } }}>Restore this version</button>}</li>)}
-          {p.history.comments.filter((c) => c.body).slice(0, 5).map((c) => <li key={c.id}><b>{c.kind.replace('_', ' ')}</b><q>{c.body}</q><small>{fmtDate(c.createdAt)}</small></li>)}</ol>
-      </section>
+        {(p.history.revisions.length > 0 || p.history.comments.some((c) => c.body)) && <details className="ed-history"><summary>History</summary>
+          <ol className="timeline">{p.history.revisions.slice(0, 8).map((r) => <li key={r.id}><b>Revision {r.number} · {r.reason}{r.id === p.publishedRevisionId ? ' · live' : ''}</b><small>{fmtDate(r.createdAt)}</small>
+            {editable && <button className="btn btn-sm btn-ghost" style={{ padding: 0, height: 'auto' }} onClick={async () => { if (confirm(`Copy revision ${r.number} into the draft?`)) { await post(`/partners/${id}/revisions/${r.id}/restore`); await load(); toast('Revision restored as a draft'); } }}>Restore this version</button>}</li>)}
+            {p.history.comments.filter((c) => c.body).slice(0, 5).map((c) => <li key={c.id}><b>{c.kind.replace('_', ' ')}</b><q>{c.body}</q><small>{fmtDate(c.createdAt)}</small></li>)}</ol></details>}
+      </WorkflowPanel>
     </div>
 
     {dialog === 'logo' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { if (m[0]) { setLogo(m[0]); set('logoMediaId', m[0].id); } setDialog(null); }} />}

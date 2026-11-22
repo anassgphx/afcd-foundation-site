@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import { EditorHeader, Field, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
 import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
@@ -21,7 +22,7 @@ export function EventsList() {
   const today = todayMa();
   const up = (r: Row) => (r.endDate ?? r.startDate) >= today;
   async function create() {
-    const r = await post<{ id: string }>('/events', { title: 'Untitled event', slug: `event-${Date.now().toString(36)}`, startDate: today, registration: 'contact' });
+    const r = await post<{ id: string }>('/events', { title: 'Untitled event', slug: `untitled-${Date.now().toString(36)}`, startDate: today, registration: 'contact' });
     navigate(`/studio/events/${r.id}`);
   }
   const is = (k: string, r: Row) => (k === 'upcoming' ? up(r) && r.status !== 'archived' : k === 'past' ? !up(r) && r.status !== 'archived' : k === 'live' ? !!r.publishedRevisionId : k === 'draft' ? ['draft', 'changes_requested'].includes(r.status) : r.status === k);
@@ -71,7 +72,7 @@ export function EventEditor({ id }: { id: string }) {
     const [d, pl, pr, nw] = await Promise.all([api<Loaded>(`/events/${id}`), api('/pillars'), api('/projects'), can('news.read') ? api('/news') : Promise.resolve([])]);
     setE(d); setF(Object.fromEntries(KEYS.map((k) => [k, (d as any)[k]])) as Form); setPoster(d.media[0] ?? null);
     setPillars(pl); setProjects(pr.filter((x: any) => x.publishedRevisionId)); setStories(nw.filter((x: any) => x.publishedRevisionId));
-    setDirty(false); setSlugTouched(!d.title.startsWith('Untitled') || !d.slug.startsWith('event-'));
+    setDirty(false); setSlugTouched(!d.title.startsWith('Untitled') || !(d.slug.startsWith('untitled-') || d.slug.startsWith('event-')));
   }, [id]);
   useEffect(() => { load().catch((err) => toast(err.message, true)); }, [load]);
   useEffect(() => { const k = (ev: KeyboardEvent) => { if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 's') { ev.preventDefault(); if (dirty) save(); } }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); });
@@ -108,69 +109,74 @@ export function EventEditor({ id }: { id: string }) {
   const file = `event-${f.slug}.html`;
 
   return <>
-    <div className="page-h">
-      <div><Link to="/studio/events" className="muted" style={{ fontSize: 13 }}>← Events</Link><h1>{f.title || 'Event'}</h1>
-        <p><span className="pills">{live && status !== 'published' && <LiveBadge />}<Badge s={status} /><span className="pill">{past ? 'Past' : 'Upcoming'}</span></span><span className="mono muted" style={{ marginLeft: 8, fontSize: 12 }}>{file}</span>{dirty && <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>Unsaved</span>}</p></div>
-      <div className="pills">
+    <EditorHeader back={{ to: '/studio/events', label: 'Events' }} title={f.title} file={live ? file : undefined} status={status} live={live} dirty={dirty}
+      extra={<span className="pill">{past ? 'Past' : 'Upcoming'}</span>}
+      actions={<>
         <button className="btn" onClick={preview} disabled={!!busy}><Icon n="eye" />{busy === 'preview' ? 'Building…' : 'Preview'}</button>
         {editable && <button className="btn btn-primary" onClick={save} disabled={!dirty || !!busy}><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save'}</button>}
-      </div>
-    </div>
+      </>} />
     {errs.length > 0 && <div className="notice n-warn" role="alert"><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErrs([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
-    {!editable && can('event.update') && <div className="notice n-info"><div>{status === 'in_review' ? 'In review: read-only. Withdraw it to edit.' : 'Archived. Restore it to edit.'}</div></div>}
+    {status === 'in_review' && can('event.update') && <div className="notice n-info"><div>In review: read-only. Withdraw it to edit.</div></div>}
 
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(280px,1fr)', gap: 16, alignItems: 'start' }} className="ev-grid">
-      <fieldset className="stack" style={{ border: 0, margin: 0, padding: 0 }} disabled={!editable}>
-        <section className="card stack" style={{ padding: 20 }}>
-          <Fld label="Title"><input className="input" maxLength={140} value={f.title} onChange={(x) => set('title', x.target.value)} aria-label="Title" /></Fld>
-          <Fld label="Short description" hint={`${f.summary.length} / 320 · shown in the calendar and search results`}><textarea className="textarea" maxLength={320} value={f.summary} onChange={(x) => set('summary', x.target.value.replace(/\n/g, ' '))} aria-label="Short description" /></Fld>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Fld label="Type"><select className="select" value={f.kind} onChange={(x) => set('kind', x.target.value)} aria-label="Type">{e.kinds.map((k) => <option key={k}>{k}</option>)}</select></Fld>
-            <Fld label="Pillar"><select className="select" value={f.pillarKey ?? ''} onChange={(x) => set('pillarKey', x.target.value || null)} aria-label="Pillar"><option value="">Choose…</option>{pillars.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}</select></Fld>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Fld label="Date"><input className="input" type="date" value={f.startDate} onChange={(x) => set('startDate', x.target.value)} aria-label="Date" /></Fld>
-            <Fld label="Ends (optional)" hint="For events over several days."><input className="input" type="date" value={f.endDate ?? ''} min={f.startDate} onChange={(x) => set('endDate', x.target.value || null)} aria-label="End date" /></Fld>
-            <Fld label="Time" hint="e.g. 10:00 – 13:00, Full day"><input className="input" maxLength={60} value={f.timeLabel} onChange={(x) => set('timeLabel', x.target.value)} aria-label="Time" /></Fld>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12, alignItems: 'end' }}>
-            <Fld label="Place" hint="Town or venue as people should read it."><input className="input" maxLength={120} value={f.location} onChange={(x) => set('location', x.target.value)} aria-label="Place" /></Fld>
-            <label className="check" style={{ paddingBottom: 18 }}><input type="checkbox" checked={f.online} onChange={(x) => set('online', x.target.checked)} /><span>Online</span></label>
-          </div>
-          <Fld label="About this event" hint="Optional. Blank line = new paragraph; ## Subheading, **bold**, [link](https://…) work."><textarea className="textarea" style={{ minHeight: 140 }} maxLength={20000} value={f.body} onChange={(x) => set('body', x.target.value)} aria-label="About this event" /></Fld>
-        </section>
-        <section className="card stack" style={{ padding: 20 }}>
-          <Fld label="Agenda" hint="Optional. Leave empty to hide the agenda.">
-            {f.agenda.map((a, i) => <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: 8 }}>
-              <input className="input" maxLength={80} placeholder="e.g. 10:00 Welcome" value={a.title} onChange={(x) => set('agenda', f.agenda.map((y, j) => j === i ? { ...y, title: x.target.value } : y))} aria-label={`Agenda item ${i + 1}`} />
+    <div className="ed-layout">
+      <SectionNav sections={[
+        { id: 'basics', label: 'Basics', icon: 'log', done: !!(f.title && f.summary && f.pillarKey) },
+        { id: 'when', label: 'Date & place', icon: 'calendar', done: !!(f.startDate && f.timeLabel && (f.location || f.online)) },
+        { id: 'details', label: 'Details', icon: 'layers', optional: true, done: !!(f.body || f.agenda.length || f.audience.length) || undefined },
+        { id: 'media', label: 'Poster', icon: 'image', optional: true, done: f.posterMediaId ? true : undefined },
+        { id: 'join', label: 'Registration & links', icon: 'send', done: f.registration !== 'external' || !!f.registrationUrl },
+        { id: 'seo', label: 'Search & address', icon: 'search', optional: true, done: f.seoTitle || f.seoDescription ? true : undefined },
+      ]} />
+      <fieldset className="ed-main" disabled={!editable}>
+        <Section id="basics" title="Basics" desc="What people see first in the calendar and in search results.">
+          <Field label="Title" span={3} count={[f.title.length, 140]}><input className="input input-lg" maxLength={140} value={f.title} onChange={(x) => set('title', x.target.value)} aria-label="Title" placeholder="e.g. Climate workshop for young leaders" /></Field>
+          <Field label="Short description" span={3} count={[f.summary.length, 320]} hint="One or two sentences: what, who for, why it matters."><textarea className="textarea" rows={3} maxLength={320} value={f.summary} onChange={(x) => set('summary', x.target.value.replace(/\n/g, ' '))} aria-label="Short description" /></Field>
+          <Field label="Type"><select className="select" value={f.kind} onChange={(x) => set('kind', x.target.value)} aria-label="Type">{e.kinds.map((k) => <option key={k}>{k}</option>)}</select></Field>
+          <Field label="Pillar" span={2}><select className="select" value={f.pillarKey ?? ''} onChange={(x) => set('pillarKey', x.target.value || null)} aria-label="Pillar"><option value="">Choose a pillar…</option>{pillars.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}</select></Field>
+        </Section>
+        <Section id="when" title="Date & place" desc="Events move from Upcoming to Past on their own after the last day (Morocco time).">
+          <Field label="Date"><input className="input" type="date" value={f.startDate} onChange={(x) => set('startDate', x.target.value)} aria-label="Date" /></Field>
+          <Field label="Ends" hint="Only for events over several days."><input className="input" type="date" value={f.endDate ?? ''} min={f.startDate} onChange={(x) => set('endDate', x.target.value || null)} aria-label="End date" /></Field>
+          <Field label="Time" hint="e.g. 10:00 – 13:00, or Full day"><input className="input" maxLength={60} value={f.timeLabel} onChange={(x) => set('timeLabel', x.target.value)} aria-label="Time" /></Field>
+          <Field label="Place" span={2} hint="Town or venue, as people should read it."><input className="input" maxLength={120} value={f.location} onChange={(x) => set('location', x.target.value)} aria-label="Place" placeholder="e.g. Ait Ourir community hall" /></Field>
+          <Field label="Format"><label className="ed-toggle"><input type="checkbox" checked={f.online} onChange={(x) => set('online', x.target.checked)} /><span>Online event</span></label></Field>
+        </Section>
+        <Section id="details" title="Details" desc="Optional. Sections left empty are hidden on the event page.">
+          <Field label="About this event" span={3} hint="Blank line = new paragraph · ## Subheading · **bold** · [link](https://…)"><textarea className="textarea" style={{ minHeight: 150 }} maxLength={20000} value={f.body} onChange={(x) => set('body', x.target.value)} aria-label="About this event" /></Field>
+          <Field label="Agenda" span={3}>
+            <ol className="ed-list">{f.agenda.map((a, i) => <li key={i}><span className="ed-list-n">{i + 1}</span>
+              <input className="input" maxLength={80} placeholder="10:00 Welcome" value={a.title} onChange={(x) => set('agenda', f.agenda.map((y, j) => j === i ? { ...y, title: x.target.value } : y))} aria-label={`Agenda item ${i + 1}`} />
               <input className="input" maxLength={240} placeholder="What happens" value={a.text} onChange={(x) => set('agenda', f.agenda.map((y, j) => j === i ? { ...y, text: x.target.value } : y))} aria-label={`Agenda item ${i + 1} details`} />
-              <button type="button" className="btn btn-ghost icon-btn" aria-label="Remove item" onClick={() => set('agenda', f.agenda.filter((_, j) => j !== i))}><Icon n="x" /></button></div>)}
-            {f.agenda.length < 12 && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => set('agenda', [...f.agenda, { title: '', text: '' }])}><Icon n="plus" />Add agenda item</button>}</Fld>
-          <Fld label="Who it’s for" hint="One per line, up to 8. Leave empty to hide."><textarea className="textarea" value={f.audience.join('\n')} onChange={(x) => set('audience', x.target.value.split('\n').map((s) => s.trimStart()).filter((s, i, arr) => s || i === arr.length - 1).slice(0, 8))} onBlur={() => set('audience', f.audience.map((s) => s.trim()).filter(Boolean))} aria-label="Who it’s for" /></Fld>
-          <Fld label="Poster" hint="Square images work best. Without one, a placeholder is shown.">
-            {f.posterMediaId && poster ? <div className="thumb" style={{ width: 160 }}><img src={poster.url} alt={poster.alt} /><button type="button" aria-label="Remove poster" onClick={() => set('posterMediaId', null)}>×</button></div> : <div className="muted">No poster</div>}
-            <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('poster')}><Icon n="image" />{f.posterMediaId ? 'Change' : 'Choose'} poster</button></Fld>
-        </section>
-        <section className="card stack" style={{ padding: 20 }}>
-          <Fld label="Registration"><select className="select" value={f.registration} onChange={(x) => set('registration', x.target.value as Form['registration'])} aria-label="Registration">
-            <option value="contact">Register interest through the contact form</option><option value="external">Link to an external registration form</option><option value="none">No registration (open event)</option></select></Fld>
-          {f.registration === 'external' && <Fld label="Registration link"><input className="input mono" maxLength={500} placeholder="https://…" value={f.registrationUrl} onChange={(x) => set('registrationUrl', x.target.value.trim())} aria-label="Registration link" /></Fld>}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Fld label="Project (optional)" hint="Live projects only."><select className="select" value={f.projectSlug ?? ''} onChange={(x) => set('projectSlug', x.target.value || null)} aria-label="Project"><option value="">None</option>{projects.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select></Fld>
-            <Fld label="Recap story (optional)" hint="Shown once the event has passed."><select className="select" value={f.recapArticleSlug ?? ''} onChange={(x) => set('recapArticleSlug', x.target.value || null)} aria-label="Recap story"><option value="">None</option>{stories.map((s) => <option key={s.slug} value={s.slug}>{s.title}</option>)}</select></Fld>
+              <button type="button" className="btn btn-ghost icon-btn btn-sm" aria-label="Remove item" onClick={() => set('agenda', f.agenda.filter((_, j) => j !== i))}><Icon n="x" /></button></li>)}</ol>
+            {f.agenda.length < 12 && <button type="button" className="btn btn-sm ed-add" onClick={() => set('agenda', [...f.agenda, { title: '', text: '' }])}><Icon n="plus" />Add agenda item</button>}</Field>
+          <Field label="Who it’s for" span={3} hint="One per line, up to 8."><textarea className="textarea" rows={3} value={f.audience.join('\n')} onChange={(x) => set('audience', x.target.value.split('\n').map((s) => s.trimStart()).filter((s, i, arr) => s || i === arr.length - 1).slice(0, 8))} onBlur={() => set('audience', f.audience.map((s) => s.trim()).filter(Boolean))} aria-label="Who it’s for" /></Field>
+        </Section>
+        <Section id="media" title="Poster" desc="Square images work best. Without one, a neutral placeholder is shown.">
+          <div className="ed-media s3">
+            {f.posterMediaId && poster ? <div className="ed-media-img"><img src={poster.url} alt={poster.alt} /><button type="button" className="btn btn-sm" onClick={() => set('posterMediaId', null)}><Icon n="x" />Remove</button></div>
+              : <button type="button" className="ed-drop" onClick={() => setDialog('poster')}><Icon n="image" /><b>Choose a poster</b><small>From the media library. It needs alt text and confirmed rights before review.</small></button>}
+            {f.posterMediaId && <button type="button" className="btn btn-sm" onClick={() => setDialog('poster')}><Icon n="image" />Change poster</button>}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Fld label="SEO title" hint={`${f.seoTitle.length} / 70 · empty = title`}><input className="input" maxLength={70} value={f.seoTitle} onChange={(x) => set('seoTitle', x.target.value)} aria-label="SEO title" /></Fld>
-            <Fld label="Page address" hint={live ? 'A live event’s address cannot change.' : undefined}><div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><span className="mono muted">event-</span><input className="input mono" aria-label="Page address" disabled={live} value={f.slug} onChange={(x) => { setSlugTouched(true); set('slug', slugify(x.target.value)); }} /></div></Fld>
-          </div>
-          <Fld label="Meta description" hint={`${f.seoDescription.length} / 170 · empty = short description`}><textarea className="textarea" maxLength={170} value={f.seoDescription} onChange={(x) => set('seoDescription', x.target.value)} aria-label="Meta description" /></Fld>
-        </section>
+        </Section>
+        <Section id="join" title="Registration & links">
+          <Field label="How people register" span={3}><div className="ed-choice">
+            {([['contact', 'Contact form', 'They send a message; you confirm by email.'], ['external', 'Registration link', 'An external form, e.g. Google Forms.'], ['none', 'No registration', 'Open event: just show up.']] as const).map(([v, l, d]) =>
+              <label key={v} className={f.registration === v ? 'on' : ''}><input type="radio" name="reg" checked={f.registration === v} onChange={() => set('registration', v)} /><b>{l}</b><small>{d}</small></label>)}</div></Field>
+          {f.registration === 'external' && <Field label="Registration link" span={3}><input className="input mono" maxLength={500} placeholder="https://…" value={f.registrationUrl} onChange={(x) => set('registrationUrl', x.target.value.trim())} aria-label="Registration link" /></Field>}
+          <Field label="Project" hint="Live projects only."><select className="select" value={f.projectSlug ?? ''} onChange={(x) => set('projectSlug', x.target.value || null)} aria-label="Project"><option value="">None</option>{projects.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select></Field>
+          <Field label="Recap story" span={2} hint="Shown on the event page once it has passed."><select className="select" value={f.recapArticleSlug ?? ''} onChange={(x) => set('recapArticleSlug', x.target.value || null)} aria-label="Recap story"><option value="">None</option>{stories.map((s) => <option key={s.slug} value={s.slug}>{s.title}</option>)}</select></Field>
+        </Section>
+        <Section id="seo" title="Search & address" desc="Optional. Empty fields use the title and short description.">
+          <Field label="SEO title" span={2} count={[f.seoTitle.length, 70]}><input className="input" maxLength={70} value={f.seoTitle} onChange={(x) => set('seoTitle', x.target.value)} aria-label="SEO title" placeholder={f.title} /></Field>
+          <Field label="Page address" hint={live ? 'A live event’s address cannot change.' : undefined}><div className="ed-slug"><span>event-</span><input className="input mono" aria-label="Page address" disabled={live} value={f.slug} onChange={(x) => { setSlugTouched(true); set('slug', slugify(x.target.value)); }} /></div></Field>
+          <Field label="Meta description" span={3} count={[f.seoDescription.length, 170]}><textarea className="textarea" rows={2} maxLength={170} value={f.seoDescription} onChange={(x) => set('seoDescription', x.target.value)} aria-label="Meta description" placeholder={f.summary} /></Field>
+          <div className="serp s3"><div className="serp-url">afcdfoundation.org › {file}</div><div className="serp-title">{(f.seoTitle || f.title || 'Event title').slice(0, 65)} · Events · AFCD Foundation</div><div className="serp-desc">{(f.seoDescription || f.summary || 'Short description of the event.').slice(0, 160)}</div></div>
+        </Section>
       </fieldset>
 
-      <section className="card stack" style={{ padding: 20, position: 'sticky', top: 16 }}>
-        <dl className="kv"><dt>Website</dt><dd>{live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'}</dd>{e.publishedAt && <><dt>Published</dt><dd>{fmtDate(e.publishedAt)}</dd></>}<dt>Calendar</dt><dd>{past ? 'Past event' : 'Upcoming'}</dd></dl>
+      <WorkflowPanel status={status} live={live} problems={e.problems}
+        facts={[['Website', live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'], ...(e.publishedAt ? [['Published', fmtDate(e.publishedAt)] as [string, string]] : []), ['Calendar', past ? 'Past event' : 'Upcoming']]}>
         {live && <a className="btn btn-sm" href={me.siteUrl + file} target="_blank" rel="noopener"><Icon n="ext" />Open live event</a>}
-        {e.problems.length > 0 && status !== 'archived' && <div className="notice n-warn"><div><b>Before review</b><ul>{e.problems.map((x) => <li key={x}>{x}</li>)}</ul></div></div>}
         {['draft', 'changes_requested'].includes(status) && can('event.update') && <button className="btn btn-primary" disabled={!!busy} onClick={() => act('submit')}><Icon n="send" />Submit for review</button>}
         {status === 'in_review' && can('event.approve') && <><button className="btn btn-ok" disabled={!!busy} onClick={() => act('approve')}><Icon n="check" />Approve</button><button className="btn" onClick={() => setDialog('changes')}>Request changes</button></>}
         {status === 'approved' && can('event.publish') && <button className="btn btn-ok" disabled={!!busy} onClick={() => setDialog('publish')}><Icon n="rocket" />Publish</button>}
@@ -178,11 +184,11 @@ export function EventEditor({ id }: { id: string }) {
         {live && can('event.publish') && <button className="btn btn-ghost btn-danger" onClick={() => setDialog('unpublish')}>Remove from website</button>}
         {!live && status !== 'archived' && can('event.update') && <button className="btn btn-ghost" onClick={() => { if (confirm('Archive this event?')) act('archive'); }}><Icon n="archive" />Archive</button>}
         {status === 'archived' && can('event.update') && <button className="btn" onClick={() => act('restore')}>Restore as draft</button>}
-        <small className="muted">History</small>
-        <ol className="timeline">{e.history.revisions.slice(0, 6).map((r) => <li key={r.id}><b>Revision {r.number} · {r.reason}{r.id === e.publishedRevisionId ? ' · live' : ''}</b><small>{fmtDate(r.createdAt)}</small>
-          {editable && <button className="btn btn-sm btn-ghost" style={{ padding: 0, height: 'auto' }} onClick={async () => { if (confirm(`Copy revision ${r.number} into the draft?`)) { await post(`/events/${id}/revisions/${r.id}/restore`); await load(); toast('Revision restored as a draft'); } }}>Restore this version</button>}</li>)}
-          {e.history.comments.filter((c) => c.body).slice(0, 5).map((c) => <li key={c.id}><b>{c.kind.replace('_', ' ')}</b><q>{c.body}</q><small>{fmtDate(c.createdAt)}</small></li>)}</ol>
-      </section>
+        {(e.history.revisions.length > 0 || e.history.comments.some((c) => c.body)) && <details className="ed-history"><summary>History</summary>
+          <ol className="timeline">{e.history.revisions.slice(0, 8).map((r) => <li key={r.id}><b>Revision {r.number} · {r.reason}{r.id === e.publishedRevisionId ? ' · live' : ''}</b><small>{fmtDate(r.createdAt)}</small>
+            {editable && <button className="btn btn-sm btn-ghost" style={{ padding: 0, height: 'auto' }} onClick={async () => { if (confirm(`Copy revision ${r.number} into the draft?`)) { await post(`/events/${id}/revisions/${r.id}/restore`); await load(); toast('Revision restored as a draft'); } }}>Restore this version</button>}</li>)}
+            {e.history.comments.filter((c) => c.body).slice(0, 5).map((c) => <li key={c.id}><b>{c.kind.replace('_', ' ')}</b><q>{c.body}</q><small>{fmtDate(c.createdAt)}</small></li>)}</ol></details>}
+      </WorkflowPanel>
     </div>
 
     {dialog === 'poster' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { if (m[0]) { setPoster(m[0]); set('posterMediaId', m[0].id); } setDialog(null); }} />}

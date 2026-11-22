@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import { EditorHeader, Field, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
 import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
@@ -23,7 +24,7 @@ export function OpportunitiesList() {
   const load = () => api<Row[]>('/opportunities').then(setRows).catch(() => setRows([]));
   useEffect(() => { load(); }, []);
   async function create() {
-    const r = await post<{ id: string }>('/opportunities', { title: 'Untitled opportunity', slug: `opportunity-${Date.now().toString(36)}`, applyMethod: 'contact' });
+    const r = await post<{ id: string }>('/opportunities', { title: 'Untitled opportunity', slug: `untitled-${Date.now().toString(36)}`, applyMethod: 'contact' });
     navigate(`/studio/opportunities/${r.id}`);
   }
   const is = (k: string, r: Row) => (k === 'all' ? r.status !== 'archived' : k === 'open' ? !!r.publishedRevisionId && stateOf(r) !== 'Closed' : k === 'closed' ? stateOf(r) === 'Closed' && r.status !== 'archived' : k === 'draft' ? ['draft', 'changes_requested'].includes(r.status) : r.status === k);
@@ -81,7 +82,7 @@ export function OpportunityEditor({ id }: { id: string }) {
     const [d, pl, pr] = await Promise.all([api<Loaded>(`/opportunities/${id}`), api('/pillars'), api('/projects')]);
     setO(d); setF(Object.fromEntries(KEYS.map((k) => [k, (d as any)[k]])) as Form); setHero(d.media[0] ?? null);
     setPillars(pl); setProjects(pr.filter((x: any) => x.publishedRevisionId));
-    setDirty(false); setSlugTouched(!d.title.startsWith('Untitled') || !d.slug.startsWith('opportunity-'));
+    setDirty(false); setSlugTouched(!d.title.startsWith('Untitled') || !(d.slug.startsWith('untitled-') || d.slug.startsWith('opportunity-')));
   }, [id]);
   useEffect(() => { load().catch((err) => toast(err.message, true)); }, [load]);
   useEffect(() => { const k = (ev: KeyboardEvent) => { if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 's') { ev.preventDefault(); if (dirty) save(); } }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); });
@@ -118,74 +119,77 @@ export function OpportunityEditor({ id }: { id: string }) {
   const state = stateOf(f);
 
   return <>
-    <div className="page-h">
-      <div><Link to="/studio/opportunities" className="muted" style={{ fontSize: 13 }}>← Opportunities</Link><h1>{f.title || 'Opportunity'}</h1>
-        <p><span className="pills">{live && status !== 'published' && <LiveBadge />}<Badge s={status} /><span className="pill">{state}</span></span><span className="mono muted" style={{ marginLeft: 8, fontSize: 12 }}>{file}</span>{dirty && <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>Unsaved</span>}</p></div>
-      <div className="pills">
+    <EditorHeader back={{ to: '/studio/opportunities', label: 'Opportunities' }} title={f.title} file={live ? file : undefined} status={status} live={live} dirty={dirty}
+      extra={<span className="pill">{state}</span>}
+      actions={<>
         <button className="btn" onClick={preview} disabled={!!busy}><Icon n="eye" />{busy === 'preview' ? 'Building…' : 'Preview'}</button>
         {editable && <button className="btn btn-primary" onClick={save} disabled={!dirty || !!busy}><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save'}</button>}
-      </div>
-    </div>
+      </>} />
     {errs.length > 0 && <div className="notice n-warn" role="alert"><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErrs([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
-    {!editable && can('opportunity.update') && <div className="notice n-info"><div>{status === 'in_review' ? 'In review: read-only. Withdraw it to edit.' : 'Archived. Restore it to edit.'}</div></div>}
-
-    <div className="side-layout">
-      <fieldset className="stack" style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }} disabled={!editable}>
-        <section className="card stack" style={{ padding: 20 }}>
-          <Fld label="Title"><input className="input" maxLength={140} value={f.title} onChange={(x) => set('title', x.target.value)} aria-label="Title" /></Fld>
-          <Fld label="Short summary" hint={`${f.summary.length} / 320 · shown in the list and search results`}><textarea className="textarea" maxLength={320} value={f.summary} onChange={(x) => set('summary', x.target.value.replace(/\n/g, ' '))} aria-label="Short summary" /></Fld>
-          <div className="cols-2">
-            <Fld label="Type"><select className="select" value={f.type} onChange={(x) => set('type', x.target.value)} aria-label="Type">{OPP_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Fld>
-            <Fld label="Pillar (optional)"><select className="select" value={f.pillarKey ?? ''} onChange={(x) => set('pillarKey', x.target.value || null)} aria-label="Pillar"><option value="">None</option>{pillars.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}</select></Fld>
+    {status === 'in_review' && can('opportunity.update') && <div className="notice n-info"><div>In review: read-only. Withdraw it to edit.</div></div>}
+    <div className="ed-layout">
+      <SectionNav sections={[
+        { id: 'basics', label: 'Basics', icon: 'log', done: !!(f.title && f.summary) },
+        { id: 'description', label: 'Description', icon: 'layers', done: f.body.trim().split(/\s+/).filter(Boolean).length >= 20 && f.eligibility.length > 0 },
+        { id: 'dates', label: 'Dates & place', icon: 'calendar', done: true },
+        { id: 'apply', label: 'How to apply', icon: 'send', done: f.applyMethod === 'contact' || (f.applyMethod === 'external' ? !!f.applyUrl : !!f.applyEmail) },
+        { id: 'links', label: 'Links & image', icon: 'image', optional: true, done: f.heroMediaId || f.projectSlug || f.pillarKey ? true : undefined },
+        { id: 'seo', label: 'Search & address', icon: 'search', optional: true, done: f.seoTitle || f.seoDescription ? true : undefined },
+      ]} />
+      <fieldset className="ed-main" disabled={!editable}>
+        <Section id="basics" title="Basics" desc="What people see in the list of opportunities and in search results.">
+          <Field label="Title" span={3} count={[f.title.length, 140]}><input className="input input-lg" maxLength={140} value={f.title} onChange={(x) => set('title', x.target.value)} aria-label="Title" placeholder="e.g. Call for applications: Youth Climate Fellows 2027" /></Field>
+          <Field label="Short summary" span={3} count={[f.summary.length, 320]}><textarea className="textarea" rows={3} maxLength={320} value={f.summary} onChange={(x) => set('summary', x.target.value.replace(/\n/g, ' '))} aria-label="Short summary" /></Field>
+          <Field label="Type"><select className="select" value={f.type} onChange={(x) => set('type', x.target.value)} aria-label="Type">{OPP_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+          <Field label="Pillar" span={2} hint="Optional."><select className="select" value={f.pillarKey ?? ''} onChange={(x) => set('pillarKey', x.target.value || null)} aria-label="Pillar"><option value="">None</option>{pillars.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}</select></Field>
+        </Section>
+        <Section id="description" title="Description" desc="What it is, what people will do, and how selection works.">
+          <Field label="Description" span={3} hint="Blank line = new paragraph · ## Subheading · **bold** · [link](https://…)"><textarea className="textarea" style={{ minHeight: 170 }} maxLength={20000} value={f.body} onChange={(x) => set('body', x.target.value)} aria-label="Description" /></Field>
+          <Field label="Who can apply" span={2} hint="One per line, up to 12. Required."><Lines label="Who can apply" value={f.eligibility} max={12} onChange={(v) => set('eligibility', v)} /></Field>
+          <Field label="What you get" hint="Optional, one per line."><Lines label="What you get" value={f.benefits} max={12} onChange={(v) => set('benefits', v)} /></Field>
+        </Section>
+        <Section id="dates" title="Dates & place" desc="It opens and closes on the website by these dates (Morocco time).">
+          <Field label="Opens" hint="Empty = open now."><input className="input" type="date" value={f.opensOn ?? ''} onChange={(x) => set('opensOn', x.target.value || null)} aria-label="Opens" /></Field>
+          <Field label="Deadline" hint="Empty = rolling applications."><input className="input" type="date" value={f.deadline ?? ''} min={f.opensOn ?? undefined} onChange={(x) => set('deadline', x.target.value || null)} aria-label="Deadline" /></Field>
+          <Field label="Commitment"><input className="input" maxLength={80} placeholder="e.g. 3 months, part-time" value={f.commitment} onChange={(x) => set('commitment', x.target.value)} aria-label="Commitment" /></Field>
+          <Field label="Location" span={3}><input className="input" maxLength={120} placeholder="e.g. Marrakech, or Remote" value={f.location} onChange={(x) => set('location', x.target.value)} aria-label="Location" /></Field>
+        </Section>
+        <Section id="apply" title="How to apply">
+          <Field label="Application method" span={3}><div className="ed-choice">
+            {([['external', 'Online form', 'A link to your application form.'], ['email', 'By email', 'The address is shown on the page.'], ['contact', 'Contact form', 'Through the website, with the right topic.']] as const).map(([v, l, d]) =>
+              <label key={v} className={f.applyMethod === v ? 'on' : ''}><input type="radio" name="apply" checked={f.applyMethod === v} onChange={() => set('applyMethod', v)} /><b>{l}</b><small>{d}</small></label>)}</div></Field>
+          {f.applyMethod === 'external' && <Field label="Application link" span={3}><input className="input mono" maxLength={500} placeholder="https://…" value={f.applyUrl} onChange={(x) => set('applyUrl', x.target.value.trim())} aria-label="Application link" /></Field>}
+          {f.applyMethod === 'email' && <Field label="Application email" span={3} hint="Shown publicly on the page."><input className="input mono" maxLength={160} placeholder="name@afcdteam.com" value={f.applyEmail} onChange={(x) => set('applyEmail', x.target.value.trim())} aria-label="Application email" /></Field>}
+        </Section>
+        <Section id="links" title="Links & image" desc="Optional.">
+          <Field label="Project" hint="Live projects only."><select className="select" value={f.projectSlug ?? ''} onChange={(x) => set('projectSlug', x.target.value || null)} aria-label="Project"><option value="">None</option>{projects.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select></Field>
+          <div className="ed-media s2" style={{ gridColumn: 'span 2' }}>
+            {f.heroMediaId && hero ? <div className="ed-media-img"><img src={hero.url} alt={hero.alt} /><button type="button" className="btn btn-sm" onClick={() => set('heroMediaId', null)}><Icon n="x" />Remove</button></div>
+              : <button type="button" className="ed-drop" onClick={() => setDialog('hero')}><Icon n="image" /><b>Choose an image</b><small>Optional, from the media library.</small></button>}
+            {f.heroMediaId && <button type="button" className="btn btn-sm" onClick={() => setDialog('hero')}><Icon n="image" />Change image</button>}
           </div>
-          <Fld label="Description" hint="What it is, what people will do, how selection works. Blank line = new paragraph; ## Subheading, **bold**, [link](https://…) work."><textarea className="textarea" style={{ minHeight: 180 }} maxLength={20000} value={f.body} onChange={(x) => set('body', x.target.value)} aria-label="Description" /></Fld>
-          <div className="cols-2">
-            <Fld label="Who can apply" hint="One per line, up to 12."><Lines label="Who can apply" value={f.eligibility} max={12} onChange={(v) => set('eligibility', v)} /></Fld>
-            <Fld label="What you get (optional)" hint="One per line, e.g. training, certificate, stipend."><Lines label="What you get" value={f.benefits} max={12} onChange={(v) => set('benefits', v)} /></Fld>
-          </div>
-        </section>
-        <section className="card stack" style={{ padding: 20 }}>
-          <div className="cols-2">
-            <Fld label="Opens (optional)" hint="Before this date it shows as Opening soon."><input className="input" type="date" value={f.opensOn ?? ''} onChange={(x) => set('opensOn', x.target.value || null)} aria-label="Opens" /></Fld>
-            <Fld label="Deadline" hint="Leave empty for rolling applications. Closes after this day (Morocco time)."><input className="input" type="date" value={f.deadline ?? ''} min={f.opensOn ?? undefined} onChange={(x) => set('deadline', x.target.value || null)} aria-label="Deadline" /></Fld>
-          </div>
-          <div className="cols-2">
-            <Fld label="Location"><input className="input" maxLength={120} placeholder="e.g. Marrakech, Remote" value={f.location} onChange={(x) => set('location', x.target.value)} aria-label="Location" /></Fld>
-            <Fld label="Commitment"><input className="input" maxLength={80} placeholder="e.g. 3 months, part-time" value={f.commitment} onChange={(x) => set('commitment', x.target.value)} aria-label="Commitment" /></Fld>
-          </div>
-          <Fld label="How to apply"><select className="select" value={f.applyMethod} onChange={(x) => set('applyMethod', x.target.value as Form['applyMethod'])} aria-label="How to apply">
-            <option value="external">Online form (link)</option><option value="email">By email</option><option value="contact">Through the website contact form</option></select></Fld>
-          {f.applyMethod === 'external' && <Fld label="Application link"><input className="input mono" maxLength={500} placeholder="https://…" value={f.applyUrl} onChange={(x) => set('applyUrl', x.target.value.trim())} aria-label="Application link" /></Fld>}
-          {f.applyMethod === 'email' && <Fld label="Application email" hint="This address is shown publicly on the page."><input className="input mono" maxLength={160} placeholder="name@afcdteam.com" value={f.applyEmail} onChange={(x) => set('applyEmail', x.target.value.trim())} aria-label="Application email" /></Fld>}
-          <div className="cols-2">
-            <Fld label="Project (optional)" hint="Live projects only."><select className="select" value={f.projectSlug ?? ''} onChange={(x) => set('projectSlug', x.target.value || null)} aria-label="Project"><option value="">None</option>{projects.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select></Fld>
-            <Fld label="Image (optional)">{f.heroMediaId && hero ? <div className="thumb" style={{ width: 160 }}><img src={hero.url} alt={hero.alt} /><button type="button" aria-label="Remove image" onClick={() => set('heroMediaId', null)}>×</button></div> : null}
-              <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('hero')}><Icon n="image" />{f.heroMediaId ? 'Change' : 'Choose'} image</button></Fld>
-          </div>
-          <div className="cols-2">
-            <Fld label="SEO title" hint={`${f.seoTitle.length} / 70 · empty = title`}><input className="input" maxLength={70} value={f.seoTitle} onChange={(x) => set('seoTitle', x.target.value)} aria-label="SEO title" /></Fld>
-            <Fld label="Page address" hint={live ? 'A live opportunity’s address cannot change.' : undefined}><div style={{ display: 'flex', gap: 6, alignItems: 'center' }}><span className="mono muted">opportunity-</span><input className="input mono" aria-label="Page address" disabled={live} value={f.slug} onChange={(x) => { setSlugTouched(true); set('slug', slugify(x.target.value)); }} /></div></Fld>
-          </div>
-          <Fld label="Meta description" hint={`${f.seoDescription.length} / 170 · empty = summary`}><textarea className="textarea" maxLength={170} value={f.seoDescription} onChange={(x) => set('seoDescription', x.target.value)} aria-label="Meta description" /></Fld>
-        </section>
+        </Section>
+        <Section id="seo" title="Search & address" desc="Optional. Empty fields use the title and summary.">
+          <Field label="SEO title" span={2} count={[f.seoTitle.length, 70]}><input className="input" maxLength={70} value={f.seoTitle} onChange={(x) => set('seoTitle', x.target.value)} aria-label="SEO title" placeholder={f.title} /></Field>
+          <Field label="Page address" hint={live ? 'A live opportunity’s address cannot change.' : undefined}><div className="ed-slug"><span>opportunity-</span><input className="input mono" aria-label="Page address" disabled={live} value={f.slug} onChange={(x) => { setSlugTouched(true); set('slug', slugify(x.target.value)); }} /></div></Field>
+          <Field label="Meta description" span={3} count={[f.seoDescription.length, 170]}><textarea className="textarea" rows={2} maxLength={170} value={f.seoDescription} onChange={(x) => set('seoDescription', x.target.value)} aria-label="Meta description" placeholder={f.summary} /></Field>
+        </Section>
       </fieldset>
-
-      <section className="card stack side-panel" style={{ padding: 20 }}>
-        <dl className="kv"><dt>Website</dt><dd>{live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'}</dd>{o.publishedAt && <><dt>Published</dt><dd>{fmtDate(o.publishedAt)}</dd></>}<dt>Applications</dt><dd>{state}{f.deadline ? ` · until ${dateLabel(f.deadline)}` : ' · rolling'}</dd></dl>
+      <WorkflowPanel status={status} live={live} problems={o.problems}
+        facts={[['Website', live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'], ...(o.publishedAt ? [['Published', fmtDate(o.publishedAt)] as [string, string]] : []), ['Applications', `${state}${f.deadline ? ` · until ${dateLabel(f.deadline)}` : ' · rolling'}`]]}>
         {live && <a className="btn btn-sm" href={me.siteUrl + file} target="_blank" rel="noopener"><Icon n="ext" />Open live page</a>}
-        {o.problems.length > 0 && status !== 'archived' && <div className="notice n-warn"><div><b>Before review</b><ul>{o.problems.map((x) => <li key={x}>{x}</li>)}</ul></div></div>}
         {['draft', 'changes_requested'].includes(status) && can('opportunity.update') && <button className="btn btn-primary" disabled={!!busy} onClick={() => act('submit')}><Icon n="send" />Submit for review</button>}
         {status === 'in_review' && can('opportunity.approve') && <><button className="btn btn-ok" disabled={!!busy} onClick={() => act('approve')}><Icon n="check" />Approve</button><button className="btn" onClick={() => setDialog('changes')}>Request changes</button></>}
         {status === 'approved' && can('opportunity.publish') && <button className="btn btn-ok" disabled={!!busy} onClick={() => setDialog('publish')}><Icon n="rocket" />Publish</button>}
         {['in_review', 'approved'].includes(status) && can('opportunity.update') && <button className="btn btn-ghost" onClick={() => act('withdraw')}><Icon n="undo" />Withdraw to draft</button>}
         {live && can('opportunity.publish') && <button className="btn btn-ghost btn-danger" onClick={() => setDialog('unpublish')}>Remove from website</button>}
-        {!live && status !== 'archived' && can('opportunity.update') && <button className="btn btn-ghost" onClick={() => { if (confirm('Archive this opportunity?')) act('archive'); }}><Icon n="archive" />Archive</button>}
+        {!live && status !== 'archived' && can('opportunity.update') && <button className="btn btn-ghost" onClick={() => { if (confirm('Archive this record?')) act('archive'); }}><Icon n="archive" />Archive</button>}
         {status === 'archived' && can('opportunity.update') && <button className="btn" onClick={() => act('restore')}>Restore as draft</button>}
-        <small className="muted">History</small>
-        <ol className="timeline">{o.history.revisions.slice(0, 6).map((r) => <li key={r.id}><b>Revision {r.number} · {r.reason}{r.id === o.publishedRevisionId ? ' · live' : ''}</b><small>{fmtDate(r.createdAt)}</small>
-          {editable && <button className="btn btn-sm btn-ghost" style={{ padding: 0, height: 'auto' }} onClick={async () => { if (confirm(`Copy revision ${r.number} into the draft?`)) { await post(`/opportunities/${id}/revisions/${r.id}/restore`); await load(); toast('Revision restored as a draft'); } }}>Restore this version</button>}</li>)}
-          {o.history.comments.filter((c) => c.body).slice(0, 5).map((c) => <li key={c.id}><b>{c.kind.replace('_', ' ')}</b><q>{c.body}</q><small>{fmtDate(c.createdAt)}</small></li>)}</ol>
-      </section>
+        {(o.history.revisions.length > 0 || o.history.comments.some((c) => c.body)) && <details className="ed-history"><summary>History</summary>
+          <ol className="timeline">{o.history.revisions.slice(0, 8).map((r) => <li key={r.id}><b>Revision {r.number} · {r.reason}{r.id === o.publishedRevisionId ? ' · live' : ''}</b><small>{fmtDate(r.createdAt)}</small>
+            {editable && <button className="btn btn-sm btn-ghost" style={{ padding: 0, height: 'auto' }} onClick={async () => { if (confirm(`Copy revision ${r.number} into the draft?`)) { await post(`/opportunities/${id}/revisions/${r.id}/restore`); await load(); toast('Revision restored as a draft'); } }}>Restore this version</button>}</li>)}
+            {o.history.comments.filter((c) => c.body).slice(0, 5).map((c) => <li key={c.id}><b>{c.kind.replace('_', ' ')}</b><q>{c.body}</q><small>{fmtDate(c.createdAt)}</small></li>)}</ol></details>}
+      </WorkflowPanel>
     </div>
 
     {dialog === 'hero' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { if (m[0]) { setHero(m[0]); set('heroMediaId', m[0].id); } setDialog(null); }} />}

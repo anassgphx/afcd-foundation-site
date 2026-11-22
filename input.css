@@ -410,7 +410,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .pl-wrap { display: flex; flex-direction: column; gap: 10px; }
 .pl-panel { position: relative; overflow: hidden; border-radius: 24px; color: #0B0B0B; transition: flex-grow .7s cubic-bezier(.2,.7,.2,1), filter .3s ease, box-shadow .4s ease; }
 /* Pillar colours: lavender, sky, green, warm yellow — each with a lighter inner tint */
-.pl-tone-1 { background: #DCC5FA; } .pl-tone-1 .pl-inner { background: #E6D6FC; } .pl-tone-1 .pl-photo { --ph: #EFE4FD; }
+.pl-tone-1 { background: #FFB2B9; } .pl-tone-1 .pl-inner { background: #FFC6CB; } .pl-tone-1 .pl-photo { --ph: #FFDDE0; }
 .pl-tone-2 { background: #A8DDFB; } .pl-tone-2 .pl-inner { background: #C3E7FC; } .pl-tone-2 .pl-photo { --ph: #D9F0FD; }
 .pl-tone-3 { background: #82E591; } .pl-tone-3 .pl-inner { background: #A0ECAB; } .pl-tone-3 .pl-photo { --ph: #BEF2C5; }
 .pl-tone-4 { background: #FBE38A; } .pl-tone-4 .pl-inner { background: #FCEBAE; } .pl-tone-4 .pl-photo { --ph: #FDF2CC; }

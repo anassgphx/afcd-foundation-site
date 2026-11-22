@@ -302,7 +302,7 @@
   (function () {
     if (!$('#stack')) return;
   var PROJECTS = [
-    { n: '01', name: 'Leadership Lab 2.0', dot: '#DCC5FA', href: 'project-leadership-lab.html', pillar: 'Youth Empowerment', cat: 'Youth Leadership', surface: 'pc-1', phTone: '#E2E2E2', dark: false,
+    { n: '01', name: 'Leadership Lab 2.0', dot: '#FFB2B9', href: 'project-leadership-lab.html', pillar: 'Youth Empowerment', cat: 'Youth Leadership', surface: 'pc-1', phTone: '#E2E2E2', dark: false,
       photo: 'Leadership Lab 2.0 · project page photo',
       lede: 'Supporting emerging leaders through entrepreneurship and civic engagement.',
       rows: [

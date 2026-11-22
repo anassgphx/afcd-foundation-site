@@ -134,9 +134,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .sh-link .arr { display: inline-block; transition: transform .3s ease; }
 .sh-link:hover .arr { transform: translate(2px,-2px); }
 .sh-body { margin-top: 24px; display: grid; gap: 18px; }
-.sh-title { font-weight: 600; letter-spacing: -.045em; line-height: 1; font-size: clamp(38px, 4.4vw, 72px); text-wrap: balance; }
+.sh-title { font-weight: 600; letter-spacing: -.04em; line-height: 1.04; font-size: clamp(28px, 3vw, 46px); text-wrap: balance; }
 .sh-title.sh-xl { font-size: clamp(44px, 5.6vw, 96px); }
-.sh-title.sh-md { font-size: clamp(34px, 3.9vw, 68px); line-height: 1.02; letter-spacing: -.045em; }
+.sh-title.sh-md { font-size: clamp(30px, 3.2vw, 50px); line-height: 1.04; letter-spacing: -.04em; }
 .sh-soft { color: var(--mid); }
 .sh-aside { position: relative; max-width: 46ch; }
 .sh-accent { display: none; }
@@ -678,7 +678,7 @@ body.show-notes .note { display: block; }
 .phd-label { display: none; align-items: center; gap: 8px; min-height: 30px; padding: 0 12px; border-radius: 9999px; background: #000; color: #fff; font-size: 11px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; white-space: nowrap; }
 .phd-body { margin-top: 18px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .phd-body > * { min-width: 0; }
-.phd-title.sh-title { font-size: clamp(32px, 3.4vw, 54px); line-height: 1.02; }
+.phd-title.sh-title { font-size: clamp(36px, 4.2vw, 64px); line-height: 1.02; letter-spacing: -.045em; }
 .phd-lead { max-width: 62ch; font-size: 16px; line-height: 1.6; color: var(--charcoal); }
 .phd-aside .sh-points { margin-top: 12px; }
 .phd-aside .sh-points li { min-height: 28px; padding: 0 11px; font-size: 12px; }
@@ -1067,3 +1067,21 @@ body.show-notes .note { display: block; }
 .pr-card:hover .pr-logo { background: #EFEFEF; }
 .pr-scope { margin-top: auto; padding-top: 14px; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--mid); }
 .pr-scope svg { width: 15px; height: 15px; }
+
+/* Values: monochrome active card (hover / focus / default first), no colour tones */
+.vl-row .vl-card:hover, .vl-row .vl-card:focus-visible, .vl-row:not(:hover):not(:focus-within) .vl-card.is-default { background: #0B0B0B; color: #fff; border-color: #0B0B0B; box-shadow: 0 24px 40px -28px rgba(0,0,0,.45); }
+.vl-row .vl-card:hover .vl-icon, .vl-row .vl-card:focus-visible .vl-icon, .vl-row:not(:hover):not(:focus-within) .vl-card.is-default .vl-icon { background: #fff; color: #000; }
+.vl-row .vl-card:hover .vl-idx, .vl-row .vl-card:focus-visible .vl-idx, .vl-row:not(:hover):not(:focus-within) .vl-card.is-default .vl-idx { color: rgba(255,255,255,.55); opacity: 1; }
+.vl-row .vl-card:hover .vl-desc, .vl-row .vl-card:focus-visible .vl-desc, .vl-row:not(:hover):not(:focus-within) .vl-card.is-default .vl-desc { color: rgba(255,255,255,.72); opacity: 1; }
+
+/* Values: equal cards, black gradient fades in on hover (no widening) */
+.vl-row .vl-card { isolation: isolate; transition: transform .45s cubic-bezier(.2,.7,.2,1), box-shadow .45s ease, border-color .35s ease, color .35s ease; }
+.vl-row .vl-card::before { content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: inherit; opacity: 0; transition: opacity .45s ease;
+  background: radial-gradient(420px 220px at 100% 0%, rgba(255,255,255,.10), transparent 70%), linear-gradient(160deg, #262626 0%, #0E0E0E 55%, #000 100%); }
+.vl-row .vl-card:hover, .vl-row .vl-card:focus-visible, .vl-row:not(:hover):not(:focus-within) .vl-card.is-default { background: #fff; border-color: transparent; transform: translateY(-6px); box-shadow: 0 30px 50px -30px rgba(0,0,0,.55); }
+.vl-row .vl-card:hover::before, .vl-row .vl-card:focus-visible::before, .vl-row:not(:hover):not(:focus-within) .vl-card.is-default::before { opacity: 1; }
+.vl-row .vl-icon { transition: background-color .35s ease, color .35s ease, transform .5s cubic-bezier(.2,.7,.2,1); }
+.vl-row .vl-card:hover .vl-icon, .vl-row .vl-card:focus-visible .vl-icon, .vl-row:not(:hover):not(:focus-within) .vl-card.is-default .vl-icon { transform: rotate(-8deg) scale(1.08); animation: none; }
+@media (min-width: 1024px) {
+  .vl-row .vl-card, .vl-row .vl-card:hover, .vl-row .vl-card:focus-visible, .vl-row:not(:hover):not(:focus-within) .vl-card.is-default { flex-grow: 1; }
+}

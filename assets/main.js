@@ -64,33 +64,6 @@
     sync();
   })();
 
-  /* ---------- Values: the coloured card cycles through the four values ---------- */
-  (function () {
-    $$('.vl-row').forEach(function (row) {
-      var cards = $$('.vl-card', row);
-      if (cards.length < 2) return;
-      cards.forEach(function (c) { var p = document.createElement('span'); p.className = 'vl-prog'; p.setAttribute('aria-hidden', 'true'); c.appendChild(p); });
-      if (reduce) return;
-      var cur = Math.max(0, cards.findIndex(function (c) { return c.classList.contains('is-default'); }));
-      var timer = null, inView = false, held = false, STEP = 4200;
-      function show(i) {
-        cards[cur].classList.remove('is-default');
-        cur = (i + cards.length) % cards.length;
-        var c = cards[cur]; c.classList.add('is-default');
-        var p = $('.vl-prog', c); p.classList.remove('run'); void p.offsetWidth; p.classList.add('run');
-      }
-      function play() { stop(); if (!inView || held) return; row.classList.add('is-cycling'); show(cur); timer = setInterval(function () { show(cur + 1); }, STEP); }
-      function stop() { clearInterval(timer); timer = null; row.classList.remove('is-cycling'); }
-      row.addEventListener('mouseenter', function () { held = true; stop(); });
-      row.addEventListener('mouseleave', function () { held = false; play(); });
-      row.addEventListener('focusin', function () { held = true; stop(); });
-      row.addEventListener('focusout', function () { held = false; play(); });
-      if ('IntersectionObserver' in window) {
-        new IntersectionObserver(function (es) { inView = es[0].isIntersecting; inView ? play() : stop(); }, { threshold: 0.4 }).observe(row);
-      }
-    });
-  })();
-
   /* ---------- Scroll reveal for [data-reveal] (skipped with reduced motion) ---------- */
   (function () {
     var els = $$('[data-reveal]');

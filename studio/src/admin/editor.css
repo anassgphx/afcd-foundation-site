@@ -1,0 +1,16 @@
+/* Shared record editor (Editor.tsx: events, partners, opportunities). Extends the .ed-* styles in studio.css. */
+
+/* Main column: the form, then the Translations section (which keeps its own review, outside the form's read-only lock) */
+.ed-col { display: grid; gap: 16px; min-width: 0; }
+
+/* Section menu: progress on required sections, with a key for the dots */
+.ed-prog { display: grid; gap: 7px; margin-bottom: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.ed-prog-h b { font-size: 12.5px; color: var(--ink); }
+.ed-prog-bar { display: block; height: 5px; border-radius: 3px; background: var(--canvas); overflow: hidden; }
+.ed-prog-bar i { display: block; height: 100%; border-radius: 3px; background: #16a34a; transition: width .35s ease; }
+.ed-prog-key { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.ed-prog-key .ed-ok { width: 14px; height: 14px; font-size: 8px; line-height: 14px; margin-inline-start: 8px; }
+.ed-nav a .ed-todo { flex-shrink: 0; }
+
+/* Translations inside a section card: no extra frame inside the card body */
+.ed-col .ed-sec .rt { grid-column: 1 / -1; }

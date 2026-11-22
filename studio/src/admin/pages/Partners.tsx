@@ -122,7 +122,9 @@ export function PartnerEditor({ id }: { id: string }) {
       extra={<span className="pill">{SCOPES.find((x) => x[0] === f.scope)?.[1]}</span>}
       actions={<>
         <button className="btn" onClick={preview} disabled={!!busy}><Icon n="eye" />{busy === 'preview' ? 'Building…' : 'Preview'}</button>
-        {editable && <button className="btn btn-primary" onClick={save} disabled={!dirty || !!busy}><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save'}</button>}
+        {editable && dirty && <button className="btn btn-primary" onClick={save} disabled={!!busy} title="Save (⌘S)"><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save draft'}</button>}
+        {!dirty && ['draft', 'changes_requested'].includes(status) && can('partner.update') && <button className="btn btn-primary" disabled={!!busy || p.problems.length > 0} title={p.problems.length ? `${p.problems.length} thing${p.problems.length === 1 ? '' : 's'} to do first (see the publishing panel)` : undefined} onClick={() => act('submit')}><Icon n="send" />Submit for review</button>}
+        {!dirty && status === 'approved' && can('partner.publish') && <button className="btn btn-primary" disabled={!!busy} onClick={() => setDialog('publish')}><Icon n="rocket" />Publish…</button>}
       </>} />
     {errs.length > 0 && <div className="notice n-warn" role="alert"><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErrs([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
     {status === 'in_review' && can('partner.update') && <div className="notice n-info"><div>In review: read-only. Withdraw it to edit.</div></div>}
@@ -135,6 +137,7 @@ export function PartnerEditor({ id }: { id: string }) {
         { id: 'internal', label: 'Internal', icon: 'lock', optional: true },
         { id: 'translations', label: 'Translations', icon: 'globe', optional: true },
       ]} />
+      <div className="ed-col">
       <fieldset className="ed-main" disabled={!editable}>
         <Section id="basics" title="Organisation" desc="One record per organisation. Use its official name.">
           <Field label="Organisation name" span={3} count={[f.name.length, 140]}><input className="input input-lg" maxLength={140} value={f.name} onChange={(x) => set('name', x.target.value)} aria-label="Organisation name" /></Field>
@@ -166,6 +169,7 @@ export function PartnerEditor({ id }: { id: string }) {
       <Section id="translations" title="Translations" desc="French and Arabic of this partner. Reviewed and published on the Translations screen.">
         <RecordTranslations noun="partner" dirty={status !== 'published'} files={[]} fields={[{ label: 'Organisation name', value: f.name }, { label: 'Category', value: f.category }, { label: 'About the partnership', value: f.description }]} />
       </Section>
+      </div>
       <WorkflowPanel status={status} live={live} problems={p.problems}
         facts={[['Website', live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'], ...(p.publishedAt ? [['Published', fmtDate(p.publishedAt)] as [string, string]] : []), ...(p.verifiedAt ? [['Last approved', fmtDate(p.verifiedAt)] as [string, string]] : [])]}>
         {live && <a className="btn btn-sm" href={me.siteUrl + 'partners.html'} target="_blank" rel="noopener"><Icon n="ext" />Open Our Partners</a>}

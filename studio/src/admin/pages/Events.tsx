@@ -114,7 +114,9 @@ export function EventEditor({ id }: { id: string }) {
       extra={<span className="pill">{past ? 'Past' : 'Upcoming'}</span>}
       actions={<>
         <button className="btn" onClick={preview} disabled={!!busy}><Icon n="eye" />{busy === 'preview' ? 'Building…' : 'Preview'}</button>
-        {editable && <button className="btn btn-primary" onClick={save} disabled={!dirty || !!busy}><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save'}</button>}
+        {editable && dirty && <button className="btn btn-primary" onClick={save} disabled={!!busy} title="Save (⌘S)"><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save draft'}</button>}
+        {!dirty && ['draft', 'changes_requested'].includes(status) && can('event.update') && <button className="btn btn-primary" disabled={!!busy || e.problems.length > 0} title={e.problems.length ? `${e.problems.length} thing${e.problems.length === 1 ? '' : 's'} to do first (see the publishing panel)` : undefined} onClick={() => act('submit')}><Icon n="send" />Submit for review</button>}
+        {!dirty && status === 'approved' && can('event.publish') && <button className="btn btn-primary" disabled={!!busy} onClick={() => setDialog('publish')}><Icon n="rocket" />Publish…</button>}
       </>} />
     {errs.length > 0 && <div className="notice n-warn" role="alert"><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErrs([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
     {status === 'in_review' && can('event.update') && <div className="notice n-info"><div>In review: read-only. Withdraw it to edit.</div></div>}
@@ -129,6 +131,7 @@ export function EventEditor({ id }: { id: string }) {
         { id: 'seo', label: 'Search & address', icon: 'search', optional: true, done: f.seoTitle || f.seoDescription ? true : undefined },
         { id: 'translations', label: 'Translations', icon: 'globe', optional: true },
       ]} />
+      <div className="ed-col">
       <fieldset className="ed-main" disabled={!editable}>
         <Section id="basics" title="Basics" desc="What people see first in the calendar and in search results.">
           <Field label="Title" span={3} count={[f.title.length, 140]}><input className="input input-lg" maxLength={140} value={f.title} onChange={(x) => set('title', x.target.value)} aria-label="Title" placeholder="e.g. Climate workshop for young leaders" /></Field>
@@ -178,6 +181,7 @@ export function EventEditor({ id }: { id: string }) {
       <Section id="translations" title="Translations" desc="French and Arabic of this event. Reviewed and published on the Translations screen.">
         <RecordTranslations noun="event" dirty={status !== 'published'} files={f.slug ? [`event-${f.slug}.html`] : []} fields={[{ label: 'Event title', value: f.title }, { label: 'Summary', value: f.summary }, ...f.body.split(/\n{2,}/).map((x) => ({ label: 'Description', value: x.replace(/^[>#-]+\s*/, '') })), { label: 'Location', value: f.location }, { label: 'Time', value: f.timeLabel }, ...f.agenda.flatMap((a) => [{ label: 'Programme step', value: a.title }, { label: 'Programme step text', value: a.text }]), ...f.audience.map((x) => ({ label: 'Who should attend', value: x })), { label: 'SEO title', value: f.seoTitle }, { label: 'Meta description', value: f.seoDescription }]} />
       </Section>
+      </div>
 
       <WorkflowPanel status={status} live={live} problems={e.problems}
         facts={[['Website', live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'], ...(e.publishedAt ? [['Published', fmtDate(e.publishedAt)] as [string, string]] : []), ['Calendar', past ? 'Past event' : 'Upcoming']]}>

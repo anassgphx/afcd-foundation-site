@@ -3,6 +3,7 @@
 // workflow steps and a readiness checklist. Presentation only: saving and workflow stay in each editor.
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Badge, Icon, Link, LiveBadge } from './ui.tsx';
+import './editor.css';
 
 export type SectionDef = { id: string; label: string; icon: string; done?: boolean; optional?: boolean };
 
@@ -34,7 +35,14 @@ export function SectionNav({ sections }: { sections: SectionDef[] }) {
     }, { rootMargin: '-80px 0px -60% 0px' });
     els.forEach((e) => io.observe(e)); return () => io.disconnect();
   }, [sections.map((s) => s.id).join()]);
+  const req = sections.filter((s) => s.done !== undefined && !s.optional);
+  const ok = req.filter((s) => s.done).length;
   return <nav className="ed-nav" aria-label="Sections">
+    {req.length > 0 && <div className="ed-prog" role="status">
+      <span className="ed-prog-h"><b>{ok === req.length ? 'All required sections done' : `${ok} of ${req.length} required done`}</b></span>
+      <span className="ed-prog-bar" aria-hidden="true"><i style={{ width: `${Math.round((ok / req.length) * 100)}%` }} /></span>
+      <span className="ed-prog-key"><i className="ed-todo" aria-hidden="true" />to do<i className="ed-ok" aria-hidden="true">✓</i>done</span>
+    </div>}
     {sections.map((s) => <a key={s.id} href={`#sec-${s.id}`} className={on === s.id ? 'on' : ''} onClick={(e) => { e.preventDefault(); document.getElementById(`sec-${s.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); setOn(s.id); }}>
       <Icon n={s.icon} width={15} height={15} /><span>{s.label}</span>
       {s.done === undefined ? null : s.done ? <i className="ed-ok" aria-label="Complete">✓</i> : s.optional ? <i className="ed-opt">optional</i> : <i className="ed-todo" aria-label="Needs attention" />}

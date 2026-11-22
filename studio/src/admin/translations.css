@@ -94,3 +94,12 @@
 .rt-save .btn-ghost { color: #fff; border-color: rgba(255,255,255,.25); background: transparent; }
 .rt-save .btn-primary { background: #fff; color: var(--ink); border-color: #fff; }
 @media (max-width: 1000px) { .rt-cols { display: none; } .rt-cells { grid-template-columns: minmax(0, 1fr); } }
+
+/* In narrow columns (event, partner and opportunity editors), English goes on top and French and Arabic sit side by side under it. */
+.rt { container-type: inline-size; }
+@container (max-width: 760px) {
+  .rt-cols { display: none; }
+  .rt-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rt-en { grid-column: 1 / -1; min-height: 0; }
+}
+@container (max-width: 440px) { .rt-cells { grid-template-columns: minmax(0, 1fr); } }

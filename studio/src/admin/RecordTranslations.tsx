@@ -65,16 +65,16 @@ export function RecordTranslations({ files, fields, noun, dirty }: { files: stri
   }
 
   return <div className="rt">
-    <div className="rt-top">
+    {v.items.length > 0 && <div className="rt-top">
       <div className="rt-langs">{v.langs.map((l) => { const d = done(l.lang); const pct = real.length ? Math.round((d / real.length) * 100) : 0; return <div key={l.lang} className="rt-lang">
         <div className="rt-lang-h"><b>{l.name}</b><span className="muted" lang={l.lang}>{l.native}</span><Badge s={l.status} /></div>
         <div className="tr-bar" aria-hidden="true"><i style={{ width: `${pct}%` }} /></div>
         <span className="muted">{d} of {real.length} translated</span>
       </div>; })}</div>
       <p className="rt-help">Untranslated text shows in English on the French and Arabic pages. Edits here are drafts: they go live after review and publishing on the <Link to="/studio/translations">Translations screen</Link>.</p>
-    </div>
+    </div>}
 
-    {dirty && <div className="notice n-info"><div>This {noun} has English changes that are not on the website yet. Translations follow the published English; new text appears here once it is published.</div></div>}
+    {dirty && v.items.length > 0 && <div className="notice n-info"><div>This {noun} has English changes that are not on the website yet. Translations follow the published English; new text appears here once it is published.</div></div>}
     {v.langs.some((l) => !editable(l.lang)) && can('translation.update') && <div className="notice n-info"><div>{v.langs.filter((l) => !editable(l.lang)).map((l) => l.name).join(' and ')} {v.langs.filter((l) => !editable(l.lang)).length === 1 ? 'is' : 'are'} in review, so read-only here. Withdraw on the Translations screen to edit.</div></div>}
 
     {v.items.length === 0 ? <div className="dt-empty"><Icon n="globe" /><b>{v.pageBuilt ? 'No text of its own to translate.' : 'Nothing to translate yet.'}</b><small>{v.pageBuilt ? 'Its page only shows text shared with the rest of the site.' : `Text appears here once this ${noun} is published on the website.`}</small></div>

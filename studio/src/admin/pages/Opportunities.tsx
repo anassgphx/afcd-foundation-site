@@ -124,7 +124,9 @@ export function OpportunityEditor({ id }: { id: string }) {
       extra={<span className="pill">{state}</span>}
       actions={<>
         <button className="btn" onClick={preview} disabled={!!busy}><Icon n="eye" />{busy === 'preview' ? 'Building…' : 'Preview'}</button>
-        {editable && <button className="btn btn-primary" onClick={save} disabled={!dirty || !!busy}><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save'}</button>}
+        {editable && dirty && <button className="btn btn-primary" onClick={save} disabled={!!busy} title="Save (⌘S)"><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save draft'}</button>}
+        {!dirty && ['draft', 'changes_requested'].includes(status) && can('opportunity.update') && <button className="btn btn-primary" disabled={!!busy || o.problems.length > 0} title={o.problems.length ? `${o.problems.length} thing${o.problems.length === 1 ? '' : 's'} to do first (see the publishing panel)` : undefined} onClick={() => act('submit')}><Icon n="send" />Submit for review</button>}
+        {!dirty && status === 'approved' && can('opportunity.publish') && <button className="btn btn-primary" disabled={!!busy} onClick={() => setDialog('publish')}><Icon n="rocket" />Publish…</button>}
       </>} />
     {errs.length > 0 && <div className="notice n-warn" role="alert"><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErrs([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
     {status === 'in_review' && can('opportunity.update') && <div className="notice n-info"><div>In review: read-only. Withdraw it to edit.</div></div>}
@@ -138,6 +140,7 @@ export function OpportunityEditor({ id }: { id: string }) {
         { id: 'seo', label: 'Search & address', icon: 'search', optional: true, done: f.seoTitle || f.seoDescription ? true : undefined },
         { id: 'translations', label: 'Translations', icon: 'globe', optional: true },
       ]} />
+      <div className="ed-col">
       <fieldset className="ed-main" disabled={!editable}>
         <Section id="basics" title="Basics" desc="What people see in the list of opportunities and in search results.">
           <Field label="Title" span={3} count={[f.title.length, 140]}><input className="input input-lg" maxLength={140} value={f.title} onChange={(x) => set('title', x.target.value)} aria-label="Title" placeholder="e.g. Call for applications: Youth Climate Fellows 2027" /></Field>
@@ -180,6 +183,7 @@ export function OpportunityEditor({ id }: { id: string }) {
       <Section id="translations" title="Translations" desc="French and Arabic of this opportunity. Reviewed and published on the Translations screen.">
         <RecordTranslations noun="opportunity" dirty={status !== 'published'} files={f.slug ? [`opportunity-${f.slug}.html`] : []} fields={[{ label: 'Title', value: f.title }, { label: 'Summary', value: f.summary }, ...f.body.split(/\n{2,}/).map((x) => ({ label: 'Description', value: x.replace(/^[>#-]+\s*/, '') })), ...f.eligibility.map((x) => ({ label: 'Who can apply', value: x })), ...f.benefits.map((x) => ({ label: 'What you get', value: x })), { label: 'Location', value: f.location }, { label: 'Commitment', value: f.commitment }, { label: 'SEO title', value: f.seoTitle }, { label: 'Meta description', value: f.seoDescription }]} />
       </Section>
+      </div>
       <WorkflowPanel status={status} live={live} problems={o.problems}
         facts={[['Website', live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'], ...(o.publishedAt ? [['Published', fmtDate(o.publishedAt)] as [string, string]] : []), ['Applications', `${state}${f.deadline ? ` · until ${dateLabel(f.deadline)}` : ' · rolling'}`]]}>
         {live && <a className="btn btn-sm" href={me.siteUrl + file} target="_blank" rel="noopener"><Icon n="ext" />Open live page</a>}

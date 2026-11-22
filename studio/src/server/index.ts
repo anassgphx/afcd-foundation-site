@@ -18,6 +18,8 @@ const tick = async () => {
     lastEventCheck = Date.now();
     try { if (await publisher.refreshEventStates()) console.log('[scheduler] events calendar rebuilt'); }
     catch (e) { console.error('[scheduler] events refresh failed', e); }
+    try { if (await publisher.refreshOpportunityStates()) console.log('[scheduler] opportunities rebuilt'); }
+    catch (e) { console.error('[scheduler] opportunities refresh failed', e); }
   }
 };
 let lastEventCheck = 0;

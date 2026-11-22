@@ -21,6 +21,7 @@ import * as G from './modules/pages/service.ts';
 import * as N from './modules/news/service.ts';
 import * as PT from './modules/partners/service.ts';
 import * as EV from './modules/events/service.ts';
+import * as OP from './modules/opportunities/service.ts';
 import { importPartners } from './modules/partners/import.ts';
 import { blockCatalog } from './modules/pages/blocks.ts';
 import { Publisher, type BuildRunner } from './modules/publish/service.ts';
@@ -278,6 +279,29 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
     return c.json({ url: `/studio/preview/${r.token}/${r.file}` });
   });
   api.post('/events/:id/revisions/:rev/restore', perm('event.update'), async (c) => { await EV.restoreEventRevision(db, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
+
+  // ---------------------------------------------------------------- Opportunities
+  api.get('/opportunities', perm('opportunity.read'), async (c) => c.json(await OP.listOpportunities(db)));
+  api.post('/opportunities', perm('opportunity.create'), async (c) => c.json(await OP.createOpportunity(db, actor(c), await c.req.json()), 201));
+  api.get('/opportunities/:id', perm('opportunity.read'), async (c) => {
+    const o = await OP.loadOpportunity(db, c.req.param('id'));
+    const mediaRows = o.heroMediaId ? await db.select().from(t.media).where(eq(t.media.id, o.heroMediaId)) : [];
+    return c.json({ ...o, media: mediaRows.map(withUrl), problems: await OP.opportunityProblems(db, o), history: await OP.opportunityHistory(db, o.id) });
+  });
+  api.put('/opportunities/:id', perm('opportunity.update'), async (c) => c.json(await OP.updateOpportunity(db, actor(c), c.req.param('id'), await c.req.json())));
+  api.post('/opportunities/:id/transition', async (c) => {
+    const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
+    if (!body.success || !OP.opportunityTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, OP.opportunityTransitionPerm(body.data.action)!);
+    return c.json(await OP.transitionOpportunity(db, actor(c), u.role, c.req.param('id'), body.data.action, { comment: body.data.comment }));
+  });
+  api.post('/opportunities/:id/publish', perm('opportunity.publish'), async (c) => c.json(await publisher.publishOpportunity(actor(c), c.req.param('id'))));
+  api.post('/opportunities/:id/unpublish', perm('opportunity.publish'), async (c) => c.json(await publisher.unpublishOpportunity(actor(c), c.req.param('id'))));
+  api.post('/opportunities/:id/preview', perm('opportunity.read'), async (c) => {
+    const r = await publisher.previewOpportunity(c.req.param('id'), OP.toOpportunitySnapshot(await OP.loadOpportunity(db, c.req.param('id'))));
+    return c.json({ url: `/studio/preview/${r.token}/${r.file}` });
+  });
+  api.post('/opportunities/:id/revisions/:rev/restore', perm('opportunity.update'), async (c) => { await OP.restoreOpportunityRevision(db, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
 
   // ---------------------------------------------------------------- Publishing jobs, audit, users
   api.get('/publish-jobs', perm('dashboard.read'), async (c) => c.json(await publisher.recentJobs(30)));

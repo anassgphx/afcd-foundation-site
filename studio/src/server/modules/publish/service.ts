@@ -15,7 +15,9 @@ import { validateDoc } from '../pages/blocks.ts';
 import { articles, articleRevisions } from '../../db/schema.ts';
 import { articleFile, articleSource, listingEntry, newsCtx, type ArticleSnapshot } from '../news/render.ts';
 import { loadArticle, toArticleSnapshot } from '../news/service.ts';
-import { partners, partnerRevisions, events, eventRevisions } from '../../db/schema.ts';
+import { partners, partnerRevisions, events, eventRevisions, opportunities, opportunityRevisions } from '../../db/schema.ts';
+import { detailSource, listingSource, oppCtx, oppState, opportunityFile, type LiveOpp } from '../opportunities/render.ts';
+import type { OpportunitySnapshot } from '../opportunities/service.ts';
 import { eventEntries, eventFile, isUpcoming } from '../events/render.ts';
 import type { EventSnapshot } from '../events/service.ts';
 import { partnerEntries } from '../partners/render.ts';
@@ -169,11 +171,38 @@ export class Publisher {
     return live.map((x) => x.snap.posterMediaId).filter(Boolean) as string[];
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null } } = {}) {
+  /** Live opportunities (optionally overriding one). */
+  async liveOpportunities(override?: { opportunityId: string; revisionId: string | null }): Promise<LiveOpp[]> {
+    const live = await this.db.select({ id: opportunities.id, rev: opportunities.publishedRevisionId }).from(opportunities).where(isNotNull(opportunities.publishedRevisionId));
+    const map = new Map(live.map((r) => [r.id, r.rev as string]));
+    if (override) { if (override.revisionId) map.set(override.opportunityId, override.revisionId); else map.delete(override.opportunityId); }
+    if (!map.size) return [];
+    const revs = await this.db.select().from(opportunityRevisions).where(inArray(opportunityRevisions.id, [...map.values()]));
+    return revs.map((r) => ({ id: r.id, snap: r.snapshot as unknown as OpportunitySnapshot }));
+  }
+
+  /** Writes opportunities.html and one page per opportunity into `pagesDir`. With nothing live, the pages are removed
+   *  (also from `outDirs`), so the site has no empty listing. Stale opportunity pages are always removed. Returns image ids. */
+  private async writeOpportunities(pagesDir: string, outDirs: string[], live: LiveOpp[], projectOverride?: { projectId: string; revisionId: string | null }) {
+    const keep = new Set(live.length ? ['opportunities.html', ...live.map((o) => opportunityFile(o.snap.slug))] : []);
+    for (const dir of [pagesDir, ...outDirs]) {
+      if (existsSync(dir)) for (const f of readdirSync(dir)) if ((f === 'opportunities.html' || /^opportunity-[a-z0-9-]+\.html$/.test(f)) && !keep.has(f)) rmSync(resolve(dir, f));
+    }
+    if (!live.length) return [] as string[];
+    const ctx = await oppCtx(this.db, live.map((o) => o.snap), { projectOverride });
+    mkdirSync(pagesDir, { recursive: true });
+    const write = (f: string, src: string) => { const file = resolve(pagesDir, f); const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`; writeFileSync(tmp, src); renameSync(tmp, file); };
+    write('opportunities.html', listingSource(live, ctx));
+    for (const o of live) write(opportunityFile(o.snap.slug), detailSource(o, ctx));
+    return live.map((o) => o.snap.heroMediaId).filter(Boolean) as string[];
+  }
+
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null } } = {}) {
     const entries = await this.liveEntries(o.project);
     this.writeData(this.dataFile, entries);
     const partnerMedia = await this.writePartners(this.partnersFile, o.partner, o.project);
     const eventMedia = await this.writeEvents(this.eventsFile, o.event, o.project);
+    const oppMedia = await this.writeOpportunities(resolve(this.cfg.siteRoot, 'src/pages'), [this.cfg.siteRoot], await this.liveOpportunities(o.opportunity), o.project);
     const newsMedia = await this.writeNews(this.newsFile, resolve(this.cfg.siteRoot, 'src/pages'), await this.liveArticles(o.article), o.project);
     const live = await this.livePages(o.page);
     const ctx = await buildCtx(this.db, live.map((x) => x.snap.doc), { projectOverride: o.project });
@@ -184,7 +213,7 @@ export class Publisher {
       const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
       writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
     }
-    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...eventMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...eventMedia, ...oppMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
     return { entries, live };
   }
 
@@ -333,7 +362,7 @@ export class Publisher {
       const msg = (e as Error).message;
       try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
       await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
-      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('partner') ? 'partner' : kind.includes('event') ? 'event' : 'page', id: entityId }, `${failLabel}: ${msg}`, { jobId: job.id });
+      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('partner') ? 'partner' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : 'page', id: entityId }, `${failLabel}: ${msg}`, { jobId: job.id });
       throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
     }
     return { job, log };
@@ -667,6 +696,97 @@ export class Publisher {
     if (!stale) return false;
     await this.locked(async () => { const log: string[] = []; await this.rebuildFromDb(log); });
     await audit(this.db, null, 'event.refresh', { type: 'event' }, 'Rebuilt the events calendar because an event has passed');
+    return true;
+  }
+
+  // ---------------------------------------------------------------- Opportunities
+  private verifyOpportunity(slug: string, revisionId: string, removed: boolean) {
+    const root = this.cfg.siteRoot;
+    const page = resolve(root, opportunityFile(slug)), listing = resolve(root, 'opportunities.html');
+    if (removed) {
+      if (existsSync(page)) throw new Error(`${opportunityFile(slug)} is still on the site.`);
+      if (existsSync(listing) && readFileSync(listing, 'utf8').includes(`data-studio-opportunity="${revisionId}"`)) throw new Error('The opportunity is still listed on opportunities.html.');
+      return;
+    }
+    if (!existsSync(page) || !readFileSync(page, 'utf8').includes(`data-studio-opportunity-rev="${revisionId}"`)) throw new Error(`${opportunityFile(slug)} does not contain the published revision.`);
+    // closed opportunities leave the listing 12 months after their deadline, so only open or coming ones must be listed
+    const closed = readFileSync(page, 'utf8').includes('data-state="closed"');
+    if (!closed && (!existsSync(listing) || !readFileSync(listing, 'utf8').includes(`data-studio-opportunity="${revisionId}"`))) throw new Error('The opportunity is missing from opportunities.html.');
+  }
+
+  async publishOpportunity(actor: NonNullable<Actor>, opportunityId: string) {
+    return this.locked(async () => {
+      const [o] = await this.db.select().from(opportunities).where(eq(opportunities.id, opportunityId));
+      if (!o) throw new AppError(404, 'Opportunity not found.');
+      if (o.status !== 'approved' || !o.approvedRevisionId) throw new AppError(409, 'Only an approved opportunity can be published.');
+      const [rev] = await this.db.select().from(opportunityRevisions).where(eq(opportunityRevisions.id, o.approvedRevisionId));
+      const snap = rev.snapshot as unknown as OpportunitySnapshot;
+      const { job, log } = await this.deliver('publish_opportunity', actor, opportunityId, rev.id, async (log) => {
+        await this.writeSite({ opportunity: { opportunityId, revisionId: rev.id } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyOpportunity(snap.slug, rev.id, false);
+      }, `Publishing “${o.title}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(opportunities).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, updatedAt: new Date() }).where(eq(opportunities.id, opportunityId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'opportunity.publish', { type: 'opportunity', id: opportunityId }, `Published opportunity “${o.title}” (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file: opportunityFile(snap.slug) };
+    });
+  }
+
+  async unpublishOpportunity(actor: NonNullable<Actor>, opportunityId: string) {
+    return this.locked(async () => {
+      const [o] = await this.db.select().from(opportunities).where(eq(opportunities.id, opportunityId));
+      if (!o) throw new AppError(404, 'Opportunity not found.');
+      if (!o.publishedRevisionId) throw new AppError(409, 'This opportunity is not on the live site.');
+      const [rev] = await this.db.select().from(opportunityRevisions).where(eq(opportunityRevisions.id, o.publishedRevisionId));
+      const snap = rev.snapshot as unknown as OpportunitySnapshot;
+      const { job, log } = await this.deliver('unpublish_opportunity', actor, opportunityId, rev.id, async (log) => {
+        await this.writeSite({ opportunity: { opportunityId, revisionId: null } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyOpportunity(snap.slug, rev.id, true);
+      }, `Removing “${o.title}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(opportunities).set({ status: 'draft', publishedRevisionId: null, publishedAt: null, updatedAt: new Date() }).where(eq(opportunities.id, opportunityId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'opportunity.unpublish', { type: 'opportunity', id: opportunityId }, `Removed opportunity “${o.title}” from the website`, { jobId: job.id });
+      });
+      return { jobId: job.id };
+    });
+  }
+
+  /** Builds the listing and the opportunity page with the saved working copy in an isolated folder. */
+  async previewOpportunity(opportunityId: string, snap: OpportunitySnapshot) {
+    return this.locked(async () => {
+      this.cleanupPreviews();
+      const token = randomBytes(16).toString('hex');
+      const dir = resolve(this.cfg.previewDir, token);
+      const pagesDir = resolve(dir, 'pages'), outDir = resolve(dir, 'site'), dataFile = resolve(dir, 'projects.json');
+      mkdirSync(pagesDir, { recursive: true }); mkdirSync(outDir, { recursive: true });
+      this.writeData(dataFile, await this.liveEntries());
+      await this.writeOpportunities(pagesDir, [], (await this.liveOpportunities({ opportunityId, revisionId: null })).concat({ id: 'preview', snap }));
+      await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, only: 'pages' });
+      const file = opportunityFile(snap.slug);
+      if (!existsSync(resolve(outDir, file))) throw new AppError(409, 'The preview could not be generated.');
+      return { token, file };
+    });
+  }
+
+  /** Rebuilds when an opportunity has opened or closed since its page was built (checked by the scheduler). */
+  async refreshOpportunityStates(now = new Date()) {
+    const live = await this.liveOpportunities();
+    if (!live.length) return false;
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    const stale = live.some((o) => {
+      const f = resolve(this.cfg.siteRoot, opportunityFile(o.snap.slug));
+      if (!existsSync(f)) return true;
+      const m = readFileSync(f, 'utf8').match(/data-state="(open|soon|closed)"/);
+      return m?.[1] !== oppState(o.snap, today);
+    });
+    if (!stale) return false;
+    await this.locked(async () => { const log: string[] = []; await this.rebuildFromDb(log); });
+    await audit(this.db, null, 'opportunity.refresh', { type: 'opportunity' }, 'Rebuilt opportunities because one has opened or closed');
     return true;
   }
 

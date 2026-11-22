@@ -367,3 +367,49 @@ export const eventRevisions = pgTable('event_revisions', {
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex('event_revisions_num_uq').on(t.eventId, t.number)]);
+
+// ---------------------------------------------------------------- Opportunities (calls for applications, volunteering, jobs, internships, consultancies)
+export const opportunityTypeEnum = pgEnum('opportunity_type', ['call_for_applications', 'volunteering', 'job', 'internship', 'consultancy', 'call_for_partners']);
+export const applyMethodEnum = pgEnum('apply_method', ['external', 'email', 'contact']);
+
+export const opportunities = pgTable('opportunities', {
+  id: id(),
+  slug: text('slug').notNull(),
+  title: text('title').notNull(),
+  type: opportunityTypeEnum('type').notNull().default('call_for_applications'),
+  summary: text('summary').notNull().default(''),
+  body: text('body').notNull().default(''),
+  eligibility: jsonb('eligibility').$type<string[]>().notNull().default([]),
+  benefits: jsonb('benefits').$type<string[]>().notNull().default([]),
+  location: text('location').notNull().default(''),
+  commitment: text('commitment').notNull().default(''),        // e.g. "3 months, part-time", "2 days"
+  opensOn: text('opens_on'),                                    // YYYY-MM-DD, optional
+  deadline: text('deadline'),                                   // YYYY-MM-DD, null = rolling
+  applyMethod: applyMethodEnum('apply_method').notNull().default('external'),
+  applyUrl: text('apply_url').notNull().default(''),
+  applyEmail: text('apply_email').notNull().default(''),
+  pillarId: uuid('pillar_id').references(() => pillars.id, { onDelete: 'restrict' }),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  heroMediaId: uuid('hero_media_id').references(() => media.id, { onDelete: 'set null' }),
+  seoTitle: text('seo_title').notNull().default(''),
+  seoDescription: text('seo_description').notNull().default(''),
+  status: workflowEnum('status').notNull().default('draft'),
+  publishedRevisionId: uuid('published_revision_id'),
+  approvedRevisionId: uuid('approved_revision_id'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('opportunities_slug_uq').on(t.slug), index('opportunities_status_idx').on(t.status)]);
+
+export const opportunityRevisions = pgTable('opportunity_revisions', {
+  id: id(),
+  opportunityId: uuid('opportunity_id').notNull().references(() => opportunities.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('opportunity_revisions_num_uq').on(t.opportunityId, t.number)]);

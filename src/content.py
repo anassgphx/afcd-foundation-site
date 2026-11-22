@@ -1116,6 +1116,29 @@ def news_articles():
 # ---------------------------------------------------------------- Events
 # Sample events: clearly marked placeholders until AFCD supplies its real calendar (e.g. through Studio).
 EVENTS = [
+    # Real event (Moonshot: Artemis Edition timeline, month 5). Only the month is fixed so far: tba=True hides the
+    # countdown, calendar button and map until the day, time and venue are announced.
+    dict(slug='artemis-morocco-roadshow', project=None, day='Dec', mon='', year='2026', iso='2026-12', tba=True, kind='Roadshow',
+         pillar='youth-empowerment', title='Artemis Morocco Roadshow', where='Venue to be announced', time='Time to be announced',
+         desc='The first public event of Moonshot: Artemis Edition, an 18-month initiative empowering Moroccan youth through STEM, space innovation, entrepreneurship and U.S.–Morocco cooperation in emerging technologies.',
+         upcoming=True, sample=False, partners=['Moroccan Initiative for Space Industry', 'U.S. Embassy Morocco'],
+         registration={'mode': 'contact', 'label': 'Register interest'},
+         poster={'src': 'assets/img/events/moonshot-artemis-poster-1200.webp',
+                 'srcset': 'assets/img/events/moonshot-artemis-poster-600.webp 600w, assets/img/events/moonshot-artemis-poster-1200.webp 1200w',
+                 'w': 1200, 'h': 1200, 'fx': 50, 'fy': 50,
+                 'alt': 'Moonshot: Artemis Edition poster with the AFCD Foundation, Moroccan Initiative for Space Industry and U.S. Embassy Morocco logos, describing the 18-month programme and its six activities.'},
+         bodyHtml=('<p>The Artemis Morocco Roadshow introduces young people to NASA’s Artemis programme and to the opportunities of the space sector. '
+                   'It opens Moonshot: Artemis Edition, an 18-month initiative led by AFCD Foundation with the Moroccan Initiative for Space Industry, '
+                   'supported by the U.S. Embassy Morocco.</p>'
+                   '<p>Moonshot: Artemis Edition brings together:</p><ul>'
+                   '<li><strong>Artemis Roadshow:</strong> introducing Artemis and space opportunities.</li>'
+                   '<li><strong>Innovation Challenges:</strong> developing innovative space solutions.</li>'
+                   '<li><strong>Space Media Series:</strong> promoting public space awareness.</li>'
+                   '<li><strong>Space Orientation:</strong> building essential space-project skills.</li>'
+                   '<li><strong>Leadership Talks:</strong> learning from American space experts.</li>'
+                   '<li><strong>National Competition:</strong> showcasing and rewarding top projects.</li></ul>'
+                   '<p>The exact date, time and venue will be announced here. Register your interest to hear first.</p>'),
+         seoDescription='Artemis Morocco Roadshow, December 2026: the first public event of Moonshot: Artemis Edition, AFCD Foundation’s space and STEM initiative for Moroccan youth.'),
     dict(slug='leadership-workshop', project='project-leadership-lab.html', day='12', mon='Dec', year='2026', iso='2026-12-12', kind='Workshop', pillar='youth-empowerment', title='Lorem ipsum leadership workshop', where='Ait Ourir', time='10:00 – 13:00', desc='Consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus posuere velit aliquet.', upcoming=True),
     dict(slug='community-clean-up', project='project-eco-citizen.html', day='20', mon='Jan', year='2027', iso='2027-01-20', kind='Community day', pillar='green-thumbs', title='Dolor sit amet community clean-up', where='Al Haouz', time='09:00 – 16:00', desc='Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.', upcoming=True),
     dict(slug='training-of-trainers', project=None, day='08', mon='Feb', year='2027', iso='2027-02-08', kind='Training', pillar='women-empowerment', title='Amet consectetur training of trainers', where='Marrakech', time='14:00 – 18:00', desc='Maecenas faucibus mollis interdum. Nullam quis risus eget urna mollis ornare vel eu leo.', upcoming=True),
@@ -1299,7 +1322,8 @@ def events():
 
     for i, e in enumerate(EVENTS):
         pname = next(p[2] for p in PILLARS if p[0] == e['pillar'])
-        others = [x for x in EVENTS if x is not e and x['upcoming']][:3]
+        # a real event lists only other real events, never the lorem-ipsum samples
+        others = [x for x in EVENTS if x is not e and x['upcoming'] and (ev_sample(e) or not ev_sample(x))][:3]
         sample = ev_sample(e)
         online = bool(e.get('online')) or _html.unescape(e['where']).strip().lower() == 'online'
         try:
@@ -1318,9 +1342,9 @@ def events():
                 f'<span class="evd-partner"><span class="evd-partner-mark" aria-hidden="true">{initials(n)}</span>{n}</span>' for n in ev_partners) + '</span>'))
         facts.append(('Pillar', f'<span class="inline-flex items-center gap-1.5"><span class="pj-dot" style="--c:#111"></span>{pname}</span>'))
         fhtml = ''.join(f'<div class="evd-fact"><dt>{a}</dt><dd>{b}</dd></div>' for a, b in facts)
-        count = f'<span class="evd-count" data-countdown="{e["iso"]}" hidden></span>' if e['upcoming'] else '<span class="evd-count is-past">Past event</span>'
+        count = '<span class="evd-count">Date to be announced</span>' if e.get('tba') else f'<span class="evd-count" data-countdown="{e["iso"]}" hidden></span>' if e['upcoming'] else '<span class="evd-count is-past">Past event</span>'
         cal = (f'<button type="button" class="evd-tool" data-ics data-uid="afcd-{e["slug"]}" data-start="{e["iso"]}" data-time="{e["time"]}" '
-               f'data-title="{e["title"]}" data-where="{e["where"]}">{evd_ico("cal")}Add to calendar</button>') if e['upcoming'] else ''
+               f'data-title="{e["title"]}" data-where="{e["where"]}">{evd_ico("cal")}Add to calendar</button>') if e['upcoming'] and not e.get('tba') else ''
         tools = f'<div class="evd-tools{" is-one" if not cal else ""}">{cal}<button type="button" class="evd-tool" data-share>{evd_ico("share")}Share</button></div>'
         card = f'''<aside class="evd-side" aria-label="Event details and registration">
       <div class="evd-card" id="register">
@@ -1381,7 +1405,9 @@ def events():
         if speakers:
             sp = ''.join(f'''<li class="evd-sp-card">{media_img(s['photo'], 'evd-av', '88px') if s.get('photo') else f'<span class="evd-av" aria-hidden="true">{initials(s["name"])}</span>'}<p class="mt-4 text-[16px] font-semibold tracking-[-0.015em]">{s['name']}</p><p class="mt-1 text-[13.5px] leading-snug text-ink-mid">{s.get('role', '')}</p></li>''' for s in speakers)
             blocks.append(('Speakers & Hosts', 'Who you’ll <span class="sh-soft">meet.</span>', f'<ul class="evd-sp mt-8">{sp}</ul>', 'speakers', False))
-        if online:
+        if e.get('tba') and not online:
+            loc = f'''<div class="evd-loc mt-8"><span class="evd-loc-ico">{ev_ico('pin')}</span><span class="min-w-0"><span class="block text-[18px] font-semibold tracking-[-0.02em]">Venue to be announced</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">The city and venue will be published here. Register your interest to be told first.</span></span></div>'''
+        elif online:
             loc = f'''<div class="evd-loc mt-8"><span class="evd-loc-ico">{evd_ico('online')}</span><span class="min-w-0"><span class="block text-[18px] font-semibold tracking-[-0.02em]">Online event</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">The joining link is sent to registered participants before the session.</span></span></div>'''
         else:
             maps = 'https://www.google.com/maps/search/?api=1&amp;query=' + _qp(_html.unescape(e['where']) + ', Morocco')

@@ -274,6 +274,33 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .mm-feat:hover .mm-feat-arr { transform: translate(2px,-2px); }
 .mm-pill { display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 9999px; border: 1px solid var(--light); background: #fff; font-weight: 500; transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
 .mm-pill:hover { background: #000; border-color: #000; color: #fff; }
+/* Projects menu: projects by pillar (added by build.mjs from src/data/pillars.json and projects.json) */
+.mm-pp { padding-bottom: 22px; }
+.mm-pp-h { margin: 0 0 10px; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--mid); }
+.mm-pp-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.mm-pp-col { padding: 14px; border-radius: 16px; border: 1px solid #ECECEC; background: #fff; transition: border-color .2s ease; }
+.mm-pp-col:hover { border-color: #DADADA; }
+.mm-pp-head { display: flex; align-items: center; gap: 10px; }
+.mm-pp-name { flex: 1; min-width: 0; font-size: 14.5px; font-weight: 600; letter-spacing: -.01em; color: var(--black); }
+.mm-pp-head:hover .mm-pp-name, .mm-pp-head:focus-visible .mm-pp-name { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }
+.mm-pp-n { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 9999px; background: #F3F3F3; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--dark); }
+.mm-pp-list { display: grid; gap: 1px; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px solid #F0F0F0; list-style: none; }
+.mm-pp-list a { display: block; margin: 0 -8px; padding: 5px 8px; border-radius: 8px; font-size: 13px; line-height: 1.35; color: var(--dark); transition: background-color .15s ease, color .15s ease; }
+.mm-pp-list a:hover, .mm-pp-list a:focus-visible { background: #F6F6F6; color: var(--black); }
+.mm-pp-list .mm-pp-more { font-weight: 600; color: var(--black); }
+.mm-pp-none { padding: 5px 0; font-size: 13px; color: var(--mid); }
+.m-pp-h { margin: 12px 0 2px; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--mid); }
+.m-pp { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
+.m-pp-n { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--mid); }
+/* Staff "Edit this page" button (assets/main.js), shown only after Staff login was used in this browser */
+.studio-edit { position: fixed; inset-inline-start: 16px; bottom: 16px; z-index: 80; display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 9999px; background: #000; color: #fff; box-shadow: 0 10px 30px -12px rgba(0,0,0,.45); font-size: 13px; font-weight: 600; }
+.studio-edit a { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px 0 12px; border-radius: 9999px; color: #fff; }
+.studio-edit a:hover, .studio-edit a:focus-visible { background: rgba(255,255,255,.14); }
+.studio-edit svg { width: 15px; height: 15px; }
+.studio-edit button { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 9999px; background: transparent; color: rgba(255,255,255,.7); font-size: 18px; line-height: 1; cursor: pointer; }
+.studio-edit button:hover, .studio-edit button:focus-visible { background: rgba(255,255,255,.14); color: #fff; }
+.studio-edit :focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+@media print { .studio-edit { display: none; } }
 
 /* Hero · cinematic slider with story bar */
 .hx { position: relative; isolation: isolate; }
@@ -1593,3 +1620,14 @@ button[type="submit"][aria-busy="true"] { opacity: .6; cursor: progress; }
 .po-so:hover { border-color: #A8A29E; background: #fff; }
 .po-so .so-ref { min-height: 26px; padding: 0 10px; font-size: 11.5px; }
 .po-so-t { max-width: 34ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Pillar pages: a soft touch of each pillar's colour (--pc) on the neutral layout */
+.pl-page .pl-hero-n2 { background: color-mix(in srgb, var(--pc) 18%, #FAFAF9); border-color: color-mix(in srgb, var(--pc) 34%, #ECECEA); }
+.pl-page .pl-hero-n::before { content: ""; width: 8px; height: 8px; margin-right: 8px; border-radius: 9999px; background: var(--pc); }
+.pl-page .pv-main { background: color-mix(in srgb, var(--pc) 13%, #FAFAF9); border-color: color-mix(in srgb, var(--pc) 28%, #ECECEA); }
+.pl-page .pv-mark { color: var(--pc); }
+.pl-page .po-empty { background: color-mix(in srgb, var(--pc) 10%, #FAFAF9); border-color: color-mix(in srgb, var(--pc) 45%, #D6D3D1); }
+@media (max-width: 1023px) { .pl-page .hw-step { background: color-mix(in srgb, var(--pc) 9%, #FAFAF9); } }
+.pl-page .wd-card:hover { background: color-mix(in srgb, var(--pc) 22%, #fff); }
+.pl-other[style*="--pc"] { background: color-mix(in srgb, var(--pc) 16%, #FAFAF9); border-color: color-mix(in srgb, var(--pc) 32%, #ECECEA); }
+.pl-other[style*="--pc"]:hover { background: #000; color: #fff; }

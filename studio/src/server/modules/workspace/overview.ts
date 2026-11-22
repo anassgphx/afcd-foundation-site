@@ -22,7 +22,7 @@ const JOB_LABEL: Record<string, string> = {
 
 export async function overview(db: DB, user: { id: string; role: Role }) {
   const role = user.role; const today = todayMorocco();
-  const statusCounts = async (table: typeof projects | typeof articles | typeof events | typeof opportunities | typeof partners | typeof pages) => {
+  const statusCounts = async (table: typeof projects | typeof articles | typeof events | typeof opportunities | typeof partners | typeof pages | typeof pillars) => {
     const t = table as typeof projects;
     const rows = await db.select({ status: t.status, live: sql<boolean>`${t.publishedRevisionId} is not null`, n: count() }).from(t).groupBy(t.status, sql`${t.publishedRevisionId} is not null`);
     const sum = (f: (r: typeof rows[number]) => boolean) => rows.filter(f).reduce((a, r) => a + r.n, 0);
@@ -42,6 +42,7 @@ export async function overview(db: DB, user: { id: string; role: Role }) {
     const [{ n }] = await db.select({ n: count() }).from(opportunities).where(and(isNotNull(opportunities.publishedRevisionId), sql`(${opportunities.deadline} is null or ${opportunities.deadline} >= ${today})`, sql`(${opportunities.opensOn} is null or ${opportunities.opensOn} <= ${today})`));
     modules.push({ key: 'opportunities', label: 'Opportunities', href: '/studio/opportunities', icon: 'spark', ...(await statusCounts(opportunities)), note: `${n} open now` });
   }
+  if (can(role, 'pillar.read')) modules.push({ key: 'pillars', label: 'Pillars', href: '/studio/pillars', icon: 'pillars', ...(await statusCounts(pillars)) });
   if (can(role, 'partner.read')) modules.push({ key: 'partners', label: 'Partners', href: '/studio/partners', icon: 'partner', ...(await statusCounts(partners)) });
   if (can(role, 'page.read')) modules.push({ key: 'pages', label: 'Custom pages', href: '/studio/pages', icon: 'layers', ...(await statusCounts(pages)) });
 

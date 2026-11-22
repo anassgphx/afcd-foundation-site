@@ -181,3 +181,12 @@ a.dsh-tr:hover { background: var(--sunken); }
 @media (prefers-reduced-motion: reduce) {
   .dsh *, .dsh *::before { transition: none !important; animation: none !important; }
 }
+
+/* ---------- data freshness: last view shows instantly, then updates */
+.dsh-updated { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 12px; color: var(--muted); min-height: 20px; }
+.dsh-refresh { padding: 0; border: 0; background: none; font: inherit; font-size: 12px; font-weight: 500; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.dsh-refresh:hover { color: var(--ink); }
+.dsh-upd-bad { color: var(--bad); }
+.dsh-spin { width: 10px; height: 10px; border: 1.5px solid var(--line-strong); border-top-color: var(--ink); border-radius: 50%; animation: dsh-rot .8s linear infinite; }
+@keyframes dsh-rot { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .dsh-spin { animation: none; } }

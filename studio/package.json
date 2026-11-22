@@ -1,0 +1,45 @@
+{
+  "name": "afcd-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "AFCD Studio: custom CMS for the AFCD Foundation website",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server/index.ts",
+    "start": "node --import tsx src/server/index.ts",
+    "build:admin": "vite build",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/server/cli/migrate.ts",
+    "db:seed": "tsx src/server/cli/seed.ts",
+    "user:create": "tsx src/server/cli/create-user.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.17",
+    "@hono/node-server": "^2.1.11",
+    "@node-rs/argon2": "^2.2.2",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.19",
+    "pg": "^8.23.1",
+    "sharp": "^0.35.5",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "drizzle-kit": "^0.31.11",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
+  }
+}

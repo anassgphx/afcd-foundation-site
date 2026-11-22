@@ -8,7 +8,7 @@ Anything AFCD still has to supply is shown as a visible placeholder, never inven
 import os, re
 from pathlib import Path
 
-OUT = Path(__file__).parent / 'pages'
+OUT = Path(os.environ.get('STUDIO_OUT') or Path(__file__).parent / 'pages')
 ARR = '<span class="arr" aria-hidden="true">↗</span>'
 
 # Official values (AFCD Connect institutional profile)
@@ -91,28 +91,30 @@ PILLARS = [
 ]
 
 # name, pillar slug, pillar name, category, detail page (or None), one-line summary
-PROJECTS = [
-    ('Leadership Lab 2.0', 'youth-empowerment', 'Youth Empowerment', 'Youth Leadership', 'project-leadership-lab.html',
-     'Supporting emerging leaders through entrepreneurship and civic engagement.'),
-    ('Youth First Academy', 'youth-empowerment', 'Youth Empowerment', 'Youth Programme', None,
-     ''),
-    ('Let’s Dialogue', 'youth-empowerment', 'Youth Empowerment', 'Bootcamp', None,
-     ''),
-    ('META Skills for Women Empowerment', 'women-empowerment', 'Women’s Empowerment', 'Skills Training', None,
-     ''),
-    ('TOT: Gender-based violence', 'women-empowerment', 'Women’s Empowerment', 'Training of Trainers', None,
-     ''),
-    ('Eco Citizen', 'green-thumbs', 'Environment and Climate', 'Environment', 'project-eco-citizen.html',
-     'Encouraging environmental awareness and community-led action.'),
-    ('Oxygen', 'green-thumbs', 'Environment and Climate', 'Environment', None,
-     ''),
-    ('Al Haouz Environmental Film Festival', 'green-thumbs', 'Environment and Climate', 'Culture & Environment', None,
-     ''),
-    ('Youth Green Generation', 'green-thumbs', 'Environment and Climate', 'Climate Action', 'project-youth-green-generation.html',
-     'Supporting young people in developing responses to climate challenges.'),
-    ('SAADA Initiative Project', 'digital-empowerment', 'Digital Inclusion and Innovation', 'Digital Skills', None,
-     ''),
-]
+# Project data lives in src/data/projects.json (managed by AFCD Studio). STUDIO_PROJECTS_JSON can point elsewhere for previews.
+import json as _json
+_PROJECTS_FILE = Path(os.environ.get('STUDIO_PROJECTS_JSON') or Path(__file__).parent / 'data' / 'projects.json')
+_PROJECT_DATA = _json.loads(_PROJECTS_FILE.read_text(encoding='utf-8'))['projects']
+_PILLAR_NAMES = {'youth-empowerment': 'Youth Empowerment', 'women-empowerment': 'Women’s Empowerment',
+                 'green-thumbs': 'Environment and Climate', 'digital-empowerment': 'Digital Inclusion and Innovation'}
+from html import escape as _esc
+# keep the file order unless Studio gives an explicit sort value
+_PROJECT_DATA = [p for _i, p in sorted(enumerate(_PROJECT_DATA), key=lambda ip: (ip[1].get('sort', (ip[0] + 1) * 10), ip[0]))]
+PROJECTS = [(p['name'], p['pillar'], _PILLAR_NAMES[p['pillar']], p['category'], p['file'] if p.get('detail') else None, p.get('summary') or '')
+            for p in _PROJECT_DATA]
+# every pillar a project is linked to (primary first); Studio exports "pillars", older data only has "pillar"
+PROJECT_PILLARS = {p['name']: (p.get('pillars') or [p['pillar']]) for p in _PROJECT_DATA}
+
+
+def media_img(m, cls, sizes='100vw', eager=False):
+    """Responsive <img> for a Studio media item ({src, srcset, w, h, alt}). Falls back to a placeholder if missing."""
+    if not m:
+        return ''
+    load = 'eager" fetchpriority="high' if eager else 'lazy'
+    return (f'<img src="{m["src"]}" srcset="{m["srcset"]}" sizes="{sizes}" width="{m["w"]}" height="{m["h"]}" '
+            f'alt="{_esc(m.get("alt") or "")}" loading="{load}" decoding="async" class="{cls} object-cover" '
+            f'style="object-position:{m.get("fx", 50)}% {m.get("fy", 50)}%">')
+
 
 
 PILLAR_FILE = {'youth-empowerment': 'youth-empowerment.html', 'women-empowerment': 'womens-empowerment.html',
@@ -568,7 +570,7 @@ def pillars():
     for i, (slug, n, t, d, rel) in enumerate(PILLARS):
         tone = PILLAR_TONE[slug]
         objs = [(ref, text, desc) for ref, text, desc, links in OBJECTIVES if any(sl == slug for _n, sl in links)]
-        projs = [p for p in PROJECTS if p[1] == slug]
+        projs = [p for p in PROJECTS if slug in PROJECT_PILLARS.get(p[0], [p[1]])]
         linked = [o[0] for o in objs]
         cross = [(r, t, d_) for r, t, d_, l in OBJECTIVES if not l]
         rest = [(r, t, d_) for r, t, d_, l in OBJECTIVES if l and r not in linked]
@@ -746,34 +748,8 @@ def projects():
 
 
 # ---------------------------------------------------------------- Project detail pages
-DETAILS = {
-    'project-leadership-lab.html': dict(
-        name='Leadership Lab 2.0', pillar='Youth Empowerment', slug='youth-empowerment', cat='Youth Leadership',
-        lede='Supporting emerging leaders through entrepreneurship and civic engagement.',
-        facts=[('Pillar', 'Youth Empowerment'), ('Category', 'Youth Leadership'), ('Format', 'Year-long training')],
-        rows=[('Context', 'A large youth population in Morocco is turning to entrepreneurship, and attitudes toward innovation and risk-taking are shifting.'),
-              ('Approach', 'Adapts practices from the U.S. entrepreneurial system and principles of participatory democracy.'),
-              ('Activities', 'Year-long civic engagement and entrepreneurship training tracks for selected young people.'),
-              ('Results', 'Participant stories shared on the AFCD blog (2023).')],
-        photo='Leadership Lab 2.0 · project photo', next_='project-eco-citizen.html', next_name='Eco Citizen'),
-    'project-eco-citizen.html': dict(
-        name='Eco Citizen', pillar='Environment and Climate', slug='green-thumbs', cat='Environment',
-        lede='Encouraging environmental awareness and community-led action.',
-        facts=[('Pillar', 'Environment and Climate'), ('Category', 'Environment'), ('Location', 'Ait Ourir'), ('Years', '2020 – 2021')],
-        rows=[('Context', 'Residents and decision-makers in Ait Ourir describe household waste management as a persistent problem.'),
-              ('Approach', 'A participatory process bringing residents, local NGOs and elected representatives together.'),
-              ('Activities', 'Awareness campaigns (2020), then workshops on waste sorting and recycling and training for new local committees (2021).'),
-              ('Results', 'Alternative waste-management proposals developed with the community.')],
-        photo='Eco Citizen · Ait Ourir 2021', next_='project-youth-green-generation.html', next_name='Youth Green Generation'),
-    'project-youth-green-generation.html': dict(
-        name='Youth Green Generation', pillar='Environment and Climate', slug='green-thumbs', cat='Climate Action',
-        lede='Supporting young people in developing responses to climate challenges.',
-        facts=[('Pillar', 'Environment and Climate'), ('Category', 'Climate Action'), ('Cohort', '2024')],
-        rows=[('Context', 'Builds on AFCD’s earlier climate projects, locally and nationally (blog, November 2023).'),
-              ('Approach', 'Empowering young people to take the lead on climate action in their communities.'),
-              ('Activities', 'Call for applications for the 2024 cohort.')],
-        photo='Youth Green Generation · 2024 call', next_='project-leadership-lab.html', next_name='Leadership Lab 2.0'),
-}
+DETAILS = {p['file']: dict(name=p['name'], pillar=_PILLAR_NAMES[p['pillar']], slug=p['pillar'], cat=p['category'], **p['detail'])
+           for p in _PROJECT_DATA if p.get('detail') and p.get('file')}
 
 
 PILLAR_TONE = {'youth-empowerment': '#FFB2B9', 'women-empowerment': '#A8DDFB', 'green-thumbs': '#82E591', 'digital-empowerment': '#FBE38A'}
@@ -785,7 +761,15 @@ def project_details():
         pevents = [x for x in EVENTS if x.get('project') == file]
         tone = PILLAR_TONE[d['slug']]
         pdesc = next(p[3] for p in PILLARS if p[0] == d['slug'])
-        objs = [(ref, text) for ref, text, _desc, links in OBJECTIVES if any(sl == d['slug'] for _n, sl in links)]
+        if d.get('objectives'):
+            objs = [(ref, text) for ref, text, _desc, _l in OBJECTIVES if ref in d['objectives']]
+        else:
+            objs = [(ref, text) for ref, text, _desc, links in OBJECTIVES if any(sl == d['slug'] for _n, sl in links)]
+        hero = media_img(d.get('hero'), 'aspect-[16/10] w-full rounded-[28px] md:aspect-[21/9]', eager=True) or ph(d['photo'], 'aspect-[16/10] w-full rounded-[28px] md:aspect-[21/9]')
+        gal = d.get('gallery') or []
+        def g(i, cls):
+            return media_img(gal[i], cls + ' w-full rounded-[24px]', '(min-width:1024px) 50vw, 100vw') if i < len(gal) else ph(d['name'] + ' · gallery', cls + ' w-full rounded-[24px]')
+        rev = d.get('revision') or ''
         dot = f'<span class="pj-dot" style="--c:{tone}"></span>'
         facts = ''.join(f'<div class="pj-fact"><dt>{k}</dt><dd>{dot if k == "Pillar" else ""}{v}</dd></div>' for k, v in d['facts'])
         n_rows = len(d['rows'])
@@ -801,10 +785,10 @@ def project_details():
             return f'''<a href="{f}" class="pj-nav group"><span class="label text-ink-mid">{label}</span><span class="mt-3 flex items-center gap-3"><span class="pj-dot" style="--c:{PILLAR_TONE[o['slug']]}"></span><span class="text-[24px] font-semibold tracking-[-0.03em] md:text-[30px]">{o['name']}</span></span><span class="mt-1 block text-[14px] text-ink-mid">{o['pillar']} · {o['cat']}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a>'''
         body = page_header([('Projects', 'projects.html'), (d['name'], file)], f'{d["pillar"]} · {d["cat"]}', d['name'], d['lede']) + f'''
 
-<section class="pt-8 lg:pt-10">
+<section class="pt-8 lg:pt-10" data-studio-rev="{rev}">
   <div class="wrap">
     <div class="pj-hero">
-      {ph(d['photo'], 'aspect-[16/10] w-full rounded-[28px] md:aspect-[21/9]')}
+      {hero}
       <dl class="pj-facts" style="--f:{len(d['facts'])}">{facts}</dl>
     </div>
   </div>
@@ -860,8 +844,8 @@ def project_details():
 </section>
 
 <section id="gallery" class="border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap">{sec_head('04 / Gallery', 'In <span class="sh-soft">pictures.</span>', 'Photos to come')}
-    <div class="pj-gallery mt-8 lg:mt-10">{''.join(ph(d['name'] + ' · gallery', ('pj-g1' if i == 0 else 'pj-gi') + ' w-full rounded-[24px]') for i in range(8))}
+  <div class="wrap">{sec_head('04 / Gallery', 'In <span class="sh-soft">pictures.</span>', f'{len(gal)} photos' if gal else 'Photos to come')}
+    <div class="pj-gallery mt-8 lg:mt-10">{''.join(g(i, 'pj-g1' if i == 0 else 'pj-gi') for i in range(max(8, len(gal))))}
     </div>
   </div>
 </section>
@@ -895,58 +879,93 @@ NEWS_PLACEHOLDERS = [
 ]
 
 
+# Stories come from src/data/news.json (written by AFCD Studio). Without it, the legacy NEWS list above is used.
+_NEWS_FILE = Path(os.environ.get('STUDIO_NEWS_JSON') or Path(__file__).parent / 'data' / 'news.json')
+
+
+def news_items():
+    if _NEWS_FILE.exists():
+        import json as _j
+        return _j.loads(_NEWS_FILE.read_text(encoding='utf-8'))['articles']
+    blog = 'https://afcdfoundation.org/blog/'
+    return [dict(slug=f'legacy-{i}', url=blog, external=True, title=n[3], excerpt=n[4], type=NEWS_TYPES[i], pillar=n[0], colour=NEWS_PILLAR[n[0]],
+                 date=n[1], dateLabel=n[2], hero=None, photo=n[5], featured=(i == 0)) for i, n in enumerate(NEWS)]
+
+
 def news():
-    lead = NEWS[0]
+    items = news_items()
+    lead = next((x for x in items if x.get('featured')), items[0] if items else None)
+    rest = [x for x in items if x is not lead]
     blog = 'https://afcdfoundation.org/blog/'
 
-    def card(pillar, typ, title, excerpt, photo, date=None, iso=None, placeholder=False):
-        meta = f'<time datetime="{iso}">{date}</time>' if date else '<span>Placeholder</span>'
-        href = '#' if placeholder else blog
-        attrs = ' aria-disabled="true" tabindex="-1"' if placeholder else ''
-        return f'''
+    def link(x):
+        # every story has its own page; stories first published on the old blog link to the original from that page
+        return f'href="{x.get("file") or "news-" + x["slug"] + ".html"}"'
+
+    def card(x=None, placeholder=None):
+        if placeholder:
+            pillar, typ, title, excerpt = placeholder
+            return f'''
       <li class="nw-item" data-type="{typ}">
-        <a href="{href}" class="nw-card group{' is-ph' if placeholder else ''}"{attrs}>
-          <div class="relative">{ph(photo, 'aspect-[16/10] w-full rounded-[20px]')}<span class="nw-type">{typ}</span></div>
-          <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{NEWS_PILLAR[pillar]}"></span>{pillar}</span><span aria-hidden="true">·</span>{meta}</span>
+        <a href="#" class="nw-card group is-ph" aria-disabled="true" tabindex="-1">
+          <div class="relative">{ph('Story photo', 'aspect-[16/10] w-full rounded-[20px]')}<span class="nw-type">{typ}</span></div>
+          <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{NEWS_PILLAR[pillar]}"></span>{pillar}</span><span aria-hidden="true">·</span><span>Placeholder</span></span>
           <span class="mt-3 block text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">{title}</span>
           <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{excerpt}</span>
-          <span class="nw-read">{'Coming soon' if placeholder else 'Read the story'} <span aria-hidden="true">↗</span></span>
+          <span class="nw-read">Coming soon <span aria-hidden="true">↗</span></span>
+        </a>
+      </li>'''
+        pic = media_img(x.get('hero'), 'aspect-[16/10] w-full rounded-[20px]', '(min-width:1024px) 33vw, 100vw') or ph(x.get('photo') or x['title'], 'aspect-[16/10] w-full rounded-[20px]')
+        return f'''
+      <li class="nw-item" data-type="{x['type']}">
+        <a {link(x)} class="nw-card group">
+          <div class="relative">{pic}<span class="nw-type">{x['type']}</span></div>
+          <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{x['colour']}"></span>{x['pillar']}</span><span aria-hidden="true">·</span><time datetime="{x['date']}">{x['dateLabel']}</time></span>
+          <span class="mt-3 block text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">{x['title']}</span>
+          <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{x['excerpt']}</span>
+          <span class="nw-read">Read the story <span aria-hidden="true">↗</span></span>
         </a>
       </li>'''
 
-    cards = ''.join(card(n[0], NEWS_TYPES[i], n[3], n[4], n[5], n[2], n[1]) for i, n in enumerate(NEWS) if i > 0)
-    cards += ''.join(card(p[0], p[1], p[2], p[3], 'Story photo', placeholder=True) for p in NEWS_PLACEHOLDERS)
-    present = [NEWS_TYPES[i] for i in range(1, len(NEWS))] + [p[1] for p in NEWS_PLACEHOLDERS]
-    types = ['All stories'] + [t for t in ['Call for applications', 'Participant story', 'Programme news'] if t in present]
+    # Placeholders (clearly marked) only fill the grid up to six cards; real stories replace them.
+    fill = NEWS_PLACEHOLDERS[:max(0, 6 - len(rest))]
+    cards = ''.join(card(x) for x in rest) + ''.join(card(placeholder=p) for p in fill)
+    present = [x['type'] for x in rest] + [p[1] for p in fill]
+    types = ['All stories'] + [t for t in ['Call for applications', 'Participant story', 'Programme news', 'Event recap'] if t in present]
     chips = ''.join(f'<button type="button" class="nw-chip" data-news-filter="{"all" if i == 0 else t}" aria-pressed="{"true" if i == 0 else "false"}">{t}</button>' for i, t in enumerate(types))
     topics = ''.join(f'<li><a class="os-area" href="pillars.html#{sl}"><span class="os-area-dot" style="--c:{NEWS_PILLAR[n]}" aria-hidden="true"></span><span class="flex-1">{n}</span><span class="os-area-arr" aria-hidden="true">↗</span></a></li>'
                      for n, sl in [('Youth Empowerment', 'youth-empowerment'), ('Women’s Empowerment', 'women-empowerment'), ('Environment and Climate', 'green-thumbs'), ('Digital Inclusion and Innovation', 'digital-empowerment')])
-
-    body = page_header([('News &amp; Stories', 'news.html')], 'News &amp; Stories',
-                       'Stories from <span class="text-ink-mid">our communities.</span>',
-                       'News, calls for applications and participant stories from AFCD’s programmes.') + f'''
-
+    note = ('Some stories were first published on the afcdfoundation.org blog; their pages link to the original. ' if any(x.get('external') for x in items) else '') + \
+           ('Lorem ipsum cards are placeholders until more stories are published.' if fill else '')
+    feat = ''
+    if lead:
+        lpic = media_img(lead.get('hero'), 'aspect-[16/10] w-full rounded-[24px] lg:aspect-auto lg:h-full lg:min-h-[420px]', '(min-width:1024px) 60vw, 100vw', eager=True) or ph(lead.get('photo') or lead['title'], 'aspect-[16/10] w-full rounded-[24px] lg:aspect-auto lg:h-full lg:min-h-[420px]')
+        feat = f'''
 <section id="featured" class="pt-8 lg:pt-10">
   <div class="wrap">
-    <a href="{blog}" class="nw-feat group">
-      <div class="relative lg:col-span-7">{ph(lead[5], 'aspect-[16/10] w-full rounded-[24px] lg:aspect-auto lg:h-full lg:min-h-[420px]')}<span class="nw-type">Featured · {NEWS_TYPES[0]}</span></div>
+    <a {link(lead)} class="nw-feat group">
+      <div class="relative lg:col-span-7">{lpic}<span class="nw-type">Featured · {lead['type']}</span></div>
       <div class="flex flex-col p-2 lg:col-span-5 lg:p-6">
-        <span class="flex flex-wrap items-center gap-x-3 text-[13px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{NEWS_PILLAR[lead[0]]}"></span>{lead[0]}</span><span aria-hidden="true">·</span><time datetime="{lead[1]}">{lead[2]}</time></span>
-        <h2 class="mt-5 text-[30px] font-semibold leading-[1.06] tracking-[-0.04em] md:text-[42px]">{lead[3]}</h2>
-        <p class="mt-5 text-[16px] leading-relaxed text-ink-dark">{lead[4]}</p>
+        <span class="flex flex-wrap items-center gap-x-3 text-[13px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{lead['colour']}"></span>{lead['pillar']}</span><span aria-hidden="true">·</span><time datetime="{lead['date']}">{lead['dateLabel']}</time></span>
+        <h2 class="mt-5 text-[30px] font-semibold leading-[1.06] tracking-[-0.04em] md:text-[42px]">{lead['title']}</h2>
+        <p class="mt-5 text-[16px] leading-relaxed text-ink-dark">{lead['excerpt']}</p>
         <span class="btn-dark btn-cta mt-8 min-h-[48px] self-start px-6 text-[14px] lg:mt-auto">Read the story <span class="arr" aria-hidden="true">↗</span></span>
       </div>
     </a>
   </div>
 </section>
+'''
 
+    body = page_header([('News &amp; Stories', 'news.html')], 'News &amp; Stories',
+                       'Stories from <span class="text-ink-mid">our communities.</span>',
+                       'News, calls for applications and participant stories from AFCD’s programmes.') + feat + f'''
 <section id="stories" class="py-14 lg:py-16">
   <div class="wrap">{sec_head('01 / All Stories', 'Latest from <span class="sh-soft">AFCD.</span>', ('Current blog', blog))}
     <div class="nw-chips mt-8" role="group" aria-label="Filter stories">{chips}</div>
     <ul class="nw-grid mt-6" id="news-grid">{cards}
     </ul>
     <p class="nw-empty mt-6 hidden text-[15px] text-ink-mid" role="status">No stories in this category yet.</p>
-    {placeholder_note('Real stories open on the current afcdfoundation.org blog. Lorem ipsum cards are placeholders until the news feed is connected.')}
+    {placeholder_note(note) if note else ''}
   </div>
 </section>
 
@@ -970,6 +989,97 @@ def news():
          'News, calls for applications and participant stories from AFCD Foundation.', 'news', body)
 
 
+# ---------------------------------------------------------------- News article pages (template owned by the website session)
+def news_articles():
+    """One article page per Studio story (news-<slug>.html). External items link to the old blog and get no page.
+    Field values from news_items() are already HTML-escaped; bodyHtml is already safe HTML."""
+    all_items = news_items()
+    # Studio stories have their own file; older stories that link to the old blog get a details page too.
+    items = []
+    for x in all_items:
+        if not x.get('file'):
+            x = dict(x, file=f"news-{x['slug']}.html")
+        items.append(x)
+    all_items = items
+    for i, it in enumerate(items):
+        body = it.get('bodyHtml') or ''
+        sample = not body.strip()
+        if sample:
+            body = ('<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus, posuere velit aliquet.</p>'
+                    '<p>Sed posuere consectetur est at lobortis. Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.</p>')
+        hero = (media_img(it['hero'], 'aspect-[16/9] w-full rounded-[28px]', '(min-width:1280px) 1200px, 100vw', eager=True) if it.get('hero')
+                else ph(it['title'], 'aspect-[16/9] w-full rounded-[28px]', '#E2E2E2'))
+        pills = it.get('pillars') or []
+        pillar_html = ''.join(f'<a href="{p["file"]}" class="na-tag"><span class="pj-dot" style="--c:{p.get("colour") or "#111"}"></span>{p["name"]}</a>' for p in pills) \
+            or (f'<span class="na-tag"><span class="pj-dot" style="--c:{it.get("colour") or "#111"}"></span>{it.get("pillar", "")}</span>' if it.get('pillar') else '')
+        tags = ''.join(f'<span class="na-tag">#{t}</span>' for t in (it.get('tags') or []))
+        author = ''
+        if it.get('authorName'):
+            ini = ''.join(w[0] for w in it['authorName'].split()[:2]).upper()
+            author = f'<div class="na-author"><span class="na-av">{ini}</span><span><span class="block text-[14px] font-semibold">{it["authorName"]}</span><span class="block text-[12.5px] text-ink-mid">{it.get("authorRole") or ""}</span></span></div>'
+        gallery = it.get('gallery') or []
+        ghtml = (f'<div class="na-gallery">{"".join(media_img(m, "aspect-[4/3] w-full rounded-[18px]", "(min-width:768px) 33vw, 50vw") for m in gallery)}</div>' if gallery else '')
+        projects = it.get('projects') or []
+        phtml = ''.join(f'<li><a href="{p["file"]}" class="na-proj"><span class="min-w-0 flex-1"><span class="block text-[15px] font-semibold">{p["name"]}</span><span class="block text-[13px] text-ink-mid">{p.get("category") or ""}</span></span><span aria-hidden="true">↗</span></a></li>' for p in projects if p.get('file'))
+        related = [x for x in all_items if x is not it][:3]
+        def card(x):
+            href = x['file']
+            return f'''
+      <li><a href="{href}" class="nw-card group"><div class="relative">{media_img(x['hero'], 'aspect-[16/10] w-full rounded-[20px]', '(min-width:1024px) 33vw, 100vw') if x.get('hero') else ph(x['title'], 'aspect-[16/10] w-full rounded-[20px]')}<span class="nw-type">{x.get('type', 'Story')}</span></div><span class="mt-5 flex flex-wrap items-center gap-x-3 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{x.get('colour') or '#111'}"></span>{x.get('pillar', '')}</span><span aria-hidden="true">·</span><time datetime="{x.get('date', '')}">{x.get('dateLabel', '')}</time></span><span class="mt-3 block text-[19px] font-semibold leading-[1.25] tracking-[-0.02em]">{x['title']}</span><span class="nw-read">Read the story <span aria-hidden="true">↗</span></span></a></li>'''
+        rel = ''.join(card(x) for x in related)
+        pn = ''
+        if len(items) > 1:
+            pv, nx = items[i - 1], items[(i + 1) % len(items)]
+            pn = f'''<nav class="na-pn" aria-label="More stories">
+        <a href="{pv['file']}" class="pj-nav group"><span class="label text-ink-mid">Previous story</span><span class="mt-2 block text-[17px] font-semibold leading-snug tracking-[-0.015em]">{pv['title']}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a>
+        <a href="{nx['file']}" class="pj-nav group"><span class="label text-ink-mid">Next story</span><span class="mt-2 block text-[17px] font-semibold leading-snug tracking-[-0.015em]">{nx['title']}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a>
+      </nav>'''
+        minutes = it.get('readMinutes') or max(1, round(len((it.get('excerpt', '') + body).split()) / 200))
+        body_html = page_header([('News &amp; Stories', 'news.html'), (it['title'], it['file'])], it.get('type') or 'Story', it['title'], it.get('excerpt', '')) + f'''
+
+<article class="na" data-studio-article-rev="{it.get('revision', '')}">
+  <div class="wrap pt-8 lg:pt-10">
+    <div class="na-hero">{hero}</div>
+  </div>
+
+  <div class="wrap na-grid py-12 lg:py-16">
+    <aside class="na-rail">
+      {author}
+      <dl class="na-meta">
+        <div><dt>Published</dt><dd><time datetime="{it.get('date', '')}">{it.get('dateLabel', '')}</time></dd></div>
+        <div><dt>Type</dt><dd>{it.get('type') or 'Story'}</dd></div>
+        <div><dt>Reading time</dt><dd>{minutes} min</dd></div>
+      </dl>
+      <div class="na-tags">{pillar_html}{tags}</div>
+      <div class="na-share">
+        <button type="button" class="na-copy" data-copy-link><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 11.5a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5l-.8.8M11.5 8.5a3.5 3.5 0 0 0-5 0L4 11a3.5 3.5 0 0 0 5 5l.8-.8"/></svg><span>Copy link</span></button>
+        <a class="na-back" href="news.html">← All stories</a>
+      </div>
+    </aside>
+
+    <div class="na-body">
+      {'<p class="na-sample">Sample article text: the full story will replace this.</p>' if sample else ''}
+      <p class="na-lead">{it.get('excerpt', '')}</p>
+      <div class="na-prose">{body}</div>
+      {f'<div class="na-callout"><p class="text-[15px] font-semibold">First published on the AFCD blog</p><p class="mt-1 text-[14px] leading-relaxed text-ink-dark">Read the full original post on afcdfoundation.org.</p><a href="{it["url"]}" class="btn-dark btn-cta mt-4 min-h-[44px] px-5 text-[13.5px]">Read the original {ARR}</a></div>' if it.get('external') and it.get('url') else ''}
+      {ghtml}
+      {f'<div class="na-related-proj"><p class="label text-ink-mid">Related projects</p><ul class="mt-3 grid gap-2">{phtml}</ul></div>' if phtml else ''}
+      {pn}
+    </div>
+  </div>
+</article>
+
+{f"""<section id="related" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('More Stories', 'Keep <span class="sh-soft">reading.</span>', ('All stories', 'news.html'))}
+    <ul class="nw-grid mt-8 lg:mt-10">{rel}
+    </ul>
+  </div>
+</section>""" if rel else ''}
+''' + cta_band('Have a story to share?', 'Alumni, volunteers and partners: tell us about the change you’ve seen.',
+               ('Contact us', 'contact.html'), ('Get Involved', 'get-involved.html'))
+        page(it['file'], f"{it.get('seoTitle') or it['title']} · News · AFCD Foundation", (it.get('seoDescription') or it.get('excerpt', ''))[:155], 'news', body_html, parent=('News &amp; Stories', 'news.html'))
+
+
 # ---------------------------------------------------------------- Events
 # Sample events: clearly marked placeholders until AFCD supplies its real calendar (e.g. through Studio).
 EVENTS = [
@@ -980,6 +1090,15 @@ EVENTS = [
     dict(slug='bootcamp', project='project-leadership-lab.html', day='18', mon='Oct', year='2026', iso='2026-10-18', kind='Bootcamp', pillar='youth-empowerment', title='Sed posuere bootcamp', where='Marrakech', time='3 days', desc='Etiam porta sem malesuada magna mollis euismod.', upcoming=False),
     dict(slug='environmental-screening', project='project-youth-green-generation.html', day='05', mon='Jun', year='2026', iso='2026-06-05', kind='Festival', pillar='green-thumbs', title='Nulla vitae environmental screening', where='Al Haouz', time='Evening', desc='Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh.', upcoming=False),
 ]
+# Studio loader (owned by AFCD Studio): when src/data/events.json exists it replaces EVENTS with real events
+# (same keys as above plus sample=False, studio=True, revision, endIso, online, bodyHtml, agenda, audience, poster,
+# registration, recap, seoTitle, seoDescription). All values are already HTML-escaped. Studio writes the file only
+# while at least one event is live, so the sample list above is used otherwise.
+_EVENTS_FILE = Path(os.environ.get('STUDIO_EVENTS_JSON') or Path(__file__).parent / 'data' / 'events.json')
+if _EVENTS_FILE.exists():
+    import json as _ej
+    EVENTS = _ej.loads(_EVENTS_FILE.read_text(encoding='utf-8'))['events']
+# End of Studio loader.
 EV_ICON = {
     'pin': '<path d="M10 17s5-4.6 5-9a5 5 0 0 0-10 0c0 4.4 5 9 5 9Z"/><circle cx="10" cy="8" r="1.8"/>',
     'clock': '<circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2"/>',
@@ -994,8 +1113,40 @@ def ev_ico(k):
     return f'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{EV_ICON[k]}</svg>'
 
 
+def ev_sample(e):
+    return e.get('sample', True)
+
+
+def ev_badge(e):
+    return '<span class="ev-sample">Sample event</span>' if ev_sample(e) else ''
+
+
+def ev_poster(e, cls, sizes='(min-width:1024px) 400px, 100vw', label='Event poster · 1:1', tone='#E2E2E2'):
+    if e.get('poster'):
+        return media_img(e['poster'], cls, sizes)
+    return ph(label, cls, tone)
+
+
+def ev_register(e, block=False):
+    """Registration action for an event: contact form, external link or nothing (Studio events); contact for samples."""
+    size = 'mt-5 min-h-[50px] w-full justify-center px-6' if block else 'min-h-[50px] px-7'
+    if not e['upcoming']:
+        rc = e.get('recap')
+        if rc and rc.get('url'):
+            return f'<a href="{rc["url"]}" class="btn-dark btn-cta {size}">Read the recap {ARR}</a>'
+        return '<p class="mt-5 rounded-2xl bg-[#F6F6F6] px-4 py-3 text-[14px] text-ink-dark">This event has ended. See upcoming events below.</p>' if block else ''
+    reg = {'mode': 'contact', 'label': 'Register interest'} if ev_sample(e) else (e.get('registration') or {'mode': 'none'})
+    mode, label = reg.get('mode'), reg.get('label') or 'Register'
+    if mode == 'external' and reg.get('url'):
+        return f'<a href="{reg["url"]}" target="_blank" rel="noopener" class="btn-dark btn-cta {size}">{label} {ARR}</a>'
+    if mode == 'contact':
+        note = '<p class="mt-3 text-[12.5px] leading-relaxed text-ink-mid">Registration isn’t online yet: this sends us a message and we confirm your place.</p>' if block else ''
+        return f'<a href="contact.html?topic=General+question#message" class="btn-dark btn-cta {size}">{label} {ARR}</a>{note}'
+    return ''
+
+
 def event_row(e, compact=False):
-    """One event as a row: date tile, details, action. Used on the Events page and the homepage."""
+    """One event as a row: date tile, details, action. Used on the Events page, homepage and project pages."""
     pname = next(p[2] for p in PILLARS if p[0] == e['pillar'])
     state = 'Upcoming' if e['upcoming'] else 'Past'
     act = (f'<a href="{event_file(e)}" class="ev-act">View details <span aria-hidden="true">↗</span></a>' if e['upcoming']
@@ -1004,13 +1155,13 @@ def event_row(e, compact=False):
       <li class="ev-row{' is-past' if not e['upcoming'] else ''}" data-when="{state.lower()}">
         <time class="ev-date" datetime="{e['iso']}"><span class="ev-day">{e['day']}</span><span class="ev-mon">{e['mon']} {e['year']}</span></time>
         <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">{e['kind']}</span><span class="ev-pillar"><span class="pj-dot" style="--c:#111"></span>{pname}</span><span class="ev-sample">Sample event</span></div>
+          <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">{e['kind']}</span><span class="ev-pillar"><span class="pj-dot" style="--c:#111"></span>{pname}</span>{ev_badge(e)}</div>
           {f'<p class="ev-proj mt-2">Part of <a href="{e["project"]}">{DETAILS[e["project"]]["name"]}</a></p>' if e.get('project') in DETAILS else ''}
           <p class="mt-3 text-[19px] font-semibold leading-snug tracking-[-0.02em] md:text-[21px]"><a href="{event_file(e)}" class="ev-link">{e['title']}</a></p>
           {'' if compact else f'<p class="mt-1.5 max-w-[62ch] text-[14.5px] leading-relaxed text-ink-dark">{e["desc"]}</p>'}
           <p class="ev-meta mt-3"><span>{ev_ico('pin')}{e['where']}</span><span>{ev_ico('clock')}{e['time']}</span></p>
         </div>
-        <div class="ev-poster" aria-hidden="true">{ph('Poster', 'aspect-square w-full rounded-[16px]', '#E6E6E6')}</div>
+        <div class="ev-poster" aria-hidden="true">{ev_poster(e, 'aspect-square w-full rounded-[16px]', '96px', 'Poster', '#E6E6E6')}</div>
         {act}
       </li>'''
 
@@ -1018,34 +1169,36 @@ def event_row(e, compact=False):
 def events():
     up = [e for e in EVENTS if e['upcoming']]
     past = [e for e in EVENTS if not e['upcoming']]
-    feat = up[0]
-    pname = next(p[2] for p in PILLARS if p[0] == feat['pillar'])
+    any_sample = any(ev_sample(x) for x in EVENTS)
+    feat = up[0] if up else (past[0] if past else None)
+    pname = next(p[2] for p in PILLARS if p[0] == feat['pillar']) if feat else ''
     chips = (f'<button type="button" class="nw-chip" data-ev="all" aria-pressed="true">All <span class="pr-count">{len(EVENTS)}</span></button>'
              f'<button type="button" class="nw-chip" data-ev="upcoming" aria-pressed="false">Upcoming <span class="pr-count">{len(up)}</span></button>'
              f'<button type="button" class="nw-chip" data-ev="past" aria-pressed="false">Past <span class="pr-count">{len(past)}</span></button>')
     rows = ''.join(event_row(e) for e in up + past)
-    body = page_header([('Events', 'events.html')], 'Events',
-                       'Meet us <span class="text-ink-mid">in the community.</span>',
-                       'Workshops, trainings, community days and online sessions across Morocco. Join an event or register your interest.') + f'''
-
-<section id="next" class="pt-8 lg:pt-10">
+    next_html = (f'''<section id="next" class="pt-8 lg:pt-10">
   <div class="wrap">
     <article class="ev-feat">
-      <div class="ev-feat-date"><span class="label text-white/55">Next event</span><span class="ev-feat-day">{feat['day']}</span><span class="text-[15px] font-medium">{feat['mon']} {feat['year']}</span><span class="mt-auto text-[13px] text-white/55">{feat['time']}</span></div>
+      <div class="ev-feat-date"><span class="label text-white/55">{'Next event' if feat['upcoming'] else 'Latest event'}</span><span class="ev-feat-day">{feat['day']}</span><span class="text-[15px] font-medium">{feat['mon']} {feat['year']}</span><span class="mt-auto text-[13px] text-white/55">{feat['time']}</span></div>
       <div class="flex min-w-0 flex-col p-6 md:p-9">
-        <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">{feat['kind']}</span><span class="ev-pillar"><span class="pj-dot" style="--c:#111"></span>{pname}</span><span class="ev-sample">Sample event</span></div>
+        <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">{feat['kind']}</span><span class="ev-pillar"><span class="pj-dot" style="--c:#111"></span>{pname}</span>{ev_badge(feat)}</div>
         <h2 class="mt-5 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[42px]"><a href="{event_file(feat)}" class="ev-link">{feat['title']}</a></h2>
         <p class="mt-4 max-w-[60ch] text-[16px] leading-relaxed text-ink-dark">{feat['desc']}</p>
         <p class="ev-meta mt-5"><span>{ev_ico('pin')}{feat['where']}</span><span>{ev_ico('clock')}{feat['time']}</span></p>
         <div class="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 lg:mt-auto lg:pt-8">
-          <a href="contact.html?topic=General+question#message" class="btn-dark btn-cta min-h-[50px] px-7">Register interest {ARR}</a>
+          {ev_register(feat)}
           <a href="{event_file(feat)}" class="link-arrow">View details {ARR}</a>
         </div>
       </div>
-      <div class="ev-feat-photo">{ph('Event poster · 1:1', 'aspect-square w-full rounded-[22px]', '#E2E2E2')}</div>
+      <div class="ev-feat-photo">{ev_poster(feat, 'aspect-square w-full rounded-[22px]')}</div>
     </article>
   </div>
-</section>
+</section>''' if feat else '')
+    body = page_header([('Events', 'events.html')], 'Events',
+                       'Meet us <span class="text-ink-mid">in the community.</span>',
+                       'Workshops, trainings, community days and online sessions across Morocco. Join an event or register your interest.') + f'''
+
+{next_html}
 
 <section id="calendar" class="py-14 lg:py-16">
   <div class="wrap">{sec_head('01 / Calendar', 'Upcoming <span class="sh-soft">and past events.</span>', f'{len(EVENTS)} events', desc='Dates, places and how to take part. Filter to see what’s coming up.')}
@@ -1053,7 +1206,7 @@ def events():
     <ul id="event-list" class="ev-list mt-6">{rows}
     </ul>
     <p class="ev-empty mt-6 hidden text-[15px] text-ink-mid" role="status">No events in this view yet.</p>
-    {placeholder_note('These are sample events (lorem ipsum) to show the layout. AFCD will publish its real event calendar here.')}
+    {placeholder_note('These are sample events (lorem ipsum) to show the layout. AFCD will publish its real event calendar here.') if any_sample else ''}
   </div>
 </section>
 
@@ -1088,9 +1241,8 @@ def events():
         ahtml = ''.join(f'<li class="evd-ag"><span class="evd-ag-n">{j:02d}</span><span><span class="block text-[16px] font-semibold tracking-[-0.015em]">{t}</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">{d}</span></span></li>' for j, (t, d) in enumerate(agenda, 1))
         who = ['Lorem ipsum: young people and students', 'Dolor sit: community volunteers', 'Amet: local associations and partners']
         whtml = ''.join(f'<li class="gi-check"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10.5 3.2 3L15 6.5"/></svg><span>{w}</span></li>' for w in who)
-        reg = (f'''<a href="contact.html?topic=General+question#message" class="btn-dark btn-cta mt-5 min-h-[50px] w-full justify-center px-6">Register interest {ARR}</a>
-            <p class="mt-3 text-[12.5px] leading-relaxed text-ink-mid">Registration isn’t online yet: this sends us a message and we confirm your place.</p>'''
-               if e['upcoming'] else '<p class="mt-5 rounded-2xl bg-[#F6F6F6] px-4 py-3 text-[14px] text-ink-dark">This event has ended. See upcoming events below.</p>')
+        reg = ev_register(e, block=True)
+        sample = ev_sample(e)
         highlights = [('learn', 'Learn', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do.'),
                       ('connect', 'Connect', 'Vestibulum id ligula porta felis euismod semper cras mattis.'),
                       ('act', 'Act', 'Aenean lacinia bibendum nulla sed consectetur curabitur blandit.')]
@@ -1101,22 +1253,9 @@ def events():
         outcomes = ['Lorem ipsum dolor sit amet, consectetur adipiscing elit.', 'Vestibulum id ligula porta felis euismod semper.',
                     'Cras mattis consectetur purus sit amet fermentum.', 'Aenean lacinia bibendum nulla sed consectetur.']
         ohtml = ''.join(f'<li class="evt-out"><span class="evt-out-n">{j:02d}</span><span class="block text-[16px] font-medium leading-snug">{o}</span></li>' for j, o in enumerate(outcomes, 1))
-        orows = ''.join(event_row(x, compact=True) for x in others)
-        dbody = page_header([('Events', 'events.html'), (e['title'], event_file(e))], f"{e['kind']} · {'Upcoming' if e['upcoming'] else 'Past'}", e['title'], e['desc']) + f'''
 
-<section id="event" class="pt-8 lg:pt-10">
-  <div class="wrap evd-top">
-    <div class="evd-poster">{ph('Event poster · 1:1', 'aspect-square w-full rounded-[28px]', '#E2E2E2')}</div>
-    <aside class="evd-card">
-      <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">{e['kind']}</span><span class="ev-sample">Sample event</span></div>
-      <div class="evd-when mt-5"><span class="evd-day">{e['day']}</span><span><span class="block text-[18px] font-semibold tracking-[-0.02em]">{e['mon']} {e['year']}</span><span class="block text-[14px] text-ink-mid">{e['time']}</span></span></div>
-      <dl class="evd-facts mt-5">{fhtml}</dl>
-      {reg}
-    </aside>
-  </div>
-</section>
-
-<section id="about" class="py-14 lg:py-16">
+        if sample:
+            about_html = f'''<section id="about" class="py-14 lg:py-16">
   <div class="wrap" data-tabs>{sec_head('01 / About This Event', 'What to <span class="sh-soft">expect.</span>', 'Sample text')}
     <div class="evt-tabs mt-8" role="tablist" aria-label="About this event">
       <button type="button" role="tab" id="evt-t1" aria-controls="evt-p1" aria-selected="true">Overview</button>
@@ -1163,7 +1302,44 @@ def events():
       </div>
     </div>
   </div>
+</section>'''
+        else:
+            tabs = []
+            overview = (e.get('bodyHtml') or '').strip()
+            facts_tiles = f'''<dl class="evt-at lg:col-span-4"><div><dt>Format</dt><dd>{e['kind']}</dd></div><div><dt>Duration</dt><dd>{e['time']}</dd></div><div><dt>Location</dt><dd>{e['where']}</dd></div><div><dt>Pillar</dt><dd><span class="pj-dot" style="--c:#111"></span>{pname}</dd></div></dl>'''
+            tabs.append(('Overview', f'''<div class="grid gap-4 lg:grid-cols-12"><div class="na-prose lg:col-span-8" style="margin-top:0">{overview or f'<p>{e["desc"]}</p>'}</div>{facts_tiles}</div>'''))
+            if e.get('agenda'):
+                ag = ''.join(f'<li class="evd-ag"><span class="evd-ag-n">{j:02d}</span><span><span class="block text-[16px] font-semibold tracking-[-0.015em]">{x.get("title", "")}</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">{x.get("text", "")}</span></span></li>' for j, x in enumerate(e['agenda'], 1))
+                tabs.append(('Programme', f'<div class="rounded-[28px] border border-ink-light p-6 md:p-7"><ol class="grid gap-3">{ag}</ol></div>'))
+            if e.get('audience'):
+                au = ''.join(f'<li class="gi-check"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10.5 3.2 3L15 6.5"/></svg><span>{w}</span></li>' for w in e['audience'])
+                tabs.append(('Who should attend', f'<div class="os-band on-dark text-white" style="padding:28px"><p class="label text-white/55">Who should attend</p><ul class="evd-who mt-5 grid gap-3">{au}</ul></div>'))
+            tab_btns = ''.join(f'<button type="button" role="tab" id="evt-t{k}" aria-controls="evt-p{k}" aria-selected="{"true" if k == 1 else "false"}">{t}</button>' for k, (t, _) in enumerate(tabs, 1))
+            tab_panels = ''.join(f'<div id="evt-p{k}" class="evt-panel" role="tabpanel" aria-labelledby="evt-t{k}">{h}</div>' for k, (_, h) in enumerate(tabs, 1))
+            about_html = f'''<section id="about" class="py-14 lg:py-16">
+  <div class="wrap"{' data-tabs' if len(tabs) > 1 else ''}>{sec_head('01 / About This Event', 'What to <span class="sh-soft">expect.</span>')}
+    {f'<div class="evt-tabs mt-8" role="tablist" aria-label="About this event">{tab_btns}</div>' if len(tabs) > 1 else ''}
+    {tab_panels}
+  </div>
+</section>'''
+        orows = ''.join(event_row(x, compact=True) for x in others)
+        if not orows:
+            orows = '<li class="rounded-[24px] border border-dashed border-ink-light p-6 text-[15px] text-ink-dark">No other upcoming events right now. <a class="link-arrow ml-1" href="events.html">See all events ↗</a></li>'
+        dbody = page_header([('Events', 'events.html'), (e['title'], event_file(e))], f"{e['kind']} · {'Upcoming' if e['upcoming'] else 'Past'}", e['title'], e['desc']) + f'''
+
+<section id="event" class="pt-8 lg:pt-10" data-studio-event-rev="{e.get('revision', '')}">
+  <div class="wrap evd-top">
+    <div class="evd-poster">{ev_poster(e, 'aspect-square w-full rounded-[28px]', '(min-width:1024px) 460px, 100vw')}</div>
+    <aside class="evd-card">
+      <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">{e['kind']}</span>{ev_badge(e)}</div>
+      <div class="evd-when mt-5"><span class="evd-day">{e['day']}</span><span><span class="block text-[18px] font-semibold tracking-[-0.02em]">{e['mon']} {e['year']}</span><span class="block text-[14px] text-ink-mid">{e['time']}</span></span></div>
+      <dl class="evd-facts mt-5">{fhtml}</dl>
+      {reg}
+    </aside>
+  </div>
 </section>
+
+{about_html}
 
 <section id="where" class="border-t border-ink-light py-14 lg:py-16">
   <div class="wrap grid gap-4 lg:grid-cols-12">
@@ -1181,12 +1357,12 @@ def events():
   <div class="wrap">{sec_head('03 / More Events', 'Other upcoming <span class="sh-soft">events.</span>', ('All events', 'events.html'))}
     <ul class="ev-list mt-8 lg:mt-10">{orows}
     </ul>
-    {placeholder_note('Sample event (lorem ipsum) to show the layout. Real event details will replace it.')}
+    {placeholder_note('Sample event (lorem ipsum) to show the layout. Real event details will replace it.') if sample else ''}
   </div>
 </section>
 ''' + cta_band('See you at the next one.', 'Volunteer at an event, join a programme or partner with us on a community day.',
                    ('Get Involved', 'get-involved.html'), ('All events', 'events.html'))
-        page(event_file(e), f"{e['title']} · Events · AFCD Foundation", f"{e['kind']} on {e['day']} {e['mon']} {e['year']} in {e['where']}: {e['desc']}", 'none', dbody, parent=('Events', 'events.html'))
+        page(event_file(e), f"{e.get('seoTitle') or e['title']} · Events · AFCD Foundation", (e.get('seoDescription') or f"{e['kind']} on {e['day']} {e['mon']} {e['year']} in {e['where']}: {e['desc']}")[:160], 'none', dbody, parent=('Events', 'events.html'))
 
     page('events.html', 'Events · AFCD Foundation',
          'AFCD Foundation events: workshops, trainings, community days and online sessions across Morocco.', 'none', body)
@@ -1198,6 +1374,19 @@ PARTNERS = [
     ('National', ['High Atlas Foundation', 'Heinrich Böll Stiftung Rabat', 'Moroccan Institute for Policy Analysis', 'Dar America Casablanca', 'Anoual Association', 'International Youth Council Morocco', 'Student Voice', 'Y-PEER PETRI Morocco']),
     ('Local', ['Commune of Ait Ourir']),
 ]
+# Studio loader (owned by AFCD Studio): when src/data/partners.json exists it replaces PARTNERS (same shape)
+# and fills PARTNER_DETAILS {name: {slug, scope, category, description, url, logo, since, current, projects}}.
+# All values in the file are already HTML-escaped by Studio; logo is a media ref for media_img() or None.
+_PARTNERS_FILE = Path(os.environ.get('STUDIO_PARTNERS_JSON') or Path(__file__).parent / 'data' / 'partners.json')
+PARTNER_DETAILS = {}
+PARTNERS_REV = ''
+if _PARTNERS_FILE.exists():
+    import json as _pj
+    _pd = _pj.loads(_PARTNERS_FILE.read_text(encoding='utf-8'))
+    PARTNERS = [(_g, _n) for _g, _n in ((g, [x['name'] for x in _pd['partners'] if x['scope'] == g]) for g in ('International', 'National', 'Local')) if _n]
+    PARTNER_DETAILS = {x['name']: x for x in _pd['partners']}
+    PARTNERS_REV = _pd.get('revision', '')
+# End of Studio loader.
 PT_ICONS = {
     'International': '<circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3c2 2.2 2.8 4.6 2.8 7s-.8 4.8-2.8 7c-2-2.2-2.8-4.6-2.8-7S8 5.2 10 3Z"/>',
     'National': '<path d="M10 17s5-4.6 5-9a5 5 0 0 0-10 0c0 4.4 5 9 5 9Z"/><circle cx="10" cy="8" r="1.8"/>',
@@ -1491,5 +1680,5 @@ def contact():
 
 
 if __name__ == '__main__':
-    about(); pillars(); projects(); project_details(); news(); events(); partners(); involved(); contact()
+    about(); pillars(); projects(); project_details(); news(); news_articles(); events(); partners(); involved(); contact()
     print('pages written to', OUT)

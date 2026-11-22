@@ -27,7 +27,7 @@ const NAV = ['home', 'about', 'pillars', 'projects', 'news', 'partners', 'contac
 const escapeAttr = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 
 function parse(file) {
-  const raw = readFileSync(join(SRC, 'pages', file), 'utf8');
+  const raw = readFileSync(join(PAGES_DIR, file), 'utf8');
   const m = raw.match(/^---\n([\s\S]*?)\n---\n/);
   if (!m) throw new Error(`${file}: missing front matter`);
   const meta = Object.fromEntries(
@@ -126,7 +126,10 @@ function lastmod(file) {
 }
 
 const sitemap = [];
-const pages = readdirSync(join(SRC, 'pages')).filter((f) => f.endsWith('.html'));
+// Studio previews render into a separate folder: PAGES_DIR (sources) and OUT_DIR (output). Defaults build the live site.
+const PAGES_DIR = process.env.PAGES_DIR || join(SRC, 'pages');
+const OUT_DIR = process.env.OUT_DIR || '.';
+const pages = readdirSync(PAGES_DIR).filter((f) => f.endsWith('.html'));
 for (const file of pages) {
   const { meta, body } = parse(file);
   if (!NAV.includes(meta.active)) throw new Error(`${file}: unknown active "${meta.active}"`);
@@ -150,14 +153,14 @@ for (const file of pages) {
     '</html>',
     '',
   ].join('\n');
-  writeFileSync(file, html);
+  writeFileSync(join(OUT_DIR, file), html);
   console.log('built', file);
 }
 
 // Sitemap: indexable canonical pages only, absolute production URLs.
-writeFileSync('sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemap.join('\n')}\n</urlset>\n`);
+writeFileSync(join(OUT_DIR, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemap.join('\n')}\n</urlset>\n`);
 // robots.txt: open on production, closed on preview builds. (Not access control: private systems need auth.)
-writeFileSync('robots.txt', PRODUCTION
+writeFileSync(join(OUT_DIR, 'robots.txt'), PRODUCTION
   ? `User-agent: *\nAllow: /\n\nSitemap: ${SITE}sitemap.xml\n`
   : `# Preview build: not for indexing. Production builds use: npm run build:production\nUser-agent: *\nDisallow: /\n`);
 console.log(`sitemap.xml (${sitemap.length} urls), robots.txt [${PRODUCTION ? 'production' : 'preview'}]`);

@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "source": "AFCD Studio",
+  "generatedAt": "2026-11-22T09:20:28.406Z",
+  "articles": [
+    {
+      "slug": "solutions-to-climate-change-the-youth-green-generation-project-2024",
+      "file": null,
+      "url": "https://afcdfoundation.org/blog/",
+      "external": true,
+      "title": "Solutions to Climate Change: The Youth Green Generation Project 2024",
+      "excerpt": "AFCD has spent recent years on projects that address climate change locally and nationally. This post introduces the Youth Green Generation project and its call for young applicants.",
+      "type": "Call for applications",
+      "pillar": "Youth Empowerment",
+      "colour": "#FFB2B9",
+      "date": "2023-11-02",
+      "dateLabel": "2 November 2023",
+      "hero": null,
+      "featured": true,
+      "revision": "4d8dc971-191a-457c-81f7-c9684b0256a9",
+      "bodyHtml": "",
+      "authorName": "",
+      "authorRole": "",
+      "tags": [],
+      "readMinutes": 1,
+      "seoTitle": "",
+      "seoDescription": "",
+      "pillars": [
+        {
+          "key": "youth-empowerment",
+          "name": "Youth Empowerment",
+          "colour": "#FFB2B9",
+          "file": "youth-empowerment.html"
+        }
+      ],
+      "gallery": [],
+      "projects": []
+    },
+    {
+      "slug": "a-journey-of-a-thousand-miles-begins-with-a-single-step",
+      "file": null,
+      "url": "https://afcdfoundation.org/blog/",
+      "external": true,
+      "title": "A Journey of a Thousand Miles Begins with a Single Step",
+      "excerpt": "A participant’s account of joining a one-year AFCD program on the last day of registration.",
+      "type": "Participant story",
+      "pillar": "Youth Empowerment",
+      "colour": "#FFB2B9",
+      "date": "2023-10-01",
+      "dateLabel": "1 October 2023",
+      "hero": null,
+      "featured": false,
+      "revision": "377d3585-fc22-4bab-8df9-6b501bbcef5b",
+      "bodyHtml": "",
+      "authorName": "",
+      "authorRole": "",
+      "tags": [],
+      "readMinutes": 1,
+      "seoTitle": "",
+      "seoDescription": "",
+      "pillars": [
+        {
+          "key": "youth-empowerment",
+          "name": "Youth Empowerment",
+          "colour": "#FFB2B9",
+          "file": "youth-empowerment.html"
+        }
+      ],
+      "gallery": [],
+      "projects": []
+    },
+    {
+      "slug": "journey-with-the-afcd-family",
+      "file": null,
+      "url": "https://afcdfoundation.org/blog/",
+      "external": true,
+      "title": "Journey with the AFCD Family",
+      "excerpt": "A Leadership Lab participant on a year of networking, capacity building and social entrepreneurship.",
+      "type": "Participant story",
+      "pillar": "Women’s Empowerment",
+      "colour": "#A8DDFB",
+      "date": "2023-10-01",
+      "dateLabel": "1 October 2023",
+      "hero": null,
+      "featured": false,
+      "revision": "2770a945-dd89-440f-b1d9-9954beedd898",
+      "bodyHtml": "",
+      "authorName": "",
+      "authorRole": "",
+      "tags": [],
+      "readMinutes": 1,
+      "seoTitle": "",
+      "seoDescription": "",
+      "pillars": [
+        {
+          "key": "women-empowerment",
+          "name": "Women’s Empowerment",
+          "colour": "#A8DDFB",
+          "file": "womens-empowerment.html"
+        }
+      ],
+      "gallery": [],
+      "projects": []
+    }
+  ]
+}

@@ -576,23 +576,27 @@
     render('all');
   })();
 
-  /* Partners page: grouped list */
+  /* Partners page: filter by scope and search by name (the list itself is plain HTML) */
   (function () {
-    if (!$('#partner-groups')) return;
-  var GROUPS = PARTNER_GROUPS;
-  var pg = $('#partner-groups');
-  GROUPS.forEach(function (g) {
-    var cells = g[1].map(function (name) {
-      return '<li class="group flex min-h-[132px] flex-col justify-between rounded-2xl border border-ink-light bg-white p-4 transition-colors hover:border-ink-mid md:min-h-[150px] md:p-5">' +
-        '<span class="grid h-14 place-items-center"><span class="grid h-full w-[72%] max-w-[150px] place-items-center rounded-lg border border-dashed border-ink-light text-[10px] uppercase tracking-[0.12em] text-ink-mid transition-colors group-hover:border-ink-mid">Logo</span></span>' +
-        '<span class="mt-3 text-[13px] leading-snug text-ink-dark">' + name + '</span></li>';
-    }).join('');
-    pg.insertAdjacentHTML('beforeend',
-      '<div class="grid gap-4 border-t border-ink-light py-8 lg:grid-cols-12 lg:gap-8">' +
-        '<div class="lg:col-span-2"><p class="label">' + g[0] + '</p><p class="mt-1 text-xs tabular-nums text-ink-mid">' + g[1].length + (g[1].length === 1 ? ' partner' : ' partners') + '</p></div>' +
-        '<ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:col-span-10 lg:grid-cols-5">' + cells + '</ul>' +
-      '</div>');
-  });
+    var grid = $('#partner-grid'); if (!grid) return;
+    var cards = $$('.pr-card', grid), btns = $$('[data-pf]'), search = $('#partner-search'), empty = $('.pr-empty');
+    var group = 'all';
+    function apply() {
+      var q = (search && search.value || '').trim().toLowerCase(), shown = 0;
+      cards.forEach(function (c) {
+        var on = (group === 'all' || c.dataset.group === group) && (!q || c.dataset.name.indexOf(q) > -1);
+        c.hidden = !on; if (on) shown++;
+      });
+      if (empty) empty.classList.toggle('hidden', shown > 0);
+    }
+    btns.forEach(function (b) {
+      b.addEventListener('click', function () {
+        group = b.dataset.pf;
+        btns.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+        apply();
+      });
+    });
+    if (search) search.addEventListener('input', apply);
   })();
 
 })();

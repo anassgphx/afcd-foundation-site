@@ -967,30 +967,84 @@ def news():
 
 
 # ---------------------------------------------------------------- Partners
+PARTNERS = [
+    ('International', ['World Denver', 'Danish Youth Council', 'Embassy of Switzerland in Morocco', 'U.S. Embassy Morocco', 'Embassy of France in Morocco', 'Service Civil International (Germany)', 'Plugged In Band Program', 'Rebild Ungdomsskole', 'MapWorks Learning']),
+    ('National', ['High Atlas Foundation', 'Heinrich Böll Stiftung Rabat', 'Moroccan Institute for Policy Analysis', 'Dar America Casablanca', 'Anoual Association', 'International Youth Council Morocco', 'Student Voice', 'Y-PEER PETRI Morocco']),
+    ('Local', ['Commune of Ait Ourir']),
+]
+PT_ICONS = {
+    'International': '<circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3c2 2.2 2.8 4.6 2.8 7s-.8 4.8-2.8 7c-2-2.2-2.8-4.6-2.8-7S8 5.2 10 3Z"/>',
+    'National': '<path d="M10 17s5-4.6 5-9a5 5 0 0 0-10 0c0 4.4 5 9 5 9Z"/><circle cx="10" cy="8" r="1.8"/>',
+    'Local': '<path d="M3.5 9 10 3.5 16.5 9v7.5h-13V9Z"/><path d="M8 16.5v-4h4v4"/>',
+    'fund': '<rect x="2.5" y="5" width="15" height="10" rx="2"/><circle cx="10" cy="10" r="2.2"/><path d="M5.5 8v4M14.5 8v4"/>',
+    'design': '<path d="m3 10 3-3 3 2 2-2 3 3"/><path d="M3 10l4 4 1.5-1M17 10l-4 4-3-2.5"/>',
+    'share': '<circle cx="7" cy="7" r="2.5"/><circle cx="13.5" cy="8.5" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M12 13c1.9-.4 3.8.8 4.5 3"/>',
+}
+
+
 def partners():
+    def ico(k, cls=''):
+        return f'<svg class="{cls}" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{PT_ICONS[k]}</svg>'
+    total = sum(len(n) for _g, n in PARTNERS)
+    stats = f'<div class="pr-stat pr-stat-main"><dt>Partners</dt><dd>{total}</dd></div>' + ''.join(
+        f'<div class="pr-stat"><dt>{ico(g, "pr-stat-ico")}{g}</dt><dd>{len(n)}</dd></div>' for g, n in PARTNERS)
+    chips = '<button type="button" class="nw-chip" data-pf="all" aria-pressed="true">All <span class="pr-count">' + str(total) + '</span></button>' + ''.join(
+        f'<button type="button" class="nw-chip" data-pf="{g}" aria-pressed="false">{g} <span class="pr-count">{len(n)}</span></button>' for g, n in PARTNERS)
+    def initials(name):
+        w = [x for x in name.replace('(', '').replace(')', '').split() if x[0].isalpha() and x.lower() not in ('of', 'in', 'for', 'the', 'and')]
+        return ''.join(x[0] for x in w[:2]).upper()
+    cards = ''.join(f'''
+      <li class="pr-card" data-group="{g}" data-name="{n.lower()}">
+        <span class="pr-logo" aria-hidden="true"><span>{initials(n)}</span></span>
+        <span class="mt-5 block text-[16px] font-semibold leading-snug tracking-[-0.015em]">{n}</span>
+        <span class="pr-scope">{ico(g)}{g}</span>
+      </li>''' for g, names in PARTNERS for n in names)
+    models = [('fund', 'Fund', 'Support a programme under one of our four pillars, from a single cohort to multi-year work.'),
+              ('design', 'Co-design', 'Build an initiative with AFCD and the community, from the first idea to the final report.'),
+              ('share', 'Share expertise', 'Train, mentor or host participants, and bring your organisation’s know-how to a programme.')]
+    mhtml = ''.join(f'<li class="wd-card" style="--c:#F3F3F3"><span class="flex items-start justify-between"><span class="wd-ico">{ico(k)}</span><span class="wd-n">{i:02d}</span></span><span class="mt-8 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for i, (k, t, d) in enumerate(models, 1))
+    steps = [('Tell us about your organisation', 'Share your goals and the communities or pillar you’d like to support.'),
+             ('Explore the fit together', 'We look at how your goals connect with our four pillars and current programmes.'),
+             ('Co-design and launch', 'We agree the plan, launch the work together and report on what it achieves.')]
+    shtml = ''.join(f'<li class="os-step"><span class="os-step-k">{i:02d}</span><span class="os-step-dot" aria-hidden="true"></span><span class="mt-5 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for i, (t, d) in enumerate(steps, 1))
+
     body = page_header([('Partners', 'partners.html')], 'Our Partners',
                        'Stronger <span class="text-ink-mid">together.</span>',
-                       'International, national and local organizations that have supported AFCD’s programmes, as listed on the current Our Partners page.', points=('<b>18</b> Partners', 'International', 'National', 'Local')) + f'''
+                       'International, national and local organizations that have supported AFCD’s programmes, as listed on the current Our Partners page.') + f'''
 
-<section class="py-14 lg:py-16">
+<section id="overview" class="pt-8 lg:pt-10">
   <div class="wrap">
-    <div id="partner-groups"></div>
+    <dl class="pr-stats">{stats}</dl>
+  </div>
+</section>
+
+<section id="directory" class="py-14 lg:py-16">
+  <div class="wrap">{sec_head('01 / Partner Directory', 'Organisations <span class="sh-soft">we work with.</span>', f'{total} partners', desc='Filter by scope or search by name. Logos will be added once each partner approves their use.')}
+    <div class="pr-tools mt-8">
+      <div class="nw-chips" role="group" aria-label="Filter partners">{chips}</div>
+      <label class="pr-search"><span class="sr-only">Search partners</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13.2 13.2 3.3 3.3"/></svg><input id="partner-search" type="search" placeholder="Search partners" autocomplete="off"></label>
+    </div>
+    <ul id="partner-grid" class="pr-grid mt-6">{cards}
+    </ul>
+    <p class="pr-empty mt-6 hidden text-[15px] text-ink-mid" role="status">No partners match your search.</p>
     {placeholder_note('Logos to be added. AFCD will confirm which partnerships are current.')}
   </div>
 </section>
 
-<section class="py-14 lg:py-16">
-  <div class="wrap grid gap-12 lg:grid-cols-12 lg:gap-16">
-    <div class="lg:col-span-5">{sec_head('Partner with AFCD', 'Co-design <span class="sh-soft">change with us.</span>', stack=True)}</div>
-    <ul class="grid gap-3 sm:grid-cols-3 lg:col-span-7 lg:self-end">
-      <li class="rounded-2xl border border-ink-light p-6"><p class="label text-ink-mid">Fund</p><p class="mt-3 text-lg">Support a programme under one of our four pillars.</p></li>
-      <li class="rounded-2xl border border-ink-light p-6"><p class="label text-ink-mid">Co-design</p><p class="mt-3 text-lg">Build an initiative with us and the community.</p></li>
-      <li class="rounded-2xl border border-ink-light p-6"><p class="label text-ink-mid">Share expertise</p><p class="mt-3 text-lg">Train, mentor or host our participants.</p></li>
-    </ul>
+<section id="models" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('02 / Ways to Partner', 'Co-design <span class="sh-soft">change with us.</span>', 'Three models', desc='Every partnership is shaped around shared goals and the communities we serve.')}
+    <ul class="mt-8 grid gap-3 md:grid-cols-3 lg:mt-10">{mhtml}</ul>
+  </div>
+</section>
+
+<section id="how" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('03 / How It Starts', 'From first message <span class="sh-soft">to shared results.</span>', 'Three steps')}
+    <ol class="os-steps gi-journey mt-8 lg:mt-10">{shtml}
+    </ol>
   </div>
 </section>
 ''' + cta_band('Let’s build something together.', 'Tell us about your organization and what you would like to support.',
-               ('Partner With Us', 'contact.html'), ('Our projects', 'projects.html'))
+               ('Partner With Us', 'contact.html?topic=Partnership#message'), ('Our projects', 'projects.html'))
     page('partners.html', 'Partners · AFCD Foundation',
          'The international, national and local organizations that have supported AFCD Foundation’s programmes.', 'partners', body)
 

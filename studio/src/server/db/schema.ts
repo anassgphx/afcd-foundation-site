@@ -516,3 +516,20 @@ export const pageContentRevisions = pgTable('page_content_revisions', {
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex('page_content_revisions_num_uq').on(t.contentId, t.number)]);
+
+// SEO issue tracking (audit engine v2): one row per rule + page, kept across audit runs.
+export const seoIssueStatusEnum = pgEnum('seo_issue_status', ['open', 'reviewed', 'resolved']);
+export const seoIssues = pgTable('seo_issues', {
+  id: id(),
+  code: text('code').notNull(),
+  file: text('file').notNull(),
+  severity: text('severity').notNull(),
+  category: text('category').notNull(),
+  evidence: jsonb('evidence').$type<string[]>().notNull().default([]),
+  status: seoIssueStatusEnum('status').notNull().default('open'),
+  firstSeen: timestamp('first_seen', { withTimezone: true }).notNull().defaultNow(),
+  lastSeen: timestamp('last_seen', { withTimezone: true }).notNull().defaultNow(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),          // set when an audit no longer finds it (verified)
+  reviewedBy: uuid('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+  note: text('note').notNull().default(''),
+}, (t) => [uniqueIndex('seo_issues_key_uq').on(t.code, t.file), index('seo_issues_status_idx').on(t.status, t.severity)]);

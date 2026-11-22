@@ -372,6 +372,12 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
   // ---------------------------------------------------------------- SEO studio
   api.get('/seo/audit', perm('seo.read'), async (c) => c.json({ last: await SEO.lastAudit(db), history: await SEO.auditHistory(db) }));
   api.post('/seo/audit', perm('seo.read'), async (c) => c.json(await SEO.runAudit(db, cfg, actor(c))));
+  api.get('/seo/issues', perm('seo.read'), async (c) => c.json(await SEO.listIssues(db, cfg)));
+  api.post('/seo/issues/:id/review', perm('seo.update'), async (c) => {
+    const b = z.object({ reviewed: z.boolean(), note: z.string().max(500).optional() }).safeParse(await c.req.json());
+    if (!b.success) throw new AppError(422, 'Invalid change.');
+    await SEO.reviewIssue(db, actor(c), c.req.param('id'), b.data); return c.json({ ok: true });
+  });
   api.get('/seo/pages', perm('seo.read'), async (c) => c.json(await SEO.listOverrides(db, cfg)));
   api.get('/seo/pages/:file', perm('seo.read'), async (c) => {
     const file = c.req.param('file');

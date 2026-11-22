@@ -5,11 +5,9 @@ import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
+import { DataTable, EmptyState, FilterTabs, ListToolbar, type Column } from '../DataTable.tsx';
 
-type Issue = { level: 'error' | 'warning'; code: string; message: string };
 type Owner = { kind: string; id?: string; label: string };
-type PageRep = { file: string; title: string; description: string; h1: string; words: number; issues: Issue[]; score: number; owner: Owner };
-type Audit = { id: string; at: string; score: number; counts: { errors: number; warnings: number }; pages: PageRep[] };
 const EDIT: Record<string, (o: Owner) => string | null> = {
   project: (o) => o.id ? `/studio/projects/${o.id}` : null, story: (o) => o.id ? `/studio/news/${o.id}` : null, event: (o) => o.id ? `/studio/events/${o.id}` : null,
   opportunity: (o) => o.id ? `/studio/opportunities/${o.id}` : '/studio/opportunities', page: (o) => o.id ? `/studio/pages/${o.id}` : null,
@@ -20,59 +18,199 @@ export function SeoPage() {
   const path = location.pathname;
   const file = path.match(/^\/studio\/seo\/pages\/([a-z0-9-]+\.html)$/)?.[1];
   if (file) return <SeoEditor key={file} file={file} />;
-  return <SeoHome tab={path.startsWith('/studio/seo/pages') ? 'pages' : 'audit'} />;
+  const tab = (path.match(/^\/studio\/seo\/([a-z-]+)/)?.[1] ?? 'overview') as Tab;
+  return <SeoHome tab={TABS.some((t) => t[0] === tab) ? tab : 'overview'} />;
 }
 
-function SeoHome({ tab }: { tab: 'audit' | 'pages' }) {
+// ---------------------------------------------------------------- SEO Intelligence workspace
+type Tab = 'overview' | 'audit' | 'issues' | 'indexability' | 'links' | 'schema' | 'pages' | 'search-console';
+const TABS: [Tab, string][] = [['overview', 'Overview'], ['audit', 'Site audit'], ['issues', 'Issues'], ['indexability', 'Indexability'], ['links', 'Internal links'], ['schema', 'Structured data'], ['pages', 'Page settings'], ['search-console', 'Search Console']];
+type Sev = 'critical' | 'high' | 'medium' | 'low' | 'info';
+type Rule = { code: string; severity: Sev; category: string; kind: 'standard' | 'heuristic'; title: string; why: string; fix: string };
+type Issue = { id: string; code: string; file: string; severity: Sev; category: string; evidence: string[]; status: 'open' | 'reviewed' | 'resolved'; firstSeen: string; lastSeen: string; resolvedAt: string | null; note: string; reviewer: string | null; rule: Rule | null; owner: Owner };
+type AuditPage = { file: string; url: string; title: string; description: string; words: number; inSitemap: boolean; robots: string; canonical: string; canonicalOk: boolean; lang: string; inbound: number; inboundFrom: string[]; linksOut: number; schema: string[]; schemaErrors: string[]; h1: string; owner: Owner; score: number };
+type AuditV2 = { id: string; kind?: string; at: string; production?: boolean; score: number; scores?: Record<string, number>; counts?: Record<Sev, number>; pages: AuditPage[] };
+const SEV: Record<Sev, { label: string; c: string }> = { critical: { label: 'Critical', c: '#b91c1c' }, high: { label: 'High', c: '#dc2626' }, medium: { label: 'Medium', c: '#d97706' }, low: { label: 'Low', c: '#2563eb' }, info: { label: 'Info', c: '#78716c' } };
+const CATS: [string, string][] = [['technical', 'Technical health'], ['metadata', 'Metadata'], ['content', 'Content checklist'], ['structured', 'Structured data'], ['linking', 'Internal linking'], ['performance', 'Performance (build)']];
+const editorFor = (o: Owner, file: string) => (o.kind === 'template' ? `/studio/seo/pages/${file}` : EDIT[o.kind]?.(o) ?? null);
+const SevBadge = ({ s }: { s: Sev }) => <span className="sev" style={{ ['--c' as string]: SEV[s].c }}>{SEV[s].label}</span>;
+
+function SeoHome({ tab }: { tab: Tab }) {
+  const toast = useToast(); const can = useCan();
+  const [data, setData] = useState<{ last: AuditV2 | null; history: { at: string; score: number; scores: Record<string, number> | null; counts: Record<string, number> }[] } | null>(null);
+  const [issues, setIssues] = useState<Issue[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => { const [a, i] = await Promise.all([api('/seo/audit'), api<Issue[]>('/seo/issues')]); setData(a); setIssues(i); }, []);
+  useEffect(() => { load().catch((e) => toast(e.message, true)); }, [load]);
+  async function run() { setBusy(true); try { await post('/seo/audit'); await load(); toast('Build audit finished'); } catch (e) { toast((e as Error).message, true); } finally { setBusy(false); } }
+  const a = data?.last ?? null; const v2 = !!a?.scores;
   return <>
-    <div className="page-h"><div><h1>SEO</h1><p>How the website appears in search results and link previews, and the settings for its template pages.</p></div></div>
-    <div className="seg" role="tablist" style={{ marginBottom: 12 }}>
-      <button className={tab === 'audit' ? 'on' : ''} onClick={() => navigate('/studio/seo')}>Site audit</button>
-      <button className={tab === 'pages' ? 'on' : ''} onClick={() => navigate('/studio/seo/pages')}>Page settings</button>
+    <div className="page-h"><div><h1>SEO Intelligence</h1><p>Monitor technical health, search performance and optimisation opportunities.</p></div>
+      <div className="pills">{can('seo.read') && <button className="btn btn-primary" disabled={busy} onClick={run}><Icon n="search" />{busy ? 'Auditing the build…' : 'Run build audit'}</button>}</div></div>
+    <nav className="seo-tabs" aria-label="SEO sections">{TABS.map(([k, l]) => <Link key={k} to={k === 'overview' ? '/studio/seo' : `/studio/seo/${k}`} className={tab === k ? 'on' : ''} aria-current={tab === k ? 'page' : undefined}>{l}</Link>)}</nav>
+    {a && <div className="seo-kind"><span className="seo-kind-tag">Build audit</span><span>Checked the pages the website build produced {ago(a.at)}{v2 && !a.production ? ' · preview build (every page is noindex on purpose)' : ''}. This is not Google’s view of the public site.</span></div>}
+    {!data || !issues ? <Loading /> : !a ? <section className="card"><div className="dt-empty"><Icon n="search" /><b>No audit yet</b><small>Run a build audit to check every page.</small></div></section>
+      : !v2 ? <section className="card"><div className="dt-empty"><Icon n="search" /><b>Your last audit used the previous engine</b><small>Run a build audit to see the new detailed findings.</small></div></section>
+      : tab === 'overview' ? <Overview a={a} issues={issues} history={data.history} />
+      : tab === 'audit' ? <SiteAudit a={a} issues={issues} />
+      : tab === 'issues' ? <Issues issues={issues} onChange={load} />
+      : tab === 'indexability' ? <Indexability a={a} />
+      : tab === 'links' ? <InternalLinks a={a} />
+      : tab === 'schema' ? <Schema a={a} />
+      : tab === 'pages' ? <PagesView />
+      : <SearchConsole />}
+  </>;
+}
+
+function Overview({ a, issues, history }: { a: AuditV2; issues: Issue[]; history: { at: string; scores: Record<string, number> | null }[] }) {
+  const open = issues.filter((i) => i.status !== 'resolved');
+  const groups = [...open.reduce((m, i) => m.set(i.code, [...(m.get(i.code) ?? []), i]), new Map<string, Issue[]>()).values()]
+    .sort((x, y) => SEV_ORDER.indexOf(x[0].severity) - SEV_ORDER.indexOf(y[0].severity) || y.length - x.length).filter((g) => g[0].severity !== 'info');
+  const indexable = a.pages.filter((p) => p.inSitemap && p.canonicalOk).length;
+  const trend = history.filter((h) => h.scores).slice(0, 12).reverse();
+  return <div className="stack" style={{ gap: 16 }}>
+    <div className="seo-scores">{CATS.map(([k, l]) => { const v = a.scores![k]; return <div key={k} className="seo-sc"><small>{l}</small><b style={{ color: tone(v) }}>{v}</b><span className="seo-bar"><i style={{ width: `${v}%`, background: tone(v) }} /></span></div>; })}</div>
+    <div className="seo-kpis">
+      <div><small>Pages checked</small><b>{a.pages.length}</b></div>
+      <div><small>Listed for indexing</small><b>{indexable}</b><span className="muted">in the sitemap, canonical OK</span></div>
+      {(['critical', 'high', 'medium', 'low'] as Sev[]).map((s) => <div key={s}><small>{SEV[s].label} issues</small><b style={{ color: (a.counts![s] ?? 0) ? SEV[s].c : undefined }}>{a.counts![s] ?? 0}</b></div>)}
     </div>
-    {tab === 'audit' ? <AuditView /> : <PagesView />}
-  </>;
+    <div className="db-grid">
+      <section className="card"><div className="card-h"><h2>Priority issues</h2><Link to="/studio/seo/issues" className="btn btn-sm btn-ghost">All issues</Link></div>
+        {groups.length === 0 ? <div className="db-clear"><Icon n="check" /><div><b>No open issues</b><small>Only informational notes remain.</small></div></div>
+          : <ul className="db-list">{groups.slice(0, 8).map((g) => <li key={g[0].code}><Link to={`/studio/seo/issues?code=${g[0].code}`} className="db-row"><SevBadge s={g[0].severity} />
+            <span className="min-w-0"><b>{g[0].rule?.title ?? g[0].code}</b><small>{g.length} page{g.length === 1 ? '' : 's'} · {g[0].rule?.kind === 'heuristic' ? 'Recommendation' : 'Standard check'}</small></span><Icon n="chev" width={14} height={14} /></Link></li>)}</ul>}
+        <p className="muted" style={{ fontSize: 12, padding: '0 16px 14px', margin: 0 }}>Ranked by severity, then by how many pages are affected. Fixing them improves the site’s technical quality; no tool can guarantee rankings.</p>
+      </section>
+      <div className="db-col">
+        <section className="card"><div className="card-h"><h2>Search performance</h2><Link to="/studio/seo/search-console" className="btn btn-sm btn-ghost">Details</Link></div>
+          <div className="seo-gsc-off"><Icon n="globe" /><div><b>Google Search Console is not connected</b><small>Clicks, impressions, click-through rate and average position appear here only once real data is connected. Nothing is estimated.</small></div></div></section>
+        {trend.length > 1 && <section className="card"><div className="card-h"><h2>Technical health over time</h2></div>
+          <div className="seo-trend">{trend.map((h, i) => <span key={i} title={`${fmtDate(h.at)}: ${h.scores!.technical}`} style={{ height: `${Math.max(6, h.scores!.technical)}%`, background: tone(h.scores!.technical) }} />)}</div>
+          <p className="muted" style={{ fontSize: 12, padding: '0 16px 14px', margin: 0 }}>Last {trend.length} build audits.</p></section>}
+      </div>
+    </div>
+  </div>;
+}
+const SEV_ORDER: Sev[] = ['critical', 'high', 'medium', 'low', 'info'];
+
+function SiteAudit({ a, issues }: { a: AuditV2; issues: Issue[] }) {
+  const [f, setF] = useState('issues'); const [q, setQ] = useState('');
+  const open = issues.filter((i) => i.status !== 'resolved');
+  const per = (file: string) => open.filter((i) => i.file === file && i.severity !== 'info');
+  const rows = a.pages.filter((p) => (f === 'all' || (f === 'issues' ? per(p.file).length > 0 : f === 'passed' ? per(p.file).length === 0 : per(p.file).some((i) => i.severity === f))) && (!q || `${p.title} ${p.file}`.toLowerCase().includes(q.toLowerCase())));
+  const cols: Column<AuditPage>[] = [
+    { key: 'score', header: 'Score', sort: (p) => p.score, csv: (p) => String(p.score), width: '80px', render: (p) => <span className="seo-pill" style={{ ['--c' as string]: tone(p.score) }}>{p.score}</span> },
+    { key: 'page', header: 'Page', sort: (p) => p.title || p.file, csv: (p) => p.file, render: (p) => <div className="min-w-0"><b className="title">{p.title || p.file}</b><div className="sub mono">{p.file}</div></div> },
+    { key: 'issues', header: 'Issues', sort: (p) => -per(p.file).length, csv: (p) => per(p.file).map((i) => i.rule?.title ?? i.code).join('; '), render: (p) => { const l = per(p.file); return l.length ? <div className="pills">{SEV_ORDER.filter((s) => l.some((i) => i.severity === s)).map((s) => <span key={s} className="sev" style={{ ['--c' as string]: SEV[s].c }}>{l.filter((i) => i.severity === s).length} {SEV[s].label.toLowerCase()}</span>)}</div> : <span className="muted">Passed</span>; } },
+    { key: 'words', header: 'Words', sort: (p) => p.words, csv: (p) => String(p.words), align: 'right', hideBelow: 1000, render: (p) => <span className="sub">{p.words}</span> },
+    { key: 'edit', header: 'Edit in', render: (p) => { const to = editorFor(p.owner, p.file); return to ? <Link to={to} className="btn btn-sm">{p.owner.kind === 'template' ? 'SEO settings' : `${p.owner.kind[0].toUpperCase()}${p.owner.kind.slice(1)} editor`}</Link> : <span className="muted">{p.owner.kind === 'sample' ? 'Website code' : p.owner.label}</span>; } },
+  ];
+  return <section className="card">
+    <ListToolbar tabs={[['issues', 'With issues', a.pages.filter((p) => per(p.file).length).length], ['critical', 'Critical', a.pages.filter((p) => per(p.file).some((i) => i.severity === 'critical')).length], ['high', 'High', a.pages.filter((p) => per(p.file).some((i) => i.severity === 'high')).length], ['passed', 'Passed', a.pages.filter((p) => !per(p.file).length).length], ['all', 'All', a.pages.length]]}
+      value={f} onChange={setF} q={q} setQ={setQ} placeholder="Search pages" />
+    <DataTable id="seo-audit" rows={rows} total={a.pages.length} rowKey={(p) => p.file} columns={cols} csvName="afcd-seo-audit" initialSort={{ key: 'score', dir: 'asc' }}
+      onOpen={(p) => navigate(`/studio/seo/issues?file=${p.file}`)} empty={<EmptyState icon="check" text="No pages here" />} />
+  </section>;
 }
 
-function AuditView() {
-  const toast = useToast();
-  const [data, setData] = useState<{ last: Audit | null; history: { at: string; score: number; errors: number; warnings: number }[] } | null>(null);
-  const [busy, setBusy] = useState(false); const [f, setF] = useState<'issues' | 'errors' | 'all'>('issues'); const [open, setOpen] = useState<string | null>(null);
-  const load = useCallback(() => api('/seo/audit').then(setData), []);
-  useEffect(() => { load(); }, [load]);
-  async function run() { setBusy(true); try { await post('/seo/audit'); await load(); toast('Audit finished'); } catch (e) { toast((e as Error).message, true); } finally { setBusy(false); } }
-  if (!data) return <Loading />;
-  const a = data.last;
-  const prev = data.history[1];
-  const shown = (a?.pages ?? []).filter((p) => f === 'all' || (f === 'errors' ? p.issues.some((i) => i.level === 'error') : p.issues.length)).sort((x, y) => x.score - y.score || x.file.localeCompare(y.file));
-  return <>
-    <section className="card" style={{ padding: 20, marginBottom: 12 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'center' }}>
-        <div className="seo-score" style={{ ['--c' as string]: a ? tone(a.score) : '#999' }}><b>{a ? a.score : '—'}</b><small>/ 100</small></div>
-        <div style={{ flex: 1, minWidth: 220 }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>{a ? `${a.pages.length} pages checked` : 'No audit yet'}</h2>
-          {a && <p className="muted" style={{ margin: '4px 0 0' }}><b style={{ color: '#dc2626' }}>{a.counts.errors} errors</b> · <b style={{ color: '#ca8a04' }}>{a.counts.warnings} warnings</b> · checked {ago(a.at)}{prev ? ` · ${a.score - prev.score >= 0 ? '+' : ''}${a.score - prev.score} since the previous audit` : ''}</p>}
-          <p className="muted" style={{ margin: '6px 0 0', fontSize: 12.5 }}>Checks the pages as built: titles, descriptions, headings, image alt text, broken links, the sitemap, sample text and escaping. Run it after publishing.</p>
+function Issues({ issues, onChange }: { issues: Issue[]; onChange: () => void }) {
+  const can = useCan(); const toast = useToast();
+  const params = new URLSearchParams(location.search);
+  const [status, setStatus] = useState('open'); const [sev, setSev] = useState('all'); const [cat, setCat] = useState('all');
+  const [code, setCode] = useState(params.get('code') ?? ''); const [file] = useState(params.get('file') ?? '');
+  const [sel, setSel] = useState<string | null>(null);
+  const shown = issues.filter((i) => (status === 'all' || (status === 'open' ? i.status !== 'resolved' : i.status === status)) && (sev === 'all' || i.severity === sev) && (cat === 'all' || i.category === cat) && (!code || i.code === code) && (!file || i.file === file));
+  const groups = [...shown.reduce((m, i) => m.set(i.code, [...(m.get(i.code) ?? []), i]), new Map<string, Issue[]>()).values()].sort((x, y) => SEV_ORDER.indexOf(x[0].severity) - SEV_ORDER.indexOf(y[0].severity) || y.length - x.length);
+  const g = groups.find((x) => x[0].code === sel) ?? null;
+  async function review(i: Issue, reviewed: boolean) { try { await post(`/seo/issues/${i.id}/review`, { reviewed }); await onChange(); toast(reviewed ? 'Marked as reviewed. It still counts until the next audit no longer finds it.' : 'Reopened'); } catch (e) { toast((e as Error).message, true); } }
+  return <div className="seo-issues-wrap">
+    <section className="card">
+      <div className="card-h dt-toolbar">
+        <FilterTabs value={status} onChange={setStatus} tabs={[['open', 'Open', issues.filter((i) => i.status !== 'resolved').length], ['reviewed', 'Reviewed', issues.filter((i) => i.status === 'reviewed').length], ['resolved', 'Resolved', issues.filter((i) => i.status === 'resolved').length], ['all', 'All', issues.length]]} />
+        <div className="dt-tools">
+          <select className="select" value={sev} onChange={(e) => setSev(e.target.value)} aria-label="Severity"><option value="all">All severities</option>{SEV_ORDER.map((s) => <option key={s} value={s}>{SEV[s].label}</option>)}</select>
+          <select className="select" value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Area"><option value="all">All areas</option>{CATS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+          {(code || file) && <button className="btn btn-sm" onClick={() => { setCode(''); history.replaceState(null, '', '/studio/seo/issues'); location.reload(); }}>Clear {file ? `page ${file}` : 'issue'} filter</button>}
         </div>
-        <button className="btn btn-primary" disabled={busy} onClick={run}><Icon n="search" />{busy ? 'Checking…' : 'Run audit'}</button>
       </div>
+      {groups.length === 0 ? <EmptyState icon="check" text="Nothing here" /> : <ul className="db-list">{groups.map((gr) => <li key={gr[0].code}><button className={`db-row seo-irow${sel === gr[0].code ? ' on' : ''}`} onClick={() => setSel(gr[0].code)}>
+        <SevBadge s={gr[0].severity} /><span className="min-w-0"><b>{gr[0].rule?.title ?? gr[0].code}</b><small>{gr.length} page{gr.length === 1 ? '' : 's'} · {CATS.find((c) => c[0] === gr[0].category)?.[1]} · {gr[0].rule?.kind === 'heuristic' ? 'Recommendation' : 'Standard check'}</small></span><Icon n="chev" width={14} height={14} /></button></li>)}</ul>}
     </section>
-    {a && <section className="card">
-      <div className="card-h"><div className="seg">{([['issues', 'With issues'], ['errors', 'Errors only'], ['all', 'All pages']] as const).map(([k, l]) => <button key={k} className={f === k ? 'on' : ''} onClick={() => setF(k)}>{l}</button>)}</div></div>
-      <div className="scroll-x"><table className="table">
-        <thead><tr><th>Score</th><th>Page</th><th>Issues</th><th>Edit in</th></tr></thead>
-        <tbody>{shown.length === 0 && <tr><td colSpan={4} className="empty">Nothing to fix here.</td></tr>}
-          {shown.map((p) => { const to = p.owner.kind === 'template' ? `/studio/seo/pages/${p.file}` : EDIT[p.owner.kind]?.(p.owner) ?? null; return <tr key={p.file}>
-            <td><span className="seo-pill" style={{ ['--c' as string]: tone(p.score) }}>{p.score}</span></td>
-            <td><span className="title">{p.title || p.file}</span><div className="sub mono">{p.file}</div></td>
-            <td>{p.issues.length === 0 ? <span className="muted">No issues</span> : <>
-              <ul className="seo-issues">{(open === p.file ? p.issues : p.issues.slice(0, 2)).map((i) => <li key={i.code} className={i.level}>{i.message}</li>)}</ul>
-              {p.issues.length > 2 && <button className="btn btn-ghost btn-sm" style={{ padding: 0, height: 'auto' }} onClick={() => setOpen(open === p.file ? null : p.file)}>{open === p.file ? 'Show less' : `+${p.issues.length - 2} more`}</button>}</>}</td>
-            <td style={{ whiteSpace: 'nowrap' }}>{to ? <Link to={to} className="btn btn-sm">{p.owner.kind === 'template' ? 'SEO settings' : `${p.owner.kind[0].toUpperCase()}${p.owner.kind.slice(1)} editor`}</Link> : <span className="muted">{p.owner.kind === 'sample' ? 'Sample page (website code)' : p.owner.label}</span>}</td>
-          </tr>; })}</tbody>
-      </table></div>
-    </section>}
-  </>;
+    {g && <aside className="seo-drawer" role="dialog" aria-label="Issue details">
+      <div className="seo-drawer-h"><div><SevBadge s={g[0].severity} /><h2>{g[0].rule?.title}</h2><small className="muted">{CATS.find((c) => c[0] === g[0].category)?.[1]} · {g[0].rule?.kind === 'heuristic' ? 'Recommendation based on good practice' : 'Standard check'}</small></div><button className="btn btn-ghost icon-btn" onClick={() => setSel(null)} aria-label="Close"><Icon n="x" /></button></div>
+      <div className="seo-drawer-b">
+        <h3>Why it matters</h3><p>{g[0].rule?.why}</p>
+        <h3>What to do</h3><p>{g[0].rule?.fix}</p>
+        <h3>Affected pages ({g.length})</h3>
+        <ul className="seo-aff">{g.map((i) => { const to = editorFor(i.owner, i.file); return <li key={i.id}>
+          <div className="between"><b className="mono">{i.file}</b>{to && <Link to={to} className="btn btn-sm">Open editor</Link>}</div>
+          {i.evidence.length > 0 && <ul className="seo-ev">{i.evidence.map((e, k) => <li key={k}>{e}</li>)}</ul>}
+          <small className="muted">First found {fmtDate(i.firstSeen)} · last seen {ago(i.lastSeen)} · {i.status === 'resolved' ? `resolved ${i.resolvedAt ? ago(i.resolvedAt) : ''} (no longer found)` : i.status === 'reviewed' ? `reviewed${i.reviewer ? ` by ${i.reviewer}` : ''}` : 'open'}</small>
+          {can('seo.update') && i.status !== 'resolved' && (i.status === 'reviewed' ? <button className="btn btn-ghost btn-sm" onClick={() => review(i, false)}>Reopen</button>
+            : i.severity !== 'critical' && <button className="btn btn-ghost btn-sm" onClick={() => review(i, true)}>Mark as reviewed</button>)}
+        </li>; })}</ul>
+        <p className="muted" style={{ fontSize: 12 }}>An issue is resolved only when an audit no longer finds it. “Reviewed” records that someone looked at it; it does not change any score. Critical issues cannot be set aside.</p>
+      </div>
+    </aside>}
+  </div>;
+}
+
+function Indexability({ a }: { a: AuditV2 }) {
+  const cat = (p: AuditPage) => (!p.canonicalOk && p.canonical ? 'Canonical points elsewhere' : !p.inSitemap ? 'Excluded (not in sitemap / noindex)' : a.production && /noindex/.test(p.robots) ? 'Noindex' : 'Listed for indexing');
+  const cats = ['Listed for indexing', 'Excluded (not in sitemap / noindex)', 'Canonical points elsewhere', 'Noindex'];
+  const [f, setF] = useState('all'); const [q, setQ] = useState('');
+  const rows = a.pages.filter((p) => (f === 'all' || cat(p) === f) && (!q || `${p.title} ${p.file}`.toLowerCase().includes(q.toLowerCase())));
+  return <section className="card">
+    {!a.production && <div className="notice n-info" style={{ margin: 16 }}><div><b>Preview build.</b> Every page carries noindex on purpose, so this view shows what the production build will list (from the sitemap and canonicals). Google’s own index status is only available through Search Console.</div></div>}
+    <ListToolbar tabs={[['all', 'All', a.pages.length], ...cats.map((c) => [c, c.split(' (')[0], a.pages.filter((p) => cat(p) === c).length] as [string, string, number])]} value={f} onChange={setF} q={q} setQ={setQ} placeholder="Search pages" />
+    <DataTable id="seo-index" rows={rows} total={a.pages.length} rowKey={(p) => p.file} csvName="afcd-indexability" columns={[
+      { key: 'page', header: 'Page', sort: (p) => p.file, csv: (p) => p.file, render: (p) => <div><b className="title">{p.title || p.file}</b><div className="sub mono">{p.url}</div></div> },
+      { key: 'state', header: 'Status (build audit)', sort: (p) => cat(p), csv: (p) => cat(p), render: (p) => <span className="dt-state"><span className="dot" style={{ ['--c' as string]: cat(p) === 'Listed for indexing' ? '#16a34a' : '#a8a29e' }} />{cat(p)}</span> },
+      { key: 'canon', header: 'Canonical', sort: (p) => (p.canonicalOk ? 0 : 1), csv: (p) => p.canonical, hideBelow: 1100, render: (p) => <span className={p.canonicalOk ? 'sub' : ''}>{p.canonicalOk ? 'Self' : p.canonical || 'Missing'}</span> },
+      { key: 'lang', header: 'Language', sort: (p) => p.lang, csv: (p) => p.lang, hideBelow: 900, render: (p) => <span className="sub">{p.lang || 'Missing'}</span> },
+    ]} empty={<EmptyState icon="globe" text="No pages here" />} />
+  </section>;
+}
+
+function InternalLinks({ a }: { a: AuditV2 }) {
+  const [q, setQ] = useState(''); const [f, setF] = useState('all');
+  const rows = a.pages.filter((p) => p.file !== '404.html' && (f === 'all' || (f === 'weak' ? p.inbound <= 1 && p.file !== 'index.html' : p.inbound === 0 && p.file !== 'index.html')) && (!q || `${p.title} ${p.file}`.toLowerCase().includes(q.toLowerCase())));
+  const base = a.pages.filter((p) => p.file !== '404.html');
+  return <section className="card">
+    <ListToolbar tabs={[['all', 'All pages', base.length], ['weak', 'One link or fewer', base.filter((p) => p.inbound <= 1 && p.file !== 'index.html').length], ['none', 'No links in content', base.filter((p) => p.inbound === 0 && p.file !== 'index.html').length]]} value={f} onChange={setF} q={q} setQ={setQ} placeholder="Search pages" />
+    <DataTable id="seo-links" rows={rows} total={base.length} rowKey={(p) => p.file} csvName="afcd-internal-links" initialSort={{ key: 'in', dir: 'asc' }} columns={[
+      { key: 'page', header: 'Page', sort: (p) => p.file, csv: (p) => p.file, render: (p) => <div><b className="title">{p.title || p.file}</b><div className="sub mono">{p.file}</div></div> },
+      { key: 'in', header: 'Linked from (content)', sort: (p) => p.inbound, csv: (p) => String(p.inbound), render: (p) => <div><b>{p.inbound}</b>{p.inboundFrom.length > 0 && <div className="sub">{p.inboundFrom.slice(0, 4).join(', ')}{p.inbound > 4 ? '…' : ''}</div>}</div> },
+      { key: 'out', header: 'Links out', sort: (p) => p.linksOut, csv: (p) => String(p.linksOut), align: 'right', hideBelow: 900, render: (p) => <span className="sub">{p.linksOut}</span> },
+    ]} empty={<EmptyState icon="check" text="No pages here" />} />
+    <p className="muted" style={{ fontSize: 12, padding: '0 16px 14px', margin: 0 }}>Counts links inside page content (the menu and footer are excluded, since they link everywhere). Suggestions for new links come in a later step and are always reviewed by a person; Studio never inserts links into approved text.</p>
+  </section>;
+}
+
+function Schema({ a }: { a: AuditV2 }) {
+  const rows = a.pages;
+  return <section className="card">
+    <DataTable id="seo-schema" rows={rows} total={rows.length} rowKey={(p) => p.file} csvName="afcd-structured-data" columns={[
+      { key: 'page', header: 'Page', sort: (p) => p.file, csv: (p) => p.file, render: (p) => <div><b className="title">{p.title || p.file}</b><div className="sub mono">{p.file}</div></div> },
+      { key: 'types', header: 'Structured data found', sort: (p) => p.schema.join(','), csv: (p) => p.schema.join('; '), render: (p) => p.schema.length ? <div className="pills">{p.schema.map((t, i) => <span key={i} className="pill mono">{t}</span>)}</div> : <span className="muted">None</span> },
+      { key: 'err', header: 'Valid', sort: (p) => p.schemaErrors.length, csv: (p) => (p.schemaErrors.length ? 'errors' : 'ok'), render: (p) => p.schemaErrors.length ? <span className="sev" style={{ ['--c' as string]: SEV.high.c }}>Cannot be read</span> : <span className="dt-state"><span className="dot" style={{ ['--c' as string]: '#16a34a' }} />OK</span> },
+    ]} empty={<EmptyState icon="layers" text="No pages" />} />
+    <p className="muted" style={{ fontSize: 12, padding: '0 16px 14px', margin: 0 }}>Read from the built pages: Organization and WebSite on the homepage, breadcrumbs on inner pages. Test a public page with Google’s <a href="https://search.google.com/test/rich-results" target="_blank" rel="noopener">Rich Results Test</a>. Structured data can help search engines understand a page; it does not guarantee rich results.</p>
+  </section>;
+}
+
+function SearchConsole() {
+  return <section className="card" style={{ padding: 24 }}>
+    <div className="seo-gsc-off" style={{ margin: 0 }}><Icon n="globe" /><div><b>Not connected</b><small>No Google data is shown anywhere until a real connection exists. Nothing is estimated.</small></div></div>
+    <h3 style={{ margin: '20px 0 8px', fontSize: 15 }}>What connecting needs</h3>
+    <ol className="seo-steps">
+      <li><b>Studio online at a fixed https address.</b> Google sends people back to Studio after they authorise it, which cannot work while Studio only runs on this computer.</li>
+      <li><b>A Google Cloud OAuth client</b> created by AFCD (client ID and secret), with the Search Console API enabled. The secret is stored on the server, never in the browser.</li>
+      <li><b>An administrator authorises read-only access</b> (scope: Search Console read-only), then chooses the verified afcdfoundation.org property.</li>
+    </ol>
+    <p className="muted" style={{ fontSize: 12.5 }}>Once connected, Studio will import clicks, impressions, click-through rate and average position by page, query, country and device within Google’s API limits. Search Console data is sampled and privacy-filtered, so it never covers every query. URL Inspection reports Google’s last known index status; it is not a live test.</p>
+  </section>;
 }
 
 type PageRow = { file: string; defaults: { title: string; description: string; noindex: boolean } | null; override: null | { id: string; status: string; title: string; description: string; noindex: boolean; publishedRevisionId: string | null; updatedAt: string }; orphan?: boolean };

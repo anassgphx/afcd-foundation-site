@@ -10,7 +10,8 @@ import { articles, events, media, opportunities, pages, projects, reviewComments
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
-import { auditSite } from './audit.ts';
+import { runBuildAudit, RULES as AUDIT_RULES, SEVERITY_ORDER } from './engine.ts';
+import { seoIssues, users } from '../../db/schema.ts';
 
 type Status = typeof seoOverrides.$inferSelect['status'];
 const FILE = /^[a-z0-9][a-z0-9-]*\.html$/;
@@ -38,23 +39,57 @@ export async function templateFiles(db: DB, cfg: Config) {
   return readdirSync(resolve(cfg.siteRoot, 'src/pages')).filter((f) => FILE.test(f) && !own.has(f)).sort();
 }
 
+/** Runs a build audit, records it, and updates issue tracking: new findings open, findings no longer detected are
+ *  resolved (verified by this audit), reviewed ones stay reviewed while still detected. Critical issues cannot be
+ *  marked reviewed, and no status changes a score: scores come only from what the audit finds. */
 export async function runAudit(db: DB, cfg: Config, actor: Actor) {
-  const result = auditSite(cfg.siteRoot);
+  const a = runBuildAudit(cfg.siteRoot);
   const own = await owners(db, cfg);
-  const pagesOut = result.pages.map((p) => ({ ...p, owner: own.get(p.file) ?? { kind: 'template', label: 'Template page' } }));
-  const [row] = await db.insert(seoAudits).values({ result: { ...result, pages: pagesOut } as unknown as Record<string, unknown>, createdBy: actor?.id ?? null }).returning();
-  // keep the last 20 audits
-  const old = await db.select({ id: seoAudits.id }).from(seoAudits).orderBy(desc(seoAudits.createdAt)).offset(20);
+  const now = new Date(a.at);
+  const existing = await db.select().from(seoIssues);
+  const key = (code: string, file: string) => `${code}|${file}`;
+  const found = new Set(a.findings.map((f) => key(f.code, f.file)));
+  for (const f of a.findings) {
+    const cur = existing.find((e) => e.code === f.code && e.file === f.file);
+    if (!cur) await db.insert(seoIssues).values({ code: f.code, file: f.file, severity: f.severity, category: f.category, evidence: f.evidence, firstSeen: now, lastSeen: now });
+    else await db.update(seoIssues).set({ severity: f.severity, category: f.category, evidence: f.evidence, lastSeen: now, ...(cur.status === 'resolved' ? { status: 'open' as const, resolvedAt: null } : {}) }).where(eq(seoIssues.id, cur.id));
+  }
+  for (const e of existing) if (e.status !== 'resolved' && !found.has(key(e.code, e.file))) await db.update(seoIssues).set({ status: 'resolved', resolvedAt: now }).where(eq(seoIssues.id, e.id));
+  const pagesOut = a.pages.map((p) => ({ file: p.file, url: p.url, title: p.title, description: p.description, words: p.words, inSitemap: p.inSitemap, robots: p.robots, canonical: p.canonical, canonicalOk: p.canonical === p.url, lang: p.lang,
+    inbound: p.inbound.length, inboundFrom: p.inbound.slice(0, 12), linksOut: p.linksOut.length, schema: p.schema.types, schemaErrors: p.schema.errors, h1: p.h1[0] ?? '', owner: own.get(p.file) ?? { kind: 'template', label: 'Template page' },
+    score: Math.max(0, 100 - a.findings.filter((f) => f.file === p.file).reduce((n, f) => n + ({ critical: 40, high: 20, medium: 8, low: 3, info: 0 } as const)[f.severity], 0)) }));
+  const summary = { kind: a.kind, at: a.at, production: a.production, scores: a.scores, counts: a.counts, pages: pagesOut, score: a.scores.overall };
+  const [row] = await db.insert(seoAudits).values({ result: summary as unknown as Record<string, unknown>, createdBy: actor?.id ?? null }).returning();
+  const old = await db.select({ id: seoAudits.id }).from(seoAudits).orderBy(desc(seoAudits.createdAt)).offset(30);
   for (const o of old) await db.delete(seoAudits).where(eq(seoAudits.id, o.id));
-  return { id: row.id, ...result, pages: pagesOut };
+  await audit(db, actor, 'seo.audit', { type: 'seo' }, `Build audit: ${a.counts.critical} critical, ${a.counts.high} high, ${a.counts.medium} medium`);
+  return { id: row.id, ...summary, findings: a.findings };
 }
 export async function lastAudit(db: DB) {
   const [r] = await db.select().from(seoAudits).orderBy(desc(seoAudits.createdAt)).limit(1);
   return r ? { id: r.id, ...(r.result as object) } : null;
 }
 export async function auditHistory(db: DB) {
-  const rows = await db.select().from(seoAudits).orderBy(desc(seoAudits.createdAt)).limit(20);
-  return rows.map((r) => { const x = r.result as { score: number; counts: { errors: number; warnings: number } }; return { at: r.createdAt, score: x.score, ...x.counts }; });
+  const rows = await db.select().from(seoAudits).orderBy(desc(seoAudits.createdAt)).limit(30);
+  return rows.map((r) => { const x = r.result as { score: number; scores?: Record<string, number>; counts?: Record<string, number>; errors?: number; warnings?: number };
+    return { at: r.createdAt, score: x.score, scores: x.scores ?? null, counts: x.counts ?? { high: (x as { errors?: number }).errors ?? 0, low: (x as { warnings?: number }).warnings ?? 0 } }; });
+}
+
+/** Tracked issues with their rule texts and the editor that fixes them. */
+export async function listIssues(db: DB, cfg: Config) {
+  const own = await owners(db, cfg);
+  const rows = await db.select({ i: seoIssues, reviewer: users.name }).from(seoIssues).leftJoin(users, eq(users.id, seoIssues.reviewedBy));
+  return rows.map(({ i, reviewer }) => ({ ...i, reviewer, rule: AUDIT_RULES[i.code] ?? null, owner: own.get(i.file) ?? (i.file.endsWith('.html') ? { kind: 'template', label: 'Template page' } : { kind: 'site', label: 'Whole site' }) }))
+    .sort((a, b) => SEVERITY_ORDER.indexOf(a.severity as never) - SEVERITY_ORDER.indexOf(b.severity as never) || a.file.localeCompare(b.file));
+}
+
+export async function reviewIssue(db: DB, actor: NonNullable<Actor>, id: string, body: { reviewed: boolean; note?: string }) {
+  const [i] = await db.select().from(seoIssues).where(eq(seoIssues.id, id));
+  if (!i) throw new AppError(404, 'Issue not found.');
+  if (i.status === 'resolved') throw new AppError(409, 'This issue is already resolved by the last audit.');
+  if (body.reviewed && i.severity === 'critical') throw new AppError(409, 'Critical issues cannot be set aside. Fix them; the next audit marks them resolved.');
+  await db.update(seoIssues).set({ status: body.reviewed ? 'reviewed' : 'open', reviewedBy: body.reviewed ? actor.id : null, note: (body.note ?? i.note).slice(0, 500) }).where(eq(seoIssues.id, id));
+  await audit(db, actor, body.reviewed ? 'seo.issue_reviewed' : 'seo.issue_reopened', { type: 'seo', id }, `${i.code} on ${i.file}`);
 }
 
 // ---------------------------------------------------------------- Overrides

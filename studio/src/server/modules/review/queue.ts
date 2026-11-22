@@ -9,6 +9,7 @@ import type { DB } from '../../db/client.ts';
 import * as t from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 import { can, type Role } from '../../rbac.ts';
+import { TEXT_PAGES } from '../home/service.ts';
 
 const ACTIVE = ['in_review', 'approved', 'changes_requested'] as const;
 type Perms = { read: string; approve: string; publish: string };
@@ -26,7 +27,7 @@ export const RECORDS: RecordSrc[] = [
   R('opportunity', 'Opportunity', 'opportunity', t.opportunities, t.opportunities.title, t.opportunityRevisions, 'opportunityId', (id) => `/studio/opportunities/${id}`, (id) => `/opportunities/${id}`),
   R('partner', 'Partner', 'partner', t.partners, t.partners.name, t.partnerRevisions, 'partnerId', (id) => `/studio/partners/${id}`, (id) => `/partners/${id}`),
   R('page', 'Page', 'page', t.pages, t.pages.title, t.pageRevisions, 'pageId', (id) => `/studio/pages/${id}`, (id) => `/pages/${id}`),
-  R('homepage', 'Homepage', 'page', t.pageContents, t.pageContents.id, t.pageContentRevisions, 'contentId', () => '/studio/home', () => '/home'),
+  R('homepage', 'Homepage', 'page', t.pageContents, t.pageContents.file, t.pageContentRevisions, 'contentId', () => '/studio/home', () => '/home'),
   R('seo', 'SEO settings', 'seo', t.seoOverrides, t.seoOverrides.file, t.seoRevisions, 'overrideId', () => '/studio/seo/pages', (id) => `/seo/overrides/${id}`),
 ];
 /** Draft/published settings kept in seo_settings rows (translations, menus, structured data). */
@@ -62,7 +63,12 @@ export async function queue(db: DB, user: { id: string; role: Role }) {
     if (!can(role, s.perm.read as never)) continue;
     const rows = await db.select({ id: s.table.id, title: s.title, status: s.table.status, submittedBy: s.table.submittedBy, updatedAt: s.table.updatedAt, pub: s.table.publishedRevisionId })
       .from(s.table).where(inArray(s.table.status, [...ACTIVE]));
-    for (const r of rows) push(s, { ...r, title: s.type === 'homepage' ? 'Homepage changes' : String(r.title ?? ''), live: !!r.pub }, s.href(r.id), s.api(r.id));
+    for (const r of rows) {
+      // page_contents rows are the Studio-edited pages (homepage, contact page): each links to its own editor
+      const tp = s.type === 'homepage' ? TEXT_PAGES[String(r.title)] : undefined;
+      if (tp) push({ ...s, label: tp.label }, { ...r, title: `${tp.label} changes`, live: !!r.pub }, tp.href, tp.api);
+      else push(s, { ...r, title: String(r.title ?? ''), live: !!r.pub }, s.href(r.id), s.api(r.id));
+    }
   }
   const settings = await db.select().from(t.seoSettings).where(inArray(t.seoSettings.key, SETTINGS.map((x) => x.key)));
   for (const row of settings) {

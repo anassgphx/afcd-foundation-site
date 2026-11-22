@@ -9,9 +9,11 @@ import { MediaPicker, type MediaItem } from './Media.tsx';
 import { DesignFields, FieldEditor, type BlockDef, type Design } from './Builder.tsx';
 import { Loading } from './Dashboard.tsx';
 
-type FieldDef = { key: string; type: 'text' | 'split' | 'rich' | 'link' | 'tail' | 'image'; section: string; sectionId: string | null; label: string; default: any };
+type FieldDef = { key: string; type: 'text' | 'split' | 'rich' | 'link' | 'tail' | 'image' | 'stories'; section: string; sectionId: string | null; label: string; default: any };
 type Entry = { kind: 'section'; id: string; hidden: boolean } | { kind: 'block'; id: string; type: string; v: number; hidden: boolean; props: Record<string, any>; design?: Design };
-type Data = { fields: FieldDef[]; siteSections: { id: string; label: string }[]; layout: Entry[]; catalog: BlockDef[]; media: MediaItem[]; problems: string[];
+type PageInfo = { file: string; label: string; noun: string; layout: boolean };
+const HOME_PAGE: PageInfo = { file: 'index.html', label: 'Homepage', noun: 'homepage', layout: true };
+type Data = { page?: PageInfo; fields: FieldDef[]; siteSections: { id: string; label: string }[]; layout: Entry[]; catalog: BlockDef[]; media: MediaItem[]; problems: string[];
   content: null | { id: string; status: string; values: Record<string, any>; layout: Entry[] | null; publishedRevisionId: string | null; publishedAt: string | null; updatedAt: string };
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] } };
 type State = { values: Record<string, any>; layout: Entry[] };
@@ -21,7 +23,8 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const rid = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (x) => (x % 36).toString(36)).join('') + Date.now().toString(36).slice(-4);
 const SECTION_ICON: Record<string, string> = { hero: 'image', 'who-we-are': 'users', purpose: 'heart', pillars: 'layers', projects: 'folder', impact: 'dash', news: 'log', events: 'calendar', partners: 'partner', 'get-involved': 'send' };
 
-export function HomeEditor() {
+/** `path` is the page's API ('/home', '/page-text/contact.html'); pages without a layout only edit their marked text. */
+export function HomeEditor({ path = '/home' }: { path?: string }) {
   const can = useCan(); const me = useMe(); const toast = useToast();
   const [d, setD] = useState<Data | null>(null);
   const [st, setSt] = useState<State>({ values: {}, layout: [] });
@@ -49,12 +52,13 @@ export function HomeEditor() {
   useEffect(() => { const el = box.current; if (!el) return; const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height })); ro.observe(el); return () => ro.disconnect(); });
 
   const load = useCallback(async () => {
-    const [x, cat] = await Promise.all([api<Data>('/home'), api<{ links: string[] }>('/pages/catalog').catch(() => ({ links: [] }))]);
+    const [x, cat] = await Promise.all([api<Data>(path), api<{ links: string[] }>('/pages/catalog').catch(() => ({ links: [] }))]);
     setD(x); setLinks(cat.links); setSt({ values: x.content?.values ?? {}, layout: x.layout }); setPast([]); setFuture([]);
     setMedia(Object.fromEntries(x.media.map((m) => [m.id, m]))); base.current = x.content?.updatedAt ?? null; setSave('saved');
-  }, []);
+  }, [path]);
   useEffect(() => { load().catch((e) => toast(e.message, true)); }, [load]);
 
+  const P = d?.page ?? HOME_PAGE; const layoutOn = P.layout;
   const status = d?.content?.status ?? 'draft'; const live = !!d?.content?.publishedRevisionId;
   const editable = !!d && can('page.update') && status !== 'in_review';
   const defs = useMemo(() => new Map((d?.catalog ?? []).map((b) => [b.type, b])), [d]);
@@ -79,9 +83,11 @@ export function HomeEditor() {
    *  publishes; every action edits the draft. */
   const actionsFor = (id: string): Act[] => {
     const i = st.layout.findIndex((e) => e.id === id); const e = st.layout[i]; if (!e) return [];
-    const site = e.kind === 'section'; const off = !editable ? 'Read-only: this version is in review or you cannot edit the homepage.' : undefined;
+    const site = e.kind === 'section'; const off = !editable ? `Read-only: this version is in review or you cannot edit the ${P.noun}.` : undefined;
+    const editAct: Act = { id: 'edit', label: 'Edit', icon: 'edit', kbd: '↵', run: () => { setSel(id); setTimeout(() => document.querySelector<HTMLElement>('.b-right input, .b-right textarea, .b-right select')?.focus(), 80); } };
+    if (!layoutOn) return [editAct];   // this page's sections stay as written: only their text is edited
     return [
-      { id: 'edit', label: 'Edit', icon: 'edit', kbd: '↵', run: () => { setSel(id); setTimeout(() => document.querySelector<HTMLElement>('.b-right input, .b-right textarea, .b-right select')?.focus(), 80); } },
+      editAct,
       { id: 'above', label: 'Add section above', icon: 'plus', off, run: () => setDialog({ kind: 'library', at: i }) },
       { id: 'below', label: 'Add section below', icon: 'plus', off, run: () => setDialog({ kind: 'library', at: i + 1 }) },
       { id: 'dup', label: 'Duplicate', icon: 'copy', kbd: '⌘D', off: off ?? (site ? 'Site sections are built from the page code and cannot be copied. Add a section from the library instead.' : undefined), run: () => duplicate(id) },
@@ -100,7 +106,7 @@ export function HomeEditor() {
   // ---- live canvas: the real page with the unsaved working copy (debounced)
   useEffect(() => {
     if (!d) return;
-    const t = setTimeout(() => { post<{ html: string }>('/home/canvas', { values: st.values, layout: st.layout }).then((r) => setHtml(r.html)).catch((e) => setErrs([e.message])); }, 250);
+    const t = setTimeout(() => { post<{ html: string }>(`${path}/canvas`, { values: st.values, layout: st.layout }).then((r) => setHtml(r.html)).catch((e) => setErrs([e.message])); }, 250);
     return () => clearTimeout(t);
   }, [st, d]);
   const wire = useCallback(() => {
@@ -165,13 +171,13 @@ export function HomeEditor() {
   const doSave = useCallback(async (quiet = false): Promise<boolean> => {
     setSave('saving'); setErrs([]);
     try {
-      const r = await put<{ updatedAt: string; problems: string[] }>('/home', { values: st.values, layout: st.layout, baseUpdatedAt: base.current });
+      const r = await put<{ updatedAt: string; problems: string[] }>(path, { values: st.values, layout: st.layout, baseUpdatedAt: base.current });
       base.current = r.updatedAt; setSave('saved');
-      const fresh = await api<Data>('/home'); setD(fresh); base.current = fresh.content?.updatedAt ?? null;
-      if (!quiet) toast(live ? 'Draft saved. The live homepage is unchanged until you publish.' : 'Draft saved');
+      const fresh = await api<Data>(path); setD(fresh); base.current = fresh.content?.updatedAt ?? null;
+      if (!quiet) toast(live ? `Draft saved. The live ${P.noun} is unchanged until you publish.` : 'Draft saved');
       return true;
     } catch (e) { setSave('failed'); showErr(e); return false; }
-  }, [st, live]);
+  }, [st, live, path, P.noun]);
   useEffect(() => {
     if (save !== 'unsaved' || !editable || status === 'approved') return;
     const t = setTimeout(() => { doSave(true); }, 3000);
@@ -199,14 +205,14 @@ export function HomeEditor() {
   async function act(action: string, extra: Record<string, unknown> = {}) {
     if (save !== 'saved' && !(await doSave(true))) return;
     setBusy(action); setErrs([]);
-    try { await post('/home/transition', { action, ...extra }); await load(); setDialog(null); setComment(''); toast({ submit: 'Sent for review', approve: 'Approved', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft' }[action] ?? 'Done'); }
+    try { await post(`${path}/transition`, { action, ...extra }); await load(); setDialog(null); setComment(''); toast({ submit: 'Sent for review', approve: 'Approved', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft' }[action] ?? 'Done'); }
     catch (e) { setDialog(null); showErr(e); } finally { setBusy(''); }
   }
   async function deliver(kind: 'publish' | 'unpublish') {
-    setBusy(kind); try { await post(`/home/${kind}`); await load(); setDialog(null); toast(kind === 'publish' ? 'Published and verified on the homepage' : 'The homepage shows its original version again'); }
+    setBusy(kind); try { await post(`${path}/${kind}`); await load(); setDialog(null); toast(kind === 'publish' ? `Published and verified on the ${P.noun}` : `The ${P.noun} shows its original version again`); }
     catch (e) { setDialog(null); showErr(e); } finally { setBusy(''); }
   }
-  async function preview() { if (save !== 'saved' && !(await doSave(true))) return; setBusy('preview'); try { const r = await post<{ url: string }>('/home/preview'); setUrl(r.url); setDialog({ kind: 'preview' }); } catch (e) { showErr(e); } finally { setBusy(''); } }
+  async function preview() { if (save !== 'saved' && !(await doSave(true))) return; setBusy('preview'); try { const r = await post<{ url: string }>(`${path}/preview`); setUrl(r.url); setDialog({ kind: 'preview' }); } catch (e) { showErr(e); } finally { setBusy(''); } }
 
   actionsRef.current = actionsFor; runActRef.current = runAct; labelRef.current = (id) => { const e = st.layout.find((x) => x.id === id); return e ? label(e) : id; };
   if (!d) return <Loading />;
@@ -222,12 +228,12 @@ export function HomeEditor() {
     : { text: 'Ready for review', tone: 'ok' };
   const scale = Math.min(1, Math.max(0.1, (size.w - 8) / device)); const canvasH = Math.max(400, size.h - 28); scaleRef.current = scale;
   const selEntry = st.layout.find((e) => e.id === sel) ?? null;
-  const nChanges = Object.keys(st.values).length + (same(st.layout, d.siteSections.map((s) => ({ kind: 'section', id: s.id, hidden: false }))) ? 0 : 1);
+  const nChanges = Object.keys(st.values).length + (!layoutOn || same(st.layout, d.siteSections.map((s) => ({ kind: 'section', id: s.id, hidden: false }))) ? 0 : 1);
   const saveLabel = { saved: 'All changes saved', saving: 'Saving…', unsaved: 'Unsaved changes', failed: 'Save failed' }[save];
 
   return <div className="builder">
     <div className="b-bar">
-      <div className="b-title"><b>Homepage</b><span className="mono muted">index.html</span></div>
+      <div className="b-title"><b>{P.label}</b><span className="mono muted">{P.file}</span></div>
       <span className="pills">{live && status !== 'published' && <LiveBadge />}{d.content ? <Badge s={status} /> : <span className="pill">Original</span>}</span>
       <span className={`muted hp-save is-${save}`} role="status" style={{ fontSize: 12 }}>{saveLabel}</span>
       {chip && <span className={`b-chip is-${chip.tone}`} title={chip.tip}>{chip.text}</span>}
@@ -244,46 +250,46 @@ export function HomeEditor() {
       {d.content && ['in_review', 'approved'].includes(status) && can('page.update') && <button className="btn btn-ghost" onClick={() => act('withdraw')}><Icon n="undo" />Withdraw</button>}
     </div>
     {errs.length > 0 && <div className="notice n-warn b-notice" role="alert"><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErrs([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
-    {status === 'changes_requested' && <div className="notice n-warn b-notice" role="status"><div><b>Changes requested.</b> Update the homepage, then submit it for review again.{d.history.comments.filter((x) => x.kind === 'request_changes' && x.body).slice(-1).map((x) => <q key={x.id} style={{ marginLeft: 6 }}>{x.body}</q>)}</div></div>}
+    {status === 'changes_requested' && <div className="notice n-warn b-notice" role="status"><div><b>Changes requested.</b> Update the {P.noun}, then submit it for review again.{d.history.comments.filter((x) => x.kind === 'request_changes' && x.body).slice(-1).map((x) => <q key={x.id} style={{ marginLeft: 6 }}>{x.body}</q>)}</div></div>}
 
     <div className="b-body">
       <aside className="b-left">
         <div className="between" style={{ padding: '10px 12px 6px' }}><b style={{ fontSize: 13 }}>Sections</b>
-          {editable && <button className="btn btn-sm btn-primary" onClick={() => setDialog({ kind: 'library' })}><Icon n="plus" /><span className="b-add-t">Add section</span></button>}</div>
-        <ol className="b-scroll b-layers" aria-label="Homepage sections">{st.layout.map((e, i) => (
-          <li key={e.id} className={`b-layer${sel === e.id ? ' on' : ''}${e.hidden ? ' off' : ''}`} draggable={editable}
+          {editable && layoutOn && <button className="btn btn-sm btn-primary" onClick={() => setDialog({ kind: 'library' })}><Icon n="plus" /><span className="b-add-t">Add section</span></button>}</div>
+        <ol className="b-scroll b-layers" aria-label={`${P.label} sections`}>{st.layout.map((e, i) => (
+          <li key={e.id} className={`b-layer${sel === e.id ? ' on' : ''}${e.hidden ? ' off' : ''}`} draggable={editable && layoutOn}
             onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', String(i)); ev.dataTransfer.effectAllowed = 'move'; }}
-            onDragOver={(ev) => { if (editable) { ev.preventDefault(); ev.currentTarget.classList.add('drop'); } }} onDragLeave={(ev) => ev.currentTarget.classList.remove('drop')}
+            onDragOver={(ev) => { if (editable && layoutOn) { ev.preventDefault(); ev.currentTarget.classList.add('drop'); } }} onDragLeave={(ev) => ev.currentTarget.classList.remove('drop')}
             onDrop={(ev) => { ev.preventDefault(); ev.currentTarget.classList.remove('drop'); move(Number(ev.dataTransfer.getData('text/plain')), i); }}>
             <button className="b-layer-main" data-tip={label(e)} onClick={() => { if (sel === e.id) reveal(); else setSel(e.id); }} aria-current={sel === e.id}>
               <span className="b-grip" aria-hidden="true">⋮⋮</span>
               <span className="hp-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
               <Icon n={e.kind === 'section' ? SECTION_ICON[e.id] ?? 'layers' : 'plus'} width={15} height={15} />
-              <span className="min-w-0"><b>{label(e)}</b><small>{e.kind === 'section' ? 'Homepage section' : 'Added section'}{e.hidden ? ' · hidden' : ''}{e.kind === 'section' && d.fields.some((f) => f.sectionId === e.id && f.key in st.values) ? ' · edited' : ''}</small></span>
+              <span className="min-w-0"><b>{label(e)}</b><small>{e.kind === 'section' ? `${P.label} section` : 'Added section'}{e.hidden ? ' · hidden' : ''}{e.kind === 'section' && d.fields.some((f) => f.sectionId === e.id && f.key in st.values) ? ' · edited' : ''}</small></span>
             </button>
-            <span className="b-layer-act">
+            {layoutOn && <span className="b-layer-act">
               <button className="b-more" aria-label={`More actions for ${label(e)}`} aria-haspopup="menu" aria-expanded={menu?.id === e.id}
                 onClick={(ev) => { const r = ev.currentTarget.getBoundingClientRect(); setMenu(menu?.id === e.id ? null : { id: e.id, x: r.right, y: r.bottom + 4 }); }}>⋯</button>
-            </span>
+            </span>}
           </li>))}
         </ol>
       </aside>
 
       <div className="b-canvas" ref={box} onClick={() => setSel(null)}>
         <div className="b-device" style={{ width: device * scale, height: canvasH }} onClick={(ev) => ev.stopPropagation()}>
-          <iframe ref={frame} title="Homepage canvas" srcDoc={html} onLoad={onFrameLoad} style={{ width: device, height: canvasH / scale, zoom: scale }} />
+          <iframe ref={frame} title={`${P.label} canvas`} srcDoc={html} onLoad={onFrameLoad} style={{ width: device, height: canvasH / scale, zoom: scale }} />
         </div>
         <span className="b-zoom">{device}px · {Math.round(scale * 100)}% · click any text or photo to edit it</span>
       </div>
 
       <aside className="b-right">
         {!selEntry ? <div className="b-scroll" style={{ padding: 16 }}><p className="muted">Select a section in the list or on the page.</p>
-          <p className="muted" style={{ fontSize: 12.5 }}>{nChanges ? `${nChanges} change${nChanges === 1 ? '' : 's'} from the original homepage.` : 'No changes from the original homepage.'}</p>
-          {live && can('page.publish') && <button className="btn btn-ghost btn-danger btn-sm" onClick={() => setDialog({ kind: 'unpublish' })}>Show the original homepage</button>}</div>
+          <p className="muted" style={{ fontSize: 12.5 }}>{nChanges ? `${nChanges} change${nChanges === 1 ? '' : 's'} from the original ${P.noun}.` : `No changes from the original ${P.noun}.`}</p>
+          {live && can('page.publish') && <button className="btn btn-ghost btn-danger btn-sm" onClick={() => setDialog({ kind: 'unpublish' })}>Show the original {P.noun}</button>}</div>
         : <fieldset className="b-scroll b-insp stack" disabled={!editable}>
-          <div><small className="muted">{selEntry.kind === 'section' ? 'Homepage section' : defs.get(selEntry.type)?.group}</small><h3 style={{ margin: '2px 0 0', fontSize: 16 }}>{label(selEntry)}</h3>
+          <div><small className="muted">{selEntry.kind === 'section' ? `${P.label} section` : defs.get(selEntry.type)?.group}</small><h3 style={{ margin: '2px 0 0', fontSize: 16 }}>{label(selEntry)}</h3>
             {selEntry.kind === 'block' && <p className="muted" style={{ fontSize: 12.5, margin: '4px 0 0' }}>{defs.get(selEntry.type)?.description}</p>}</div>
-          <label className="check"><input type="checkbox" checked={!selEntry.hidden} onChange={() => toggle(selEntry.id)} /><span>Show on the homepage</span></label>
+          {layoutOn && <label className="check"><input type="checkbox" checked={!selEntry.hidden} onChange={() => toggle(selEntry.id)} /><span>Show on the homepage</span></label>}
           {selEntry.kind === 'section'
             ? <SectionFields fields={d.fields.filter((f) => f.sectionId === selEntry.id)} values={st.values} media={media} editable={editable} onChange={setField} onPickImage={(key) => setDialog({ kind: 'image', key })} />
             : <>
@@ -297,16 +303,19 @@ export function HomeEditor() {
     {dialog?.kind === 'library' && <SectionLibrary catalog={d.catalog} onPick={(t) => addBlock(t, dialog.at)} onClose={() => setDialog(null)} />}
     {menu && <ActionMenu x={menu.x} y={menu.y} acts={actionsFor(menu.id)} onRun={(a) => { setMenu(null); runAct(menu.id, a); }} onClose={() => setMenu(null)} />}
     {dialog?.kind === 'image' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { const f = d.fields.find((x) => x.key === dialog.key)!; if (m[0]) { setMedia((x) => ({ ...x, [m[0].id]: m[0] })); setField(f, { mediaId: m[0].id }); } setDialog(null); }} />}
-    {dialog?.kind === 'preview' && <Modal wide title="Preview · built by the real website build" onClose={() => setDialog(null)}><div className="preview-wrap"><iframe title="Homepage preview" src={url} style={{ width: Math.min(device, window.innerWidth - 80) }} /></div></Modal>}
-    {dialog?.kind === 'history' && <Modal title="Homepage history" onClose={() => setDialog(null)}><div className="modal-b">
+    {dialog?.kind === 'preview' && <Modal wide title="Preview · built by the real website build" onClose={() => setDialog(null)}><div className="preview-wrap"><iframe title={`${P.label} preview`} src={url} style={{ width: Math.min(device, window.innerWidth - 80) }} /></div></Modal>}
+    {dialog?.kind === 'history' && <Modal title={`${P.label} history`} onClose={() => setDialog(null)}><div className="modal-b">
       {!d.content ? <p className="muted">No versions yet.</p> : <ol className="timeline">{d.history.revisions.map((r) => <li key={r.id}><b>Revision {r.number} · {r.reason}{r.id === d.content!.publishedRevisionId ? ' · live' : ''}</b><small>{fmtDate(r.createdAt)}</small>
-        {editable && <button className="btn btn-sm btn-ghost" style={{ padding: 0, height: 'auto' }} onClick={async () => { if (confirm(`Copy revision ${r.number} into a new draft? The live homepage does not change.`)) { try { await post(`/home/revisions/${r.id}/restore`); await load(); setDialog(null); toast('Revision restored as a draft'); } catch (e) { showErr(e); } } }}>Restore as a new draft</button>}</li>)}
+        {editable && <button className="btn btn-sm btn-ghost" style={{ padding: 0, height: 'auto' }} onClick={async () => { if (confirm(`Copy revision ${r.number} into a new draft? The live ${P.noun} does not change.`)) { try { await post(`${path}/revisions/${r.id}/restore`); await load(); setDialog(null); toast('Revision restored as a draft'); } catch (e) { showErr(e); } } }}>Restore as a new draft</button>}</li>)}
         {d.history.comments.filter((x) => x.body).map((x) => <li key={x.id}><b>{x.kind.replace('_', ' ')}</b><q>{x.body}</q><small>{fmtDate(x.createdAt)}</small></li>)}</ol>}</div></Modal>}
     {dialog?.kind === 'changes' && <Modal size="sm" title="Request changes" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={!comment.trim()} onClick={() => act('request_changes', { comment })}>Send to author</button></>}><div className="modal-b"><textarea className="textarea" autoFocus aria-label="What needs to change" value={comment} onChange={(e) => setComment(e.target.value)} /></div></Modal>}
-    {dialog?.kind === 'publish' && <Modal size="sm" title="Publish the homepage?" onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-ok" disabled={!!busy} onClick={() => deliver('publish')}><Icon n="rocket" />{busy ? 'Publishing and checking…' : 'Publish'}</button></>}><div className="modal-b"><p style={{ margin: 0 }}>Rebuilds <span className="mono">index.html</span> with the approved version and checks the result. Pushing to the hosted site is a separate, authorized step.</p></div></Modal>}
-    {dialog?.kind === 'unpublish' && <Modal size="sm" title="Show the original homepage?" onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={!!busy} onClick={() => deliver('unpublish')}>{busy ? 'Rebuilding…' : 'Show original'}</button></>}><div className="modal-b"><p style={{ margin: 0 }}>The homepage is rebuilt exactly as written in the website. Your changes stay here as a draft.</p></div></Modal>}
+    {dialog?.kind === 'publish' && <Modal size="sm" title={`Publish the ${P.noun}?`} onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-ok" disabled={!!busy} onClick={() => deliver('publish')}><Icon n="rocket" />{busy ? 'Publishing and checking…' : 'Publish'}</button></>}><div className="modal-b"><p style={{ margin: 0 }}>Rebuilds <span className="mono">{P.file}</span> with the approved version and checks the result. Pushing to the hosted site is a separate, authorized step.</p></div></Modal>}
+    {dialog?.kind === 'unpublish' && <Modal size="sm" title={`Show the original ${P.noun}?`} onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={!!busy} onClick={() => deliver('unpublish')}>{busy ? 'Rebuilding…' : 'Show original'}</button></>}><div className="modal-b"><p style={{ margin: 0 }}>The {P.noun} is rebuilt exactly as written in the website. Your changes stay here as a draft.</p></div></Modal>}
   </div>;
 }
+
+// same limits as the server (modules/home/service.ts HEAD_MAX) for the numbered section headers
+const HEAD_MAX: Record<string, number> = { num: 4, label: 60, meta: 60 };
 
 function SectionFields({ fields, values, media, editable, onChange, onPickImage }: { fields: FieldDef[]; values: Record<string, any>; media: Record<string, MediaItem>; editable: boolean; onChange: (f: FieldDef, v: any) => void; onPickImage: (key: string) => void }) {
   if (!fields.length) return <p className="muted" style={{ fontSize: 13 }}>This section’s content comes from Studio records or the website’s design, so there is nothing to type here. You can move or hide it.</p>;
@@ -321,12 +330,46 @@ function SectionFields({ fields, values, media, editable, onChange, onPickImage 
     else if (f.type === 'link') control = <><input className="input" maxLength={40} value={v.label} onChange={(e) => onChange(f, { ...v, label: e.target.value })} aria-label={`${f.label} text`} /><input className="input mono" maxLength={300} value={v.href} onChange={(e) => onChange(f, { ...v, href: e.target.value.trim() })} aria-label={`${f.label} link`} /></>;
     else if (f.type === 'image') { const m = v.mediaId ? media[v.mediaId] : null; control = <><div className="thumb" style={{ width: '100%' }}><img src={m ? m.url : '/studio/site/' + v.src} alt={m ? m.alt : v.alt} /></div>
       <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} disabled={!editable} onClick={() => onPickImage(f.key)}><Icon n="image" />Choose photo</button></>; }
+    else if (f.type === 'stories') control = <StoriesField value={v} editable={editable} onChange={(x) => onChange(f, x)} />;
     else if (f.type === 'rich' || String(v).length > 60) control = <textarea className="textarea" maxLength={f.type === 'rich' ? 700 : 300} value={v} onChange={(e) => onChange(f, e.target.value.replace(/\n/g, ' '))} aria-label={f.label} />;
-    else control = <input className="input" maxLength={f.key.endsWith('.value') ? 24 : 240} value={v} onChange={(e) => onChange(f, e.target.value)} aria-label={f.label} />;
+    else control = <input className="input" maxLength={HEAD_MAX[f.key.match(/\.head\.(num|label|meta)$/)?.[1] ?? ''] ?? (f.key.endsWith('.value') ? 24 : 240)} value={v} onChange={(e) => onChange(f, e.target.value)} aria-label={f.label} />;
     return <div key={f.key} data-field={f.key} className={`field${changed ? ' hp-changed' : ''}`}><span>{f.label}{changed && <em className="hp-dot">edited</em>}</span>{control}
       {f.type === 'rich' && <small>**Double stars** highlight words, as on the page.</small>}
+      {changed && f.type !== 'image' && f.type !== 'stories' && <small>The French and Arabic pages show this English text until it is translated on the Translations page.</small>}
       {changed && editable && <button type="button" className="btn btn-ghost btn-sm" style={{ padding: 0, height: 'auto', justifySelf: 'start' }} onClick={() => onChange(f, null)}>Reset to the original</button>}</div>;
   })}</>;
+}
+
+type Story = { quote: string; name: string; role: string; caption: string; sample?: boolean };
+const STORIES_MAX = 8;   // same limit as the server (modules/home/service.ts)
+/** Participant stories: one card per story, in carousel order. Add, edit, move and delete; at least one stays. */
+function StoriesField({ value, editable, onChange }: { value: Story[]; editable: boolean; onChange: (v: Story[]) => void }) {
+  const set = (i: number, patch: Partial<Story>) => onChange(value.map((s, j) => {
+    if (j !== i) return s;
+    const n = { ...s, ...patch };
+    if ('quote' in patch || 'name' in patch) delete n.sample;   // writing a real quote or name makes it a real story
+    return n;
+  }));
+  const move = (i: number, d: number) => { const l = [...value]; const [x] = l.splice(i, 1); l.splice(i + d, 0, x); onChange(l); };
+  const del = (i: number) => { if (confirm(`Delete story ${i + 1}${value[i].name ? ` (${value[i].name})` : ''} from the draft? Undo (⌘Z) brings it back.`)) onChange(value.filter((_s, j) => j !== i)); };
+  return <div className="stack" style={{ gap: 10 }}>
+    <small className="muted">The carousel shows these stories in this order. Its progress bars and the “01 / {String(value.length).padStart(2, '0')}” counter follow the list.</small>
+    {value.map((s, i) => <div key={i} className="card" style={{ padding: 10, display: 'grid', gap: 6 }}>
+      <div className="between"><b style={{ fontSize: 13 }}>Story {i + 1}{s.sample && <em className="hp-dot" style={{ marginLeft: 6 }}>sample</em>}</b>
+        <span style={{ display: 'flex', gap: 2 }}>
+          <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={!editable || i === 0} onClick={() => move(i, -1)} aria-label={`Move story ${i + 1} up`} title="Move up">↑</button>
+          <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={!editable || i === value.length - 1} onClick={() => move(i, 1)} aria-label={`Move story ${i + 1} down`} title="Move down">↓</button>
+          <button type="button" className="btn btn-ghost btn-sm btn-danger" disabled={!editable || value.length <= 1} onClick={() => del(i)} aria-label={`Delete story ${i + 1}`} title={value.length <= 1 ? 'Keep at least one story' : 'Delete'}>Delete</button>
+        </span></div>
+      {s.sample && <small className="muted">Sample text: replace it with a real participant’s words or delete this story before review.</small>}
+      <textarea className="textarea" maxLength={300} value={s.quote} onChange={(e) => set(i, { quote: e.target.value.replace(/\n/g, ' ') })} aria-label={`Story ${i + 1} quote`} placeholder="Quote" />
+      <input className="input" maxLength={80} value={s.name} onChange={(e) => set(i, { name: e.target.value })} aria-label={`Story ${i + 1} name`} placeholder="Name" />
+      <input className="input" maxLength={120} value={s.role} onChange={(e) => set(i, { role: e.target.value })} aria-label={`Story ${i + 1} programme and date`} placeholder="Programme · date (optional)" />
+      <input className="input" maxLength={80} value={s.caption} onChange={(e) => set(i, { caption: e.target.value })} aria-label={`Story ${i + 1} photo note`} placeholder="Photo note (optional)" />
+    </div>)}
+    <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} disabled={!editable || value.length >= STORIES_MAX} title={value.length >= STORIES_MAX ? `At most ${STORIES_MAX} stories` : undefined}
+      onClick={() => onChange([...value, { quote: '', name: '', role: '', caption: '' }])}><Icon n="plus" />Add story</button>
+  </div>;
 }
 
 type Act = { id: string; label: string; icon: string; kbd?: string; danger?: boolean; off?: string; run: () => void };

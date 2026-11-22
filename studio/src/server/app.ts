@@ -35,7 +35,7 @@ import { registerInboxRoutes } from './modules/inbox/routes.ts';
 import * as HM from './modules/home/service.ts';
 import * as WS from './modules/workspace/service.ts';
 import { overview as dashboardOverview } from './modules/workspace/overview.ts';
-import { readFields, SECTION_LABEL, siteSections } from './modules/home/fields.ts';
+import { fieldSections, readFields, SECTION_LABEL, siteSections } from './modules/home/fields.ts';
 import { currentLayout, validateLayout, HOME_BLOCKS } from './modules/home/layout.ts';
 import { homeCanvas } from './modules/home/render.ts';
 import { docMediaIds } from './modules/pages/render.ts';
@@ -485,37 +485,44 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   api.get('/overview', perm('dashboard.read'), async (c) => c.json(await dashboardOverview(db, requireUser(c))));
   api.get('/notifications', async (c) => { const u = requireUser(c); return c.json(await WS.notifications(db, u)); });
 
-  // ---------------------------------------------------------------- Homepage editing
-  api.get('/home', perm('page.read'), async (c) => {
-    const fields = readFields(cfg.siteRoot, HM.HOME);
-    const content = await HM.loadContent(db);
-    const ids = Object.values(content?.values ?? {}).flatMap((v) => (v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId] : []));
-    const mediaRows = ids.length ? await db.select().from(t.media).where(inArray(t.media.id, ids)) : [];
-    const layout = currentLayout(cfg.siteRoot, HM.HOME, content?.layout ?? null);
-    const blockIds = layout.flatMap((e) => (e.kind === 'block' ? docMediaIds({ blocks: [e] }) : []));
-    const extra = blockIds.length ? await db.select().from(t.media).where(inArray(t.media.id, blockIds)) : [];
-    return c.json({ fields, sections: SECTION_LABEL, siteSections: siteSections(cfg.siteRoot, HM.HOME), layout, content, media: [...mediaRows, ...extra].map(withUrl),
-      catalog: blockCatalog().filter((b) => HOME_BLOCKS.includes(b.type)),
-      problems: content ? await HM.contentProblems(db, cfg, content.values, content.layout) : [], history: content ? await HM.contentHistory(db, content.id) : { revisions: [], comments: [] } });
-  });
-  api.put('/home', perm('page.update'), async (c) => c.json(await HM.saveContent(db, cfg, actor(c), await c.req.json())));
-  // Live canvas of the unsaved working copy (no files written): the real page, composed by the same code as the build.
-  api.post('/home/canvas', perm('page.read'), bodyLimit({ maxSize: 512 * 1024 }), async (c) => {
-    const b = await c.req.json().catch(() => ({})) as { values?: unknown; layout?: unknown };
-    const values = HM.validateValues(readFields(cfg.siteRoot, HM.HOME), b.values ?? {});
-    const { layout } = validateLayout(cfg.siteRoot, HM.HOME, b.layout ?? currentLayout(cfg.siteRoot, HM.HOME, null));
-    return c.json({ html: await homeCanvas(db, cfg, HM.HOME, values, layout) });
-  });
-  api.post('/home/transition', async (c) => {
-    const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
-    if (!body.success || !HM.homeTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');
-    const u = requirePerm(c, HM.homeTransitionPerm(body.data.action)!);
-    return c.json(await HM.transitionContent(db, cfg, actor(c), u.role, body.data.action, { comment: body.data.comment }));
-  });
-  api.post('/home/publish', perm('page.publish'), async (c) => c.json(await publisher.publishHome(actor(c))));
-  api.post('/home/unpublish', perm('page.publish'), async (c) => c.json(await publisher.unpublishHome(actor(c))));
-  api.post('/home/preview', perm('page.read'), async (c) => { const r = await publisher.previewHome(); return c.json({ url: `/studio/preview/${r.token}/${r.file}` }); });
-  api.post('/home/revisions/:rev/restore', perm('page.update'), async (c) => { await HM.restoreContentRevision(db, cfg, actor(c), c.req.param('rev')); return c.json({ ok: true }); });
+  // ---------------------------------------------------------------- Homepage and contact page editing (marked text, review, publishing)
+  // Same endpoints for each page in HM.TEXT_PAGES: /home for the homepage (with its section layout), /page-text/contact.html.
+  const textPageRoutes = (prefix: string, file: string) => {
+    const page = HM.TEXT_PAGES[file];
+    api.get(prefix, perm('page.read'), async (c) => {
+      const fields = readFields(cfg.siteRoot, file);
+      const content = await HM.loadContent(db, file);
+      const ids = Object.values(content?.values ?? {}).flatMap((v) => (v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId] : []));
+      const mediaRows = ids.length ? await db.select().from(t.media).where(inArray(t.media.id, ids)) : [];
+      // a page without a layout lists its sections that have fields, in page order (selection only)
+      const sections = page.layout ? siteSections(cfg.siteRoot, file) : fieldSections(cfg.siteRoot, file);
+      const layout = page.layout ? currentLayout(cfg.siteRoot, file, content?.layout ?? null) : sections.map((x) => ({ kind: 'section' as const, id: x.id, hidden: false }));
+      const blockIds = layout.flatMap((e) => (e.kind === 'block' ? docMediaIds({ blocks: [e] }) : []));
+      const extra = blockIds.length ? await db.select().from(t.media).where(inArray(t.media.id, blockIds)) : [];
+      return c.json({ page: { file, ...page }, fields, sections: SECTION_LABEL, siteSections: sections, layout, content, media: [...mediaRows, ...extra].map(withUrl),
+        catalog: page.layout ? blockCatalog().filter((b) => HOME_BLOCKS.includes(b.type)) : [],
+        problems: content ? await HM.contentProblems(db, cfg, content.values, content.layout, file) : [], history: content ? await HM.contentHistory(db, content.id) : { revisions: [], comments: [] } });
+    });
+    api.put(prefix, perm('page.update'), async (c) => c.json(await HM.saveContent(db, cfg, actor(c), await c.req.json(), file)));
+    // Live canvas of the unsaved working copy (no files written): the real page, composed by the same code as the build.
+    api.post(`${prefix}/canvas`, perm('page.read'), bodyLimit({ maxSize: 512 * 1024 }), async (c) => {
+      const b = await c.req.json().catch(() => ({})) as { values?: unknown; layout?: unknown };
+      const values = HM.validateValues(readFields(cfg.siteRoot, file), b.values ?? {});
+      const layout = page.layout ? validateLayout(cfg.siteRoot, file, b.layout ?? currentLayout(cfg.siteRoot, file, null)).layout : null;
+      return c.json({ html: await homeCanvas(db, cfg, file, values, layout) });
+    });
+    api.post(`${prefix}/transition`, async (c) => {
+      const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
+      if (!body.success || !HM.homeTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');
+      const u = requirePerm(c, HM.homeTransitionPerm(body.data.action)!);
+      return c.json(await HM.transitionContent(db, cfg, actor(c), u.role, body.data.action, { comment: body.data.comment }, file));
+    });
+    api.post(`${prefix}/publish`, perm('page.publish'), async (c) => c.json(await publisher.publishHome(actor(c), file)));
+    api.post(`${prefix}/unpublish`, perm('page.publish'), async (c) => c.json(await publisher.unpublishHome(actor(c), file)));
+    api.post(`${prefix}/preview`, perm('page.read'), async (c) => { const r = await publisher.previewHome(file); return c.json({ url: `/studio/preview/${r.token}/${r.file}` }); });
+    api.post(`${prefix}/revisions/:rev/restore`, perm('page.update'), async (c) => { await HM.restoreContentRevision(db, cfg, actor(c), c.req.param('rev'), file); return c.json({ ok: true }); });
+  };
+  for (const [file, page] of Object.entries(HM.TEXT_PAGES)) textPageRoutes(page.api, file);
 
   // ---------------------------------------------------------------- Publishing jobs, audit, users
   api.get('/publish-jobs', perm('dashboard.read'), async (c) => c.json(await publisher.recentJobs(30)));

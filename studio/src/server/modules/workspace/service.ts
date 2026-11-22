@@ -4,6 +4,7 @@ import { and, count, desc, eq, gte, ilike, inArray, isNull, or, sql } from 'driz
 import type { DB } from '../../db/client.ts';
 import { articles, events, formSubmissions, opportunities, pageContents, pages, partners, projects, publishJobs, seoOverrides } from '../../db/schema.ts';
 import { can, type Role } from '../../rbac.ts';
+import { TEXT_PAGES } from '../home/service.ts';
 
 export type Hit = { kind: string; id: string; title: string; sub: string; href: string; status: string };
 const LIMIT = 6;
@@ -37,8 +38,8 @@ export async function notifications(db: DB, user: { id: string; role: Role }): P
       rows: () => db.select({ id: articles.id, title: articles.title, status: articles.status, submittedBy: articles.submittedBy, updatedAt: articles.updatedAt }).from(articles).where(inArray(articles.status, ['in_review', 'approved', 'changes_requested'])) },
     { kind: 'Page', perm: { read: 'page.read', approve: 'page.approve', publish: 'page.publish' }, href: (id) => `/studio/pages/${id}`,
       rows: () => db.select({ id: pages.id, title: pages.title, status: pages.status, submittedBy: pages.submittedBy, updatedAt: pages.updatedAt }).from(pages).where(inArray(pages.status, ['in_review', 'approved', 'changes_requested'])) },
-    { kind: 'Homepage', perm: { read: 'page.read', approve: 'page.approve', publish: 'page.publish' }, href: () => '/studio/home',
-      rows: () => db.select({ id: pageContents.id, title: sql<string>`'Homepage changes'`, status: pageContents.status, submittedBy: pageContents.submittedBy, updatedAt: pageContents.updatedAt }).from(pageContents).where(inArray(pageContents.status, ['in_review', 'approved', 'changes_requested'])) },
+    ...Object.entries(TEXT_PAGES).map(([file, p]): Src => ({ kind: p.label, perm: { read: 'page.read', approve: 'page.approve', publish: 'page.publish' }, href: () => p.href,
+      rows: () => db.select({ id: pageContents.id, title: sql<string>`${p.label + ' changes'}`, status: pageContents.status, submittedBy: pageContents.submittedBy, updatedAt: pageContents.updatedAt }).from(pageContents).where(and(eq(pageContents.file, file), inArray(pageContents.status, ['in_review', 'approved', 'changes_requested']))) })),
     { kind: 'Event', perm: { read: 'event.read', approve: 'event.approve', publish: 'event.publish' }, href: (id) => `/studio/events/${id}`,
       rows: () => db.select({ id: events.id, title: events.title, status: events.status, submittedBy: events.submittedBy, updatedAt: events.updatedAt }).from(events).where(inArray(events.status, ['in_review', 'approved', 'changes_requested'])) },
     { kind: 'Opportunity', perm: { read: 'opportunity.read', approve: 'opportunity.approve', publish: 'opportunity.publish' }, href: (id) => `/studio/opportunities/${id}`,

@@ -142,7 +142,8 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 }
 
 function route(path: string): { title: string; el: React.ReactElement; full?: boolean } {
-  if (path.startsWith('/studio/home')) return { title: 'Homepage', el: <HomeEditor />, full: true };
+  if (path.startsWith('/studio/home')) return { title: 'Homepage', el: <HomeEditor key="home" />, full: true };
+  if (path.startsWith('/studio/contact')) return { title: 'Contact page', el: <HomeEditor key="contact" path="/page-text/contact.html" />, full: true };
   if (path.startsWith('/studio/seo')) return { title: 'SEO', el: <SeoPage key={path} /> };
   if (path.startsWith('/studio/translations')) return { title: 'Translations', el: <TranslationsPage /> };
   if (path.startsWith('/studio/menus')) return { title: 'Menus', el: <MenusPage /> };

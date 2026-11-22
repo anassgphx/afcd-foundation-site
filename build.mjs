@@ -3,7 +3,7 @@
 //   ---
 //   title: Page title
 //   description: Meta description
-//   active: home | about | pillars | projects | news | partners | contact | involved
+//   active: home | about | pillars | projects | news | events | partners | contact | involved
 //   ---
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -23,7 +23,7 @@ const head = partial('head').replace('href="assets/styles.css"', `href="assets/s
 const header = partial('header');
 const footer = partial('footer');
 
-const NAV = ['home', 'about', 'pillars', 'projects', 'news', 'partners', 'contact', 'involved', 'none'];
+const NAV = ['home', 'about', 'pillars', 'projects', 'news', 'partners', 'contact', 'involved', 'events', 'none'];
 // Escapes for attributes without double-escaping entities already in the text (front matter titles may contain &amp;).
 const escapeAttr = (s) => s.replace(/&(?!(?:[a-z][a-z0-9]*|#\d+|#x[0-9a-f]+);)/gi, '&amp;').replace(/"/g, '&quot;');
 const escapeText = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

@@ -113,6 +113,13 @@
       "when": 1795365193053,
       "tag": "0015_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1795375887766,
+      "tag": "0016_pillars",
+      "breakpoints": true
     }
   ]
 }

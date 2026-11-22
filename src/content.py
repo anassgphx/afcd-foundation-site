@@ -90,6 +90,16 @@ PILLARS = [
      ['SAADA Initiative Project']),
 ]
 
+# Pillar content (owned by AFCD Studio): src/data/pillars.json, or env STUDIO_PILLARS_JSON, replaces the pillar texts in
+# this file once they are managed in Studio (Content > Pillars). Studio sends every value HTML-escaped. Without the file
+# the pages build exactly as written here. Keys, numbers and page files never change, so URLs stay the same.
+_PILLARS_JSON = Path(os.environ.get('STUDIO_PILLARS_JSON') or Path(__file__).parent / 'data' / 'pillars.json')
+STUDIO_PILLARS = __import__('json').loads(_PILLARS_JSON.read_text(encoding='utf-8'))['pillars'] if _PILLARS_JSON.is_file() else []
+if STUDIO_PILLARS:
+    PILLARS = [(p['key'], p['number'], p['name'], p['summary'], p['highlights']) for p in STUDIO_PILLARS]
+    _names = {p['key']: p['name'] for p in STUDIO_PILLARS}
+    OBJECTIVES = [(r, t, d, [(_names.get(sl, n), sl) for n, sl in links]) for r, t, d, links in OBJECTIVES]
+
 # name, pillar slug, pillar name, category, detail page (or None), one-line summary
 # Project data lives in src/data/projects.json (managed by AFCD Studio). STUDIO_PROJECTS_JSON can point elsewhere for previews.
 import json as _json
@@ -97,6 +107,7 @@ _PROJECTS_FILE = Path(os.environ.get('STUDIO_PROJECTS_JSON') or Path(__file__).p
 _PROJECT_DATA = _json.loads(_PROJECTS_FILE.read_text(encoding='utf-8'))['projects']
 _PILLAR_NAMES = {'youth-empowerment': 'Youth Empowerment', 'women-empowerment': 'Women’s Empowerment',
                  'green-thumbs': 'Environment and Climate', 'digital-empowerment': 'Digital Inclusion and Innovation'}
+_PILLAR_NAMES.update({p['key']: p['name'] for p in STUDIO_PILLARS})
 from html import escape as _esc
 # keep the file order unless Studio gives an explicit sort value
 _PROJECT_DATA = [p for _i, p in sorted(enumerate(_PROJECT_DATA), key=lambda ip: (ip[1].get('sort', (ip[0] + 1) * 10), ip[0]))]
@@ -563,6 +574,15 @@ PILLAR_APPROACH = {
                ('Connect', 'Exchange and cooperation that link local innovators with wider networks.')]),
 }
 PILLAR_SHORT = {'youth-empowerment': 'Youth', 'women-empowerment': 'Women', 'green-thumbs': 'Environment', 'digital-empowerment': 'Digital'}
+PILLAR_BRAND = {'green-thumbs': 'Green Thumbs'}
+PILLAR_IMAGE = {}
+for _p in STUDIO_PILLARS:   # Studio pillar content (see STUDIO_PILLARS above)
+    _k = _p['key']
+    PILLAR_INTRO[_k], PILLAR_SHORT[_k], PILLAR_ACTS[_k], PILLAR_GROUPS[_k] = _p['intro'], _p['short'], _p['activities'], _p['groups']
+    PILLAR_APPROACH[_k] = dict(title=_p['approach']['title'], view=_p['approach']['view'], principles=_p['approach']['principles'],
+                               steps=[tuple(x) for x in _p['approach']['steps']])
+    PILLAR_BRAND[_k] = _p['brand']
+    PILLAR_IMAGE[_k] = _p.get('image')
 
 
 def pillars():
@@ -594,7 +614,8 @@ def pillars():
         princ = ''.join(f'<li class="ap-pr"><span class="pj-dot" style="--c:{tone}"></span>{x}</li>' for x in ap['principles'])
         others = ''.join(f'''<li><a href="{PILLAR_FILE[s2]}" class="pl-other group" style="--c:{PILLAR_TONE[s2]}"><span class="pl-other-n">{n2}</span><span class="mt-8 block text-[22px] font-semibold leading-[1.1] tracking-[-0.03em]">{t2}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a></li>'''
                          for s2, n2, t2, _d2, _r2 in PILLARS if s2 != slug)
-        brand = '<span class="pg-tag">Programme brand: Green Thumbs</span>' if slug == 'green-thumbs' else ''
+        brand = f'<span class="pg-tag">Programme brand: {PILLAR_BRAND[slug]}</span>' if PILLAR_BRAND.get(slug) else ''
+        photo = media_img(PILLAR_IMAGE[slug], 'h-full w-full rounded-[22px]', '(min-width: 1024px) 40vw, 100vw') if PILLAR_IMAGE.get(slug) else ph(t + ' · programme photo', 'h-full w-full rounded-[22px]', '#FFFFFF')
         body = page_header([('Our Pillars', 'pillars.html'), (t, PILLAR_FILE[slug])], f'Pillar {n} / 04', t, PILLAR_INTRO[slug]) + f'''
 
 <section id="overview" class="pt-8 lg:pt-10">
@@ -612,7 +633,7 @@ def pillars():
           <a href="#objectives" class="link-arrow">Strategic objectives <span class="arr" aria-hidden="true">↓</span></a>
         </div>
       </div>
-      <div class="pl-hero-photo">{ph(t + ' · programme photo', 'h-full w-full rounded-[22px]', '#FFFFFF')}</div>
+      <div class="pl-hero-photo">{photo}</div>
     </div>
   </div>
 </section>
@@ -753,6 +774,7 @@ DETAILS = {p['file']: dict(name=p['name'], pillar=_PILLAR_NAMES[p['pillar']], sl
 
 
 PILLAR_TONE = {'youth-empowerment': '#FFB2B9', 'women-empowerment': '#A8DDFB', 'green-thumbs': '#82E591', 'digital-empowerment': '#FBE38A'}
+PILLAR_TONE.update({p['key']: p['colour'] for p in STUDIO_PILLARS})
 
 
 def project_details():
@@ -869,6 +891,7 @@ NEWS = [
 
 
 NEWS_PILLAR = {'Youth Empowerment': '#FFB2B9', 'Women’s Empowerment': '#A8DDFB', 'Environment and Climate': '#82E591', 'Digital Inclusion and Innovation': '#FBE38A'}
+NEWS_PILLAR.update({p['name']: p['colour'] for p in STUDIO_PILLARS})
 NEWS_TYPES = {0: 'Call for applications', 1: 'Participant story', 2: 'Participant story'}
 # Clearly marked placeholder posts (lorem ipsum) to show the layout until the news feed is connected.
 NEWS_PLACEHOLDERS = [

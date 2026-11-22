@@ -40,6 +40,7 @@ import { currentLayout, validateLayout, HOME_BLOCKS } from './modules/home/layou
 import { homeCanvas } from './modules/home/render.ts';
 import { docMediaIds } from './modules/pages/render.ts';
 import { importPartners } from './modules/partners/import.ts';
+import * as PL from './modules/pillars/service.ts';
 import { blockCatalog } from './modules/pages/blocks.ts';
 import { Publisher, type BuildRunner } from './modules/publish/service.ts';
 
@@ -301,6 +302,28 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     return c.json({ url: `/studio/preview/${r.token}/${r.file}` });
   });
   api.post('/partners/:id/revisions/:rev/restore', perm('partner.update'), async (c) => { await PT.restorePartnerRevision(db, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
+
+  // ---------------------------------------------------------------- Pillars (the four strategic pillars and their pages)
+  api.get('/pillars/records', perm('pillar.read'), async (c) => c.json(await PL.listPillars(db)));
+  api.post('/pillars/import', perm('pillar.publish'), async (c) => c.json(await PL.importPillars(db, cfg, actor(c))));
+  api.get('/pillars/:id{[0-9a-f-]{36}}', perm('pillar.read'), async (c) => {
+    const p = await PL.loadPillar(db, c.req.param('id'));
+    const mediaRows = p.mediaId ? await db.select().from(t.media).where(eq(t.media.id, p.mediaId)) : [];
+    return c.json({ ...p, draft: undefined, media: mediaRows.map(withUrl), problems: await PL.pillarProblems(db, p), history: await PL.pillarHistory(db, p.id), lists: PL.siteLists(cfg), colours: PL.COLOURS });
+  });
+  api.put('/pillars/:id{[0-9a-f-]{36}}', perm('pillar.update'), async (c) => c.json(await PL.updatePillar(db, cfg, actor(c), c.req.param('id'), await c.req.json())));
+  api.post('/pillars/:id/transition', async (c) => {
+    const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
+    if (!body.success || !PL.pillarTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, PL.pillarTransitionPerm(body.data.action)!);
+    return c.json(await PL.transitionPillar(db, actor(c), u.role, c.req.param('id'), body.data.action, { comment: body.data.comment }));
+  });
+  api.post('/pillars/:id/publish', perm('pillar.publish'), async (c) => c.json(await publisher.publishPillar(actor(c), c.req.param('id'))));
+  api.post('/pillars/:id/preview', perm('pillar.read'), async (c) => {
+    const r = await publisher.previewPillar(c.req.param('id'), PL.toPillarSnapshot(await PL.loadPillar(db, c.req.param('id'))));
+    return c.json({ url: `/studio/preview/${r.token}/${r.file}` });
+  });
+  api.post('/pillars/:id/revisions/:rev/restore', perm('pillar.update'), async (c) => { await PL.restorePillarRevision(db, cfg, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
 
   // ---------------------------------------------------------------- Events
   api.get('/events', perm('event.read'), async (c) => c.json(await EV.listEvents(db)));

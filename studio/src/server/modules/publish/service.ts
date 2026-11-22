@@ -27,6 +27,9 @@ import type { OpportunitySnapshot } from '../opportunities/service.ts';
 import { eventEntries, eventFile, isUpcoming } from '../events/render.ts';
 import type { EventSnapshot } from '../events/service.ts';
 import { partnerEntries } from '../partners/render.ts';
+import { pillars, pillarRevisions } from '../../db/schema.ts';
+import { pillarEntries } from '../pillars/render.ts';
+import type { PillarSnapshot } from '../pillars/service.ts';
 import type { PartnerSnapshot } from '../partners/service.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
@@ -43,7 +46,7 @@ import * as MENU from '../menus/service.ts';
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
 
-export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string; partnersFile?: string; eventsFile?: string; fieldsFile?: string }) => Promise<string>;
+export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string; partnersFile?: string; eventsFile?: string; fieldsFile?: string; pillarsFile?: string }) => Promise<string>;
 
 /** Default runner: the real generator and build. Tests inject a fake. */
 export const realRunner: BuildRunner = async (cfg, mode) => {
@@ -53,7 +56,7 @@ export const realRunner: BuildRunner = async (cfg, mode) => {
     const b = await run('npm', ['run', 'build'], { ...opts, env: { ...process.env } });
     return [a.stdout, b.stdout, b.stderr].join('\n');
   }
-  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}), ...(mode.partnersFile ? { STUDIO_PARTNERS_JSON: mode.partnersFile } : {}), ...(mode.eventsFile ? { STUDIO_EVENTS_JSON: mode.eventsFile } : {}), ...(mode.fieldsFile ? { PAGE_FIELDS_JSON: mode.fieldsFile } : {}) };
+  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}), ...(mode.partnersFile ? { STUDIO_PARTNERS_JSON: mode.partnersFile } : {}), ...(mode.eventsFile ? { STUDIO_EVENTS_JSON: mode.eventsFile } : {}), ...(mode.fieldsFile ? { PAGE_FIELDS_JSON: mode.fieldsFile } : {}), ...(mode.pillarsFile ? { STUDIO_PILLARS_JSON: mode.pillarsFile } : {}) };
   const a = mode.only === 'pages' ? { stdout: '' } : await run('python3', ['-I', 'src/content.py'], { ...opts, env });
   const b = await run('node', ['build.mjs'], { ...opts, env });
   return [a.stdout, b.stdout].join('\n');
@@ -154,6 +157,29 @@ export class Publisher {
     const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
     writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), partners: list }, null, 2) + '\n'); renameSync(tmp, file);
     return live.map((x) => x.snap.logoMediaId).filter(Boolean) as string[];
+  }
+
+  get pillarsFile() { return resolve(this.cfg.siteRoot, 'src/data/pillars.json'); }
+
+  /** Live pillar revisions (optionally overriding one). */
+  async livePillars(override?: { pillarId: string; revisionId: string | null }) {
+    const rows = await this.db.select({ id: pillars.id, rev: pillars.publishedRevisionId }).from(pillars);
+    const map = new Map(rows.filter((r) => r.rev).map((r) => [r.id, r.rev as string]));
+    if (override?.revisionId) map.set(override.pillarId, override.revisionId);
+    if (!rows.length || map.size < rows.length) return null;   // some pillar has no Studio content yet: the site keeps src/content.py
+    const revs = await this.db.select().from(pillarRevisions).where(inArray(pillarRevisions.id, [...map.values()]));
+    return revs.map((r) => ({ id: r.id, snap: r.snapshot as unknown as PillarSnapshot }));
+  }
+
+  /** pillars.json exists only once every pillar's content is in Studio (all four are imported together). Returns photo ids. */
+  private async writePillars(file: string, override?: { pillarId: string; revisionId: string | null }) {
+    const live = await this.livePillars(override);
+    if (!live) { if (existsSync(file)) rmSync(file); return [] as string[]; }
+    const list = await pillarEntries(this.db, live);
+    mkdirSync(resolve(file, '..'), { recursive: true });
+    const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), pillars: list }, null, 2) + '\n'); renameSync(tmp, file);
+    return live.map((x) => x.snap.mediaId).filter(Boolean) as string[];
   }
 
   get eventsFile() { return resolve(this.cfg.siteRoot, 'src/data/events.json'); }
@@ -281,11 +307,12 @@ export class Publisher {
     return ids;
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { file?: string; revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string } } = {}) {
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; pillar?: { pillarId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { file?: string; revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string } } = {}) {
     const entries = await this.liveEntries(o.project);
     await this.writeRedirects(o.redirects === 'pending');
     this.writeData(this.dataFile, entries);
     const partnerMedia = await this.writePartners(this.partnersFile, o.partner, o.project);
+    const pillarMedia = await this.writePillars(this.pillarsFile, o.pillar);
     const eventMedia = await this.writeEvents(this.eventsFile, o.event, o.project);
     const seoMedia = await this.writeSeo(o.seo);
     await this.writeSchema(o.schema, o.article, o.event);
@@ -304,7 +331,7 @@ export class Publisher {
       const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
       writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
     }
-    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...eventMedia, ...oppMedia, ...seoMedia, ...homeMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...eventMedia, ...oppMedia, ...seoMedia, ...homeMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
     return { entries, live };
   }
 
@@ -453,7 +480,7 @@ export class Publisher {
       const msg = (e as Error).message;
       try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
       await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
-      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
+      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('pillar') ? 'pillar' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
       throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
     }
     return { job, log };
@@ -696,6 +723,66 @@ export class Publisher {
       await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, newsFile: resolve(dir, 'news.json'), partnersFile });
       if (!existsSync(resolve(outDir, 'partners.html'))) throw new AppError(409, 'The preview could not be generated.');
       return { token, file: 'partners.html', mediaIds: snap.logoMediaId ? [snap.logoMediaId] : [] };
+    });
+  }
+
+  // ---------------------------------------------------------------- Pillars
+  /** Checks the pillar's own page and the Our Pillars hub show the published name and summary. */
+  private verifyPillar(snap: PillarSnapshot) {
+    const name = escapeHtml(snap.name), summary = escapeHtml(snap.summary);
+    for (const file of [snap.publicFile, 'pillars.html']) {
+      const p = resolve(this.cfg.siteRoot, file);
+      if (!existsSync(p)) throw new Error(`${file} was not generated.`);
+      const html = readFileSync(p, 'utf8');
+      if (!html.includes(name) || !html.includes(summary)) throw new Error(`${file} does not show the published pillar text.`);
+    }
+  }
+
+  async publishPillar(actor: NonNullable<Actor>, pillarId: string) {
+    return this.locked(async () => {
+      const [p] = await this.db.select().from(pillars).where(eq(pillars.id, pillarId));
+      if (!p) throw new AppError(404, 'Pillar not found.');
+      if (p.status !== 'approved' || !p.approvedRevisionId) throw new AppError(409, 'Only an approved pillar can be published.');
+      const [rev] = await this.db.select().from(pillarRevisions).where(eq(pillarRevisions.id, p.approvedRevisionId));
+      const snap = rev.snapshot as unknown as PillarSnapshot;
+      // name, summary and colour are also read by other modules (story tags, project pages): switch them for this build,
+      // and put the old values back if the delivery fails, before the site is rebuilt from the database.
+      const before = { name: p.name, description: p.description, colour: p.colour };
+      const setLive = (v: typeof before) => this.db.update(pillars).set(v).where(eq(pillars.id, pillarId));
+      const { job, log } = await this.deliver('publish_pillar', actor, pillarId, rev.id, async (log) => {
+        await setLive({ name: snap.name, description: snap.summary, colour: snap.colour });
+        try {
+          await this.writeSite({ pillar: { pillarId, revisionId: rev.id } });
+          log.push(await this.runner(this.cfg, { kind: 'live' }));
+          this.verifyPillar(snap);
+        } catch (e) { await setLive(before); throw e; }
+      }, `Publishing pillar “${p.name}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(pillars).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, updatedAt: new Date() }).where(eq(pillars.id, pillarId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'pillar.publish', { type: 'pillar', id: pillarId }, `Published pillar “${snap.name}” (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file: snap.publicFile };
+    });
+  }
+
+  /** Builds the pillar's page with the saved working copy in an isolated folder. */
+  async previewPillar(pillarId: string, snap: PillarSnapshot) {
+    return this.locked(async () => {
+      this.cleanupPreviews();
+      const token = randomBytes(16).toString('hex');
+      const dir = resolve(this.cfg.previewDir, token);
+      const pagesDir = resolve(dir, 'pages'), outDir = resolve(dir, 'site'), dataFile = resolve(dir, 'projects.json'), pillarsFile = resolve(dir, 'pillars.json');
+      mkdirSync(pagesDir, { recursive: true }); mkdirSync(outDir, { recursive: true });
+      this.writeData(dataFile, await this.liveEntries());
+      const live = await this.livePillars();
+      if (!live) throw new AppError(409, 'Import the current pillar content first.');
+      const list = await pillarEntries(this.db, live.filter((x) => x.snap.key !== snap.key).concat({ id: 'preview', snap }));
+      writeFileSync(pillarsFile, JSON.stringify({ version: 1, source: 'AFCD Studio (preview)', pillars: list }, null, 2));
+      await this.writeNews(resolve(dir, 'news.json'), pagesDir, await this.liveArticles());
+      await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, newsFile: resolve(dir, 'news.json'), pillarsFile });
+      if (!existsSync(resolve(outDir, snap.publicFile))) throw new AppError(409, 'The preview could not be generated.');
+      return { token, file: snap.publicFile, mediaIds: snap.mediaId ? [snap.mediaId] : [] };
     });
   }
 

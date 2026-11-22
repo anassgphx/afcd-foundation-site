@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { AppError, clientIp, perm, type Env } from '../../http.ts';
 import { isFormKey, saveSettings } from '../forms/service.ts';
 import * as I from './service.ts';
+import * as MAIL from './mail.ts';
 
 export function registerInboxRoutes(api: Hono<Env>) {
   const me = (c: { var: Env['Variables'] }) => ({ id: c.var.user!.id, email: c.var.user!.email });
@@ -47,6 +48,13 @@ export function registerInboxRoutes(api: Hono<Env>) {
     await I.setSubscriber(c.var.db, me(c), c.req.param('id'), a); return c.json({ ok: true });
   });
   api.get('/inbox/subscribers/export.csv', perm('forms.manage'), async (c) => csv(c, 'newsletter', await I.exportSubscribers(c.var.db, me(c), clientIp(c))));
+
+  // Email (SMTP): everyone with access learns whether replies can be sent; only managers see and change the settings
+  api.get('/inbox/mail', perm('forms.read'), (c) => { const s = MAIL.mailSettings(c.var.cfg); return c.json({ ready: s.ready, fromEmail: s.ready ? s.fromEmail : '', fromName: s.ready ? s.fromName : '' }); });
+  api.get('/inbox/mail/settings', perm('forms.manage'), (c) => c.json(MAIL.mailSettings(c.var.cfg)));
+  api.put('/inbox/mail/settings', perm('forms.manage'), async (c) => c.json(await MAIL.saveMailSettings(c.var.db, c.var.cfg, me(c), await c.req.json())));
+  api.post('/inbox/mail/test', perm('forms.manage'), async (c) => c.json(await MAIL.sendTest(c.var.db, c.var.cfg, me(c))));
+  api.post('/inbox/messages/:id/send', perm('forms.manage'), async (c) => c.json(await MAIL.sendReply(c.var.db, c.var.cfg, me(c), c.req.param('id'), await c.req.json())));
 
   api.put('/inbox/settings/:key', perm('forms.manage'), async (c) => {
     const key = c.req.param('key'); if (!isFormKey(key)) throw new AppError(404, 'Unknown form.');

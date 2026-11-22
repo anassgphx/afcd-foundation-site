@@ -42,29 +42,31 @@ function Login({ onDone }: { onDone: () => void }) {
     finally { setBusy(false); }
   }
   const FEATURES: [string, string, string][] = [
-    ['layers', 'Pages and projects', 'Build pages from approved blocks and keep projects up to date.'],
-    ['check', 'Review and publish', 'Every change is reviewed, then published and checked on the site.'],
-    ['image', 'Media library', 'Photos with alt text, credits and confirmed usage rights.'],
+    ['users', 'Youth Empowerment', 'Young people building leadership, civic skills and local initiatives.'],
+    ['heart', 'Women’s Empowerment', 'Confidence, learning and opportunities for women in community life.'],
+    ['leaf', 'Environment and Climate', 'Community action and dialogue on Morocco’s climate priorities.'],
+    ['monitor', 'Digital Inclusion and Innovation', 'Digital skills, AI, science and emerging technologies for all.'],
   ];
+  useEffect(() => { const prev = document.title; document.title = 'AFCD Portal · Sign in'; return () => { document.title = prev; }; }, []);
   return (
     <main className="auth">
-      <section className="auth-brand" aria-label="AFCD Studio">
+      <section className="auth-brand" aria-label="AFCD Portal">
         <div className="auth-line" aria-hidden="true" />
         <div className="auth-glow" aria-hidden="true" />
         <img className="auth-logo" src="/studio/brand/afcd-logo-white.png" alt="AFCD Foundation" width="1525" height="318" />
         <div className="auth-copy">
-          <span className="auth-kicker"><span className="auth-dot" aria-hidden="true" />AFCD Studio</span>
-          <h1>Manage the AFCD Foundation <span>website.</span></h1>
-          <p>One place for pages, projects, stories and photos, with review before anything goes live.</p>
-          <ul className="auth-features">{FEATURES.map(([ic, t, d]) => <li key={t}><span className="auth-ico"><Icon n={ic} /></span><span><b>{t}</b><small>{d}</small></span></li>)}</ul>
+          <span className="auth-kicker"><span className="auth-dot" aria-hidden="true" />AFCD Portal</span>
+          <h1>AFCD Foundation <span>Portal.</span></h1>
+          <p>Sign in to manage our work across four pillars, from projects and stories to events and media.</p>
         </div>
+        <ul className="auth-features" aria-label="Our four pillars">{FEATURES.map(([ic, t, d]) => <li key={t}><span className="auth-ico"><Icon n={ic} /></span><b>{t}</b><small>{d}</small></li>)}</ul>
         <small className="auth-foot">© {new Date().getFullYear()} AFCD Foundation · Marrakech, Morocco</small>
       </section>
 
       <section className="auth-panel">
         <form className="auth-form" onSubmit={submit} noValidate aria-describedby={err ? 'auth-err' : undefined}>
           <h2>Sign in</h2>
-          <p className="auth-sub">Use your AFCD Studio account.</p>
+          <p className="auth-sub">Use your AFCD Portal account.</p>
           <label className="auth-field">
             <span>Email</span>
             <span className={`auth-in${fieldErr.email ? ' bad' : ''}`}><Icon n="mail" />

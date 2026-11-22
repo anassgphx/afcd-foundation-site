@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { api } from './api.ts';
 import { Icon, Link, ago, initials, navigate, useCan, useMe } from './ui.tsx';
 import './account-menu.css';
+import { NAV_SHORTCUTS } from './Sidebar.tsx';
 
 export type NavLink = { to: string; label: string; icon: string; perm: string; group: string };
 type Hit = { kind: string; id: string; title: string; sub: string; href: string; status: string };
@@ -201,10 +202,12 @@ export function UserMenu({ onLogout }: { onLogout: () => void }) {
 }
 
 function ShortcutsDialog({ onClose }: { onClose: () => void }) {
+  const can = useCan();
+  const jumps = NAV_SHORTCUTS.filter((j) => can(j.perm));
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [onClose]);
   const mod = isMac ? '⌘' : 'Ctrl';
   return <div className="pal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><div className="pal" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" style={{ maxWidth: 440 }}>
     <div className="tb-panel-h"><b>Keyboard shortcuts</b><button className="btn btn-ghost icon-btn btn-sm" onClick={onClose} aria-label="Close" autoFocus><Icon n="x" /></button></div>
-    <dl className="tb-keys">{[[`${mod} K  or  /`, 'Search and jump anywhere'], ['?', 'Show these shortcuts'], [`${mod} S`, 'Save the open editor'], [`${mod} Z`, 'Undo (page and homepage editors)'], [`${isMac ? '⇧ ⌘' : 'Shift Ctrl'} Z`, 'Redo'], ['↑ ↓', 'Move through menus and search results'], ['Esc', 'Close a dialog or menu']].map(([k, d]) => <div key={k}><dt><kbd>{k}</kbd></dt><dd>{d}</dd></div>)}</dl>
+    <dl className="tb-keys">{[[`${mod} K  or  /`, 'Search and jump anywhere'], ['?', 'Show these shortcuts'], [`${mod} S`, 'Save the open editor'], [`${mod} Z`, 'Undo (page and homepage editors)'], [`${isMac ? '⇧ ⌘' : 'Shift Ctrl'} Z`, 'Redo'], ['↑ ↓', 'Move through menus and search results'], ['Esc', 'Close a dialog or menu'], ...jumps.map((j) => [`G  ${j.key.toUpperCase()}`, `Go to ${j.label}`])].map(([k, d]) => <div key={k}><dt><kbd>{k}</kbd></dt><dd>{d}</dd></div>)}</dl>
   </div></div>;
 }

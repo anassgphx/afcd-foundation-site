@@ -19,6 +19,7 @@ import { TranslationsPage } from './pages/Translations.tsx';
 import { MenusPage } from './pages/Menus.tsx';
 import { HomeEditor } from './pages/Home.tsx';
 import { Breadcrumbs, Notifications, SearchButton, UserMenu, useRecent, type NavLink } from './Topbar.tsx';
+import { NAV, Sidebar } from './Sidebar.tsx';
 import { MediaLibrary } from './pages/Media.tsx';
 import { Publishing, ActivityLog, Users } from './pages/Admin.tsx';
 import { ApprovalsPage } from './pages/Approvals.tsx';
@@ -103,39 +104,11 @@ function Login({ onDone }: { onDone: () => void }) {
   );
 }
 
-type NavItem = { to: string; label: string; icon: string; perm: string; match?: RegExp };
-const NAV: { group: string; items: NavItem[] }[] = [
-  { group: 'Overview', items: [{ to: '/studio/', label: 'Dashboard', icon: 'dash', perm: 'dashboard.read', match: /^\/studio\/?$/ }] },
-  { group: 'Website', items: [{ to: '/studio/home', label: 'Homepage', icon: 'home', perm: 'page.read', match: /^\/studio\/home/ }, { to: '/studio/pages', label: 'Pages', icon: 'layers', perm: 'page.read', match: /^\/studio\/pages/ },
-    { to: '/studio/menus', label: 'Menus', icon: 'menu', perm: 'page.read', match: /^\/studio\/menus/ },
-    { to: '/studio/seo', label: 'SEO', icon: 'search', perm: 'seo.read', match: /^\/studio\/seo/ },
-    { to: '/studio/translations', label: 'Translations', icon: 'globe', perm: 'translation.read', match: /^\/studio\/translations/ }] },
-  { group: 'Content', items: [
-    { to: '/studio/projects', label: 'Projects', icon: 'folder', perm: 'project.read', match: /^\/studio\/projects/ },
-    { to: '/studio/news', label: 'News & Stories', icon: 'log', perm: 'news.read', match: /^\/studio\/news/ },
-    { to: '/studio/events', label: 'Events', icon: 'calendar', perm: 'event.read', match: /^\/studio\/events/ },
-    { to: '/studio/opportunities', label: 'Opportunities', icon: 'spark', perm: 'opportunity.read', match: /^\/studio\/opportunities/ },
-    { to: '/studio/partners', label: 'Partners', icon: 'partner', perm: 'partner.read', match: /^\/studio\/partners/ },
-  ] },
-  { group: 'Media', items: [{ to: '/studio/media', label: 'Media Library', icon: 'image', perm: 'media.read' }] },
-  { group: 'Messages', items: [{ to: '/studio/inbox', label: 'Inbox', icon: 'mail', perm: 'forms.read', match: /^\/studio\/(inbox|forms)/ }] },
-  { group: 'Workflow', items: [
-    { to: '/studio/approvals', label: 'Approval Queue', icon: 'inbox', perm: 'project.read' },
-    { to: '/studio/publishing', label: 'Publishing', icon: 'globe', perm: 'dashboard.read' },
-  ] },
-  { group: 'Administration', items: [
-    { to: '/studio/users', label: 'Users & Roles', icon: 'users', perm: 'users.read' },
-    { to: '/studio/activity', label: 'Activity Log', icon: 'log', perm: 'audit.read' },
-  ] },
-];
-
 function Shell({ onLogout }: { onLogout: () => void }) {
   const me = useMe(); const can = useCan(); const path = usePath();
   const [collapsed, setCollapsed] = useState(() => localStorageGet('studio.side') === '1');
   const [mobile, setMobile] = useState(false);
-  const [queue, setQueue] = useState(0);
   useEffect(() => { setMobile(false); }, [path]);
-  useEffect(() => { if (can('project.read')) api('/projects').then((p: any[]) => setQueue(p.filter((x) => x.status === 'in_review' || x.status === 'approved').length)).catch(() => {}); }, [path]);
   // Inbox unread badge: on navigation, when the Inbox changes something, and every 2 minutes while Studio is open
   const [unread, setUnread] = useState(0);
   useEffect(() => {
@@ -144,48 +117,16 @@ function Shell({ onLogout }: { onLogout: () => void }) {
     f(); window.addEventListener('studio:inbox', f); const t = setInterval(f, 120_000);
     return () => { window.removeEventListener('studio:inbox', f); clearInterval(t); };
   }, [path]);
-  const isOn = (i: NavItem) => (i.match ? i.match.test(path) : path.startsWith(i.to));
-  // the active-page highlight glides to the selected item (measured after every navigation and resize)
-  const navRef = useRef<HTMLElement>(null);
-  const [ind, setInd] = useState<{ top: number; h: number } | null>(null);
-  useLayoutEffect(() => {
-    const measure = () => { const nav = navRef.current; const el = nav?.querySelector<HTMLElement>('a.on'); if (!nav || !el) { setInd(null); return; } const a = el.getBoundingClientRect(), n = nav.getBoundingClientRect(); setInd({ top: a.top - n.top, h: a.height }); };
-    measure();
-    // the layout settles after fonts load, the menu fades in, or the sidebar collapses: measure again whenever it changes size
-    const ro = new ResizeObserver(measure); if (navRef.current) ro.observe(navRef.current);
-    const t = setTimeout(measure, 400);
-    document.fonts?.ready.then(measure).catch(() => {});
-    return () => { clearTimeout(t); ro.disconnect(); };
-  }, [path, collapsed, queue, unread]);
   const links: NavLink[] = NAV.flatMap((g) => g.items.filter((i) => can(i.perm)).map((i) => ({ to: i.to, label: i.label, icon: i.icon, perm: i.perm, group: g.group })));
   useRecent(path, links);
   const page = route(path);
   return (
     <div className={`shell${collapsed ? ' collapsed' : ''}${mobile ? ' mobile-open' : ''}`}>
-      <aside className="side" aria-label="Studio navigation">
-        <Link to="/studio/" className="brand" aria-label="AFCD Studio, dashboard"><img className="brand-logo" src="/studio/brand/afcd-logo.png" alt="AFCD Foundation" width="640" height="133" /><img className="brand-sym" src="/studio/brand/afcd-mark.png" alt="AFCD" width="30" height="30" /><span className="brand-tag">Studio</span></Link>
-        <nav className="nav" ref={navRef}>
-          <span className="nav-ind" aria-hidden="true" style={ind ? { transform: `translateY(${ind.top}px)`, height: ind.h, opacity: 1 } : { opacity: 0 }} />
-          {NAV.map((g) => {
-            const items = g.items.filter((i) => can(i.perm));
-            if (!items.length) return null;
-            return <div className="nav-group" key={g.group}><span className="nav-label">{g.group}</span>
-              {items.map((i) => <Link key={i.to} to={i.to} className={isOn(i) ? 'on' : ''} aria-current={isOn(i) ? 'page' : undefined} title={i.label}>
-                <Icon n={i.icon} /><span className="nav-text">{i.label}</span>{i.to.endsWith('approvals') && queue > 0 && <em className="count">{queue}</em>}{i.to.endsWith('/inbox') && unread > 0 && <em className="count" aria-label={`${unread} unread`}>{unread}</em>}
-              </Link>)}
-            </div>;
-          })}
-        </nav>
-        <div className="side-foot">
-          <a href="/" onClick={(e) => { e.preventDefault(); window.open(me.siteUrl, '_blank', 'noopener'); }} className="btn btn-ghost" style={{ width: '100%', justifyContent: 'flex-start' }} title="Open the public website">
-            <Icon n="ext" /><span className="brand-text">View website</span>
-          </a>
-        </div>
-      </aside>
+      <Sidebar path={path} collapsed={collapsed} unread={unread} onCloseMobile={() => setMobile(false)}
+        onToggle={() => { const v = !collapsed; setCollapsed(v); localStorageSet('studio.side', v ? '1' : '0'); }} />
       <div className="main">
         <header className="top">
-          <button className="btn btn-ghost icon-btn mobile-menu" onClick={() => setMobile((v) => !v)} aria-label="Open navigation"><Icon n="menu" /></button>
-          <button className="btn btn-ghost icon-btn" onClick={() => { const v = !collapsed; setCollapsed(v); localStorageSet('studio.side', v ? '1' : '0'); }} aria-label="Collapse navigation" title="Collapse navigation"><Icon n="side" /></button>
+          <button className="btn btn-ghost icon-btn mobile-menu" onClick={() => setMobile((v) => !v)} aria-label="Open navigation" aria-expanded={mobile}><Icon n="menu" /></button>
           <Breadcrumbs path={path} title={page.title} nav={links} />
           <div className="top-right">
             <SearchButton nav={links} />

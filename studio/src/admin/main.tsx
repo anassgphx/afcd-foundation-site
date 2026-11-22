@@ -16,6 +16,7 @@ import { OpportunitiesList, OpportunityEditor } from './pages/Opportunities.tsx'
 import { FormsPage } from './pages/Forms.tsx';
 import { SeoPage } from './pages/Seo.tsx';
 import { HomeEditor } from './pages/Home.tsx';
+import { Breadcrumbs, Notifications, SearchButton, UserMenu, useRecent, type NavLink } from './Topbar.tsx';
 import { MediaLibrary } from './pages/Media.tsx';
 import { ApprovalQueue, Publishing, ActivityLog, Users } from './pages/Admin.tsx';
 
@@ -131,6 +132,8 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   useEffect(() => { setMobile(false); }, [path]);
   useEffect(() => { if (can('project.read')) api('/projects').then((p: any[]) => setQueue(p.filter((x) => x.status === 'in_review' || x.status === 'approved').length)).catch(() => {}); }, [path]);
   const isOn = (i: NavItem) => (i.match ? i.match.test(path) : path.startsWith(i.to));
+  const links: NavLink[] = NAV.flatMap((g) => g.items.filter((i) => can(i.perm)).map((i) => ({ to: i.to, label: i.label, icon: i.icon, perm: i.perm, group: g.group })));
+  useRecent(path, links);
   const page = route(path);
   return (
     <div className={`shell${collapsed ? ' collapsed' : ''}${mobile ? ' mobile-open' : ''}`}>
@@ -157,10 +160,11 @@ function Shell({ onLogout }: { onLogout: () => void }) {
         <header className="top">
           <button className="btn btn-ghost icon-btn mobile-menu" onClick={() => setMobile((v) => !v)} aria-label="Open navigation"><Icon n="menu" /></button>
           <button className="btn btn-ghost icon-btn" onClick={() => { const v = !collapsed; setCollapsed(v); localStorageSet('studio.side', v ? '1' : '0'); }} aria-label="Collapse navigation" title="Collapse navigation"><Icon n="side" /></button>
-          <div className="crumbs"><span>Studio</span><Icon n="chev" width={14} height={14} /><b>{page.title}</b></div>
+          <Breadcrumbs path={path} title={page.title} nav={links} />
           <div className="top-right">
-            <div className="user-chip" title={me.user.email}><span className="avatar">{initials(me.user.name)}</span><span>{me.user.name}<br /><small>{me.user.roleLabel}</small></span></div>
-            <button className="btn btn-ghost icon-btn" onClick={onLogout} aria-label="Sign out" title="Sign out"><Icon n="logout" /></button>
+            <SearchButton nav={links} />
+            <Notifications path={path} />
+            <UserMenu onLogout={onLogout} />
           </div>
         </header>
         <main className={`content${page.full ? ' content-full' : ''}`} id="main">{page.el}</main>

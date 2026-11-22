@@ -549,6 +549,30 @@
     render('all');
   })();
 
+  /* Staff login: links to the AFCD Studio dashboard.
+     Set STUDIO_URL once Studio has a live address; until then the link only appears on a local machine. */
+  (function () {
+    var STUDIO_URL = '';
+    var local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    var url = STUDIO_URL || (local ? 'http://localhost:4400/studio/' : '');
+    if (!url) return;
+    $$('[data-studio-login]').forEach(function (a) { a.href = url; a.hidden = false; });
+  })();
+
+  /* Events page: upcoming / past filter */
+  (function () {
+    var list = $('#event-list'); if (!list) return;
+    var rows = $$('.ev-row', list), btns = $$('[data-ev]'), empty = $('.ev-empty');
+    btns.forEach(function (b) {
+      b.addEventListener('click', function () {
+        var f = b.dataset.ev, shown = 0;
+        btns.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+        rows.forEach(function (r) { var on = f === 'all' || r.dataset.when === f; r.hidden = !on; if (on) shown++; });
+        if (empty) empty.classList.toggle('hidden', shown > 0);
+      });
+    });
+  })();
+
   /* Partners page: filter by scope and search by name (the list itself is plain HTML) */
   (function () {
     var grid = $('#partner-grid'); if (!grid) return;

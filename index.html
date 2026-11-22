@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/styles.css?v=8da7b129">
+<link rel="stylesheet" href="assets/styles.css?v=bbb60dd2">
 <link rel="canonical" href="https://afcdfoundation.org/">
 <meta name="robots" content="noindex, nofollow">
 <meta property="og:type" content="website">
@@ -53,6 +53,7 @@
           <a class="tb-link" href="get-involved.html#partner">Partner With Us</a>
           <a class="tb-link" href="contact.html">Contact</a>
         </nav>
+        <a class="tb-login" href="#" data-studio-login hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.6"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg><span>Staff login</span></a>
         <div class="tb-lang" role="group" aria-label="Language">
           <button class="lang-btn" data-lang="en" aria-pressed="true">EN</button>
           <button class="lang-btn" data-lang="fr" aria-disabled="true" title="Version française bientôt disponible">FR<span class="sr-only"> (coming soon)</span></button>
@@ -145,7 +146,7 @@
             </div>
           </div>
         </li>
-        <li class="flex"><a href="news.html" class="nav-a nav-item flex items-center px-3 text-ink-dark hover:text-ink-pure ">News &amp; Stories</a></li>
+        <li class="flex"><a href="news.html" class="nav-a nav-item flex items-center px-3 text-ink-dark hover:text-ink-pure ">News &amp; Stories</a></li><li class="flex"><a href="events.html" class="nav-a nav-item flex items-center px-3 text-ink-dark hover:text-ink-pure">Events</a></li>
         <li class="flex"><a href="partners.html" class="nav-a nav-item flex items-center px-3 text-ink-dark hover:text-ink-pure ">Partners</a></li>
         <li class="flex"><a href="contact.html" class="nav-a nav-item flex items-center px-3 text-ink-dark hover:text-ink-pure ">Contact</a></li>
       </ul>
@@ -192,8 +193,10 @@
       </div>
     </div>
     <a href="news.html" class="m-link flex min-h-[56px] items-center border-b border-ink-light font-medium">News &amp; Stories</a>
+    <a href="events.html" class="m-link flex min-h-[56px] items-center border-b border-ink-light font-medium">Events</a>
     <a href="partners.html" class="m-link flex min-h-[56px] items-center border-b border-ink-light font-medium">Partners</a>
     <a href="contact.html" class="m-link flex min-h-[56px] items-center border-b border-ink-light font-medium">Contact</a>
+    <a href="#" class="m-link flex min-h-[56px] items-center gap-2 border-b border-ink-light font-medium" data-studio-login hidden><svg class="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.6"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>Staff login</a>
   </nav>
   <div class="space-y-4 border-t border-ink-light px-5 py-5">
     <div class="flex items-center gap-2 text-sm font-medium" role="group" aria-label="Language">
@@ -685,10 +688,57 @@
 </section>
 
 <!-- ============ 9. PARTNERS ============ -->
+<section id="events" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">
+    <header class="sh">
+      <div class="sh-top"><span class="sh-num">07</span><span class="sh-label">Upcoming Events</span><span class="sh-rule" aria-hidden="true"></span><a href="events.html" class="sh-link">All events <span class="arr" aria-hidden="true">↗</span></a></div>
+      <div class="sh-body">
+      <h2 class="sh-title reveal">Meet us <span class="sh-soft">in the community.</span></h2>
+      <div class="sh-aside"><p class="sh-desc">Workshops, trainings, community days and online sessions across Morocco.</p></div>
+      </div>
+    </header>
+    <ul class="ev-list mt-8 lg:mt-10">
+      <li class="ev-row" data-when="upcoming">
+        <time class="ev-date" datetime="2026-12-12"><span class="ev-day">12</span><span class="ev-mon">Dec 2026</span></time>
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">Workshop</span><span class="ev-pillar"><span class="pj-dot" style="--c:#111"></span>Youth Empowerment</span><span class="ev-sample">Sample event</span></div>
+          <p class="mt-3 text-[19px] font-semibold leading-snug tracking-[-0.02em] md:text-[21px]"><a href="event-leadership-workshop.html" class="ev-link">Lorem ipsum leadership workshop</a></p>
+          
+          <p class="ev-meta mt-3"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17s5-4.6 5-9a5 5 0 0 0-10 0c0 4.4 5 9 5 9Z"/><circle cx="10" cy="8" r="1.8"/></svg>Ait Ourir</span><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2"/></svg>10:00 – 13:00</span></p>
+        </div>
+        <div class="ev-poster" aria-hidden="true"><div class="ph aspect-square w-full rounded-[16px]" style="--ph:#E6E6E6"><span class="ph-cap"><b>Photo</b> · Poster</span></div></div>
+        <a href="event-leadership-workshop.html" class="ev-act">View details <span aria-hidden="true">↗</span></a>
+      </li>
+      <li class="ev-row" data-when="upcoming">
+        <time class="ev-date" datetime="2027-01-20"><span class="ev-day">20</span><span class="ev-mon">Jan 2027</span></time>
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">Community day</span><span class="ev-pillar"><span class="pj-dot" style="--c:#111"></span>Environment and Climate</span><span class="ev-sample">Sample event</span></div>
+          <p class="mt-3 text-[19px] font-semibold leading-snug tracking-[-0.02em] md:text-[21px]"><a href="event-community-clean-up.html" class="ev-link">Dolor sit amet community clean-up</a></p>
+          
+          <p class="ev-meta mt-3"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17s5-4.6 5-9a5 5 0 0 0-10 0c0 4.4 5 9 5 9Z"/><circle cx="10" cy="8" r="1.8"/></svg>Al Haouz</span><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2"/></svg>09:00 – 16:00</span></p>
+        </div>
+        <div class="ev-poster" aria-hidden="true"><div class="ph aspect-square w-full rounded-[16px]" style="--ph:#E6E6E6"><span class="ph-cap"><b>Photo</b> · Poster</span></div></div>
+        <a href="event-community-clean-up.html" class="ev-act">View details <span aria-hidden="true">↗</span></a>
+      </li>
+      <li class="ev-row" data-when="upcoming">
+        <time class="ev-date" datetime="2027-02-08"><span class="ev-day">08</span><span class="ev-mon">Feb 2027</span></time>
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">Training</span><span class="ev-pillar"><span class="pj-dot" style="--c:#111"></span>Women’s Empowerment</span><span class="ev-sample">Sample event</span></div>
+          <p class="mt-3 text-[19px] font-semibold leading-snug tracking-[-0.02em] md:text-[21px]"><a href="event-training-of-trainers.html" class="ev-link">Amet consectetur training of trainers</a></p>
+          
+          <p class="ev-meta mt-3"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17s5-4.6 5-9a5 5 0 0 0-10 0c0 4.4 5 9 5 9Z"/><circle cx="10" cy="8" r="1.8"/></svg>Marrakech</span><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2"/></svg>14:00 – 18:00</span></p>
+        </div>
+        <div class="ev-poster" aria-hidden="true"><div class="ph aspect-square w-full rounded-[16px]" style="--ph:#E6E6E6"><span class="ph-cap"><b>Photo</b> · Poster</span></div></div>
+        <a href="event-training-of-trainers.html" class="ev-act">View details <span aria-hidden="true">↗</span></a>
+      </li>
+    </ul>
+  </div>
+</section>
+
 <section id="partners" class="border-t border-ink-light py-14 lg:py-16">
   <div class="wrap">
     <header class="sh">
-      <div class="sh-top"><span class="sh-num">07</span><span class="sh-label">Our Partners</span><span class="sh-rule" aria-hidden="true"></span><a href="partners.html" class="sh-link">All partners <span class="arr" aria-hidden="true">↗</span></a></div>
+      <div class="sh-top"><span class="sh-num">08</span><span class="sh-label">Our Partners</span><span class="sh-rule" aria-hidden="true"></span><a href="partners.html" class="sh-link">All partners <span class="arr" aria-hidden="true">↗</span></a></div>
       <div class="sh-body">
         <h2 class="sh-title reveal">Stronger <span class="sh-soft">Together.</span></h2>
         <div class="sh-aside"><p class="sh-desc">International, national and local organizations that have supported AFCD’s programmes.</p></div>
@@ -720,7 +770,7 @@
 <!-- ============ 10. GET INVOLVED ============ -->
 <section id="get-involved" class="gi-band">
   <div class="wrap py-14 lg:py-16">
-    <div class="sh-top"><span class="sh-num">08</span><span class="sh-label">Get Involved</span><span class="sh-rule" aria-hidden="true"></span></div>
+    <div class="sh-top"><span class="sh-num">09</span><span class="sh-label">Get Involved</span><span class="sh-rule" aria-hidden="true"></span></div>
     <div class="mt-8 grid gap-10 lg:mt-10 lg:grid-cols-12 lg:items-stretch lg:gap-12">
       <div class="flex flex-col lg:col-span-5">
         <h2 class="sh-title sh-md reveal">Let’s Create <span class="sh-soft">Change Together.</span></h2>
@@ -796,7 +846,7 @@
       <div class="ft-panel lg:col-span-8">
         <nav class="ft-col" aria-label="Explore">
           <p class="ft-head"><span>01</span>Explore</p>
-          <ul><li><a href="about.html" class="ft-link"><span>About Us</span><span class="ft-link-arr" aria-hidden="true">↗</span></a></li><li><a href="pillars.html" class="ft-link"><span>Our Pillars</span><span class="ft-link-arr" aria-hidden="true">↗</span></a></li><li><a href="projects.html" class="ft-link"><span>Projects</span><span class="ft-link-arr" aria-hidden="true">↗</span></a></li><li><a href="news.html" class="ft-link"><span>News &amp; Stories</span><span class="ft-link-arr" aria-hidden="true">↗</span></a></li><li><a href="partners.html" class="ft-link"><span>Partners</span><span class="ft-link-arr" aria-hidden="true">↗</span></a></li></ul>
+          <ul><li><a href="about.html" class="ft-link"><span>About Us</span><span class="ft-link-arr" aria-hidden="true">↗</span></a></li><li><a href="pillars.html" class="ft-link"><span>Our Pillars</span><span class="ft-link-arr" aria-hidden="true">↗</span></a></li><li><a href="projects.html" class="ft-link"><span>Projects</span><span class="ft-link-arr" aria-hidden="true">↗</span></a></li><li><a href="news.html" class="ft-link"><span>News &amp; Stories</span><span class="ft-link-arr" aria-hidden="true">↗</span></a></li><li><a href="events.html" class="ft-link"><span>Events</span><span class="ft-link-arr" aria-hidden="true">↗</span></a></li><li><a href="partners.html" class="ft-link"><span>Partners</span><span class="ft-link-arr" aria-hidden="true">↗</span></a></li></ul>
         </nav>
         <nav class="ft-col" aria-label="Our pillars">
           <p class="ft-head"><span>02</span>Our Pillars</p>
@@ -845,6 +895,6 @@
 
 <div id="toast" class="pointer-events-none rounded-full fixed left-1/2 z-[95] -translate-x-1/2 bg-ink-pure px-4 py-3 text-sm text-white opacity-0 transition-opacity duration-300" style="bottom: calc(env(safe-area-inset-bottom,0px) + 76px); max-width: calc(100% - 32px)" role="status"></div>
 
-<script src="assets/main.js?v=30fe0e26"></script>
+<script src="assets/main.js?v=340a8a17"></script>
 </body>
 </html>

@@ -92,17 +92,44 @@
     apply(buttons.some(function (b) { return b.dataset.filter === fromUrl; }) ? fromUrl : 'all');
   })();
 
-  /* ---------- Newsletter (footer): client-side check only, no service connected yet ---------- */
+  /* ---------- Forms → AFCD Studio (only when the build adds <meta name="afcd-forms">) ---------- */
+  var FORMS = (function () { var m = document.querySelector('meta[name="afcd-forms"]'); return m && m.content ? m.content.replace(/\/+$/, '') : ''; })();
+  var PAGE_T0 = Date.now();
+  var NET_FAIL = 'We couldn’t send your message. Please try again, or email contact@afcdteam.com.';
+  if (FORMS) {
+    $$('[data-forms-off]').forEach(function (el) { el.hidden = true; });
+    $$('[data-forms-on]').forEach(function (el) { el.hidden = false; });
+  }
+  function postForm(path, data) {
+    return fetch(FORMS + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'omit', body: JSON.stringify(data) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, body: j || {} }; }); });
+  }
+  function formProblem(res) {
+    var b = res.body || {};
+    if (b.details && b.details.length) return b.details.map(function (d) { return d.message; }).filter(Boolean).join(' ');
+    if (res.status === 429) return b.error || 'Too many attempts. Please wait a few minutes and try again.';
+    return b.error || b.message || NET_FAIL;
+  }
+  function busy(btn, on) { if (!btn) return; btn.disabled = on; if (on) btn.setAttribute('aria-busy', 'true'); else btn.removeAttribute('aria-busy'); }
+
+  /* ---------- Newsletter (footer): sends to Studio when connected, otherwise a local check only ---------- */
   (function () {
     var form = $('#newsletter-form'); if (!form) return;
-    var err = $('.ft-error');
+    var err = $('.ft-error'), errDefault = err ? err.textContent : '';
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.value.trim());
       if (err) err.classList.toggle('hidden', ok);
       form.email.setAttribute('aria-invalid', String(!ok));
-      if (ok) { toast('Thanks! The newsletter isn’t connected yet, so nothing was sent.'); form.reset(); }
-      else form.email.focus();
+      if (!ok) { if (err) err.textContent = errDefault; form.email.focus(); return; }
+      if (!FORMS) { toast('Thanks! The newsletter isn’t connected yet, so nothing was sent.'); form.reset(); return; }
+      var btn = $('button[type="submit"]', form); busy(btn, true);
+      postForm('/newsletter', { email: form.email.value.trim(), website: form.website ? form.website.value : '', t: Date.now() - PAGE_T0, page: location.pathname })
+        .then(function (res) {
+          if (res.status === 200 && res.body.ok) { toast(res.body.message || 'Thanks! You’re subscribed.'); form.reset(); form.email.removeAttribute('aria-invalid'); }
+          else { if (err) { err.textContent = formProblem(res); err.classList.remove('hidden'); } }
+        }, function () { if (err) { err.textContent = NET_FAIL; err.classList.remove('hidden'); } })
+        .then(function () { busy(btn, false); });
     });
   })();
 
@@ -116,7 +143,7 @@
     });
   })();
 
-  /* ---------- Contact form: client-side checks only (no backend yet) ---------- */
+  /* ---------- Contact form: client checks, then sends to Studio when connected ---------- */
   (function () {
     var form = $('#contact-form'); if (!form) return;
     // Topic hint: what to include, and which team inbox it goes to
@@ -163,12 +190,34 @@
       var ok = true;
       checks.forEach(function (c) { c[0].setAttribute('aria-invalid', c[1] ? 'false' : 'true'); if (!c[1]) ok = false; });
       if (form.consent && !form.consent.checked) ok = false;
-      $('.form-error', form).classList.toggle('hidden', ok);
-      if (ok) {
-        toast('Thanks! The form isn’t connected yet, so nothing was sent.');
+      var errBox = $('.form-error', form);
+      if (!errBox.dataset.def) errBox.dataset.def = errBox.textContent;
+      errBox.textContent = errBox.dataset.def;
+      errBox.classList.toggle('hidden', ok);
+      function cleared(msg) {
+        toast(msg);
         form.reset(); if (count) count.textContent = '0';
         var first0 = $('input[name="topic"]:checked', form); if (first0) first0.dispatchEvent(new Event('change'));
         checks.forEach(function (c) { c[0].removeAttribute('aria-invalid'); });
+      }
+      function problem(msg, res) {
+        errBox.textContent = msg; errBox.classList.remove('hidden');
+        ((res && res.body && res.body.details) || []).forEach(function (d) { var f = d.path && form.elements[String(d.path).split('.')[0]]; if (f && f.setAttribute) f.setAttribute('aria-invalid', 'true'); });
+        errBox.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+      }
+      if (ok && !FORMS) {
+        cleared('Thanks! The form isn’t connected yet, so nothing was sent.');
+      } else if (ok) {
+        var btn = $('button[type="submit"]', form), topic = $('input[name="topic"]:checked', form);
+        busy(btn, true);
+        postForm('/contact', {
+          topic: topic ? topic.value : 'General question', name: form.name.value.trim(), email: form.email.value.trim(),
+          phone: form.phone.value.trim(), org: form.org.value.trim(), message: form.message.value.trim(), consent: true,
+          website: form.website ? form.website.value : '', t: Date.now() - PAGE_T0
+        }).then(function (res) {
+          if (res.status === 200 && res.body.ok) cleared(res.body.message || 'Thanks! Your message was sent.');
+          else problem(formProblem(res), res);
+        }, function () { problem(NET_FAIL); }).then(function () { busy(btn, false); });
       } else {
         var first = checks.filter(function (c) { return !c[1]; })[0];
         (first ? first[0] : form.consent).focus();

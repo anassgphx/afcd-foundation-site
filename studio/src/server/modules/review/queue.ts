@@ -26,6 +26,7 @@ export const RECORDS: RecordSrc[] = [
   R('event', 'Event', 'event', t.events, t.events.title, t.eventRevisions, 'eventId', (id) => `/studio/events/${id}`, (id) => `/events/${id}`),
   R('opportunity', 'Opportunity', 'opportunity', t.opportunities, t.opportunities.title, t.opportunityRevisions, 'opportunityId', (id) => `/studio/opportunities/${id}`, (id) => `/opportunities/${id}`),
   R('partner', 'Partner', 'partner', t.partners, t.partners.name, t.partnerRevisions, 'partnerId', (id) => `/studio/partners/${id}`, (id) => `/partners/${id}`),
+  R('pillar', 'Pillar', 'pillar', t.pillars, t.pillars.name, t.pillarRevisions, 'pillarId', (id) => `/studio/pillars/${id}`, (id) => `/pillars/${id}`),
   R('page', 'Page', 'page', t.pages, t.pages.title, t.pageRevisions, 'pageId', (id) => `/studio/pages/${id}`, (id) => `/pages/${id}`),
   R('homepage', 'Homepage', 'page', t.pageContents, t.pageContents.file, t.pageContentRevisions, 'contentId', () => '/studio/home', () => '/home'),
   R('seo', 'SEO settings', 'seo', t.seoOverrides, t.seoOverrides.file, t.seoRevisions, 'overrideId', () => '/studio/seo/pages', (id) => `/seo/overrides/${id}`),

@@ -38,6 +38,13 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
     if (newsFile && existsSync(newsFile)) writeFileSync(join(out, 'news.html'), (JSON.parse(readFileSync(newsFile, 'utf8')).articles as any[]).map((a) => `<li><a href="${a.url}">${a.title}</a></li>`).join('\n'));
     const partnersFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/partners.json') : mode.partnersFile;
     if (partnersFile && existsSync(partnersFile)) writeFileSync(join(out, 'partners.html'), (JSON.parse(readFileSync(partnersFile, 'utf8')).partners as any[]).map((p) => `<li data-studio-partner-rev="${p.revision}"><span>${p.name}</span></li>`).join('\n'));
+    // Stand-in for content.py's pillar pages (src/data/pillars.json): hub + one page per pillar with its escaped texts.
+    const pillarsFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/pillars.json') : mode.pillarsFile;
+    if (pillarsFile && existsSync(pillarsFile)) {
+      const pls = JSON.parse(readFileSync(pillarsFile, 'utf8')).pillars as any[];
+      writeFileSync(join(out, 'pillars.html'), pls.map((p) => `<li style="--c:${p.colour}"><a href="${p.file}">${p.name}</a><p>${p.summary}</p></li>`).join('\n'));
+      for (const p of pls) writeFileSync(join(out, p.file), `<h1>${p.name}</h1><p>${p.summary}</p><p>${p.intro}</p>${p.image ? `<img src="${p.image.src}">` : ''}`);
+    }
     // Stand-in for the events templates: listing + one page per event with the revision marker.
     const eventsFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/events.json') : mode.eventsFile;
     if (eventsFile && existsSync(eventsFile)) {

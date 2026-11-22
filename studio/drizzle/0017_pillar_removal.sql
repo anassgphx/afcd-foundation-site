@@ -1,0 +1,1 @@
+ALTER TABLE "pillars" ADD COLUMN "remove_requested" boolean DEFAULT false NOT NULL;

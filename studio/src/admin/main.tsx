@@ -11,6 +11,7 @@ import { PagesList } from './pages/PagesList.tsx';
 import { Builder } from './pages/Builder.tsx';
 import { NewsList, ArticleEditor } from './pages/News.tsx';
 import { PartnersList, PartnerEditor } from './pages/Partners.tsx';
+import { PillarsScreen } from './pages/Pillars.tsx';
 import { EventsList, EventEditor } from './pages/Events.tsx';
 import { OpportunitiesList, OpportunityEditor } from './pages/Opportunities.tsx';
 import { InboxPage } from './pages/Inbox.tsx';
@@ -154,6 +155,9 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   const ev = path.match(/^\/studio\/events\/([0-9a-f-]{36})$/);
   if (ev) return { title: 'Event', el: <EventEditor key={ev[1]} id={ev[1]} /> };
   if (path.startsWith('/studio/events')) return { title: 'Events', el: <EventsList /> };
+  const pl = path.match(/^\/studio\/pillars\/([0-9a-f-]{36})$/);
+  if (pl) return { title: 'Pillar', el: <PillarsScreen key="pillars" id={pl[1]} /> };
+  if (path.startsWith('/studio/pillars')) return { title: 'Pillars', el: <PillarsScreen key="pillars" /> };
   const pt = path.match(/^\/studio\/partners\/([0-9a-f-]{36})$/);
   if (pt) return { title: 'Partner', el: <PartnerEditor key={pt[1]} id={pt[1]} /> };
   if (path.startsWith('/studio/partners')) return { title: 'Partners', el: <PartnersList /> };

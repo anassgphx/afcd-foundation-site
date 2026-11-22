@@ -190,7 +190,7 @@ describe('0015_inbox migration', () => {
     const dir = mkdtempSync(join(tmpdir(), 'studio-mig-'));
     cpSync(MIGRATIONS, dir, { recursive: true });
     const j = JSON.parse(readFileSync(join(dir, 'meta/_journal.json'), 'utf8'));
-    j.entries = j.entries.filter((e: { tag: string }) => e.tag !== '0015_inbox');
+    j.entries = j.entries.filter((e: { idx: number }) => e.idx < 15);   // everything before 0015 (later migrations too are left out)
     writeFileSync(join(dir, 'meta/_journal.json'), JSON.stringify(j));
     const pg = new PGlite();
     const db = drizzle(pg);
@@ -205,6 +205,8 @@ describe('0015_inbox migration', () => {
     expect((await pg.query<{ body: string }>(`select body from submission_events where kind = 'note'`)).rows).toEqual([{ body: 'Fake legacy note' }]);
     await expect(pg.exec(`update form_submissions set status = 'done'`)).rejects.toThrow();   // CHECK constraint
 
+    await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0017_pillar_removal_down.sql'), 'utf8'));   // newer migrations are undone first
+    await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0016_pillars_down.sql'), 'utf8'));   // newer migrations are undone first
     await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0015_inbox_down.sql'), 'utf8'));
     const back = (await pg.query<{ name: string; status: string; note: string }>('select name, status::text as status, note from form_submissions order by name')).rows;
     expect(back.map((r) => [r.name, r.status])).toEqual([['', 'done'], ['Fake Done', 'done'], ['Fake New', 'new'], ['Fake Spam', 'spam']]);

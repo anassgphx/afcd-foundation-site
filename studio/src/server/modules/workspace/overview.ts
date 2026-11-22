@@ -1,7 +1,7 @@
 // Dashboard overview: one read across every module, filtered by the user's permissions. Only real counts and records.
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
-import { articles, events, formSubmissions, media, opportunities, pageContents, pages, partners, projects, publishJobs, seoAudits } from '../../db/schema.ts';
+import { articles, events, formSubmissions, media, opportunities, pageContents, pages, partners, pillars, projects, publishJobs, seoAudits } from '../../db/schema.ts';
 import { can, type Role } from '../../rbac.ts';
 import { TEXT_PAGES } from '../home/service.ts';
 import { todayMorocco } from '../events/render.ts';
@@ -13,7 +13,7 @@ type Recent = { kind: string; title: string; status: string; live: boolean; href
 const JOB_LABEL: Record<string, string> = {
   publish_project: 'Published a project', unpublish_project: 'Removed a project', publish_page: 'Published a page', unpublish_page: 'Removed a page',
   publish_article: 'Published a story', publish_article_scheduled: 'Published a scheduled story', unpublish_article: 'Removed a story',
-  publish_partner: 'Published a partner', unpublish_partner: 'Removed a partner', publish_event: 'Published an event', unpublish_event: 'Removed an event',
+  publish_partner: 'Published a partner', publish_pillar: 'Published a pillar', unpublish_partner: 'Removed a partner', publish_event: 'Published an event', unpublish_event: 'Removed an event',
   publish_opportunity: 'Published an opportunity', unpublish_opportunity: 'Removed an opportunity', publish_seo: 'Published SEO settings', unpublish_seo: 'Restored a page’s own SEO',
   publish_home: 'Published the homepage', unpublish_home: 'Restored the original homepage', rebuild: 'Rebuilt the website',
   publish_redirects: 'Published redirects', publish_seo_schema: 'Published structured data', unpublish_seo_schema: 'Removed structured data',
@@ -54,6 +54,7 @@ export async function overview(db: DB, user: { id: string; role: Role }) {
   if (can(role, 'event.read')) await take('Event', (id) => `/studio/events/${id}`, q(events as never, events.title as never));
   if (can(role, 'opportunity.read')) await take('Opportunity', (id) => `/studio/opportunities/${id}`, q(opportunities as never, opportunities.title as never));
   if (can(role, 'partner.read')) await take('Partner', (id) => `/studio/partners/${id}`, q(partners as never, partners.name as never));
+  if (can(role, 'pillar.read')) await take('Pillar', (id) => `/studio/pillars/${id}`, db.select({ id: pillars.id, title: pillars.name, status: pillars.status, live: sql<boolean>`${pillars.publishedRevisionId} is not null`, at: pillars.updatedAt }).from(pillars).where(isNotNull(pillars.draft)).orderBy(desc(pillars.updatedAt)).limit(6));
   if (can(role, 'page.read')) {
     await take('Page', (id) => `/studio/pages/${id}`, q(pages as never, pages.title as never));
     for (const c of await db.select().from(pageContents)) if (c.publishedRevisionId || Object.keys(c.values ?? {}).length || c.layout) { const p = TEXT_PAGES[c.file]; if (p) recent.push({ kind: p.label, title: p.label, status: c.status, live: !!c.publishedRevisionId, href: p.href, at: c.updatedAt.toISOString() }); }
@@ -101,7 +102,7 @@ export async function overview(db: DB, user: { id: string; role: Role }) {
   const ids = jobs.map((j) => j.entityId).filter(Boolean) as string[];
   const names = new Map<string, string>();
   if (ids.length) {
-    for (const [t, col] of [[projects, projects.name], [articles, articles.title], [events, events.title], [opportunities, opportunities.title], [partners, partners.name], [pages, pages.title]] as const) {
+    for (const [t, col] of [[projects, projects.name], [articles, articles.title], [events, events.title], [opportunities, opportunities.title], [partners, partners.name], [pillars, pillars.name], [pages, pages.title]] as const) {
       for (const r of await db.select({ id: (t as typeof projects).id, n: col as typeof projects.name }).from(t as typeof projects).where(inArray((t as typeof projects).id, ids))) names.set(r.id, r.n);
     }
   }

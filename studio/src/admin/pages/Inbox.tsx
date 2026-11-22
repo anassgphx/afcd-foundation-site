@@ -18,6 +18,8 @@ type Row = { id: string; topic: string; name: string; email: string; status: Sta
 type Ev = { id: string; kind: string; body: string; meta: Record<string, any> | null; at: string; actorId: string | null; actorName: string | null };
 type Msg = Omit<Row, 'preview'> & { phone: string; org: string; message: string; consentAt: string | null; archivedAt: string | null; closedAt: string | null; events: Ev[] };
 type Person = { id: string; name: string };
+type MailInfo = { ready: boolean; fromEmail: string; fromName: string };
+type MailSettings = { enabled: boolean; host: string; port: number; security: 'starttls' | 'tls' | 'none'; user: string; fromName: string; fromEmail: string; replyTo: string; hasPassword: boolean; ready: boolean; updatedAt: string | null; updatedBy: string | null; keySource: 'env' | 'data-folder' };
 
 export const STATUSES: [Status, string][] = [['new', 'New'], ['in_progress', 'In progress'], ['replied', 'Replied'], ['closed', 'Closed']];
 const SLABEL = Object.fromEntries(STATUSES) as Record<Status, string>;
@@ -45,10 +47,13 @@ const Glyph = ({ n, solid, ...p }: { n: string; solid?: boolean } & Omit<React.S
   : <Icon n={n} {...p} />);
 
 const firstName = (n: string) => n.trim().split(/\s+/)[0] ?? '';
+const replySubject = (m: Msg) => `Re: ${m.topic || 'Your message'} · AFCD Foundation`;
+function replyBody(m: Msg, max = 800) {
+  const quoted = m.message.slice(0, max).split('\n').map((l) => `> ${l}`).join('\n');
+  return `Hello ${firstName(m.name)},\n\nThank you for contacting AFCD Foundation.\n\n\n\nBest regards,\nAFCD Foundation\n\n---\nOn ${fmtDate(m.createdAt)}, ${m.name} wrote:\n${quoted}`;
+}
 function mailto(m: Msg) {
-  const quoted = m.message.slice(0, 800).split('\n').map((l) => `> ${l}`).join('\n');
-  const body = `Hello ${firstName(m.name)},\n\nThank you for contacting AFCD Foundation.\n\n\n\nBest regards,\nAFCD Foundation\n\n---\nOn ${fmtDate(m.createdAt)}, ${m.name} wrote:\n${quoted}`;
-  return `mailto:${encodeURIComponent(m.email).replace('%40', '@')}?subject=${encodeURIComponent(`Re: ${m.topic || 'Your message'} · AFCD Foundation`)}&body=${encodeURIComponent(body)}`;
+  return `mailto:${encodeURIComponent(m.email).replace('%40', '@')}?subject=${encodeURIComponent(replySubject(m))}&body=${encodeURIComponent(replyBody(m))}`;
 }
 
 // ================================================================ Page
@@ -59,7 +64,9 @@ export function InboxPage() {
   const [sum, setSum] = useState<Summary | null>(null);
   const [settings, setSettings] = useState(false);
   const loadSum = useCallback(() => api<Summary>('/inbox/summary').then(setSum).catch((e) => toast(e.message, true)), []);
-  useEffect(() => { loadSum(); }, [loadSum]);
+  const [mail, setMail] = useState<MailInfo>({ ready: false, fromEmail: '', fromName: '' });
+  const loadMail = useCallback(() => api<MailInfo>('/inbox/mail').then(setMail).catch(() => undefined), []);
+  useEffect(() => { loadSum(); loadMail(); }, [loadSum, loadMail]);
   // new mail arrives while the page is open: refresh when the tab comes back into view
   useEffect(() => { const f = () => { if (document.visibilityState === 'visible') { loadSum(); window.dispatchEvent(new Event('studio:inbox-refresh')); } }; document.addEventListener('visibilitychange', f); return () => document.removeEventListener('visibilitychange', f); }, [loadSum]);
   const changed = useCallback(() => { loadSum(); pingBadge(); }, [loadSum]);
@@ -81,9 +88,9 @@ export function InboxPage() {
       <Filters sum={sum} st={st} choose={choose} />
       {view === 'newsletter'
         ? <Subscribers onChange={changed} />
-        : <Mail st={st} set={set} sum={sum} onChange={changed} />}
+        : <Mail st={st} set={set} sum={sum} onChange={changed} mail={mail} onSetupMail={() => setSettings(true)} />}
     </div>
-    {settings && <SettingsDialog forms={sum.forms} onClose={() => setSettings(false)} onSaved={() => { setSettings(false); loadSum(); toast('Settings saved'); }} />}
+    {settings && <SettingsDialog forms={sum.forms} onClose={() => setSettings(false)} onSaved={() => { setSettings(false); loadSum(); loadMail(); toast('Settings saved'); }} />}
   </div>;
 }
 
@@ -122,7 +129,7 @@ function Filters({ sum, st, choose }: { sum: Summary; st: Record<string, string>
 }
 
 // ================================================================ List + reading pane
-function Mail({ st, set, sum, onChange }: { st: Record<string, string>; set: (k: string, v: string) => void; sum: Summary; onChange: () => void }) {
+function Mail({ st, set, sum, onChange, mail, onSetupMail }: { st: Record<string, string>; set: (k: string, v: string) => void; sum: Summary; onChange: () => void; mail: MailInfo; onSetupMail: () => void }) {
   const can = useCan(); const toast = useToast();
   const [q, setQ] = useState(st.q);
   const [data, setData] = useState<{ total: number; rows: Row[] } | null>(null);
@@ -234,7 +241,7 @@ function Mail({ st, set, sum, onChange }: { st: Record<string, string>; set: (k:
         </ul>}
     </section>
     <section className="ix-read" aria-label="Message">
-      {st.m ? <Reader key={st.m} id={st.m} people={people} onBack={() => set('m', '')} onChanged={async (p) => { if (p) patchRow(st.m, p); await reload(); }} onDelete={() => setConfirmDel([st.m])} onGone={() => set('m', '')} onOpened={onChange} />
+      {st.m ? <Reader key={st.m} id={st.m} people={people} onBack={() => set('m', '')} onChanged={async (p) => { if (p) patchRow(st.m, p); await reload(); }} onDelete={() => setConfirmDel([st.m])} onGone={() => set('m', '')} onOpened={onChange} mail={mail} onSetupMail={onSetupMail} />
         : <div className="ix-read-empty"><Icon n="mail" /><b>{sum.views.unread.total ? `${sum.views.unread.total} unread` : 'Nothing selected'}</b><small className="muted">Choose a message to read it. Use <kbd>j</kbd> and <kbd>k</kbd> to move through the list.</small></div>}
     </section>
     {confirmDel && <Modal size="sm" title={confirmDel.length === 1 ? 'Delete this message?' : `Delete ${confirmDel.length} messages?`} onClose={() => setConfirmDel(null)}
@@ -244,11 +251,12 @@ function Mail({ st, set, sum, onChange }: { st: Record<string, string>; set: (k:
 }
 
 // ================================================================ Reading pane
-function Reader({ id, people, onBack, onChanged, onDelete, onGone, onOpened }: { id: string; people: Person[]; onBack: () => void; onChanged: (p?: Partial<Row>) => Promise<void>; onDelete: () => void; onGone: () => void; onOpened: () => void }) {
+function Reader({ id, people, onBack, onChanged, onDelete, onGone, onOpened, mail, onSetupMail }: { id: string; people: Person[]; onBack: () => void; onChanged: (p?: Partial<Row>) => Promise<void>; onDelete: () => void; onGone: () => void; onOpened: () => void; mail: MailInfo; onSetupMail: () => void }) {
   const can = useCan(); const me = useMe(); const toast = useToast();
   const [m, setM] = useState<Msg | null>(null);
   const [note, setNote] = useState(''); const [busy, setBusy] = useState('');
   const [nudge, setNudge] = useState(false);
+  const [composing, setComposing] = useState(false);
   const load = useCallback(() => api<Msg>(`/inbox/messages/${id}`).then(setM), [id]);
   useEffect(() => { load().then(onOpened).catch((e) => { toast(e.message, true); onGone(); }); }, [load]);
   // on a phone the reader replaces the list: start at the top of the message
@@ -304,11 +312,18 @@ function Reader({ id, people, onBack, onChanged, onDelete, onGone, onOpened }: {
 
     <div className="ix-body">{m.message}</div>
 
-    <div className="ix-reply">
-      {manage ? <a className="btn btn-primary" href={mailto(m)} onClick={() => { post(`/inbox/messages/${m.id}/reply`).then(load).catch(() => undefined); if (m.status !== 'replied' && m.status !== 'closed') setNudge(true); }}><Glyph n="reply" />Reply by email</a>
-        : <a className="btn btn-primary" href={mailto(m)}><Glyph n="reply" />Reply by email</a>}
-      <small className="muted">Opens your email app with the subject and a quote filled in. Studio doesn’t send email.</small>
-    </div>
+    {composing ? <Composer m={m} mail={mail} onCancel={() => setComposing(false)} onSent={async (marked) => { setComposing(false); await load(); await onChanged(marked && m.status !== 'closed' ? { status: 'replied' } : undefined); toast(`Reply sent to ${m.email}`); }} />
+      : <div className="ix-reply">
+        {manage && mail.ready && !m.spam ? <>
+          <button className="btn btn-primary" onClick={() => { setComposing(true); setNudge(false); }}><Glyph n="reply" />Reply</button>
+          <a className="btn btn-ghost" href={mailto(m)} onClick={() => { post(`/inbox/messages/${m.id}/reply`).then(load).catch(() => undefined); if (m.status !== 'replied' && m.status !== 'closed') setNudge(true); }}>Open in email app</a>
+          <small className="muted">Sent from {mail.fromEmail} and kept in the history below.</small>
+        </> : <>
+          {manage ? <a className="btn btn-primary" href={mailto(m)} onClick={() => { post(`/inbox/messages/${m.id}/reply`).then(load).catch(() => undefined); if (m.status !== 'replied' && m.status !== 'closed') setNudge(true); }}><Glyph n="reply" />Reply by email</a>
+            : <a className="btn btn-primary" href={mailto(m)}><Glyph n="reply" />Reply by email</a>}
+          <small className="muted">Opens your email app with the subject and a quote filled in.{manage && !m.spam && <> To send from Studio, <button type="button" className="ix-link" onClick={onSetupMail}>set up email sending</button>.</>}</small>
+        </>}
+      </div>}
     {nudge && <div className="notice n-info ix-nudge" role="status"><div>Sent your reply? <button className="btn btn-sm btn-primary" onClick={() => { setNudge(false); setStatus('replied'); }}>Mark as replied</button> <button className="btn btn-sm btn-ghost" onClick={() => setNudge(false)}>Not yet</button></div></div>}
 
     <dl className="ix-facts">{facts.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
@@ -321,8 +336,10 @@ function Reader({ id, people, onBack, onChanged, onDelete, onGone, onOpened }: {
         <div className="ix-note-f"><small className="muted">⌘/Ctrl + Enter to add</small><button className="btn btn-sm" disabled={!note.trim() || busy === 'note'}>{busy === 'note' ? 'Adding…' : 'Add note'}</button></div>
       </form>}
       <ol className="ix-timeline">
-        {[...m.events].reverse().map((e) => <li key={e.id} className={e.kind === 'note' ? 'ix-ev-note' : ''}>
-          {e.kind === 'note' ? <div className="ix-note"><div className="ix-note-h"><b>{e.actorName ?? 'Former teammate'}</b><time className="muted" title={fmtDate(e.at)}>{ago(e.at)}</time>
+        {[...m.events].reverse().map((e) => <li key={e.id} className={e.kind === 'note' || e.kind === 'email_sent' ? 'ix-ev-note' : ''}>
+          {e.kind === 'email_sent' ? <details className="ix-sent"><summary><Glyph n="send" /><span><b>{e.actorName ?? 'Former teammate'}</b> sent a reply <span className="muted">· {String(e.meta?.subject ?? '')}</span></span><time className="muted" title={fmtDate(e.at)}>{ago(e.at)}</time></summary>
+            <div className="ix-sent-h muted">From {String(e.meta?.from ?? '')} to {String(e.meta?.to ?? '')}</div><p>{e.body}</p></details>
+          : e.kind === 'note' ? <div className="ix-note"><div className="ix-note-h"><b>{e.actorName ?? 'Former teammate'}</b><time className="muted" title={fmtDate(e.at)}>{ago(e.at)}</time>
             {manage && e.actorId === me.user.id && <button className="btn btn-ghost btn-sm btn-danger" onClick={() => run('delnote', () => del(`/inbox/messages/${m.id}/notes/${e.id}`), 'Note deleted')}>Delete</button>}</div><p>{e.body}</p></div>
             : <><span className="ix-ev-dot" aria-hidden="true" /><span><b>{e.actorName ?? (e.actorId ? 'Former teammate' : 'Studio')}</b> {describe(e)} <time className="muted" title={fmtDate(e.at)}>· {ago(e.at)}</time></span></>}
         </li>)}
@@ -340,8 +357,46 @@ function describe(e: Ev) {
     case 'archive': return 'archived it'; case 'unarchive': return 'moved it back to the inbox';
     case 'spam': return 'marked it as spam'; case 'not_spam': return 'marked it as not spam';
     case 'reply': return 'opened a reply in their email app';
+    case 'email_sent': return 'sent a reply';
     default: return e.kind;
   }
+}
+
+// ================================================================ Reply composer (sends through the saved SMTP server)
+function Composer({ m, mail, onCancel, onSent }: { m: Msg; mail: MailInfo; onCancel: () => void; onSent: (markedReplied: boolean) => Promise<void> }) {
+  const toast = useToast();
+  const draftKey = `studio.reply.${m.id}`;
+  const initial = { subject: replySubject(m), body: replyBody(m, 4000) };
+  const [d, setD] = useState<{ subject: string; body: string }>(() => { try { const x = localStorage.getItem(draftKey); if (x) return JSON.parse(x); } catch { /* private mode */ } return initial; });
+  const [mark, setMark] = useState(m.status !== 'closed');
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const dirty = d.subject !== initial.subject || d.body !== initial.body;
+  // keep an unsent draft in this browser, so a reload or a misclick doesn't lose it
+  useEffect(() => { try { if (dirty) localStorage.setItem(draftKey, JSON.stringify(d)); else localStorage.removeItem(draftKey); } catch { /* private mode */ } }, [d]);
+  useEffect(() => { const t = bodyRef.current; if (!t) return; t.focus(); const i = t.value.indexOf('\n\n\n'); if (i > 0) t.setSelectionRange(i + 2, i + 2); }, []);
+  const clear = () => { try { localStorage.removeItem(draftKey); } catch { /* private mode */ } };
+  async function send() {
+    setErr(''); setBusy(true);
+    try { await post(`/inbox/messages/${m.id}/send`, { subject: d.subject, body: d.body, markReplied: mark }); clear(); await onSent(mark); }
+    catch (e) { setErr((e as Error).message); toast((e as Error).message, true); } finally { setBusy(false); }
+  }
+  return <form className="ix-compose" aria-label="Reply" onSubmit={(e) => { e.preventDefault(); if (!busy) send(); }}>
+    <div className="ix-compose-row"><span>From</span><b>{mail.fromName ? `${mail.fromName} <${mail.fromEmail}>` : mail.fromEmail}</b></div>
+    <div className="ix-compose-row"><span>To</span><b>{m.name} &lt;{m.email}&gt;</b></div>
+    <label className="ix-compose-row"><span>Subject</span><input className="input" value={d.subject} maxLength={200} onChange={(e) => setD({ ...d, subject: e.target.value })} required /></label>
+    <textarea ref={bodyRef} className="textarea ix-compose-body" value={d.body} maxLength={20000} onChange={(e) => setD({ ...d, body: e.target.value })} aria-label="Reply text" required
+      onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); if (!busy) send(); } if (e.key === 'Escape' && !dirty) onCancel(); }} />
+    {err && <div className="notice n-warn" role="alert"><div>{err}</div></div>}
+    <div className="ix-compose-f">
+      <label className="check"><input type="checkbox" checked={mark} onChange={(e) => setMark(e.target.checked)} /><span>Mark as replied</span></label>
+      <span className="ix-compose-btns">
+        <button type="button" className="btn btn-ghost" onClick={() => { if (!dirty || confirm('Discard this reply?')) { clear(); onCancel(); } }}>{dirty ? 'Discard' : 'Cancel'}</button>
+        <button className="btn btn-primary" disabled={busy || !d.subject.trim() || !d.body.trim()}><Icon n="send" />{busy ? 'Sending…' : 'Send'}</button>
+      </span>
+    </div>
+    <small className="muted">⌘/Ctrl + Enter to send. Plain text. The reply and its text are kept in this message’s history.</small>
+  </form>;
 }
 
 // ================================================================ Newsletter subscribers
@@ -382,25 +437,63 @@ function Subscribers({ onChange }: { onChange: () => void }) {
 
 // ================================================================ Settings
 function SettingsDialog({ forms, onClose, onSaved }: { forms: FormInfo[]; onClose: () => void; onSaved: () => void }) {
+  const me = useMe(); const toast = useToast();
   const [v, setV] = useState(() => Object.fromEntries(forms.map((f) => [f.key, { ...f.settings }])) as Record<string, FormInfo['settings']>);
-  const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const [mail, setMail] = useState<MailSettings | null>(null); const [pw, setPw] = useState<string | undefined>(undefined);
+  const [err, setErr] = useState(''); const [busy, setBusy] = useState(''); const [tested, setTested] = useState('');
+  useEffect(() => { api<MailSettings>('/inbox/mail/settings').then(setMail).catch((e) => setErr(e.message)); }, []);
   const up = (k: string, p: Partial<FormInfo['settings']>) => setV((x) => ({ ...x, [k]: { ...x[k], ...p } }));
+  const um = (p: Partial<MailSettings>) => setMail((x) => x && { ...x, ...p });
+  const mailBody = () => mail && { enabled: mail.enabled, host: mail.host, port: mail.port, security: mail.security, user: mail.user, fromName: mail.fromName, fromEmail: mail.fromEmail, replyTo: mail.replyTo, ...(pw !== undefined ? { password: pw } : {}) };
+  async function saveMail() { if (!mail) return; const r = await put<MailSettings>('/inbox/mail/settings', mailBody()); setMail(r); setPw(undefined); }
   async function save() {
-    setErr(''); setBusy(true);
-    try { for (const f of forms) await put(`/inbox/settings/${f.key}`, { enabled: v[f.key].enabled, retentionDays: v[f.key].retentionDays, ...(f.key === 'contact' ? { closedRetentionMonths: v[f.key].closedRetentionMonths } : {}) }); onSaved(); }
-    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    setErr(''); setBusy('save');
+    try {
+      for (const f of forms) await put(`/inbox/settings/${f.key}`, { enabled: v[f.key].enabled, retentionDays: v[f.key].retentionDays, ...(f.key === 'contact' ? { closedRetentionMonths: v[f.key].closedRetentionMonths } : {}) });
+      await saveMail(); onSaved();
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(''); }
   }
+  async function test() {
+    setErr(''); setTested(''); setBusy('test');
+    try { await saveMail(); const r = await post<{ to: string }>('/inbox/mail/test', {}); setTested(`Test email sent to ${r.to}. Check that inbox (and its spam folder).`); toast('Test email sent'); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(''); }
+  }
+  const PORTS = { starttls: 587, tls: 465, none: 25 } as const;
   const c = v.contact;
-  return <Modal title="Inbox settings" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button></>}>
+  return <Modal title="Inbox settings" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={!!busy} onClick={save}>{busy === 'save' ? 'Saving…' : 'Save'}</button></>}>
     <div className="modal-b stack ix-settings">
+      <fieldset className="ix-smtp"><legend>Email sending (SMTP) {mail && <span className={`ix-st ${mail.ready ? 's-replied' : 's-closed'}`}>{mail.ready ? 'On' : 'Off'}</span>}</legend>
+        {!mail ? <div className="skeleton" style={{ height: 120 }} /> : <>
+          <p className="muted" style={{ margin: 0 }}>Lets your team answer website messages from the Inbox. Use the SMTP details from your email provider (for example Google Workspace, Microsoft 365 or your host). Replies are plain text.</p>
+          <label className="check"><input type="checkbox" checked={mail.enabled} onChange={(e) => um({ enabled: e.target.checked })} /><span><b>Send replies from Studio</b></span></label>
+          <div className="ix-grid">
+            <Field label="SMTP server"><input className="input" aria-label="SMTP server" value={mail.host} placeholder="smtp.example.org" autoComplete="off" spellCheck={false} onChange={(e) => um({ host: e.target.value.trim() })} /></Field>
+            <Field label="Security"><select className="select" aria-label="Security" value={mail.security} onChange={(e) => { const s = e.target.value as MailSettings['security']; um({ security: s, port: Object.values(PORTS).includes(mail.port as 25) ? PORTS[s] : mail.port }); }}>
+              <option value="starttls">STARTTLS (usually port 587)</option><option value="tls">SSL/TLS (usually port 465)</option><option value="none">None (local relay only)</option></select></Field>
+            <Field label="Port"><input className="input" aria-label="Port" type="number" min={1} max={65535} value={mail.port} onChange={(e) => um({ port: Number(e.target.value) })} /></Field>
+            <Field label="Username" hint="Often the full email address."><input className="input" aria-label="Username" value={mail.user} autoComplete="off" spellCheck={false} onChange={(e) => um({ user: e.target.value })} /></Field>
+            <Field label="Password" hint={mail.hasPassword && pw === undefined ? <>A password is saved (encrypted). <button type="button" className="ix-link" onClick={() => setPw('')}>Remove it</button></> : 'For Google or Microsoft accounts, use an app password.'}>
+              <input className="input" aria-label="SMTP password" type="password" autoComplete="new-password" value={pw ?? ''} placeholder={mail.hasPassword ? '•••••••• (unchanged)' : ''} onChange={(e) => setPw(e.target.value)} /></Field>
+            <Field label="Sender name"><input className="input" aria-label="Sender name" value={mail.fromName} maxLength={100} onChange={(e) => um({ fromName: e.target.value })} /></Field>
+            <Field label="Sender email" hint="Must be an address your SMTP account may send from."><input className="input" aria-label="Sender email" type="email" value={mail.fromEmail} placeholder="contact@afcdteam.com" onChange={(e) => um({ fromEmail: e.target.value.trim() })} /></Field>
+            <Field label="Reply-to (optional)" hint="Where answers to your replies go, if not the sender email."><input className="input" aria-label="Reply-to (optional)" type="email" value={mail.replyTo} onChange={(e) => um({ replyTo: e.target.value.trim() })} /></Field>
+          </div>
+          {mail.security === 'none' && mail.host && !/^(localhost|127\.0\.0\.1)$/.test(mail.host) && <div className="notice n-warn"><div>Without encryption the password and messages cross the network in clear text. Use STARTTLS or SSL/TLS for any external server.</div></div>}
+          <div className="ix-smtp-f">
+            <button type="button" className="btn" disabled={!!busy || !mail.enabled} onClick={test} title={mail.enabled ? `Saves these settings and sends a test to ${me.user.email}` : 'Switch sending on first'}>{busy === 'test' ? 'Sending…' : 'Save and send a test email'}</button>
+            <small className="muted">{mail.updatedAt ? `Last changed ${ago(mail.updatedAt)}${mail.updatedBy ? ` by ${mail.updatedBy}` : ''}.` : 'Not set up yet.'}{mail.keySource === 'data-folder' ? ' The password is encrypted with a key in Studio’s data folder.' : ''}</small>
+          </div>
+          {tested && <div className="notice n-info" role="status"><div>{tested}</div></div>}
+        </>}
+      </fieldset>
       {forms.map((f) => <fieldset key={f.key}><legend>{f.label} <small className="muted">· {f.site}</small></legend>
         <label className="check"><input type="checkbox" checked={v[f.key].enabled} onChange={(e) => up(f.key, { enabled: e.target.checked })} /><span><b>Accept new submissions</b><br /><small className="muted">When paused, the website asks people to email contact@afcdteam.com instead.</small></span></label>
         <Field label="Delete every submission after (days)" hint={f.key === 'contact' ? 'Spam is deleted after 30 days.' : 'The subscriber list itself is kept until people unsubscribe or are deleted.'}>
-          <input className="input" type="number" min={30} max={1825} value={v[f.key].retentionDays} onChange={(e) => up(f.key, { retentionDays: Number(e.target.value) })} /></Field>
+          <input className="input" aria-label="Delete every submission after (days)" type="number" min={30} max={1825} value={v[f.key].retentionDays} onChange={(e) => up(f.key, { retentionDays: Number(e.target.value) })} /></Field>
       </fieldset>)}
       {c && <fieldset><legend>Closed messages</legend>
-        <label className="check"><input type="checkbox" checked={c.closedRetentionMonths != null} onChange={(e) => up('contact', { closedRetentionMonths: e.target.checked ? 6 : null })} /><span><b>Delete closed messages sooner</b><br /><small className="muted">Personal data is kept only as long as needed. Notes and history are deleted with the message.</small></span></label>
-        {c.closedRetentionMonths != null && <Field label="Months after closing"><input className="input" type="number" min={1} max={60} value={c.closedRetentionMonths} onChange={(e) => up('contact', { closedRetentionMonths: Number(e.target.value) })} /></Field>}
+        <label className="check"><input type="checkbox" checked={c.closedRetentionMonths != null} onChange={(e) => up('contact', { closedRetentionMonths: e.target.checked ? 6 : null })} /><span><b>Delete closed messages sooner</b><br /><small className="muted">Personal data is kept only as long as needed. Notes, replies and history are deleted with the message.</small></span></label>
+        {c.closedRetentionMonths != null && <Field label="Months after closing"><input className="input" aria-label="Months after closing" type="number" min={1} max={60} value={c.closedRetentionMonths} onChange={(e) => up('contact', { closedRetentionMonths: Number(e.target.value) })} /></Field>}
       </fieldset>}
       <div className="notice n-info"><div>The website sends forms here only when it is built with <span className="mono">FORMS_ENDPOINT</span> set to this Studio’s address. Retention runs every 15 minutes while Studio is running.</div></div>
       {err && <div className="notice n-warn" role="alert"><div>{err}</div></div>}

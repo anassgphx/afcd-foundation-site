@@ -59,6 +59,11 @@ export const auditLog = pgTable('audit_log', {
   ip: text('ip'),
 }, (t) => [index('audit_at_idx').on(t.at), index('audit_entity_idx').on(t.entityType, t.entityId)]);
 
+// Editorial workflow shared by every reviewed record (projects, pages, news, partners, pillars, …).
+export const workflowEnum = pgEnum('workflow_status', [
+  'draft', 'in_review', 'changes_requested', 'approved', 'scheduled', 'published', 'archived',
+]);
+
 // ---------------------------------------------------------------- Strategy (canonical records)
 export const pillars = pgTable('pillars', {
   id: id(),
@@ -69,7 +74,33 @@ export const pillars = pgTable('pillars', {
   colour: text('colour').notNull(),
   publicFile: text('public_file').notNull(),
   sort: integer('sort').notNull().default(0),
+  // Pillars module (0016). name/description/colour above stay the LIVE values other modules read; they change only when
+  // a pillar is published. The working copy lives in `draft` (PillarSnapshot) until then. draft = null: page content
+  // not imported yet, the website keeps the text written in src/content.py.
+  draft: jsonb('draft').$type<Record<string, unknown>>(),
+  mediaId: uuid('media_id').references(() => media.id, { onDelete: 'set null' }),
+  provenance: text('provenance').notNull().default(''),
+  status: workflowEnum('status').notNull().default('draft'),
+  publishedRevisionId: uuid('published_revision_id'),
+  approvedRevisionId: uuid('approved_revision_id'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  verifiedAt: timestamp('verified_at', { withTimezone: true }),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedAt: updatedAt(),
+  // 0017: the pending review is about removing the pillar from the website (its page becomes a redirect to pillars.html)
+  removeRequested: boolean('remove_requested').notNull().default(false),
 }, (t) => [uniqueIndex('pillars_key_uq').on(t.key)]);
+
+export const pillarRevisions = pgTable('pillar_revisions', {
+  id: id(),
+  pillarId: uuid('pillar_id').notNull().references(() => pillars.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('pillar_revisions_num_uq').on(t.pillarId, t.number)]);
 
 export const objectives = pgTable('objectives', {
   id: id(),
@@ -106,9 +137,7 @@ export const media = pgTable('media', {
 }, (t) => [uniqueIndex('media_storage_uq').on(t.storageKey), index('media_created_idx').on(t.createdAt)]);
 
 // ---------------------------------------------------------------- Projects
-export const workflowEnum = pgEnum('workflow_status', [
-  'draft', 'in_review', 'changes_requested', 'approved', 'scheduled', 'published', 'archived',
-]);
+// workflowEnum ('workflow_status') is defined above the Strategy tables, which use it too.
 
 export const projects = pgTable('projects', {
   id: id(),

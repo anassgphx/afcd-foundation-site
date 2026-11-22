@@ -95,6 +95,7 @@ PILLARS = [
 # the pages build exactly as written here. Keys, numbers and page files never change, so URLs stay the same.
 _PILLARS_JSON = Path(os.environ.get('STUDIO_PILLARS_JSON') or Path(__file__).parent / 'data' / 'pillars.json')
 STUDIO_PILLARS = __import__('json').loads(_PILLARS_JSON.read_text(encoding='utf-8'))['pillars'] if _PILLARS_JSON.is_file() else []
+STUDIO_PILLAR_BY_KEY = {p_['key']: p_ for p_ in STUDIO_PILLARS}   # per-pillar extras, e.g. 'objectives': [{title, text}]
 if STUDIO_PILLARS:
     PILLARS = [(p['key'], p['number'], p['name'], p['summary'], p['highlights']) for p in STUDIO_PILLARS]
     _names = {p['key']: p['name'] for p in STUDIO_PILLARS}
@@ -596,12 +597,14 @@ for _p in STUDIO_PILLARS:   # Studio pillar content (see STUDIO_PILLARS above)
 def pillars():
     # ---- one page per pillar
     for i, (slug, n, t, d, rel) in enumerate(PILLARS):
-        tone = PILLAR_TONE[slug]
+        tone = '#EFEFED'   # pillar pages are neutral: no pillar colour
         objs = [(ref, text, desc) for ref, text, desc, links in OBJECTIVES if any(sl == slug for _n, sl in links)]
         projs = [p for p in PROJECTS if slug in PROJECT_PILLARS.get(p[0], [p[1]])]
         linked = [o[0] for o in objs]
         cross = [(r, t, d_) for r, t, d_, l in OBJECTIVES if not l]
         rest = [(r, t, d_) for r, t, d_, l in OBJECTIVES if l and r not in linked]
+        pobj = [o for o in (STUDIO_PILLAR_BY_KEY.get(slug, {}).get('objectives') or []) if (o.get('title') or '').strip()]
+        pobj_html = (f'<ol class="po-grid mt-8 lg:mt-10">' + ''.join(f'<li class="po-card"><span class="po-n">{j:02d}</span><span class="po-t">{_esc(o["title"])}</span>' + (f'<span class="po-d">{_esc(o.get("text") or "")}</span>' if (o.get('text') or '').strip() else '') + '</li>' for j, o in enumerate(pobj, 1)) + '</ol>') if pobj else '<div class="po-empty mt-8 lg:mt-10"><span class="po-empty-ico" aria-hidden="true"></span><span><span class="block text-[17px] font-semibold tracking-[-0.015em]">This pillar’s objectives are being finalised.</span><span class="mt-1 block text-[14.5px] text-ink-dark">They will appear here once AFCD publishes them.</span></span></div>'
         obj_html = ''.join(f'''
         <li><a href="strategy.html#{ref.lower()}" class="so-card so-mini so-own group h-full"><span class="flex items-center justify-between gap-3"><span class="so-ref">{ref}</span><span class="so-kind">Objective {j:02d} / {len(objs):02d}</span></span><span class="mt-6 block text-[20px] font-semibold leading-[1.25] tracking-[-0.02em]">{text}</span><span class="mt-3 block text-[14.5px] leading-relaxed text-ink-dark">{desc}</span><span class="nw-read">View in strategy <span aria-hidden="true">↗</span></span></a></li>''' for j, (ref, text, desc) in enumerate(objs, 1))
         obj_cols = {1: 'sm:grid-cols-1', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-2 lg:grid-cols-3'}.get(len(objs), 'sm:grid-cols-2 lg:grid-cols-4')
@@ -619,15 +622,16 @@ def pillars():
         groups = ''.join(f'<li class="wd-person"><span class="wd-av" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="7" r="3"/><path d="M4 16.5c.8-3 3.2-4.6 6-4.6s5.2 1.6 6 4.6"/></svg></span><span>{BENEFICIARIES[g]}</span></li>' for g in PILLAR_GROUPS[slug])
         ap = PILLAR_APPROACH[slug]
         steps = ''.join(f'<li class="ap-step" style="--c:{tone}"><span class="ap-step-n">{j:02d}</span><span class="min-w-0"><span class="block text-[18px] font-semibold tracking-[-0.02em]">{a}</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">{b}</span></span></li>' for j, (a, b) in enumerate(ap['steps'], 1))
-        princ = ''.join(f'<li class="ap-pr"><span class="pj-dot" style="--c:{tone}"></span>{x}</li>' for x in ap['principles'])
-        others = ''.join(f'''<li><a href="{PILLAR_FILE[s2]}" class="pl-other group" style="--c:{PILLAR_TONE[s2]}"><span class="pl-other-n">{n2}</span><span class="mt-8 block text-[22px] font-semibold leading-[1.1] tracking-[-0.03em]">{t2}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a></li>'''
+        hw_steps = ''.join(f'<li class="hw-step"><span class="hw-n">{j:02d}</span><span class="hw-t">{a}</span><span class="hw-d">{b}</span></li>' for j, (a, b) in enumerate(ap['steps'], 1))
+        princ = ''.join(f'<li class="ap-pr"><span class="pj-dot" style="--c:#000"></span>{x}</li>' for x in ap['principles'])
+        others = ''.join(f'''<li><a href="{PILLAR_FILE[s2]}" class="pl-other group" style="--c:#F4F4F3"><span class="pl-other-n">{n2}</span><span class="mt-8 block text-[22px] font-semibold leading-[1.1] tracking-[-0.03em]">{t2}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a></li>'''
                          for s2, n2, t2, _d2, _r2 in PILLARS if s2 != slug)
         brand = f'<span class="pg-tag">Programme brand: {PILLAR_BRAND[slug]}</span>' if PILLAR_BRAND.get(slug) else ''
         steps_nav = ''.join(f'<a href="{PILLAR_FILE[s2]}" class="pl-step{" is-on" if s2 == slug else ""}" title="{_esc(t2)}"{" aria-current=" + chr(34) + "page" + chr(34) if s2 == slug else ""}>{n2}</a>' for s2, n2, t2, _d2, _r2 in PILLARS)
         photo = media_img(PILLAR_IMAGE[slug], 'h-full w-full rounded-[22px]', '(min-width: 1024px) 40vw, 100vw') if PILLAR_IMAGE.get(slug) else ph(t + ' · programme photo', 'h-full w-full rounded-[22px]', '#FFFFFF')
         body = page_header([('Our Pillars', 'pillars.html'), (t, PILLAR_FILE[slug])], f'Pillar {n} / {PILLARS_TOTAL}', t, PILLAR_INTRO[slug]) + f'''
 
-<section id="overview" class="pt-8 lg:pt-10">
+<section id="overview" class="pl-sec pt-8 lg:pt-10">
   <div class="wrap">
     <div class="pl-hero pl-hero-2 pl-hero-n2">
       <div class="flex min-w-0 flex-col">
@@ -639,7 +643,7 @@ def pillars():
         <dl class="pl-facts">
           <div class="pl-fact"><dt>Projects</dt><dd>{len(projs)}</dd></div>
           <div class="pl-fact"><dt>Activities</dt><dd>{len(PILLAR_ACTS[slug])}</dd></div>
-          <div class="pl-fact pl-fact-wide"><dt>Objectives</dt><dd class="pl-fact-refs">{''.join(f'<a href="#objectives" class="so-ref" title="{_esc(t_)}">{r}</a>' for r, t_, _d in objs)}</dd></div>
+          {f'<div class="pl-fact"><dt>Objectives</dt><dd>{len(pobj)}</dd></div>' if pobj else ''}
         </dl>
         <div class="pl-who"><span class="pl-who-k">Who we work with</span><ul>{''.join(f'<li>{_esc(BENEFICIARIES[g])}</li>' for g in PILLAR_GROUPS[slug])}</ul></div>
         <div class="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3 lg:mt-auto lg:pt-8">
@@ -652,16 +656,42 @@ def pillars():
   </div>
 </section>
 
-<section id="objectives" class="py-14 lg:py-16">
-  <div class="wrap">{sec_head('01 / Strategic Objectives', 'What we aim <span class="sh-soft">to achieve.</span>', f'{len(objs)} objective{"s" if len(objs) != 1 else ""}', desc=f'The strategic objective{"s" if len(objs) != 1 else ""} this pillar works towards.')}
-    <ul class="mt-8 grid gap-3 {obj_cols} lg:mt-10">{obj_html}
-    </ul>
+<nav class="pl-tabs" aria-label="On this page" data-pl-tabs>
+  <div class="wrap"><div class="pl-tabs-in">
+    <a href="#overview" class="pl-tab">Overview</a><a href="#perspective" class="pl-tab">Our perspective</a><a href="#objectives" class="pl-tab">Objectives</a><a href="#how-we-work" class="pl-tab">How we work</a><a href="#projects" class="pl-tab">Projects</a>
+  </div></div>
+</nav>
+
+<section id="perspective" class="pl-sec py-14 lg:py-20">
+  <div class="wrap">
+    <div class="pv">
+      <div class="pv-side">
+        <div class="sh-top"><span class="sh-num">01</span><span class="sh-label">Our Perspective</span></div>
+        <p class="pv-title">{ap['title'].replace('text-white/45', 'text-ink-mid')}</p>
+      </div>
+      <div class="pv-main">
+        <span class="pv-mark" aria-hidden="true">“</span>
+        <blockquote class="pv-quote">{ap['view']}</blockquote>
+        <p class="pv-by"><span class="pv-by-ico" aria-hidden="true"></span>AFCD Foundation · {t}</p>
+        <div class="pv-pr"><p class="label text-ink-mid">Guiding principles</p><ul class="mt-3 flex flex-wrap gap-2">{princ}</ul></div>
+      </div>
+    </div>
   </div>
 </section>
 
-<section id="what-we-do" class="border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap">{sec_head('02 / What We Do', 'How this pillar <span class="sh-soft">comes to life.</span>', 'Activities · Participants', desc='The kinds of activities AFCD runs under this pillar, and the people they involve.')}
-    <ul class="wd-grid mt-8 lg:mt-10">{acts}</ul>
+<section id="objectives" class="pl-sec border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('02 / Objectives', 'What this pillar <span class="sh-soft">aims to achieve.</span>', (f'{len(pobj)} objective' + ('s' if len(pobj) != 1 else '')) if pobj else 'Coming soon', desc='The objectives of this pillar, and how it connects to AFCD’s wider strategy.')}
+    {pobj_html}
+    <div class="po-strat"><span class="po-strat-k">Part of AFCD’s strategy</span><span class="flex flex-wrap gap-2">{''.join(f'<a href="strategy.html#{r.lower()}" class="po-so" title="{_esc(t_)}"><span class="so-ref">{r}</span><span class="po-so-t">{t_}</span></a>' for r, t_, _d in objs)}</span><a href="strategy.html" class="link-arrow">All AFCD objectives <span class="arr" aria-hidden="true">↗</span></a></div>
+  </div>
+</section>
+
+<section id="how-we-work" class="pl-sec border-t border-ink-light py-14 lg:py-16">
+  <span id="approach" class="pl-anchor" aria-hidden="true"></span><span id="what-we-do" class="pl-anchor" aria-hidden="true"></span>
+  <div class="wrap">{sec_head('03 / How We Work', 'How this pillar <span class="sh-soft">comes to life.</span>', 'Approach · Activities · People', desc='The steps we follow, the activities we run and the people they involve.')}
+    <ol class="hw-steps mt-8 lg:mt-10">{hw_steps}</ol>
+    <p class="label mt-12 text-ink-mid lg:mt-14">What it looks like</p>
+    <ul class="wd-grid mt-4">{acts}</ul>
     <div class="wd-who mt-3" style="--c:{tone}">
       <div class="wd-who-head">
         <p class="label text-black/60">Who we work with</p>
@@ -673,27 +703,7 @@ def pillars():
   </div>
 </section>
 
-<section id="approach" class="py-6 lg:py-8">
-  <div class="wrap">
-    <div class="ap-band">
-      <div class="grid gap-10 lg:grid-cols-12 lg:gap-14">
-        <div class="flex flex-col lg:col-span-5">
-          <div class="sh-top"><span class="sh-num">03</span><span class="sh-label">Our Approach</span></div>
-          <p class="mt-8 text-[34px] font-semibold leading-[1.04] tracking-[-0.045em] md:text-[46px]">{ap['title'].replace('text-white/45', 'text-ink-mid')}</p>
-          <div class="ap-view mt-8" style="--c:{tone}">
-            <p class="label text-ink-mid">Our perspective</p>
-            <p class="mt-3 text-[16.5px] leading-[1.6] text-ink-pure">{ap['view']}</p>
-          </div>
-          <p class="label mt-8 text-ink-mid">Guiding principles</p>
-          <ul class="mt-3 flex flex-wrap gap-2">{princ}</ul>
-        </div>
-        <ol class="ap-steps lg:col-span-7">{steps}</ol>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="projects" class="border-t border-ink-light py-14 lg:py-16">
+<section id="projects" class="pl-sec border-t border-ink-light py-14 lg:py-16">
   <div class="wrap">{sec_head('04 / Projects', f'Projects in <span class="sh-soft">{PILLAR_SHORT[slug].lower()}.</span>', ('All projects', f'projects.html?pillar={slug}#by-pillar'), desc=f'Programmes AFCD has run under the {t} pillar.')}
     <ul class="nw-grid mt-8 lg:mt-10">{proj_html}
     </ul>

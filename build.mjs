@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { renderPage } from './lib/page-fields.mjs';
 import { activeLangs, decorateEnglish, buildLanguages } from './lib/i18n.mjs';
+import { renderMenus } from './lib/menu.mjs';
 import { execSync } from 'node:child_process';
 
 const SRC = 'src';
@@ -22,8 +23,13 @@ const CSS_V = version('assets/styles.css');
 const JS_V = version('assets/main.js');
 
 const head = partial('head').replace('href="assets/styles.css"', `href="assets/styles.css?v=${CSS_V}"`);
-const header = partial('header');
-const footer = partial('footer');
+// Studio menus (owned by AFCD Studio): src/data/menu.json, or env MENU_JSON, replaces the main, phone and footer menus of the
+// partials (see lib/menu.mjs). Without it the partials are used exactly as written.
+const MENU_FILE = process.env.MENU_JSON || join(SRC, 'data', 'menu.json');
+const MENU = existsSync(MENU_FILE) ? JSON.parse(readFileSync(MENU_FILE, 'utf8')) : null;
+const menus = MENU ? renderMenus(partial('header'), partial('footer'), MENU) : null;
+const header = menus ? menus.header : partial('header');
+const footer = menus ? menus.footer : partial('footer');
 
 const NAV = ['home', 'about', 'pillars', 'projects', 'news', 'partners', 'contact', 'involved', 'events', 'none'];
 // Escapes for attributes without double-escaping entities already in the text (front matter titles may contain &amp;).
@@ -147,6 +153,7 @@ function seoTags(file, meta) {
     `<meta property="og:image:alt" content="${meta.ogImage ? escapeAttr(escapeText(meta.ogImage.alt)) : 'AFCD Leadership Lab panel discussion'}">`,
     ...(meta.seoRevision ? [`<meta name="studio-seo-rev" content="${meta.seoRevision}">`] : []),
     ...(FIELDS[file]?.revision ? [`<meta name="studio-fields-rev" content="${FIELDS[file].revision}">`] : []),
+    ...(MENU?.revision && /^[\w-]{1,64}$/.test(MENU.revision) ? [`<meta name="studio-menu-rev" content="${MENU.revision}">`] : []),
     `<meta name="twitter:card" content="summary_large_image">`,
   ];
   // Website forms → AFCD Studio: only when FORMS_ENDPOINT is set (e.g. http://localhost:4400/forms/v1).

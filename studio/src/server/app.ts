@@ -27,6 +27,7 @@ import * as SEO from './modules/seo/service.ts';
 import * as RD from './modules/seo/redirects.ts';
 import * as SCH from './modules/seo/schema.ts';
 import * as TR from './modules/translations/service.ts';
+import { registerMenuRoutes } from './modules/menus/routes.ts';
 import * as HM from './modules/home/service.ts';
 import * as WS from './modules/workspace/service.ts';
 import { overview as dashboardOverview } from './modules/workspace/overview.ts';
@@ -425,6 +426,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
   });
   api.post('/seo/schema/publish', perm('seo.publish'), async (c) => c.json(await publisher.publishSchema(actor(c))));
   api.post('/seo/schema/unpublish', perm('seo.publish'), async (c) => c.json(await publisher.unpublishSchema(actor(c))));
+  registerMenuRoutes(api);   // website menus (modules/menus)
 
   // ---------------------------------------------------------------- Translations: edited (translation.update), reviewed by someone else (translation.approve), published (translation.publish)
   const langOf = (c: { req: { param: (k: string) => string } }) => { const l = c.req.param('lang'); if (!TR.isLang(l)) throw new AppError(404, 'Unknown language.'); return l; };

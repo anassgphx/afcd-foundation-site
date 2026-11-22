@@ -38,6 +38,7 @@ import type { Role } from '../../rbac.ts';
 import { seoSettings } from '../../db/schema.ts';
 import { buildSchemaFile, KEY as SCHEMA_KEY, settingsSchema, type LiveForSchema, type SchemaSettings } from '../seo/schema.ts';
 import * as TR from '../translations/service.ts';
+import * as MENU from '../menus/service.ts';
 
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
@@ -273,7 +274,7 @@ export class Publisher {
     return ids;
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string } } = {}) {
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string } } = {}) {
     const entries = await this.liveEntries(o.project);
     await this.writeRedirects(o.redirects === 'pending');
     this.writeData(this.dataFile, entries);
@@ -282,6 +283,7 @@ export class Publisher {
     const seoMedia = await this.writeSeo(o.seo);
     await this.writeSchema(o.schema, o.article, o.event);
     await this.writeTranslations(o.translations);
+    await this.writeMenus(o.menus);
     const pending = { article: o.article, event: o.event, opportunity: o.opportunity, partner: o.partner };
     const homeMedia = await this.writeFields(o.home, { projectOverride: o.project, pending });
     const oppMedia = await this.writeOpportunities(resolve(this.cfg.siteRoot, 'src/pages'), [this.cfg.siteRoot], await this.liveOpportunities(o.opportunity), o.project);
@@ -1182,6 +1184,42 @@ export class Publisher {
         await audit(tx, actor, 'translation.publish', { type: 'translation', id: lang }, `Published ${TR.LANG_INFO[lang].name} translations${data.live ? ' (public on the live site)' : ' (preview only)'}`, { jobId: job.id, revision, strings: Object.keys(data.strings).length });
       });
       TR.clearSegmentCache();
+      return { jobId: job.id, revision };
+    });
+  }
+
+  // ---------------------------------------------------------------- Menus (src/data/menu.json, read by build.mjs through lib/menu.mjs)
+  get menuFile() { return resolve(this.cfg.siteRoot, 'src/data/menu.json'); }
+  /** menu.json holds the published menus (or the ones being delivered); without published Studio menus there is no file. */
+  private async writeMenus(override?: { menu: MENU.Menu; revision: string }) {
+    const content = await MENU.publishedFile(this.db, override);
+    if (content === null) { if (existsSync(this.menuFile)) rmSync(this.menuFile); return; }
+    if (existsSync(this.menuFile) && readFileSync(this.menuFile, 'utf8') === content) return;
+    mkdirSync(resolve(this.menuFile, '..'), { recursive: true });
+    const tmp = `${this.menuFile}.${randomBytes(4).toString('hex')}.tmp`;
+    writeFileSync(tmp, content); renameSync(tmp, this.menuFile);
+  }
+  /** Every built page carries the new menu revision. */
+  private verifyMenus(revision: string) {
+    const pages = readdirSync(resolve(this.cfg.siteRoot, 'src/pages')).filter((f) => f.endsWith('.html'));
+    const stale = pages.filter((f) => { const p = resolve(this.cfg.siteRoot, f); return !existsSync(p) || !readFileSync(p, 'utf8').includes(`<meta name="studio-menu-rev" content="${revision}">`); });
+    if (stale.length) throw new Error(`${stale.length} page${stale.length === 1 ? '' : 's'} do not carry the new menus (e.g. ${stale[0]}). build.mjs must apply src/data/menu.json.`);
+  }
+  async publishMenus(actor: NonNullable<Actor>) {
+    return this.locked(async () => {
+      const row = await MENU.loadRow(this.db);
+      if (!row || row.status !== 'approved' || !row.draft) throw new AppError(409, 'Only approved menus can be published.');
+      const menu = MENU.menuSchema.parse(row.draft); const revision = randomUUID();
+      const { job, log } = await this.deliver('publish_menus', actor, null, null, async (log) => {
+        await this.writeSite({ menus: { menu, revision } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyMenus(revision);
+      }, 'Publishing the menus failed');
+      await this.db.transaction(async (tx) => {
+        await tx.update(seoSettings).set({ status: 'published', published: { ...menu, _revision: revision } as unknown as Record<string, unknown>, publishedAt: new Date(), updatedAt: new Date() }).where(eq(seoSettings.key, MENU.KEY));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'menu.publish', { type: 'menu', id: MENU.KEY }, 'Published the website menus', { jobId: job.id, revision });
+      });
       return { jobId: job.id, revision };
     });
   }

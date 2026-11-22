@@ -413,3 +413,42 @@ export const opportunityRevisions = pgTable('opportunity_revisions', {
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex('opportunity_revisions_num_uq').on(t.opportunityId, t.number)]);
+
+// ---------------------------------------------------------------- Forms (submissions from the public site; personal data)
+export const submissionStatusEnum = pgEnum('submission_status', ['new', 'in_progress', 'done', 'spam']);
+
+export const formSettings = pgTable('form_settings', {
+  key: text('key').primaryKey(),                          // 'contact' | 'newsletter'
+  enabled: boolean('enabled').notNull().default(true),     // accepting submissions
+  retentionDays: integer('retention_days').notNull().default(365),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedAt: updatedAt(),
+});
+
+export const formSubmissions = pgTable('form_submissions', {
+  id: id(),
+  formKey: text('form_key').notNull(),
+  topic: text('topic').notNull().default(''),
+  name: text('name').notNull().default(''),
+  email: text('email').notNull().default(''),
+  data: jsonb('data').$type<Record<string, string>>().notNull().default({}),
+  status: submissionStatusEnum('status').notNull().default('new'),
+  assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
+  note: text('note').notNull().default(''),               // internal, staff only
+  consentAt: timestamp('consent_at', { withTimezone: true }),
+  ipHash: text('ip_hash'),                                 // salted hash, for rate limiting only
+  page: text('page').notNull().default(''),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('form_submissions_form_idx').on(t.formKey, t.status, t.createdAt), index('form_submissions_ip_idx').on(t.ipHash, t.createdAt)]);
+
+export const newsletterSubscribers = pgTable('newsletter_subscribers', {
+  id: id(),
+  email: text('email').notNull(),
+  status: text('status').notNull().default('subscribed'),  // 'subscribed' | 'unsubscribed'
+  source: text('source').notNull().default(''),            // page it was submitted from
+  consentAt: timestamp('consent_at', { withTimezone: true }).notNull(),
+  unsubscribedAt: timestamp('unsubscribed_at', { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('newsletter_email_uq').on(t.email)]);

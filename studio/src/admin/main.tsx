@@ -13,6 +13,7 @@ import { NewsList, ArticleEditor } from './pages/News.tsx';
 import { PartnersList, PartnerEditor } from './pages/Partners.tsx';
 import { EventsList, EventEditor } from './pages/Events.tsx';
 import { OpportunitiesList, OpportunityEditor } from './pages/Opportunities.tsx';
+import { FormsPage } from './pages/Forms.tsx';
 import { MediaLibrary } from './pages/Media.tsx';
 import { ApprovalQueue, Publishing, ActivityLog, Users } from './pages/Admin.tsx';
 
@@ -108,6 +109,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { to: '/studio/partners', label: 'Partners', icon: 'partner', perm: 'partner.read', match: /^\/studio\/partners/ },
   ] },
   { group: 'Media', items: [{ to: '/studio/media', label: 'Media Library', icon: 'image', perm: 'media.read' }] },
+  { group: 'Inbox', items: [{ to: '/studio/forms', label: 'Forms', icon: 'mail', perm: 'forms.read', match: /^\/studio\/forms/ }] },
   { group: 'Workflow', items: [
     { to: '/studio/approvals', label: 'Approval Queue', icon: 'inbox', perm: 'project.read' },
     { to: '/studio/publishing', label: 'Publishing', icon: 'globe', perm: 'dashboard.read' },
@@ -166,6 +168,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 }
 
 function route(path: string): { title: string; el: React.ReactElement; full?: boolean } {
+  if (path.startsWith('/studio/forms')) return { title: 'Forms', el: <FormsPage /> };
   const op = path.match(/^\/studio\/opportunities\/([0-9a-f-]{36})$/);
   if (op) return { title: 'Opportunity', el: <OpportunityEditor key={op[1]} id={op[1]} /> };
   if (path.startsWith('/studio/opportunities')) return { title: 'Opportunities', el: <OpportunitiesList /> };

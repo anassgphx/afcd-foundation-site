@@ -22,6 +22,7 @@ import * as N from './modules/news/service.ts';
 import * as PT from './modules/partners/service.ts';
 import * as EV from './modules/events/service.ts';
 import * as OP from './modules/opportunities/service.ts';
+import * as FM from './modules/forms/service.ts';
 import { importPartners } from './modules/partners/import.ts';
 import { blockCatalog } from './modules/pages/blocks.ts';
 import { Publisher, type BuildRunner } from './modules/publish/service.ts';
@@ -40,6 +41,29 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
 
   app.use('*', async (c, next) => { c.set('db', db); c.set('cfg', cfg); c.set('publisher', publisher); await next(); });
   app.use('*', securityHeaders);
+
+  // ---------------------------------------------------------------- Public form intake (the website posts here; no cookies, no session)
+  const formOrigins = new Set([new URL(cfg.publicSiteUrl).origin, ...(process.env.FORMS_ALLOWED_ORIGINS ?? '').split(',').map((x) => x.trim()).filter(Boolean)]);
+  const cors = (c: { req: { header: (n: string) => string | undefined }; header: (n: string, v: string) => void }) => {
+    const o = c.req.header('origin');
+    if (o && formOrigins.has(o)) { c.header('Access-Control-Allow-Origin', o); c.header('Vary', 'Origin'); }
+    return !o || formOrigins.has(o);
+  };
+  app.options('/forms/v1/:key', (c) => {
+    if (!cors(c)) return c.body(null, 403);
+    c.header('Access-Control-Allow-Methods', 'POST'); c.header('Access-Control-Allow-Headers', 'Content-Type'); c.header('Access-Control-Max-Age', '600');
+    return c.body(null, 204);
+  });
+  app.post('/forms/v1/:key', bodyLimit({ maxSize: 16 * 1024, onError: (c) => c.json({ error: 'The message is too long.' }, 413) }), async (c) => {
+    if (!cors(c)) return c.json({ error: 'This website is not allowed to send forms here.' }, 403);
+    c.header('Cache-Control', 'no-store');
+    const key = c.req.param('key');
+    if (!FM.isFormKey(key)) return c.json({ error: 'Unknown form.' }, 404);
+    if (!(c.req.header('content-type') ?? '').includes('application/json')) return c.json({ error: 'Send JSON.' }, 415);
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== 'object') return c.json({ error: 'Send JSON.' }, 400);
+    return c.json(await FM.receive(db, cfg, key, body, clientIp(c)));
+  });
   app.use('/studio/*', loadSession);
   app.use('/studio/api/*', csrfGuard);
 
@@ -302,6 +326,35 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
     return c.json({ url: `/studio/preview/${r.token}/${r.file}` });
   });
   api.post('/opportunities/:id/revisions/:rev/restore', perm('opportunity.update'), async (c) => { await OP.restoreOpportunityRevision(db, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
+
+  // ---------------------------------------------------------------- Forms (personal data: administrators only)
+  api.get('/forms', perm('forms.read'), async (c) => c.json(await FM.overview(db)));
+  api.get('/forms/:key/submissions', perm('forms.read'), async (c) => {
+    const key = c.req.param('key'); if (!FM.isFormKey(key)) throw new AppError(404, 'Unknown form.');
+    return c.json(await FM.listSubmissions(db, key, c.req.query('status') ?? null));
+  });
+  api.patch('/forms/submissions/:id', perm('forms.manage'), async (c) => { await FM.updateSubmission(db, actor(c), c.req.param('id'), await c.req.json()); return c.json({ ok: true }); });
+  api.post('/forms/submissions/delete', perm('forms.manage'), async (c) => {
+    const b = z.object({ ids: z.array(z.string().uuid()).max(500) }).safeParse(await c.req.json());
+    if (!b.success) throw new AppError(422, 'Invalid selection.');
+    return c.json({ deleted: await FM.deleteSubmissions(db, actor(c), b.data.ids) });
+  });
+  api.get('/forms/subscribers', perm('forms.read'), async (c) => c.json(await FM.listSubscribers(db)));
+  api.post('/forms/subscribers/:id/:action', perm('forms.manage'), async (c) => {
+    const a = c.req.param('action'); if (a !== 'unsubscribe' && a !== 'delete') throw new AppError(404, 'Unknown action.');
+    await FM.setSubscriber(db, actor(c), c.req.param('id'), a); return c.json({ ok: true });
+  });
+  api.put('/forms/:key/settings', perm('forms.manage'), async (c) => {
+    const key = c.req.param('key'); if (!FM.isFormKey(key)) throw new AppError(404, 'Unknown form.');
+    await FM.saveSettings(db, actor(c), key, await c.req.json()); return c.json({ ok: true });
+  });
+  api.get('/forms/export/:what', perm('forms.read'), async (c) => {
+    const w = c.req.param('what'); if (w !== 'contact' && w !== 'newsletter') throw new AppError(404, 'Unknown export.');
+    const csv = await FM.exportCsv(db, actor(c), w);
+    c.header('Content-Type', 'text/csv; charset=utf-8'); c.header('Cache-Control', 'no-store');
+    c.header('Content-Disposition', `attachment; filename="afcd-${w}-${new Date().toISOString().slice(0, 10)}.csv"`);
+    return c.body(csv);
+  });
 
   // ---------------------------------------------------------------- Publishing jobs, audit, users
   api.get('/publish-jobs', perm('dashboard.read'), async (c) => c.json(await publisher.recentJobs(30)));

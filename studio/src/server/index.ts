@@ -3,6 +3,7 @@ import { serve } from '@hono/node-server';
 import { loadConfig } from './config.ts';
 import { openDb } from './db/client.ts';
 import { createApp } from './app.ts';
+import { purgeExpired } from './modules/forms/service.ts';
 
 const cfg = loadConfig();
 const { db } = await openDb(cfg);
@@ -20,6 +21,8 @@ const tick = async () => {
     catch (e) { console.error('[scheduler] events refresh failed', e); }
     try { if (await publisher.refreshOpportunityStates()) console.log('[scheduler] opportunities rebuilt'); }
     catch (e) { console.error('[scheduler] opportunities refresh failed', e); }
+    try { const n = await purgeExpired(db); if (n) console.log(`[scheduler] deleted ${n} form message(s) past retention`); }
+    catch (e) { console.error('[scheduler] forms retention failed', e); }
   }
 };
 let lastEventCheck = 0;

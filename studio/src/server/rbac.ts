@@ -8,6 +8,7 @@ export const PERMISSIONS = [
   'partner.read', 'partner.create', 'partner.update', 'partner.approve', 'partner.publish',
   'event.read', 'event.create', 'event.update', 'event.approve', 'event.publish',
   'opportunity.read', 'opportunity.create', 'opportunity.update', 'opportunity.approve', 'opportunity.publish',
+  'forms.read', 'forms.manage',
   'media.read', 'media.upload', 'media.update', 'media.delete',
   'site.rebuild',
   'audit.read',

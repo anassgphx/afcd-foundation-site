@@ -21,30 +21,72 @@ VALUES = [
 
 # Strategic objectives (AFCD Connect). Stable references for reporting and cross-linking.
 OBJECTIVES = [
-    ('SO-01', 'Strengthen youth leadership and civic participation.', [('Youth Empowerment', 'youth-empowerment')]),
-    ('SO-02', 'Advance women’s empowerment and equal opportunities.', [('Women’s Empowerment', 'women-empowerment')]),
-    ('SO-03', 'Promote environmental sustainability and climate action.', [('Environment and Climate', 'green-thumbs')]),
-    ('SO-04', 'Expand digital inclusion and innovation.', [('Digital Inclusion and Innovation', 'digital-empowerment')]),
-    ('SO-05', 'Support entrepreneurship and economic empowerment.', [('Youth Empowerment', 'youth-empowerment'), ('Women’s Empowerment', 'women-empowerment')]),
-    ('SO-06', 'Strengthen civil society capacity and inclusive policy dialogue.', []),
+    ('SO-01', 'Strengthen youth leadership and civic participation.',
+     'Develop young people’s leadership skills, confidence, and ability to participate in civic life and lead initiatives that respond to community needs.',
+     [('Youth Empowerment', 'youth-empowerment')]),
+    ('SO-02', 'Advance women’s empowerment and equal opportunities.',
+     'Strengthen women’s access to learning, leadership, economic opportunities, and decision-making, and support their meaningful participation in community life.',
+     [('Women’s Empowerment', 'women-empowerment')]),
+    ('SO-03', 'Promote environmental sustainability and climate action.',
+     'Strengthen environmental awareness and support locally led initiatives that protect the environment, encourage sustainable practices, and build community resilience to climate change.',
+     [('Environment and Climate', 'green-thumbs')]),
+    ('SO-04', 'Expand digital inclusion and innovation.',
+     'Improve access to digital knowledge and skills, and support the practical use of artificial intelligence, science, and emerging technologies for learning, problem-solving, and community development.',
+     [('Digital Inclusion and Innovation', 'digital-empowerment')]),
+    ('SO-05', 'Support entrepreneurship and economic empowerment.',
+     'Equip young people and women with entrepreneurial skills, mentoring, and connections to develop viable initiatives and pursue economic opportunities.',
+     [('Youth Empowerment', 'youth-empowerment'), ('Women’s Empowerment', 'women-empowerment')]),
+    ('SO-06', 'Strengthen civil society capacity and inclusive policy dialogue.',
+     'Build civil society organisations’ capacities and enable young people and communities to contribute to consultations, advocacy, and public policy discussions, including climate policy.',
+     []),
 ]
-
-BENEFICIARIES = ['Young people and students', 'Women and young women', 'Children and adolescents, depending on the programme',
-                 'Aspiring entrepreneurs', 'Community initiative leaders', 'Civil society organizations and community associations',
-                 'Youth workers', 'Rural and underserved communities']
+BENEFICIARIES = ['Young people and students', 'Women and young women', 'Children and adolescents',
+                 'Aspiring entrepreneurs and community initiative leaders',
+                 'Civil society organisations, community associations, and youth workers',
+                 'Rural and underserved communities',
+                 'Political party representatives and civic actors in climate programmes']
+BENEFICIARY_SUMMARY = [
+    'AFCD Foundation primarily serves young people and women in Morocco, including students, volunteers, aspiring entrepreneurs, and people leading community initiatives. It supports access to practical learning, mentoring, leadership development, civic participation, and digital and entrepreneurial skills.',
+    'Depending on the programme, beneficiaries also include children and adolescents, local civil society organisations, community associations, and youth workers. Climate-related activities also engage political party representatives and other civic actors in learning, consultation, and policy dialogue.',
+    'AFCD places emphasis on rural communities and people with limited access to training and participation opportunities. Through participant-led initiatives and work with local organisations, it seeks to extend the benefits of its programmes to the wider community. Age groups and participation criteria vary by programme.',
+]
+REGIONS = [
+    ('Marrakech-Safi', 'Marrakech, Ait Ourir, Al Haouz Province, and surrounding High Atlas communities'),
+    ('Oriental', 'Oujda'),
+    ('Rabat-Salé-Kénitra', 'Rabat'),
+    ('Drâa-Tafilalet', 'Ouarzazate'),
+]
+COVERAGE_NOTE = 'AFCD works in Morocco through local, regional, and national programmes, with roots in Ait Ourir and Al Haouz and a main office in Marrakech. Activities take place in selected cities and rural communities, while some programmes recruit participants nationally or include online learning. Coverage varies by project; international partnerships and exchanges complement this work.'
+AREAS = ['Youth empowerment and civic participation', 'Women’s empowerment',
+         'Environment, climate action, and sustainable development', 'Digital inclusion and innovation']
+ACTIVITIES = [
+    'Non-formal education, skills training, and training of trainers.',
+    'Leadership programmes, workshops, bootcamps, and learning events.',
+    'Mentoring and coaching for youth-led civic, social, environmental, and entrepreneurial initiatives.',
+    'Community outreach, awareness campaigns, and volunteer mobilisation.',
+    'Stakeholder consultations, policy dialogue, and preparation of advocacy recommendations.',
+    'Digital literacy, artificial intelligence, and practical innovation activities.',
+    'Capacity building and peer learning for civil society organisations.',
+    'Intercultural learning and international cooperation activities.',
+]
+SOCIALS = [
+    ('Facebook', 'https://www.facebook.com/afcd.foundation'),
+    ('Instagram', 'https://www.instagram.com/afcd.foundation'),
+    ('LinkedIn', 'https://www.linkedin.com/company/afcd-foundation'),
+]
 
 PILLARS = [
     ('youth-empowerment', '01', 'Youth Empowerment',
      'Support young people in building leadership and civic skills, participating in community life, and developing initiatives that respond to local needs.',
      ['Leadership Lab 2.0', 'Youth First Academy', 'Let’s Dialogue']),
     ('women-empowerment', '02', 'Women’s Empowerment',
-     'Strengthen women’s capacities, confidence, and access to learning, leadership and economic opportunities.',
+     'Strengthen women’s capacities, confidence, and access to learning, leadership, and economic opportunities, enabling meaningful participation in community life and decision-making.',
      ['META Skills for Women Empowerment', 'TOT: Gender-based violence']),
     ('green-thumbs', '03', 'Environment and Climate',
-     'Promote environmental education, sustainable practices and community climate action, connecting local perspectives with Morocco’s climate priorities.',
+     'Promote environmental education, sustainable practices, and community climate action, and connect local perspectives with dialogue on Morocco’s climate priorities and commitments.',
      ['Eco Citizen', 'Oxygen', 'Al Haouz Environmental Film Festival', 'Youth Green Generation']),
     ('digital-empowerment', '04', 'Digital Inclusion and Innovation',
-     'Improve access to digital knowledge and skills, enabling communities to explore artificial intelligence, science and emerging technologies.',
+     'Improve access to digital knowledge and skills, and enable young people and communities to explore artificial intelligence, science, and emerging technologies for learning and practical problem-solving.',
      ['SAADA Initiative Project']),
 ]
 
@@ -179,12 +221,15 @@ def about():
             return '<span class="text-[13px] text-ink-mid">Cross-cutting, all pillars</span>'
         return ''.join(f'<a class="inline-flex min-h-[30px] items-center rounded-full border border-ink-light bg-white px-3 text-[12.5px] font-medium hover:border-ink-pure" href="pillars.html#{slug}">{name}</a>' for name, slug in links)
     objectives = ''.join(f'''
-      <li id="{ref.lower()}" class="flex flex-col rounded-3xl border border-ink-light bg-white p-6 md:p-7">
-        <span class="inline-flex self-start rounded-full bg-ink-pure px-3 py-1 text-[12px] font-semibold tabular-nums text-white">{ref}</span>
-        <span class="mt-5 block text-[19px] font-semibold leading-snug tracking-[-0.015em]">{text}</span>
-        <span class="mt-auto flex flex-wrap gap-2 pt-5">{obj_links(links)}</span>
-      </li>''' for ref, text, links in OBJECTIVES)
+      <li id="{ref.lower()}" class="so-card">
+        <span class="flex items-center justify-between gap-3"><span class="so-ref">{ref}</span><span class="so-n" aria-hidden="true">{ref[-2:]}</span></span>
+        <span class="mt-6 block text-[20px] font-semibold leading-[1.2] tracking-[-0.02em]">{text}</span>
+        <span class="mt-3 block text-[14.5px] leading-relaxed text-ink-dark">{desc}</span>
+        <span class="mt-auto flex flex-wrap gap-2 pt-6">{obj_links(links)}</span>
+      </li>''' for ref, text, desc, links in OBJECTIVES)
     beneficiaries = ''.join(f'<li class="inline-flex min-h-[38px] items-center rounded-full bg-ink-faint px-4 text-[14px] font-medium">{b}</li>' for b in BENEFICIARIES)
+    summary = ''.join(f'<p>{p}</p>' for p in BENEFICIARY_SUMMARY)
+    regions = ''.join(f'<li class="rounded-2xl border border-white/10 bg-white/5 p-4"><span class="block text-[16px] font-semibold tracking-[-0.015em]">{r}</span><span class="mt-1 block text-[14px] leading-relaxed text-white/65">{c}</span></li>' for r, c in REGIONS)
     team = ''.join(f'''
         <li>
           {ph('Team portrait', 'aspect-[4/5] w-full', '#DADADA')}
@@ -244,18 +289,21 @@ def about():
   </div>
 </section>
 
-<section id="who-we-serve" class="scroll-mt-28 py-14 lg:py-16">
-  <div class="wrap">{sec_head('05 / Who We Work With', 'People and places <span class="sh-soft">we serve.</span>', 'Across Morocco', desc='Each programme defines its own participants; not every activity serves every group.')}
+<section id="who-we-serve" class="scroll-mt-28 border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('05 / Who We Work With', 'People and places <span class="sh-soft">we serve.</span>', 'Across Morocco', desc='Age groups and participation criteria vary by programme; not every activity serves every group.')}
     <div class="mt-8 grid gap-4 lg:mt-10 lg:grid-cols-12">
-      <div class="rounded-3xl border border-ink-light p-6 md:p-8 lg:col-span-7">
-        <p class="label text-ink-mid">Who we work with</p>
+      <div class="rounded-[28px] border border-ink-light p-6 md:p-8 lg:col-span-7">
+        <p class="label text-ink-mid">Primary beneficiary groups</p>
         <ul class="mt-5 flex flex-wrap gap-2">{beneficiaries}</ul>
+        <div class="mt-8 grid gap-4 border-t border-ink-light pt-6 text-[15px] leading-relaxed text-ink-dark">{summary}</div>
       </div>
-      <dl class="grid gap-3 lg:col-span-5">
-        <div class="rounded-3xl bg-ink-pure p-6 text-white on-dark md:p-7"><dt class="label text-white/60">Main office</dt><dd class="mt-2 text-xl font-semibold tracking-[-0.02em]">Marrakech, Morocco</dd></div>
-        <div class="rounded-3xl border border-ink-light p-6 md:p-7"><dt class="label text-ink-mid">Community roots</dt><dd class="mt-2 text-xl font-semibold tracking-[-0.02em]">Ait Ourir and Al Haouz</dd></div>
-        <div class="rounded-3xl border border-ink-light p-6 md:p-7"><dt class="label text-ink-mid">Where we work</dt><dd class="mt-2 text-[15px] leading-relaxed text-ink-dark">Local, regional and national programmes across Morocco. Locations for each programme are listed on its project page. International partners are not AFCD offices.</dd></div>
-      </dl>
+      <div class="grid content-start gap-3 lg:col-span-5">
+        <div class="os-band on-dark text-white" style="padding:28px">
+          <p class="label text-white/60">Where we work</p>
+          <ul class="mt-5 grid gap-3">{regions}</ul>
+        </div>
+        <div class="rounded-[28px] border border-ink-light p-6 md:p-7"><p class="label text-ink-mid">Coverage</p><p class="mt-3 text-[15px] leading-relaxed text-ink-dark">{COVERAGE_NOTE}</p></div>
+      </div>
     </div>
   </div>
 </section>
@@ -293,11 +341,101 @@ def about():
         body = page_header([ABOUT, (crumb, file)], label, title, lead) + renum_all('\n'.join([first] + [parts[k] for k in keys[1:]])) + cta + about_more(file)
         page(file, meta_title, meta_desc, 'about', body, parent=ABOUT)
 
-    sub('our-story.html', 'Our Story', 'About · Our Story',
-        'It started with young volunteers <span class="text-ink-mid">in Ait Ourir.</span>',
-        'Founded in 2007 by committed young volunteers, AFCD Foundation grew from Ait Ourir into programmes across Morocco.',
-        ['story', 'approach'], 'Our Story · AFCD Foundation',
-        'How young volunteers founded AFCD Foundation in Ait Ourir in 2007, and how we work with communities.')
+    # ---- Our Story: custom layout (story + facts, journey, approach)
+    journey = [
+        ('2007', 'Founded', 'A group of young people committed to improving living conditions in their community founds AFCD.'),
+        ('Roots', 'Ait Ourir &amp; Al Haouz', 'Work rooted in Ait Ourir and the Al Haouz area expands through regional and national initiatives.'),
+        ('2020–21', 'Eco-Citizen &amp; Youth First', 'Eco-Citizen, Youth First and Youth First Academy combine environmental awareness, youth mobilisation, leadership and active citizenship.'),
+        ('2022 →', 'Leadership Lab', 'Successive editions of Leadership Lab develop this work through training, mentoring, entrepreneurship and support for community initiatives.'),
+    ]
+    area_tones = ['#FFB2B9', '#A8DDFB', '#82E591', '#FBE38A']
+    area_slugs = ['youth-empowerment', 'women-empowerment', 'green-thumbs', 'digital-empowerment']
+    areas = ''.join(f'<li><a href="pillars.html#{sl}" class="os-area"><span class="os-area-dot" style="--c:{c}" aria-hidden="true"></span><span class="flex-1">{t}</span><span class="os-area-arr" aria-hidden="true">↗</span></a></li>'
+                    for t, c, sl in zip(AREAS, area_tones, area_slugs))
+    acts = ''.join(f'<li class="os-act"><span class="os-act-n">{i:02d}</span><span>{t}</span></li>' for i, t in enumerate(ACTIVITIES, 1))
+    steps = ''.join(f'''
+        <li class="os-step">
+          <span class="os-step-k">{k}</span>
+          <span class="os-step-dot" aria-hidden="true"></span>
+          <span class="mt-5 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span>
+          <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span>
+        </li>''' for k, t, d in journey)
+    approach = [('Listen', 'Start from what communities in Ait Ourir and across Morocco say they need.'),
+                ('Build capacity', 'Strengthen people’s skills through education, empowerment and innovation.'),
+                ('Act together', 'Work with residents, institutions and partners so change lasts.')]
+    appr = ''.join(f'''
+          <li class="os-ap"><span class="os-ap-n">{i:02d}</span><span><span class="block text-[19px] font-semibold tracking-[-0.02em]">{t}</span><span class="mt-1.5 block text-[14.5px] leading-relaxed text-white/65">{d}</span></span></li>'''
+                   for i, (t, d) in enumerate(approach, 1))
+    body = page_header([ABOUT, ('Our Story', 'our-story.html')], 'About · Our Story',
+                       'It started with young volunteers <span class="text-ink-mid">in Ait Ourir.</span>',
+                       'Founded in 2007 by committed young volunteers, AFCD Foundation grew from Ait Ourir into programmes across Morocco.') + f'''
+
+<section id="story" class="py-14 lg:py-20">
+  <div class="wrap grid gap-10 lg:grid-cols-12 lg:gap-16">
+    <div class="lg:col-span-6">
+      <p class="text-[26px] font-medium leading-[1.25] tracking-[-0.025em] md:text-[32px]">AFCD Foundation is a Moroccan nonprofit association founded in 2007 that promotes sustainable development through <span class="text-ink-mid">youth and women’s empowerment, environmental education, civic participation, and digital inclusion.</span></p>
+      <div class="mt-8 grid gap-5 sm:grid-cols-2">
+        <p class="text-[15.5px] leading-relaxed text-ink-dark">Rooted in Ait Ourir and the Al Haouz area, with its main office in Marrakech, AFCD works with young people, women, and local communities across Morocco.</p>
+        <p class="text-[15.5px] leading-relaxed text-ink-dark">Through practical training, mentoring, community initiatives, and dialogue, AFCD helps people build skills and contribute to positive change in their communities.</p>
+      </div>
+      <dl class="os-facts mt-10">
+        <div><dt>Founded</dt><dd>2007</dd></div>
+        <div><dt>Roots</dt><dd>Ait Ourir, Al Haouz</dd></div>
+        <div><dt>Main office</dt><dd>Marrakech</dd></div>
+        <div><dt>Pillars</dt><dd>4</dd></div>
+      </dl>
+    </div>
+    <div class="relative lg:col-span-6">
+      {ph('Youth First Academy, closing ceremony', 'aspect-[4/3] w-full rounded-[28px] lg:aspect-auto lg:h-full lg:min-h-[460px]')}
+      <div class="os-legal">
+        <p class="label text-ink-mid">Legal name</p>
+        <p class="mt-1.5 text-[15px] font-medium leading-snug">Association le Futur pour les Chantiers et le Développement</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="journey" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('01 / Our Journey', 'From Ait Ourir <span class="sh-soft">to across Morocco.</span>', 'Since 2007', desc='How a local volunteer initiative became a national nonprofit.')}
+    <ol class="os-steps mt-10 lg:mt-12">{steps}
+    </ol>
+  </div>
+</section>
+
+<section id="what-we-do" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('02 / What We Do', 'Four areas, <span class="sh-soft">eight ways of working.</span>', 'Areas · Activities', desc='Programmes combine non-formal education, practical training, mentoring and community action.')}
+    <div class="mt-8 grid gap-4 lg:mt-10 lg:grid-cols-12">
+      <div class="rounded-[28px] border border-ink-light p-6 md:p-7 lg:col-span-4">
+        <p class="label text-ink-mid">Areas of intervention</p>
+        <ul class="mt-4 grid gap-2">{areas}</ul>
+      </div>
+      <div class="rounded-[28px] bg-[#F6F6F6] p-6 md:p-7 lg:col-span-8">
+        <p class="label text-ink-mid">Core activities</p>
+        <ol class="mt-4 grid gap-2 sm:grid-cols-2">{acts}</ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="approach" class="py-6 lg:py-8">
+  <div class="wrap">
+    <div class="os-band on-dark text-white">
+      <div class="grid gap-10 lg:grid-cols-12 lg:gap-16">
+        <div class="lg:col-span-6">
+          <div class="sh-top"><span class="sh-num">03</span><span class="sh-label">Our Approach</span></div>
+          <blockquote class="mt-8 text-[38px] font-semibold leading-[1.02] tracking-[-0.045em] md:text-[56px]">With communities, <span class="text-white/45">not simply for communities.</span></blockquote>
+        </div>
+        <ol class="grid content-end gap-3 lg:col-span-6">{appr}
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+''' + cta + about_more('our-story.html')
+    page('our-story.html', 'Our Story · AFCD Foundation',
+         'How young volunteers founded AFCD Foundation in Ait Ourir in 2007, and how we work with communities.',
+         'about', body, parent=ABOUT)
+
     sub('mission-vision.html', 'Mission &amp; Vision', 'About · Mission &amp; Vision',
         'What guides <span class="text-ink-mid">our work.</span>',
         'A mission we act on every day, a vision we work toward, and four values that shape how we work.',
@@ -645,6 +783,7 @@ def contact():
         <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Roots</dt><dd>Ait Ourir, Al Haouz</dd></div>
         <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Phone</dt><dd class="tabular-nums"><a class="hover:underline" href="tel:+212663618536">+212 663 618 536</a></dd></div>
         <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Email</dt><dd><a class="hover:underline" href="mailto:contact@afcdteam.com">contact@afcdteam.com</a></dd></div>
+        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Follow</dt><dd class="flex flex-wrap gap-2">{''.join(f'<a class="sh-link" href="{u}" target="_blank" rel="noopener">{n} {ARR}</a>' for n, u in SOCIALS)}</dd></div>
       </dl>
       {ph('Map · Marrakech main office', 'mt-8 aspect-[4/3] w-full rounded-3xl', '#E5E5E5')}
     </div>

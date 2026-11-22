@@ -75,6 +75,7 @@ const ORG = {
   foundingLocation: { '@type': 'Place', name: 'Ait Ourir, Al Haouz, Morocco' },
   address: { '@type': 'PostalAddress', addressLocality: 'Marrakech', postalCode: '40000', addressCountry: 'MA' },
   areaServed: { '@type': 'Country', name: 'Morocco' },
+  sameAs: ['https://www.facebook.com/afcd.foundation', 'https://www.instagram.com/afcd.foundation', 'https://www.linkedin.com/company/afcd-foundation'],
 };
 const WEBSITE = { '@context': 'https://schema.org', '@type': 'WebSite', '@id': SITE + '#website', name: 'AFCD Foundation', url: SITE, inLanguage: 'en', publisher: { '@id': SITE + '#organization' } };
 

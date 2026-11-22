@@ -533,3 +533,32 @@ export const seoIssues = pgTable('seo_issues', {
   reviewedBy: uuid('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
   note: text('note').notNull().default(''),
 }, (t) => [uniqueIndex('seo_issues_key_uq').on(t.code, t.file), index('seo_issues_status_idx').on(t.status, t.severity)]);
+
+// ---------------------------------------------------------------- Redirects (static hosting: instant redirect pages + a _redirects file)
+export const redirectStatusEnum = pgEnum('redirect_status', ['draft', 'active', 'disabled']);
+export const redirects = pgTable('redirects', {
+  id: id(),
+  source: text('source').notNull(),               // e.g. 'old-page.html' (exact path, no wildcards)
+  destination: text('destination').notNull(),     // internal path ('new-page.html', 'projects.html#x') or https URL
+  code: integer('code').notNull().default(301),   // 301 | 302 | 307 | 308 (used by hosts that support _redirects)
+  reason: text('reason').notNull().default(''),
+  status: redirectStatusEnum('status').notNull().default('draft'),
+  published: jsonb('published').$type<{ source: string; destination: string; code: number } | null>(),   // what the live site has; null = not live
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('redirects_source_uq').on(t.source)]);
+
+// ---------------------------------------------------------------- SEO settings with a draft and a published value (e.g. the Organization profile)
+export const seoSettings = pgTable('seo_settings', {
+  key: text('key').primaryKey(),
+  draft: jsonb('draft').$type<Record<string, unknown> | null>(),
+  published: jsonb('published').$type<Record<string, unknown> | null>(),
+  status: workflowEnum('status').notNull().default('draft'),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedAt: updatedAt(),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+});

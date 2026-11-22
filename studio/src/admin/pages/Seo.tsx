@@ -23,13 +23,13 @@ export function SeoPage() {
 }
 
 // ---------------------------------------------------------------- SEO Intelligence workspace
-type Tab = 'overview' | 'audit' | 'issues' | 'indexability' | 'links' | 'schema' | 'pages' | 'search-console';
-const TABS: [Tab, string][] = [['overview', 'Overview'], ['audit', 'Site audit'], ['issues', 'Issues'], ['indexability', 'Indexability'], ['links', 'Internal links'], ['schema', 'Structured data'], ['pages', 'Page settings'], ['search-console', 'Search Console']];
+type Tab = 'overview' | 'audit' | 'issues' | 'indexability' | 'links' | 'schema' | 'redirects' | 'pages' | 'search-console';
+const TABS: [Tab, string][] = [['overview', 'Overview'], ['audit', 'Site audit'], ['issues', 'Issues'], ['indexability', 'Indexability'], ['links', 'Internal links'], ['schema', 'Structured data'], ['redirects', 'Redirects'], ['pages', 'Page settings'], ['search-console', 'Search Console']];
 type Sev = 'critical' | 'high' | 'medium' | 'low' | 'info';
 type Rule = { code: string; severity: Sev; category: string; kind: 'standard' | 'heuristic'; title: string; why: string; fix: string };
 type Issue = { id: string; code: string; file: string; severity: Sev; category: string; evidence: string[]; status: 'open' | 'reviewed' | 'resolved'; firstSeen: string; lastSeen: string; resolvedAt: string | null; note: string; reviewer: string | null; rule: Rule | null; owner: Owner };
 type AuditPage = { file: string; url: string; title: string; description: string; words: number; inSitemap: boolean; robots: string; canonical: string; canonicalOk: boolean; lang: string; inbound: number; inboundFrom: string[]; linksOut: number; schema: string[]; schemaErrors: string[]; h1: string; owner: Owner; score: number };
-type AuditV2 = { id: string; kind?: string; at: string; production?: boolean; score: number; scores?: Record<string, number>; counts?: Record<Sev, number>; pages: AuditPage[] };
+type AuditV2 = { id: string; kind?: string; at: string; production?: boolean; score: number; scores?: Record<string, number>; counts?: Record<Sev, number>; pages: AuditPage[]; redirects?: { file: string; to: string }[] };
 const SEV: Record<Sev, { label: string; c: string }> = { critical: { label: 'Critical', c: '#b91c1c' }, high: { label: 'High', c: '#dc2626' }, medium: { label: 'Medium', c: '#d97706' }, low: { label: 'Low', c: '#2563eb' }, info: { label: 'Info', c: '#78716c' } };
 const CATS: [string, string][] = [['technical', 'Technical health'], ['metadata', 'Metadata'], ['content', 'Content checklist'], ['structured', 'Structured data'], ['linking', 'Internal linking'], ['performance', 'Performance (build)']];
 const editorFor = (o: Owner, file: string) => (o.kind === 'template' ? `/studio/seo/pages/${file}` : EDIT[o.kind]?.(o) ?? null);
@@ -49,7 +49,8 @@ function SeoHome({ tab }: { tab: Tab }) {
       <div className="pills">{can('seo.read') && <button className="btn btn-primary" disabled={busy} onClick={run}><Icon n="search" />{busy ? 'Auditing the build…' : 'Run build audit'}</button>}</div></div>
     <nav className="seo-tabs" aria-label="SEO sections">{TABS.map(([k, l]) => <Link key={k} to={k === 'overview' ? '/studio/seo' : `/studio/seo/${k}`} className={tab === k ? 'on' : ''} aria-current={tab === k ? 'page' : undefined}>{l}</Link>)}</nav>
     {a && <div className="seo-kind"><span className="seo-kind-tag">Build audit</span><span>Checked the pages the website build produced {ago(a.at)}{v2 && !a.production ? ' · preview build (every page is noindex on purpose)' : ''}. This is not Google’s view of the public site.</span></div>}
-    {!data || !issues ? <Loading /> : !a ? <section className="card"><div className="dt-empty"><Icon n="search" /><b>No audit yet</b><small>Run a build audit to check every page.</small></div></section>
+    {tab === 'redirects' ? <Redirects />
+      : !data || !issues ? <Loading /> : !a ? <section className="card"><div className="dt-empty"><Icon n="search" /><b>No audit yet</b><small>Run a build audit to check every page.</small></div></section>
       : !v2 ? <section className="card"><div className="dt-empty"><Icon n="search" /><b>Your last audit used the previous engine</b><small>Run a build audit to see the new detailed findings.</small></div></section>
       : tab === 'overview' ? <Overview a={a} issues={issues} history={data.history} />
       : tab === 'audit' ? <SiteAudit a={a} issues={issues} />
@@ -161,15 +162,20 @@ function Indexability({ a }: { a: AuditV2 }) {
   const cats = ['Listed for indexing', 'Excluded (not in sitemap / noindex)', 'Canonical points elsewhere', 'Noindex'];
   const [f, setF] = useState('all'); const [q, setQ] = useState('');
   const rows = a.pages.filter((p) => (f === 'all' || cat(p) === f) && (!q || `${p.title} ${p.file}`.toLowerCase().includes(q.toLowerCase())));
+  const red = (a.redirects ?? []).filter((r) => !q || `${r.file} ${r.to}`.toLowerCase().includes(q.toLowerCase()));
   return <section className="card">
     {!a.production && <div className="notice n-info" style={{ margin: 16 }}><div><b>Preview build.</b> Every page carries noindex on purpose, so this view shows what the production build will list (from the sitemap and canonicals). Google’s own index status is only available through Search Console.</div></div>}
-    <ListToolbar tabs={[['all', 'All', a.pages.length], ...cats.map((c) => [c, c.split(' (')[0], a.pages.filter((p) => cat(p) === c).length] as [string, string, number])]} value={f} onChange={setF} q={q} setQ={setQ} placeholder="Search pages" />
-    <DataTable id="seo-index" rows={rows} total={a.pages.length} rowKey={(p) => p.file} csvName="afcd-indexability" columns={[
+    <ListToolbar tabs={[['all', 'All', a.pages.length], ...cats.map((c) => [c, c.split(' (')[0], a.pages.filter((p) => cat(p) === c).length] as [string, string, number]), ['redirected', 'Redirected', (a.redirects ?? []).length]]} value={f} onChange={setF} q={q} setQ={setQ} placeholder="Search pages" />
+    {f === 'redirected' ? <DataTable id="seo-index-red" rows={red} total={(a.redirects ?? []).length} rowKey={(r) => r.file} csvName="afcd-redirected" columns={[
+      { key: 'from', header: 'Old address', sort: (r) => r.file, csv: (r) => r.file, render: (r) => <b className="title mono">{r.file}</b> },
+      { key: 'state', header: 'Status (build audit)', render: () => <span className="dt-state"><span className="dot" style={{ ['--c' as string]: '#2563eb' }} />Redirected</span> },
+      { key: 'to', header: 'Goes to', sort: (r) => r.to, csv: (r) => r.to, render: (r) => <span className="mono sub">{r.to}</span> },
+    ]} empty={<EmptyState icon="globe" text="No redirect pages in this build" />} /> : <DataTable id="seo-index" rows={rows} total={a.pages.length} rowKey={(p) => p.file} csvName="afcd-indexability" columns={[
       { key: 'page', header: 'Page', sort: (p) => p.file, csv: (p) => p.file, render: (p) => <div><b className="title">{p.title || p.file}</b><div className="sub mono">{p.url}</div></div> },
       { key: 'state', header: 'Status (build audit)', sort: (p) => cat(p), csv: (p) => cat(p), render: (p) => <span className="dt-state"><span className="dot" style={{ ['--c' as string]: cat(p) === 'Listed for indexing' ? '#16a34a' : '#a8a29e' }} />{cat(p)}</span> },
       { key: 'canon', header: 'Canonical', sort: (p) => (p.canonicalOk ? 0 : 1), csv: (p) => p.canonical, hideBelow: 1100, render: (p) => <span className={p.canonicalOk ? 'sub' : ''}>{p.canonicalOk ? 'Self' : p.canonical || 'Missing'}</span> },
       { key: 'lang', header: 'Language', sort: (p) => p.lang, csv: (p) => p.lang, hideBelow: 900, render: (p) => <span className="sub">{p.lang || 'Missing'}</span> },
-    ]} empty={<EmptyState icon="globe" text="No pages here" />} />
+    ]} empty={<EmptyState icon="globe" text="No pages here" />} />}
   </section>;
 }
 
@@ -198,6 +204,87 @@ function Schema({ a }: { a: AuditV2 }) {
     ]} empty={<EmptyState icon="layers" text="No pages" />} />
     <p className="muted" style={{ fontSize: 12, padding: '0 16px 14px', margin: 0 }}>Read from the built pages: Organization and WebSite on the homepage, breadcrumbs on inner pages. Test a public page with Google’s <a href="https://search.google.com/test/rich-results" target="_blank" rel="noopener">Rich Results Test</a>. Structured data can help search engines understand a page; it does not guarantee rich results.</p>
   </section>;
+}
+
+// ---------------------------------------------------------------- Redirects
+type Redirect = { id: string; source: string; destination: string; code: number; reason: string; status: 'draft' | 'active' | 'disabled'; published: { source: string; destination: string; code: number } | null; publishedAt: string | null; updatedAt: string; updatedByName: string | null; live: boolean; pending: null | 'new' | 'edited' | 'removal' };
+type RForm = { source: string; destination: string; code: number; reason: string };
+const CODES: [number, string][] = [[301, '301 · Moved permanently'], [302, '302 · Moved temporarily'], [308, '308 · Permanent (keeps form data)'], [307, '307 · Temporary (keeps form data)']];
+const rState = (r: Redirect): [string, string] => r.pending === 'new' ? ['Not live yet', '#d97706'] : r.pending === 'edited' ? ['Edited, live version differs', '#d97706'] : r.pending === 'removal' ? ['Will be removed', '#dc2626'] : r.status === 'disabled' ? ['Disabled', '#a8a29e'] : r.live ? ['Live', '#16a34a'] : ['Published, page missing', '#dc2626'];
+
+function Redirects() {
+  const toast = useToast(); const can = useCan();
+  const [rows, setRows] = useState<Redirect[] | null>(null); const [q, setQ] = useState(''); const [f, setF] = useState('all');
+  const [edit, setEdit] = useState<{ id?: string; form: RForm } | null>(null); const [confirm, setConfirm] = useState(false); const [busy, setBusy] = useState('');
+  const load = useCallback(() => api<Redirect[]>('/seo/redirects').then(setRows).catch((e) => toast(e.message, true)), []);
+  useEffect(() => { load(); }, [load]);
+  const pending = (rows ?? []).filter((r) => r.pending);
+  const match = (r: Redirect) => (f === 'all' || (f === 'live' ? r.live && !r.pending : f === 'pending' ? !!r.pending : r.status === 'disabled')) && (!q || `${r.source} ${r.destination} ${r.reason}`.toLowerCase().includes(q.toLowerCase()));
+  async function act(r: Redirect, kind: 'disable' | 'enable' | 'delete') {
+    setBusy(r.id);
+    try { kind === 'delete' ? await api(`/seo/redirects/${r.id}`, { method: 'DELETE' }) : await post(`/seo/redirects/${r.id}/${kind}`); await load();
+      toast(kind === 'delete' ? 'Redirect deleted' : kind === 'disable' ? (r.published ? 'Disabled. It leaves the site when redirects are published.' : 'Disabled') : 'Enabled again. It goes live when redirects are published.'); }
+    catch (e) { toast((e as Error).message, true); } finally { setBusy(''); }
+  }
+  async function publish() {
+    setBusy('publish');
+    try { const r = await post<{ live: number; removed: number }>('/seo/redirects/publish'); setConfirm(false); await load(); toast(`Published and verified: ${r.live} redirect${r.live === 1 ? '' : 's'} live${r.removed ? `, ${r.removed} removed` : ''}`); }
+    catch (e) { setConfirm(false); toast(e instanceof ApiError && e.details?.length ? (e.details as { message: string }[]).map((d) => d.message).join(' ') : (e as Error).message, true); } finally { setBusy(''); }
+  }
+  if (!rows) return <Loading />;
+  return <section className="card">
+    <div className="card-h">
+      <p className="muted" style={{ margin: 0, maxWidth: 760 }}>Send visitors and search engines from an old address to its new page. The site is static, so each redirect is a small page at the old address that forwards at once and names the new page as canonical; Studio also writes a <span className="mono">_redirects</span> file with the real status code for hosts that support it.</p>
+      <div className="pills">
+        {can('seo.update') && <button className="btn" onClick={() => setEdit({ form: { source: '', destination: '', code: 301, reason: '' } })}><Icon n="plus" />New redirect</button>}
+        {can('seo.publish') ? <button className="btn btn-primary" disabled={!pending.length} onClick={() => setConfirm(true)}><Icon n="globe" />Publish changes{pending.length ? ` (${pending.length})` : ''}</button>
+          : pending.length > 0 && <span className="muted" style={{ fontSize: 12.5 }}>{pending.length} change{pending.length === 1 ? '' : 's'} waiting for an administrator to publish</span>}
+      </div>
+    </div>
+    <ListToolbar tabs={[['all', 'All', rows.length], ['live', 'Live', rows.filter((r) => r.live && !r.pending).length], ['pending', 'Waiting to publish', pending.length], ['disabled', 'Disabled', rows.filter((r) => r.status === 'disabled').length]]} value={f} onChange={setF} q={q} setQ={setQ} placeholder="Search redirects" />
+    <DataTable id="seo-redirects" rows={rows.filter(match)} total={rows.length} rowKey={(r) => r.id} csvName="afcd-redirects" onOpen={can('seo.update') ? (r) => setEdit({ id: r.id, form: { source: r.source, destination: r.destination, code: r.code, reason: r.reason } }) : undefined} columns={[
+      { key: 'from', header: 'Old address', sort: (r) => r.source, csv: (r) => r.source, render: (r) => <div><b className="title mono">/{r.source}</b>{r.reason && <div className="sub">{r.reason}</div>}</div> },
+      { key: 'to', header: 'Goes to', sort: (r) => r.destination, csv: (r) => r.destination, render: (r) => <div><span className="mono">{/^https:/.test(r.destination) ? r.destination : `/${r.destination}`}</span>{r.pending === 'edited' && r.published && <div className="sub">Live: /{r.published.source} → {r.published.destination}</div>}</div> },
+      { key: 'code', header: 'Type', sort: (r) => r.code, csv: (r) => String(r.code), hideBelow: 900, render: (r) => <span className="pill mono">{r.code}</span> },
+      { key: 'state', header: 'Status', sort: (r) => rState(r)[0], csv: (r) => rState(r)[0], render: (r) => { const [l, c] = rState(r); return <span className="dt-state"><span className="dot" style={{ ['--c' as string]: c }} />{l}</span>; } },
+      { key: 'by', header: 'Updated', sort: (r) => r.updatedAt, csv: (r) => r.updatedAt, hideBelow: 1100, render: (r) => <span className="sub">{ago(r.updatedAt)}{r.updatedByName ? ` · ${r.updatedByName}` : ''}</span> },
+      { key: 'act', header: '', align: 'right', render: (r) => can('seo.update') ? <div className="pills" style={{ justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
+        {r.status === 'disabled' ? <button className="btn btn-sm" disabled={busy === r.id} onClick={() => act(r, 'enable')}>Enable</button> : <button className="btn btn-sm" disabled={busy === r.id} onClick={() => act(r, 'disable')}>Disable</button>}
+        {!r.published && <button className="btn btn-sm btn-ghost" disabled={busy === r.id} onClick={() => act(r, 'delete')} aria-label={`Delete redirect ${r.source}`}><Icon n="x" /></button>}
+      </div> : null },
+    ]} empty={<EmptyState icon="globe" text={rows.length ? 'No redirects here' : 'No redirects yet. Add one when a page moves or is renamed.'} />} />
+    {edit && <RedirectDialog init={edit} onClose={() => setEdit(null)} onSaved={(w) => { setEdit(null); load(); toast(w.length ? `Saved with a note: ${w[0]}` : 'Saved. It goes live when redirects are published.'); }} />}
+    {confirm && <Modal size="sm" title="Publish redirect changes" onClose={() => setConfirm(false)} footer={<><button className="btn" onClick={() => setConfirm(false)}>Cancel</button><button className="btn btn-primary" disabled={busy === 'publish'} onClick={publish}>{busy === 'publish' ? 'Publishing and verifying…' : 'Publish to the website'}</button></>}>
+      <div className="modal-b"><p style={{ marginTop: 0 }}>The website is rebuilt and each change is checked before it is recorded. If anything fails, the site is restored.</p>
+        <ul style={{ margin: 0, paddingLeft: 18 }}>{pending.map((r) => <li key={r.id}><span className="mono">/{r.source}</span> {r.pending === 'removal' ? 'is removed' : <>→ <span className="mono">{r.destination}</span>{r.pending === 'edited' ? ' (edited)' : ''}</>}</li>)}</ul></div>
+    </Modal>}
+  </section>;
+}
+
+function RedirectDialog({ init, onClose, onSaved }: { init: { id?: string; form: RForm }; onClose: () => void; onSaved: (warnings: string[]) => void }) {
+  const [f, setF] = useState<RForm>(init.form); const [chk, setChk] = useState<{ errors: string[]; warnings: string[] } | null>(null); const [saving, setSaving] = useState(false); const [err, setErr] = useState<string[]>([]);
+  useEffect(() => {
+    if (!f.source.trim() || !f.destination.trim()) { setChk(null); return; }
+    const t = setTimeout(() => { post<{ errors: string[]; warnings: string[] }>(`/seo/redirects/check${init.id ? `?id=${init.id}` : ''}`, f).then(setChk).catch(() => setChk(null)); }, 300);
+    return () => clearTimeout(t);
+  }, [f]);
+  async function save() {
+    setSaving(true); setErr([]);
+    try { const r = init.id ? await put<{ warnings: string[] }>(`/seo/redirects/${init.id}`, f) : await post<{ warnings: string[] }>('/seo/redirects', f); onSaved(r.warnings ?? []); }
+    catch (e) { setErr(e instanceof ApiError && e.details?.length ? (e.details as { message: string }[]).map((d) => d.message) : [(e as Error).message]); } finally { setSaving(false); }
+  }
+  const blocked = !!chk?.errors.length || !f.source.trim() || !f.destination.trim();
+  return <Modal size="sm" title={init.id ? 'Edit redirect' : 'New redirect'} onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={blocked || saving} onClick={save}>{saving ? 'Saving…' : 'Save as draft'}</button></>}>
+    <div className="modal-b stack">
+      <label className="field"><span>Old address</span><input className="input mono" autoFocus placeholder="old-page.html" maxLength={160} value={f.source} onChange={(e) => setF({ ...f, source: e.target.value })} /><small>The address that no longer has a page. Exact match, no wildcards.</small></label>
+      <label className="field"><span>Goes to</span><input className="input mono" placeholder="projects.html" maxLength={500} value={f.destination} onChange={(e) => setF({ ...f, destination: e.target.value })} /><small>A page of this site, or a full https:// address (administrators only).</small></label>
+      <label className="field"><span>Type</span><select className="select" value={f.code} onChange={(e) => setF({ ...f, code: Number(e.target.value) })}>{CODES.map(([c, l]) => <option key={c} value={c}>{l}</option>)}</select><small>Used by hosts that read _redirects. On GitHub Pages every redirect forwards instantly through its redirect page.</small></label>
+      <label className="field"><span>Reason <em className="muted" style={{ fontStyle: 'normal' }}>(optional, internal)</em></span><input className="input" maxLength={300} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} placeholder="e.g. Page renamed in the 2026 redesign" /></label>
+      {[...err, ...(chk?.errors ?? [])].length > 0 && <div className="notice n-bad"><div><ul style={{ margin: 0, paddingLeft: 16 }}>{[...new Set([...err, ...(chk?.errors ?? [])])].map((m) => <li key={m}>{m}</li>)}</ul></div></div>}
+      {!!chk?.warnings.length && <div className="notice n-info"><div><ul style={{ margin: 0, paddingLeft: 16 }}>{chk.warnings.map((m) => <li key={m}>{m}</li>)}</ul></div></div>}
+      {chk && !chk.errors.length && !chk.warnings.length && <div className="notice n-ok"><div>Checked: the new page exists and nothing conflicts.</div></div>}
+    </div>
+  </Modal>;
 }
 
 function SearchConsole() {

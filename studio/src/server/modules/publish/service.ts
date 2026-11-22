@@ -32,6 +32,9 @@ import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import { derivativeFiles } from '../media/service.ts';
 import { loadProject, toSnapshot, type Snapshot } from '../projects/service.ts';
+import { redirects } from '../../db/schema.ts';
+import { checkRedirect, redirectsFile, stubHtml, STUB_MARK, REDIRECTS_HEADER } from '../seo/redirects.ts';
+import type { Role } from '../../rbac.ts';
 
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
@@ -267,8 +270,9 @@ export class Publisher {
     return ids;
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { revisionId: string | null } } = {}) {
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { revisionId: string | null }; redirects?: 'pending' } = {}) {
     const entries = await this.liveEntries(o.project);
+    await this.writeRedirects(o.redirects === 'pending');
     this.writeData(this.dataFile, entries);
     const partnerMedia = await this.writePartners(this.partnersFile, o.partner, o.project);
     const eventMedia = await this.writeEvents(this.eventsFile, o.event, o.project);
@@ -427,7 +431,7 @@ export class Publisher {
   }
 
   // ---------------------------------------------------------------- Pages
-  private async deliver(kind: string, actor: NonNullable<Actor>, entityId: string, revisionId: string, apply: (log: string[]) => Promise<void>, failLabel: string) {
+  private async deliver(kind: string, actor: NonNullable<Actor>, entityId: string | null, revisionId: string | null, apply: (log: string[]) => Promise<void>, failLabel: string) {
     const [job] = await this.db.insert(publishJobs).values({ kind, entityId, revisionId, requestedBy: actor.id }).returning();
     const log: string[] = [];
     try { await apply(log); }
@@ -435,7 +439,7 @@ export class Publisher {
       const msg = (e as Error).message;
       try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
       await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
-      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('partner') ? 'partner' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId }, `${failLabel}: ${msg}`, { jobId: job.id });
+      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
       throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
     }
     return { job, log };
@@ -979,6 +983,80 @@ export class Publisher {
       await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, only: 'pages', fieldsFile });
       if (!existsSync(resolve(outDir, HOME))) throw new AppError(409, 'The preview could not be generated.');
       return { token, file: HOME };
+    });
+  }
+
+  // ---------------------------------------------------------------- Redirects
+  /** Redirect pages at the old addresses and the _redirects file. Live = each redirect's published copy; 'pending' = what
+   *  publishing will deliver (every redirect that is not disabled). Studio only ever replaces or removes its own files. */
+  private async redirectSet(pending: boolean) {
+    const rows = await this.db.select().from(redirects);
+    const want = pending
+      ? rows.filter((r) => r.status !== 'disabled').map((r) => ({ source: r.source, destination: r.destination, code: r.code }))
+      : rows.flatMap((r) => (r.published ? [r.published] : []));
+    return { rows, want };
+  }
+  private async writeRedirects(pending: boolean) {
+    const root = this.cfg.siteRoot; const { rows, want } = await this.redirectSet(pending);
+    const keep = new Set(want.map((r) => r.source));
+    const candidates = new Set([...readdirSync(root).filter((f) => f.endsWith('.html')), ...rows.map((r) => r.source), ...rows.flatMap((r) => (r.published ? [r.published.source] : []))]);
+    for (const f of candidates) {
+      const file = resolve(root, f);
+      if (!keep.has(f) && existsSync(file) && readFileSync(file, 'utf8').includes(STUB_MARK)) rmSync(file);
+    }
+    for (const r of want) {
+      const file = resolve(root, r.source);
+      if (existsSync(file) && !readFileSync(file, 'utf8').includes(STUB_MARK)) throw new Error(`${r.source} is a real page on the site; the redirect was not written over it.`);
+      mkdirSync(resolve(file, '..'), { recursive: true });
+      const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`; writeFileSync(tmp, stubHtml(r)); renameSync(tmp, file);
+    }
+    const rf = resolve(root, '_redirects');
+    const ours = !existsSync(rf) || readFileSync(rf, 'utf8').startsWith(REDIRECTS_HEADER);
+    if (!ours) { if (want.length) throw new Error('A _redirects file not made by Studio is already on the site; Studio will not replace it.'); return; }
+    if (want.length) { const tmp = `${rf}.${randomBytes(4).toString('hex')}.tmp`; writeFileSync(tmp, redirectsFile(want)); renameSync(tmp, rf); }
+    else if (existsSync(rf)) rmSync(rf);
+  }
+  private verifyRedirects(want: { source: string; destination: string; code: number }[], gone: string[]) {
+    const root = this.cfg.siteRoot;
+    for (const r of want) {
+      const file = resolve(root, r.source);
+      const html = existsSync(file) ? readFileSync(file, 'utf8') : '';
+      if (!html.includes(STUB_MARK) || !html.includes(stubHtml(r).match(/url=([^"]+)"/)![1])) throw new Error(`The redirect page ${r.source} was not written correctly.`);
+    }
+    for (const f of gone) { const file = resolve(root, f); if (existsSync(file) && readFileSync(file, 'utf8').includes(STUB_MARK)) throw new Error(`The old redirect page ${f} is still on the site.`); }
+    const rf = resolve(root, '_redirects'); const txt = existsSync(rf) ? readFileSync(rf, 'utf8') : '';
+    for (const r of want) if (!txt.includes(`/${r.source} `)) throw new Error(`_redirects is missing ${r.source}.`);
+  }
+
+  /** Puts every pending redirect change on the site at once: new and edited redirects go live, disabled ones are removed. */
+  async publishRedirects(actor: NonNullable<Actor>, role: Role) {
+    return this.locked(async () => {
+      const { rows, want } = await this.redirectSet(true);
+      const changes = rows.filter((r) => r.status === 'draft' || (r.status === 'disabled' && r.published));
+      if (!changes.length) throw new AppError(409, 'There are no redirect changes to publish.');
+      const problems: { path: string; message: string }[] = [];
+      for (const r of rows.filter((x) => x.status !== 'disabled')) {
+        const { errors } = await checkRedirect(this.db, this.cfg, { source: r.source, destination: r.destination, code: r.code as 301, reason: r.reason }, role, r.id);
+        for (const m of errors) problems.push({ path: r.source, message: `${r.source}: ${m}` });
+      }
+      if (problems.length) throw new AppError(422, 'Some redirects need attention before publishing.', problems);
+      const gone = rows.filter((r) => r.status === 'disabled' && r.published).map((r) => r.published!.source)
+        .concat(rows.flatMap((r) => (r.published && r.status !== 'disabled' && r.published.source !== r.source ? [r.published.source] : [])));
+      const { job, log } = await this.deliver('publish_redirects', actor, null, null, async (log) => {
+        await this.writeSite({ redirects: 'pending' });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyRedirects(want, gone);
+      }, 'Publishing redirects failed');
+      await this.db.transaction(async (tx) => {
+        const now = new Date();
+        for (const r of rows) {
+          if (r.status === 'disabled') { if (r.published) await tx.update(redirects).set({ published: null, publishedAt: null }).where(eq(redirects.id, r.id)); }
+          else await tx.update(redirects).set({ status: 'active', published: { source: r.source, destination: r.destination, code: r.code }, publishedAt: r.status === 'draft' ? now : r.publishedAt }).where(eq(redirects.id, r.id));
+        }
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: now }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'redirect.publish', { type: 'redirect' }, `Published redirects: ${want.length} live, ${gone.length} removed`, { jobId: job.id });
+      });
+      return { jobId: job.id, live: want.length, removed: gone.length };
     });
   }
 

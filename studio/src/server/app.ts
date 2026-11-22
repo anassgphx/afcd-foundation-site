@@ -24,6 +24,7 @@ import * as EV from './modules/events/service.ts';
 import * as OP from './modules/opportunities/service.ts';
 import * as FM from './modules/forms/service.ts';
 import * as SEO from './modules/seo/service.ts';
+import * as RD from './modules/seo/redirects.ts';
 import * as HM from './modules/home/service.ts';
 import * as WS from './modules/workspace/service.ts';
 import { overview as dashboardOverview } from './modules/workspace/overview.ts';
@@ -397,6 +398,19 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
   api.post('/seo/overrides/:id/discard', perm('seo.update'), async (c) => { await SEO.discardOverride(db, actor(c), c.req.param('id')); return c.json({ ok: true }); });
   api.post('/seo/overrides/:id/publish', perm('seo.publish'), async (c) => c.json(await publisher.publishSeo(actor(c), c.req.param('id'))));
   api.post('/seo/overrides/:id/unpublish', perm('seo.publish'), async (c) => c.json(await publisher.unpublishSeo(actor(c), c.req.param('id'))));
+  // redirects: editors draft them (seo.update), administrators put them on the site (seo.publish)
+  api.get('/seo/redirects', perm('seo.read'), async (c) => c.json(await RD.listRedirects(db, cfg)));
+  api.post('/seo/redirects/check', perm('seo.update'), async (c) => {
+    const p = RD.redirectSchema.safeParse(await c.req.json());
+    if (!p.success) return c.json({ errors: p.error.issues.map((i) => i.message), warnings: [] });
+    return c.json(await RD.checkRedirect(db, cfg, p.data, requireUser(c).role, c.req.query('id') || undefined));
+  });
+  api.post('/seo/redirects', perm('seo.update'), async (c) => c.json(await RD.saveRedirect(db, cfg, actor(c), requireUser(c).role, await c.req.json()), 201));
+  api.put('/seo/redirects/:id', perm('seo.update'), async (c) => c.json(await RD.saveRedirect(db, cfg, actor(c), requireUser(c).role, await c.req.json(), c.req.param('id'))));
+  api.post('/seo/redirects/:id/disable', perm('seo.update'), async (c) => { await RD.setRedirectStatus(db, actor(c), c.req.param('id'), 'disabled'); return c.json({ ok: true }); });
+  api.post('/seo/redirects/:id/enable', perm('seo.update'), async (c) => { await RD.setRedirectStatus(db, actor(c), c.req.param('id'), 'draft'); return c.json({ ok: true }); });
+  api.delete('/seo/redirects/:id', perm('seo.update'), async (c) => { await RD.deleteRedirect(db, actor(c), c.req.param('id')); return c.json({ ok: true }); });
+  api.post('/seo/redirects/publish', perm('seo.publish'), async (c) => c.json(await publisher.publishRedirects(actor(c), requireUser(c).role)));
 
   // ---------------------------------------------------------------- Top bar: search and notifications (permission-filtered)
   api.get('/search', async (c) => { const u = requireUser(c); return c.json(await WS.search(db, u.role, c.req.query('q') ?? '')); });

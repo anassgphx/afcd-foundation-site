@@ -13,7 +13,7 @@ export type PageScan = {
   h1: string[]; headings: { level: number; text: string }[]; words: number; og: { title: string; description: string; image: string };
   schema: { types: string[]; errors: string[] }; linksOut: string[]; inbound: string[]; images: number; size: number;
 };
-export type BuildAudit = { kind: 'build'; at: string; site: string; production: boolean; pages: PageScan[]; findings: Finding[]; scores: Record<Category | 'overall', number>; counts: Record<Severity, number> };
+export type BuildAudit = { kind: 'build'; at: string; site: string; production: boolean; pages: PageScan[]; redirects?: { file: string; to: string }[]; findings: Finding[]; scores: Record<Category | 'overall', number>; counts: Record<Severity, number> };
 
 export const SITE = 'https://afcdfoundation.org/';
 const pageUrl = (f: string) => SITE + (f === 'index.html' ? '' : f);
@@ -57,7 +57,9 @@ const R: Record<string, Omit<Finding, 'file' | 'evidence'>> = {
   'link.orphan': { code: 'link.orphan', severity: 'medium', category: 'linking', kind: 'heuristic', title: 'No other page links here', why: 'Pages without internal links are hard for visitors and crawlers to find.', fix: 'Link to it from a related page (its pillar, project or listing).' },
   'site.preview-build': { code: 'site.preview-build', severity: 'info', category: 'technical', kind: 'standard', title: 'Preview build: every page is noindex', why: 'Preview builds are kept out of search on purpose. This audit cannot judge indexability for the public site.', fix: 'Production builds (npm run build:production) are indexable; audit the public site after deployment.' },
 };
+R['link.via-redirect'] = { code: 'link.via-redirect', severity: 'low', category: 'linking', kind: 'standard', title: 'Links to a redirected address', why: 'Visitors and search engines take an extra hop through the redirect page before reaching the content.', fix: 'Point the link straight at the new page.' };
 export const RULES = R;
+const STUB_MARK = '<!-- studio-redirect -->';   // redirect pages written by Studio (see redirects.ts)
 export const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 const WEIGHT: Record<Severity, number> = { critical: 40, high: 20, medium: 8, low: 3, info: 0 };
 
@@ -85,7 +87,12 @@ function scanPage(root: string, file: string) {
 
 /** Runs the build audit over every built page in `root`. */
 export function runBuildAudit(root: string, now = new Date()): BuildAudit {
-  const files = readdirSync(root).filter((f) => /^[a-z0-9][a-z0-9-]*\.html$/.test(f)).sort();
+  const all = readdirSync(root).filter((f) => /^[a-z0-9][a-z0-9-]*\.html$/.test(f)).sort();
+  // redirect pages are not content: list them separately and leave them out of the page checks
+  const redirectsOut: { file: string; to: string }[] = [];
+  const files = all.filter((f) => { const h = readFileSync(resolve(root, f), 'utf8'); if (!h.includes(STUB_MARK)) return true;
+    redirectsOut.push({ file: f, to: decode(h.match(/http-equiv="refresh" content="0; url=([^"]+)"/i)?.[1] ?? '') }); return false; });
+  const redirected = new Map(redirectsOut.map((r) => [r.file, r.to]));
   const robotsTxt = existsSync(resolve(root, 'robots.txt')) ? readFileSync(resolve(root, 'robots.txt'), 'utf8') : '';
   const production = !/Disallow:\s*\/\s*$/m.test(robotsTxt);
   const sitemapXml = existsSync(resolve(root, 'sitemap.xml')) ? readFileSync(resolve(root, 'sitemap.xml'), 'utf8') : '';
@@ -113,6 +120,8 @@ export function runBuildAudit(root: string, now = new Date()): BuildAudit {
     if (!p.lang) add('tech.lang-missing', p.file);
     const broken = p.linksOut.filter((l) => !existsSync(resolve(root, l)));
     if (broken.length) add('tech.broken-links', p.file, broken.slice(0, 8).map((b) => `Links to ${b}`));
+    const hops = p.linksOut.filter((l) => redirected.has(l));
+    if (hops.length) add('link.via-redirect', p.file, hops.slice(0, 8).map((l) => `Links to ${l}, which redirects to ${redirected.get(l)}`));
     if (/&amp;(?:amp|lt|gt|quot|#\d+);/.test(head)) add('tech.double-escaped', p.file, [clip(head.match(/[^\n]*&amp;(?:amp|lt|gt|quot|#\d+);[^\n]*/)?.[0]?.trim() ?? '', 140)]);
     if (!p.description) add('meta.desc-missing', p.file);
     else if (p.description.length < 50) add('meta.desc-short', p.file, [`“${p.description}” (${p.description.length} characters)`]);
@@ -159,5 +168,5 @@ export function runBuildAudit(root: string, now = new Date()): BuildAudit {
     return [c, per.length ? Math.round(per.reduce((a, b) => a + b, 0) / per.length) : 0];
   })) as Record<Category, number>;
   const counts = Object.fromEntries(SEVERITY_ORDER.map((s) => [s, findings.filter((f) => f.severity === s).length])) as Record<Severity, number>;
-  return { kind: 'build', at: now.toISOString(), site: SITE, production, pages, findings, scores: { ...scores, overall: scores.technical }, counts };
+  return { kind: 'build', at: now.toISOString(), site: SITE, production, pages, redirects: redirectsOut, findings, scores: { ...scores, overall: scores.technical }, counts };
 }

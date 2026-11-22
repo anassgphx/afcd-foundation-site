@@ -20,6 +20,7 @@ import * as M from './modules/media/service.ts';
 import * as G from './modules/pages/service.ts';
 import * as N from './modules/news/service.ts';
 import * as PT from './modules/partners/service.ts';
+import * as EV from './modules/events/service.ts';
 import { importPartners } from './modules/partners/import.ts';
 import { blockCatalog } from './modules/pages/blocks.ts';
 import { Publisher, type BuildRunner } from './modules/publish/service.ts';
@@ -255,6 +256,29 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
   });
   api.post('/partners/:id/revisions/:rev/restore', perm('partner.update'), async (c) => { await PT.restorePartnerRevision(db, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
 
+  // ---------------------------------------------------------------- Events
+  api.get('/events', perm('event.read'), async (c) => c.json(await EV.listEvents(db)));
+  api.post('/events', perm('event.create'), async (c) => c.json(await EV.createEvent(db, actor(c), await c.req.json()), 201));
+  api.get('/events/:id', perm('event.read'), async (c) => {
+    const e = await EV.loadEvent(db, c.req.param('id'));
+    const mediaRows = e.posterMediaId ? await db.select().from(t.media).where(eq(t.media.id, e.posterMediaId)) : [];
+    return c.json({ ...e, media: mediaRows.map(withUrl), problems: await EV.eventProblems(db, e), history: await EV.eventHistory(db, e.id), kinds: EV.KINDS });
+  });
+  api.put('/events/:id', perm('event.update'), async (c) => c.json(await EV.updateEvent(db, actor(c), c.req.param('id'), await c.req.json())));
+  api.post('/events/:id/transition', async (c) => {
+    const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
+    if (!body.success || !EV.eventTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, EV.eventTransitionPerm(body.data.action)!);
+    return c.json(await EV.transitionEvent(db, actor(c), u.role, c.req.param('id'), body.data.action, { comment: body.data.comment }));
+  });
+  api.post('/events/:id/publish', perm('event.publish'), async (c) => c.json(await publisher.publishEvent(actor(c), c.req.param('id'))));
+  api.post('/events/:id/unpublish', perm('event.publish'), async (c) => c.json(await publisher.unpublishEvent(actor(c), c.req.param('id'))));
+  api.post('/events/:id/preview', perm('event.read'), async (c) => {
+    const r = await publisher.previewEvent(c.req.param('id'), EV.toEventSnapshot(await EV.loadEvent(db, c.req.param('id'))));
+    return c.json({ url: `/studio/preview/${r.token}/${r.file}` });
+  });
+  api.post('/events/:id/revisions/:rev/restore', perm('event.update'), async (c) => { await EV.restoreEventRevision(db, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
+
   // ---------------------------------------------------------------- Publishing jobs, audit, users
   api.get('/publish-jobs', perm('dashboard.read'), async (c) => c.json(await publisher.recentJobs(30)));
   api.get('/audit', perm('audit.read'), async (c) => {
@@ -321,7 +345,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
   // Brand files for the sign-in screen (public; allow-listed names only).
   app.get('/studio/brand/:name', (c) => {
     const name = c.req.param('name');
-    if (!['afcd-logo-white.png', 'afcd-mark.png', 'afcd-logo.png'].includes(name)) return c.notFound();
+    if (!['afcd-logo-white.png', 'afcd-mark.png', 'afcd-logo.png', 'afcd-symbol.svg'].includes(name)) return c.notFound();
     return sendFile(c, resolve(cfg.siteRoot, 'assets/brand', name), { immutable: false });
   });
 

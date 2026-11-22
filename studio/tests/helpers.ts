@@ -38,6 +38,13 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
     if (newsFile && existsSync(newsFile)) writeFileSync(join(out, 'news.html'), (JSON.parse(readFileSync(newsFile, 'utf8')).articles as any[]).map((a) => `<li><a href="${a.url}">${a.title}</a></li>`).join('\n'));
     const partnersFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/partners.json') : mode.partnersFile;
     if (partnersFile && existsSync(partnersFile)) writeFileSync(join(out, 'partners.html'), (JSON.parse(readFileSync(partnersFile, 'utf8')).partners as any[]).map((p) => `<li data-studio-partner-rev="${p.revision}"><span>${p.name}</span></li>`).join('\n'));
+    // Stand-in for the events templates: listing + one page per event with the revision marker.
+    const eventsFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/events.json') : mode.eventsFile;
+    if (eventsFile && existsSync(eventsFile)) {
+      const evs = JSON.parse(readFileSync(eventsFile, 'utf8')).events as any[];
+      writeFileSync(join(out, 'events.html'), evs.map((e) => `<li data-when="${e.upcoming ? 'upcoming' : 'past'}"><a class="ev-link">${e.title}</a></li>`).join('\n'));
+      for (const e of evs) writeFileSync(join(out, `event-${e.slug}.html`), `<section id="event" data-studio-event-rev="${e.revision}"><h1>${e.title}</h1>${e.bodyHtml}</section>`);
+    }
     // Stand-in for build.mjs: every page source becomes a root page and a sitemap entry.
     const pagesDir = mode.kind === 'live' ? join(cfg.siteRoot, 'src/pages') : mode.pagesDir;
     const files = existsSync(pagesDir) ? readdirSync(pagesDir).filter((f) => f.endsWith('.html')) : [];

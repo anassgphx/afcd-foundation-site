@@ -29,6 +29,13 @@
       "when": 1795339768868,
       "tag": "0003_partners",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795340721739,
+      "tag": "0004_events",
+      "breakpoints": true
     }
   ]
 }

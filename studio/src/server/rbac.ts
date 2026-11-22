@@ -6,6 +6,7 @@ export const PERMISSIONS = [
   'page.read', 'page.create', 'page.update', 'page.approve', 'page.publish',
   'news.read', 'news.create', 'news.update', 'news.approve', 'news.publish',
   'partner.read', 'partner.create', 'partner.update', 'partner.approve', 'partner.publish',
+  'event.read', 'event.create', 'event.update', 'event.approve', 'event.publish',
   'media.read', 'media.upload', 'media.update', 'media.delete',
   'site.rebuild',
   'audit.read',
@@ -26,13 +27,13 @@ export const ROLE_LABELS: Record<Role, string> = {
   read_only: 'Read-Only User',
 };
 
-const READ: Permission[] = ['dashboard.read', 'project.read', 'media.read', 'page.read', 'news.read', 'partner.read'];
+const READ: Permission[] = ['dashboard.read', 'project.read', 'media.read', 'page.read', 'news.read', 'partner.read', 'event.read'];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   super_admin: PERMISSIONS,
   website_admin: PERMISSIONS.filter((p) => p !== 'users.manage'),
-  content_editor: [...READ, 'project.create', 'project.update', 'project.seo', 'media.upload', 'media.update', 'page.create', 'page.update', 'news.create', 'news.update', 'partner.create', 'partner.update'],
-  content_reviewer: [...READ, 'project.review', 'project.approve', 'page.approve', 'news.approve', 'partner.approve', 'audit.read'],
+  content_editor: [...READ, 'project.create', 'project.update', 'project.seo', 'media.upload', 'media.update', 'page.create', 'page.update', 'news.create', 'news.update', 'partner.create', 'partner.update', 'event.create', 'event.update'],
+  content_reviewer: [...READ, 'project.review', 'project.approve', 'page.approve', 'news.approve', 'partner.approve', 'event.approve', 'audit.read'],
   media_manager: [...READ, 'media.upload', 'media.update', 'media.delete'],
   seo_manager: [...READ, 'project.seo'],
   read_only: READ,

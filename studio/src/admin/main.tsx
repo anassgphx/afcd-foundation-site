@@ -11,6 +11,7 @@ import { PagesList } from './pages/PagesList.tsx';
 import { Builder } from './pages/Builder.tsx';
 import { NewsList, ArticleEditor } from './pages/News.tsx';
 import { PartnersList, PartnerEditor } from './pages/Partners.tsx';
+import { EventsList, EventEditor } from './pages/Events.tsx';
 import { MediaLibrary } from './pages/Media.tsx';
 import { ApprovalQueue, Publishing, ActivityLog, Users } from './pages/Admin.tsx';
 
@@ -52,6 +53,7 @@ function Login({ onDone }: { onDone: () => void }) {
   return (
     <main className="auth">
       <section className="auth-brand" aria-label="AFCD Portal">
+        <div className="auth-motif" aria-hidden="true" />
         <div className="auth-line" aria-hidden="true" />
         <div className="auth-glow" aria-hidden="true" />
         <img className="auth-logo" src="/studio/brand/afcd-logo-white.png" alt="AFCD Foundation" width="1525" height="318" />
@@ -100,6 +102,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
   { group: 'Content', items: [
     { to: '/studio/projects', label: 'Projects', icon: 'folder', perm: 'project.read', match: /^\/studio\/projects/ },
     { to: '/studio/news', label: 'News & Stories', icon: 'log', perm: 'news.read', match: /^\/studio\/news/ },
+    { to: '/studio/events', label: 'Events', icon: 'calendar', perm: 'event.read', match: /^\/studio\/events/ },
     { to: '/studio/partners', label: 'Partners', icon: 'partner', perm: 'partner.read', match: /^\/studio\/partners/ },
   ] },
   { group: 'Media', items: [{ to: '/studio/media', label: 'Media Library', icon: 'image', perm: 'media.read' }] },
@@ -161,6 +164,9 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 }
 
 function route(path: string): { title: string; el: React.ReactElement; full?: boolean } {
+  const ev = path.match(/^\/studio\/events\/([0-9a-f-]{36})$/);
+  if (ev) return { title: 'Event', el: <EventEditor key={ev[1]} id={ev[1]} /> };
+  if (path.startsWith('/studio/events')) return { title: 'Events', el: <EventsList /> };
   const pt = path.match(/^\/studio\/partners\/([0-9a-f-]{36})$/);
   if (pt) return { title: 'Partner', el: <PartnerEditor key={pt[1]} id={pt[1]} /> };
   if (path.startsWith('/studio/partners')) return { title: 'Partners', el: <PartnersList /> };

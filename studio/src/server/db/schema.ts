@@ -321,3 +321,49 @@ export const partnerRevisions = pgTable('partner_revisions', {
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex('partner_revisions_num_uq').on(t.partnerId, t.number)]);
+
+// ---------------------------------------------------------------- Events (real AFCD events only; the site's samples are not imported)
+export const eventRegistrationEnum = pgEnum('event_registration', ['none', 'contact', 'external']);
+
+export const events = pgTable('events', {
+  id: id(),
+  slug: text('slug').notNull(),
+  title: text('title').notNull(),
+  kind: text('kind').notNull().default('Workshop'),
+  summary: text('summary').notNull().default(''),
+  body: text('body').notNull().default(''),
+  startDate: text('start_date').notNull(),          // YYYY-MM-DD
+  endDate: text('end_date'),                        // optional, multi-day events
+  timeLabel: text('time_label').notNull().default(''),
+  location: text('location').notNull().default(''),
+  online: boolean('online').notNull().default(false),
+  pillarId: uuid('pillar_id').references(() => pillars.id, { onDelete: 'restrict' }),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  posterMediaId: uuid('poster_media_id').references(() => media.id, { onDelete: 'set null' }),
+  agenda: jsonb('agenda').$type<{ title: string; text: string }[]>().notNull().default([]),
+  audience: jsonb('audience').$type<string[]>().notNull().default([]),
+  registration: eventRegistrationEnum('registration').notNull().default('contact'),
+  registrationUrl: text('registration_url').notNull().default(''),
+  recapArticleId: uuid('recap_article_id').references(() => articles.id, { onDelete: 'set null' }),
+  seoTitle: text('seo_title').notNull().default(''),
+  seoDescription: text('seo_description').notNull().default(''),
+  status: workflowEnum('status').notNull().default('draft'),
+  publishedRevisionId: uuid('published_revision_id'),
+  approvedRevisionId: uuid('approved_revision_id'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('events_slug_uq').on(t.slug), index('events_status_idx').on(t.status), index('events_start_idx').on(t.startDate)]);
+
+export const eventRevisions = pgTable('event_revisions', {
+  id: id(),
+  eventId: uuid('event_id').notNull().references(() => events.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('event_revisions_num_uq').on(t.eventId, t.number)]);

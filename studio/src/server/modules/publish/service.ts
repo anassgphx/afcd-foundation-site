@@ -15,7 +15,9 @@ import { validateDoc } from '../pages/blocks.ts';
 import { articles, articleRevisions } from '../../db/schema.ts';
 import { articleFile, articleSource, listingEntry, newsCtx, type ArticleSnapshot } from '../news/render.ts';
 import { loadArticle, toArticleSnapshot } from '../news/service.ts';
-import { partners, partnerRevisions } from '../../db/schema.ts';
+import { partners, partnerRevisions, events, eventRevisions } from '../../db/schema.ts';
+import { eventEntries, eventFile, isUpcoming } from '../events/render.ts';
+import type { EventSnapshot } from '../events/service.ts';
 import { partnerEntries } from '../partners/render.ts';
 import type { PartnerSnapshot } from '../partners/service.ts';
 import { AppError } from '../../http.ts';
@@ -26,7 +28,7 @@ import { loadProject, toSnapshot, type Snapshot } from '../projects/service.ts';
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
 
-export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string; partnersFile?: string }) => Promise<string>;
+export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string; partnersFile?: string; eventsFile?: string }) => Promise<string>;
 
 /** Default runner: the real generator and build. Tests inject a fake. */
 export const realRunner: BuildRunner = async (cfg, mode) => {
@@ -36,7 +38,7 @@ export const realRunner: BuildRunner = async (cfg, mode) => {
     const b = await run('npm', ['run', 'build'], { ...opts, env: { ...process.env } });
     return [a.stdout, b.stdout, b.stderr].join('\n');
   }
-  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}), ...(mode.partnersFile ? { STUDIO_PARTNERS_JSON: mode.partnersFile } : {}) };
+  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}), ...(mode.partnersFile ? { STUDIO_PARTNERS_JSON: mode.partnersFile } : {}), ...(mode.eventsFile ? { STUDIO_EVENTS_JSON: mode.eventsFile } : {}) };
   const a = mode.only === 'pages' ? { stdout: '' } : await run('python3', ['-I', 'src/content.py'], { ...opts, env });
   const b = await run('node', ['build.mjs'], { ...opts, env });
   return [a.stdout, b.stdout].join('\n');
@@ -139,10 +141,39 @@ export class Publisher {
     return live.map((x) => x.snap.logoMediaId).filter(Boolean) as string[];
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null } } = {}) {
+  get eventsFile() { return resolve(this.cfg.siteRoot, 'src/data/events.json'); }
+
+  /** Live events (optionally overriding one). */
+  async liveEvents(override?: { eventId: string; revisionId: string | null }) {
+    const live = await this.db.select({ id: events.id, rev: events.publishedRevisionId }).from(events).where(isNotNull(events.publishedRevisionId));
+    const map = new Map(live.map((r) => [r.id, r.rev as string]));
+    if (override) { if (override.revisionId) map.set(override.eventId, override.revisionId); else map.delete(override.eventId); }
+    if (!map.size) return [] as { id: string; snap: EventSnapshot }[];
+    const revs = await this.db.select().from(eventRevisions).where(inArray(eventRevisions.id, [...map.values()]));
+    return revs.map((r) => ({ id: r.id, snap: r.snapshot as unknown as EventSnapshot }));
+  }
+
+  /** events.json exists only while at least one Studio event is live; otherwise the site shows its own sample list.
+   *  Event pages that no longer belong to the list are removed (the generator recreates the right ones). Returns poster media ids. */
+  private async writeEvents(file: string, override?: { eventId: string; revisionId: string | null }, projectOverride?: { projectId: string; revisionId: string | null }) {
+    const live = await this.liveEvents(override);
+    if (!live.length) { if (existsSync(file)) rmSync(file); return [] as string[]; }
+    const list = await eventEntries(this.db, live, { projectOverride });
+    mkdirSync(resolve(file, '..'), { recursive: true });
+    const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), events: list }, null, 2) + '\n'); renameSync(tmp, file);
+    const keep = new Set(list.map((e) => eventFile(e.slug)));
+    for (const dir of [this.cfg.siteRoot, resolve(this.cfg.siteRoot, 'src/pages')]) {
+      if (existsSync(dir)) for (const f of readdirSync(dir)) if (/^event-[a-z0-9-]+\.html$/.test(f) && !keep.has(f)) rmSync(resolve(dir, f));
+    }
+    return live.map((x) => x.snap.posterMediaId).filter(Boolean) as string[];
+  }
+
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null } } = {}) {
     const entries = await this.liveEntries(o.project);
     this.writeData(this.dataFile, entries);
     const partnerMedia = await this.writePartners(this.partnersFile, o.partner, o.project);
+    const eventMedia = await this.writeEvents(this.eventsFile, o.event, o.project);
     const newsMedia = await this.writeNews(this.newsFile, resolve(this.cfg.siteRoot, 'src/pages'), await this.liveArticles(o.article), o.project);
     const live = await this.livePages(o.page);
     const ctx = await buildCtx(this.db, live.map((x) => x.snap.doc), { projectOverride: o.project });
@@ -153,7 +184,7 @@ export class Publisher {
       const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
       writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
     }
-    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...eventMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
     return { entries, live };
   }
 
@@ -302,7 +333,7 @@ export class Publisher {
       const msg = (e as Error).message;
       try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
       await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
-      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('partner') ? 'partner' : 'page', id: entityId }, `${failLabel}: ${msg}`, { jobId: job.id });
+      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('partner') ? 'partner' : kind.includes('event') ? 'event' : 'page', id: entityId }, `${failLabel}: ${msg}`, { jobId: job.id });
       throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
     }
     return { job, log };
@@ -422,7 +453,8 @@ export class Publisher {
       if (!a) throw new AppError(404, 'Story not found.');
       if (!a.publishedRevisionId) throw new AppError(409, 'This story is not on the live site.');
       const [rev] = await this.db.select().from(articleRevisions).where(eq(articleRevisions.id, a.publishedRevisionId));
-      const file = articleFile(rev.snapshot as unknown as ArticleSnapshot);
+      // stories from the old blog also get a page from the site's template (news-<slug>.html), so remove that too
+      const file = articleFile(rev.snapshot as unknown as ArticleSnapshot) ?? `news-${(rev.snapshot as unknown as ArticleSnapshot).slug}.html`;
       const [job] = await this.db.insert(publishJobs).values({ kind: 'unpublish_article', entityId: articleId, revisionId: rev.id, requestedBy: actor.id }).returning();
       const log: string[] = [];
       try {
@@ -545,6 +577,97 @@ export class Publisher {
       if (!existsSync(resolve(outDir, 'partners.html'))) throw new AppError(409, 'The preview could not be generated.');
       return { token, file: 'partners.html', mediaIds: snap.logoMediaId ? [snap.logoMediaId] : [] };
     });
+  }
+
+  // ---------------------------------------------------------------- Events
+  private verifyEvent(slug: string, title: string, revisionId: string) {
+    const root = this.cfg.siteRoot;
+    const listing = readFileSync(resolve(root, 'events.html'), 'utf8');
+    if (!listing.includes(`>${escapeHtml(title)}<`)) throw new Error('The event is missing from events.html.');
+    const file = resolve(root, eventFile(slug));
+    if (!existsSync(file)) throw new Error(`${eventFile(slug)} was not generated.`);
+    const html = readFileSync(file, 'utf8');
+    if (!html.includes(`data-studio-event-rev="${revisionId}"`)) throw new Error(`${eventFile(slug)} does not show the published revision (the site's event template must output data-studio-event-rev).`);
+    if (html.includes('Sample event')) throw new Error(`${eventFile(slug)} still shows sample content.`);
+  }
+
+  async publishEvent(actor: NonNullable<Actor>, eventId: string) {
+    return this.locked(async () => {
+      const [e] = await this.db.select().from(events).where(eq(events.id, eventId));
+      if (!e) throw new AppError(404, 'Event not found.');
+      if (e.status !== 'approved' || !e.approvedRevisionId) throw new AppError(409, 'Only an approved event can be published.');
+      const [rev] = await this.db.select().from(eventRevisions).where(eq(eventRevisions.id, e.approvedRevisionId));
+      const snap = rev.snapshot as unknown as EventSnapshot;
+      const { job, log } = await this.deliver('publish_event', actor, eventId, rev.id, async (log) => {
+        await this.writeSite({ event: { eventId, revisionId: rev.id } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyEvent(snap.slug, snap.title, rev.id);
+      }, `Publishing “${e.title}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(events).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, updatedAt: new Date() }).where(eq(events.id, eventId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'event.publish', { type: 'event', id: eventId }, `Published event “${e.title}” (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file: eventFile(snap.slug) };
+    });
+  }
+
+  async unpublishEvent(actor: NonNullable<Actor>, eventId: string) {
+    return this.locked(async () => {
+      const [e] = await this.db.select().from(events).where(eq(events.id, eventId));
+      if (!e) throw new AppError(404, 'Event not found.');
+      if (!e.publishedRevisionId) throw new AppError(409, 'This event is not on the live site.');
+      const [rev] = await this.db.select().from(eventRevisions).where(eq(eventRevisions.id, e.publishedRevisionId));
+      const snap = rev.snapshot as unknown as EventSnapshot;
+      const { job, log } = await this.deliver('unpublish_event', actor, eventId, rev.id, async (log) => {
+        this.removeOrphanPages(eventFile(snap.slug));
+        await this.writeSite({ event: { eventId, revisionId: null } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        const f = resolve(this.cfg.siteRoot, eventFile(snap.slug));
+        if (existsSync(f) && readFileSync(f, 'utf8').includes(`data-studio-event-rev="${rev.id}"`)) throw new Error(`${eventFile(snap.slug)} is still on the site.`);
+      }, `Removing “${e.title}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(events).set({ status: 'draft', publishedRevisionId: null, publishedAt: null, updatedAt: new Date() }).where(eq(events.id, eventId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'event.unpublish', { type: 'event', id: eventId }, `Removed event “${e.title}” from the website`, { jobId: job.id });
+      });
+      return { jobId: job.id };
+    });
+  }
+
+  /** Builds the calendar and the event page with the saved working copy in an isolated folder. */
+  async previewEvent(eventId: string, snap: EventSnapshot) {
+    return this.locked(async () => {
+      this.cleanupPreviews();
+      const token = randomBytes(16).toString('hex');
+      const dir = resolve(this.cfg.previewDir, token);
+      const pagesDir = resolve(dir, 'pages'), outDir = resolve(dir, 'site'), dataFile = resolve(dir, 'projects.json'), eventsFile = resolve(dir, 'events.json');
+      mkdirSync(pagesDir, { recursive: true }); mkdirSync(outDir, { recursive: true });
+      this.writeData(dataFile, await this.liveEntries());
+      const list = await eventEntries(this.db, (await this.liveEvents({ eventId, revisionId: null })).concat({ id: 'preview', snap }));
+      writeFileSync(eventsFile, JSON.stringify({ version: 1, source: 'AFCD Studio (preview)', events: list }, null, 2));
+      await this.writeNews(resolve(dir, 'news.json'), pagesDir, await this.liveArticles());
+      await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, newsFile: resolve(dir, 'news.json'), eventsFile });
+      const file = existsSync(resolve(outDir, eventFile(snap.slug))) ? eventFile(snap.slug) : 'events.html';
+      if (!existsSync(resolve(outDir, file))) throw new AppError(409, 'The preview could not be generated.');
+      return { token, file };
+    });
+  }
+
+  /** Rebuilds when an event has moved from upcoming to past since the last export (checked by the scheduler). */
+  async refreshEventStates(now = new Date()) {
+    if (!existsSync(this.eventsFile)) return false;
+    let stale = false;
+    try {
+      const cur = JSON.parse(readFileSync(this.eventsFile, 'utf8')).events as { revision: string; upcoming: boolean }[];
+      const live = await this.liveEvents();
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+      stale = live.some((l) => { const c = cur.find((x) => x.revision === l.id); return !c || c.upcoming !== isUpcoming(l.snap, today); });
+    } catch { stale = true; }
+    if (!stale) return false;
+    await this.locked(async () => { const log: string[] = []; await this.rebuildFromDb(log); });
+    await audit(this.db, null, 'event.refresh', { type: 'event' }, 'Rebuilt the events calendar because an event has passed');
+    return true;
   }
 
   async recentJobs(limit = 10) {

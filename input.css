@@ -1368,26 +1368,26 @@ a.na-tag:hover { border-color: #000; }
 /* Brand symbol (from the AFCD logo) as a quiet watermark, cropped off the edges */
 .phd::after, .ft::after, .cta-card::after, .os-band::after {
   content: ""; position: absolute; pointer-events: none; aspect-ratio: 47 / 48;
-  background: currentColor; -webkit-mask: url(brand/afcd-symbol.svg) center / contain no-repeat; mask: url(brand/afcd-symbol.svg) center / contain no-repeat;
+  background: currentColor; -webkit-mask: url(brand/afcd-symbol.svg?v=2) center / contain no-repeat; mask: url(brand/afcd-symbol.svg?v=2) center / contain no-repeat;
 }
 /* Page headers */
-.phd::after { z-index: -1; width: 620px; right: -150px; top: -140px; transform: rotate(12deg); color: #000; opacity: .05; }
+.phd::after { z-index: -1; width: 620px; right: -150px; top: -140px; color: #000; opacity: .05; }
 @media (max-width: 767px) { .phd::after { width: 320px; right: -170px; top: -40px; opacity: .03; } }
 /* Footer */
 .ft { position: relative; }
 .ft > * { position: relative; z-index: 1; }
-.ft::after { z-index: 0; width: 640px; right: -120px; bottom: -140px; transform: rotate(12deg); color: #fff; opacity: .05; }
+.ft::after { z-index: 0; width: 640px; right: -120px; bottom: -140px; color: #fff; opacity: .05; }
 /* White CTA card */
-.cta-card::after { z-index: -1; width: 320px; right: -60px; top: -60px; transform: rotate(-12deg); color: #000; opacity: .055; }
+.cta-card::after { z-index: -1; width: 320px; right: -60px; top: -60px; color: #000; opacity: .055; }
 /* Black bands */
 .os-band { position: relative; overflow: hidden; isolation: isolate; }
-.os-band::after { z-index: -1; width: 300px; right: -50px; bottom: -60px; transform: rotate(10deg); color: #fff; opacity: .07; }
+.os-band::after { z-index: -1; width: 300px; right: -50px; bottom: -60px; color: #fff; opacity: .07; }
 
 /* Page header: white AFCD symbol in the black home button and label pill */
 .phd-home svg { display: none; }
-.phd-home::before { content: ""; width: 17px; height: 17px; background: #fff; -webkit-mask: url(brand/afcd-symbol.svg) center / contain no-repeat; mask: url(brand/afcd-symbol.svg) center / contain no-repeat; }
+.phd-home::before { content: ""; width: 17px; height: 17px; background: #fff; -webkit-mask: url(brand/afcd-symbol.svg?v=2) center / contain no-repeat; mask: url(brand/afcd-symbol.svg?v=2) center / contain no-repeat; }
 .phd-home { width: 32px; height: 32px; }
-.phd-label .tb-dot { width: 13px; height: 13px; border-radius: 0; background: #fff; -webkit-mask: url(brand/afcd-symbol.svg) center / contain no-repeat; mask: url(brand/afcd-symbol.svg) center / contain no-repeat; }
+.phd-label .tb-dot { width: 13px; height: 13px; border-radius: 0; background: #fff; -webkit-mask: url(brand/afcd-symbol.svg?v=2) center / contain no-repeat; mask: url(brand/afcd-symbol.svg?v=2) center / contain no-repeat; }
 
 /* Forms: spam trap (kept off-screen, not display:none) and connected/preview states */
 .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }

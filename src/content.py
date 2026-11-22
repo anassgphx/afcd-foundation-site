@@ -1098,6 +1098,9 @@ def events():
               'connect': '<circle cx="7" cy="7" r="2.5"/><circle cx="13.5" cy="8.5" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M12 13c1.9-.4 3.8.8 4.5 3"/>',
               'act': '<path d="M10 2.5v3M4.7 4.7l2.1 2.1M15.3 4.7l-2.1 2.1"/><circle cx="10" cy="11.5" r="4"/><path d="M8.5 17.5h3"/>'}
         hhtml = ''.join(f'<li class="wd-card" style="--c:#F3F3F3"><span class="flex items-start justify-between"><span class="wd-ico"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{HI[k]}</svg></span><span class="wd-n">{j:02d}</span></span><span class="mt-8 block text-[19px] font-semibold tracking-[-0.02em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for j, (k, t, d) in enumerate(highlights, 1))
+        outcomes = ['Lorem ipsum dolor sit amet, consectetur adipiscing elit.', 'Vestibulum id ligula porta felis euismod semper.',
+                    'Cras mattis consectetur purus sit amet fermentum.', 'Aenean lacinia bibendum nulla sed consectetur.']
+        ohtml = ''.join(f'<li class="evt-out"><span class="evt-out-n">{j:02d}</span><span class="block text-[16px] font-medium leading-snug">{o}</span></li>' for j, o in enumerate(outcomes, 1))
         orows = ''.join(event_row(x, compact=True) for x in others)
         dbody = page_header([('Events', 'events.html'), (e['title'], event_file(e))], f"{e['kind']} · {'Upcoming' if e['upcoming'] else 'Past'}", e['title'], e['desc']) + f'''
 
@@ -1114,19 +1117,51 @@ def events():
 </section>
 
 <section id="about" class="py-14 lg:py-16">
-  <div class="wrap">{sec_head('01 / About This Event', 'What to <span class="sh-soft">expect.</span>', 'Sample text', desc='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus.')}
-    <div class="mt-8 grid gap-4 lg:mt-10 lg:grid-cols-12">
-      <div class="grid content-start gap-4 text-[16px] leading-[1.75] text-ink-dark lg:col-span-7">
-        <p class="text-[19px] leading-[1.55] tracking-[-0.01em] text-ink-pure">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus, posuere velit aliquet.</p>
-        <p>Sed posuere consectetur est at lobortis. Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.</p>
-        <p>Aenean lacinia bibendum nulla sed consectetur. Curabitur blandit tempus porttitor. Nulla vitae elit libero, a pharetra augue.</p>
-      </div>
-      <div class="os-band on-dark text-white lg:col-span-5" style="padding:28px">
-        <p class="label text-white/55">Who should attend</p>
-        <ul class="evd-who mt-5 grid gap-3">{whtml}</ul>
+  <div class="wrap" data-tabs>{sec_head('01 / About This Event', 'What to <span class="sh-soft">expect.</span>', 'Sample text')}
+    <div class="evt-tabs mt-8" role="tablist" aria-label="About this event">
+      <button type="button" role="tab" id="evt-t1" aria-controls="evt-p1" aria-selected="true">Overview</button>
+      <button type="button" role="tab" id="evt-t2" aria-controls="evt-p2" aria-selected="false">Outcomes</button>
+      <button type="button" role="tab" id="evt-t3" aria-controls="evt-p3" aria-selected="false">Highlights</button>
+      <button type="button" role="tab" id="evt-t4" aria-controls="evt-p4" aria-selected="false">Who should attend</button>
+    </div>
+
+    <div id="evt-p1" class="evt-panel" role="tabpanel" aria-labelledby="evt-t1">
+      <div class="grid gap-4 lg:grid-cols-12">
+        <div class="grid content-start gap-4 text-[16px] leading-[1.75] text-ink-dark lg:col-span-8">
+          <p class="text-[20px] leading-[1.5] tracking-[-0.01em] text-ink-pure">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus, posuere velit aliquet.</p>
+          <p>Sed posuere consectetur est at lobortis. Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.</p>
+          <p>Aenean lacinia bibendum nulla sed consectetur. Curabitur blandit tempus porttitor. Nulla vitae elit libero, a pharetra augue.</p>
+        </div>
+        <dl class="evt-at lg:col-span-4">
+          <div><dt>Format</dt><dd>{e['kind']}</dd></div>
+          <div><dt>Duration</dt><dd>{e['time']}</dd></div>
+          <div><dt>Location</dt><dd>{e['where']}</dd></div>
+          <div><dt>Pillar</dt><dd><span class="pj-dot" style="--c:#111"></span>{pname}</dd></div>
+        </dl>
       </div>
     </div>
-    <ul class="mt-4 grid gap-3 md:grid-cols-3">{hhtml}</ul>
+
+    <div id="evt-p2" class="evt-panel" role="tabpanel" aria-labelledby="evt-t2">
+      <ul class="evt-outcomes">{ohtml}</ul>
+    </div>
+
+    <div id="evt-p3" class="evt-panel" role="tabpanel" aria-labelledby="evt-t3">
+      <ul class="grid gap-3 md:grid-cols-3">{hhtml}</ul>
+    </div>
+
+    <div id="evt-p4" class="evt-panel" role="tabpanel" aria-labelledby="evt-t4">
+      <div class="grid gap-4 lg:grid-cols-12">
+        <div class="os-band on-dark text-white lg:col-span-7" style="padding:28px">
+          <p class="label text-white/55">Who should attend</p>
+          <ul class="evd-who mt-5 grid gap-3">{whtml}</ul>
+        </div>
+        <div class="rounded-[28px] border border-ink-light p-6 md:p-7 lg:col-span-5">
+          <p class="text-[18px] font-semibold tracking-[-0.02em]">Not sure it’s for you?</p>
+          <p class="mt-2 text-[14.5px] leading-relaxed text-ink-dark">Send us a short message and we’ll tell you whether this event fits what you’re looking for.</p>
+          <a href="contact.html?topic=General+question#message" class="link-arrow mt-5">Ask a question {ARR}</a>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 

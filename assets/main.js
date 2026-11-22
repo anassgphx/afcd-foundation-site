@@ -559,6 +559,33 @@
     $$('[data-studio-login]').forEach(function (a) { a.href = url; a.hidden = false; });
   })();
 
+  /* Article pages: copy the page link */
+  $$('[data-copy-link]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var done = function () { toast('Link copied.'); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(location.href).then(done, function () { toast(location.href); });
+      else toast(location.href);
+    });
+  });
+
+  /* Tabs inside a section ([data-tabs]): all panels stay visible if scripts don't run */
+  $$('[data-tabs]').forEach(function (root) {
+    var tabs = $$('[role="tab"]', root), panels = $$('[role="tabpanel"]', root);
+    root.classList.add('tabs-on');
+    function show(i, focus) {
+      tabs.forEach(function (t, k) { var on = k === i; t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1; if (on && focus) t.focus(); });
+      panels.forEach(function (p, k) { p.hidden = k !== i; });
+    }
+    tabs.forEach(function (t, i) {
+      t.addEventListener('click', function () { show(i); });
+      t.addEventListener('keydown', function (e) {
+        var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (d) { e.preventDefault(); show((i + d + tabs.length) % tabs.length, true); }
+      });
+    });
+    show(0);
+  });
+
   /* Events page: upcoming / past filter */
   (function () {
     var list = $('#event-list'); if (!list) return;

@@ -5,7 +5,7 @@
 //   description: Meta description
 //   active: home | about | pillars | projects | news | partners | contact | involved
 //   ---
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
@@ -24,7 +24,9 @@ const header = partial('header');
 const footer = partial('footer');
 
 const NAV = ['home', 'about', 'pillars', 'projects', 'news', 'partners', 'contact', 'involved', 'none'];
-const escapeAttr = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+// Escapes for attributes without double-escaping entities already in the text (front matter titles may contain &amp;).
+const escapeAttr = (s) => s.replace(/&(?!(?:[a-z][a-z0-9]*|#\d+|#x[0-9a-f]+);)/gi, '&amp;').replace(/"/g, '&quot;');
+const escapeText = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 function parse(file) {
   const raw = readFileSync(join(PAGES_DIR, file), 'utf8');
@@ -54,6 +56,8 @@ function markActive(html, active) {
 // preview copy never competes with the real site. Use `npm run build:production` for afcdfoundation.org.
 const SITE = 'https://afcdfoundation.org/';
 const PRODUCTION = process.env.SITE_ENV === 'production';
+const FORMS_ENDPOINT = (process.env.FORMS_ENDPOINT || '').trim().replace(/\/+$/, '');
+if (FORMS_ENDPOINT && !/^https?:\/\/[^\s"<>]+$/.test(FORMS_ENDPOINT)) throw new Error(`FORMS_ENDPOINT must be an http(s) URL, got "${FORMS_ENDPOINT}"`);
 const OG_IMAGE = SITE + 'assets/img/og-default.jpg';
 const pageUrl = (file) => SITE + (file === 'index.html' ? '' : file);
 
@@ -88,6 +92,20 @@ function breadcrumbs(file, meta) {
   return { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: items.map((it, i) => ({ '@type': 'ListItem', position: i + 1, name: it.name, item: it.url })) };
 }
 
+// Studio SEO overrides (owned by AFCD Studio): src/data/seo.json, or env SEO_JSON, sets the title, description, noindex
+// and share image of template pages. Values are plain text; they are escaped here.
+const SEO_FILE = process.env.SEO_JSON || join(SRC, 'data', 'seo.json');
+const SEO = existsSync(SEO_FILE) ? JSON.parse(readFileSync(SEO_FILE, 'utf8')).pages ?? {} : {};
+function applySeo(file, meta) {
+  const o = SEO[file]; if (!o) return meta;
+  if (o.title) meta.title = escapeText(o.title);
+  if (o.description) meta.description = o.description;
+  if (o.noindex) meta.noindex = 'true';
+  if (o.image) meta.ogImage = o.image;   // { src, w, h, alt } relative to the site root
+  if (o.revision) meta.seoRevision = o.revision;
+  return meta;
+}
+
 function seoTags(file, meta) {
   const noindex = !PRODUCTION || meta.noindex === 'true';
   const title = escapeAttr(meta.title), desc = escapeAttr(meta.description);
@@ -100,12 +118,16 @@ function seoTags(file, meta) {
     `<meta property="og:title" content="${title}">`,
     `<meta property="og:description" content="${desc}">`,
     `<meta property="og:url" content="${pageUrl(file)}">`,
-    `<meta property="og:image" content="${OG_IMAGE}">`,
-    `<meta property="og:image:width" content="1200">`,
-    `<meta property="og:image:height" content="630">`,
-    `<meta property="og:image:alt" content="AFCD Leadership Lab panel discussion">`,
+    `<meta property="og:image" content="${meta.ogImage ? SITE + meta.ogImage.src : OG_IMAGE}">`,
+    `<meta property="og:image:width" content="${meta.ogImage ? meta.ogImage.w : 1200}">`,
+    `<meta property="og:image:height" content="${meta.ogImage ? meta.ogImage.h : 630}">`,
+    `<meta property="og:image:alt" content="${meta.ogImage ? escapeAttr(escapeText(meta.ogImage.alt)) : 'AFCD Leadership Lab panel discussion'}">`,
+    ...(meta.seoRevision ? [`<meta name="studio-seo-rev" content="${meta.seoRevision}">`] : []),
     `<meta name="twitter:card" content="summary_large_image">`,
   ];
+  // Website forms → AFCD Studio: only when FORMS_ENDPOINT is set (e.g. http://localhost:4400/forms/v1).
+  // Without it the contact and newsletter forms keep their "not connected, nothing was sent" behaviour.
+  if (FORMS_ENDPOINT) tags.push(`<meta name="afcd-forms" content="${escapeAttr(FORMS_ENDPOINT)}">`);
   const ld = [];
   if (file === 'index.html') {
     ld.push(ORG, WEBSITE);
@@ -131,7 +153,8 @@ const PAGES_DIR = process.env.PAGES_DIR || join(SRC, 'pages');
 const OUT_DIR = process.env.OUT_DIR || '.';
 const pages = readdirSync(PAGES_DIR).filter((f) => f.endsWith('.html'));
 for (const file of pages) {
-  const { meta, body } = parse(file);
+  const { meta: meta0, body } = parse(file);
+  const meta = applySeo(file, meta0);
   if (!NAV.includes(meta.active)) throw new Error(`${file}: unknown active "${meta.active}"`);
   if (meta.noindex !== 'true') sitemap.push(`  <url><loc>${pageUrl(file)}</loc><lastmod>${lastmod(file)}</lastmod></url>`);
   const html = [

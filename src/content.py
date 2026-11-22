@@ -1259,15 +1259,6 @@ def events():
         return f'<svg class="{cls}" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{EVD_I[k]}</svg>'
 
     CHECK = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10.5 3.2 3L15 6.5"/></svg>'
-    HI = {'learn': '<path d="M2.5 7 10 4l7.5 3L10 10 2.5 7Z"/><path d="M5.5 8.3v3.7c0 1.1 2 2 4.5 2s4.5-.9 4.5-2V8.3"/>',
-          'connect': '<circle cx="7" cy="7" r="2.5"/><circle cx="13.5" cy="8.5" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M12 13c1.9-.4 3.8.8 4.5 3"/>',
-          'act': '<path d="M10 2.5v3M4.7 4.7l2.1 2.1M15.3 4.7l-2.1 2.1"/><circle cx="10" cy="11.5" r="4"/><path d="M8.5 17.5h3"/>'}
-
-    def tabs_html(tabs):
-        btns = ''.join(f'<button type="button" role="tab" id="evt-t{k}" aria-controls="evt-p{k}" aria-selected="{"true" if k == 1 else "false"}">{t}</button>' for k, (t, _) in enumerate(tabs, 1))
-        panels = ''.join(f'<div id="evt-p{k}" class="evt-panel" role="tabpanel" aria-labelledby="evt-t{k}">{h}</div>' for k, (_, h) in enumerate(tabs, 1))
-        bar = f'<div class="evt-tabs mt-8" role="tablist" aria-label="About this event">{btns}</div>' if len(tabs) > 1 else ''
-        return bar + panels
 
     def initials(name):
         w = [x for x in _html.unescape(name).split() if x[:1].isalpha()]
@@ -1287,6 +1278,11 @@ def events():
         facts = [('Time', e['time']), ('Location', f'<a class="evd-fact-link" href="#where">{e["where"]}</a>'), ('Format', e['kind'])]
         if e.get('project') and e['project'] in DETAILS:
             facts.append(('Project', f'<a class="evd-fact-link" href="{e["project"]}">{DETAILS[e["project"]]["name"]}</a>'))
+        # Partner(s): Studio supplies real names; samples show a neutral placeholder, never a real partner
+        ev_partners = ['Partner name'] if sample else [x for x in (e.get('partners') or []) if x]
+        if ev_partners:
+            facts.append(('Partner' if len(ev_partners) == 1 else 'Partners', '<span class="evd-partners">' + ''.join(
+                f'<span class="evd-partner"><span class="evd-partner-mark" aria-hidden="true">{initials(n)}</span>{n}</span>' for n in ev_partners) + '</span>'))
         facts.append(('Pillar', f'<span class="inline-flex items-center gap-1.5"><span class="pj-dot" style="--c:#111"></span>{pname}</span>'))
         fhtml = ''.join(f'<div class="evd-fact"><dt>{a}</dt><dd>{b}</dd></div>' for a, b in facts)
         count = f'<span class="evd-count" data-countdown="{e["iso"]}" hidden></span>' if e['upcoming'] else '<span class="evd-count is-past">Past event</span>'
@@ -1305,28 +1301,21 @@ def events():
 
         # -- main column blocks, numbered in order
         blocks = []
-        poster = f'<div class="evd-ov-poster">{ev_poster(e, "aspect-square w-full rounded-[24px]", "(min-width:1024px) 280px, 100vw")}</div>'
+        poster = f'<div class="evd-ov-poster">{ev_poster(e, "aspect-square w-full rounded-[24px]", "(min-width:1024px) 400px, 100vw")}</div>'
         if sample:
             outcomes = ['Lorem ipsum dolor sit amet, consectetur adipiscing elit.', 'Vestibulum id ligula porta felis euismod semper.',
                         'Cras mattis consectetur purus sit amet fermentum.', 'Aenean lacinia bibendum nulla sed consectetur.']
             ohtml = ''.join(f'<li class="evt-out"><span class="evt-out-n">{j:02d}</span><span class="block text-[16px] font-medium leading-snug">{o}</span></li>' for j, o in enumerate(outcomes, 1))
-            highlights = [('learn', 'Learn', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do.'),
-                          ('connect', 'Connect', 'Vestibulum id ligula porta felis euismod semper cras mattis.'),
-                          ('act', 'Act', 'Aenean lacinia bibendum nulla sed consectetur curabitur blandit.')]
-            hhtml = ''.join(f'<li class="wd-card" style="--c:#F3F3F3"><span class="flex items-start justify-between"><span class="wd-ico"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{HI[k]}</svg></span><span class="wd-n">{j:02d}</span></span><span class="mt-8 block text-[19px] font-semibold tracking-[-0.02em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for j, (k, t, d) in enumerate(highlights, 1))
             who = ['Lorem ipsum: young people and students', 'Dolor sit: community volunteers', 'Amet: local associations and partners']
             whtml = ''.join(f'<li class="gi-check">{CHECK}<span>{w}</span></li>' for w in who)
-            tabs = [
-                ('Overview', f'''<div class="evd-ov"><div class="grid content-start gap-4 text-[16px] leading-[1.75] text-ink-dark">
+            about_html = f'''<div class="evd-ov"><div class="grid content-start gap-4 text-[16px] leading-[1.75] text-ink-dark">
+            <h3 class="evd-ov-h">Overview</h3>
             <p class="text-[20px] leading-[1.5] tracking-[-0.01em] text-ink-pure">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus, posuere velit aliquet.</p>
             <p>Sed posuere consectetur est at lobortis. Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.</p>
-            <p>Aenean lacinia bibendum nulla sed consectetur. Curabitur blandit tempus porttitor. Nulla vitae elit libero, a pharetra augue.</p></div>{poster}</div>'''),
-                ('Outcomes', f'<ul class="evt-outcomes">{ohtml}</ul>'),
-                ('Highlights', f'<ul class="grid gap-3 md:grid-cols-3">{hhtml}</ul>'),
-                ('Who should attend', f'''<div class="grid gap-4 md:grid-cols-12">
-            <div class="os-band on-dark text-white md:col-span-7" style="padding:28px"><p class="label text-white/55">Who should attend</p><ul class="evd-who mt-5 grid gap-3">{whtml}</ul></div>
-            <div class="rounded-[28px] border border-ink-light p-6 md:col-span-5"><p class="text-[18px] font-semibold tracking-[-0.02em]">Not sure it’s for you?</p><p class="mt-2 text-[14.5px] leading-relaxed text-ink-dark">Send us a short message and we’ll tell you whether this event fits what you’re looking for.</p><a href="contact.html?topic=General+question#message" class="link-arrow mt-5">Ask a question {ARR}</a></div></div>'''),
-            ]
+            <p>Aenean lacinia bibendum nulla sed consectetur. Curabitur blandit tempus porttitor. Nulla vitae elit libero, a pharetra augue.</p></div>{poster}</div>'''
+            extra = [('Outcomes & Audience', 'What you’ll <span class="sh-soft">take away.</span>', f'''<div class="evd-oa mt-8"><div><p class="evd-sub">Outcomes</p><ul class="evt-outcomes is-stack mt-4">{ohtml}</ul></div><div class="grid content-start gap-3">
+            <div class="os-band on-dark text-white" style="padding:28px"><p class="label text-white/55">Who should attend</p><ul class="evd-who mt-5 grid gap-3">{whtml}</ul></div>
+            <div class="rounded-[28px] border border-ink-light p-6"><p class="text-[18px] font-semibold tracking-[-0.02em]">Not sure it’s for you?</p><p class="mt-2 text-[14.5px] leading-relaxed text-ink-dark">Send us a short message and we’ll tell you whether this event fits what you’re looking for.</p><a href="contact.html?topic=General+question#message" class="link-arrow mt-5">Ask a question {ARR}</a></div></div></div>''', 'outcomes')]
             agenda = [dict(time='10:00', title='Arrival and welcome', text='Introductions. Lorem ipsum dolor sit amet.'),
                       dict(time='10:30', title='Session 1', text='Consectetur adipiscing elit, sed do eiusmod tempor.'),
                       dict(time='11:30', title='Break', text='Networking and refreshments.'),
@@ -1340,17 +1329,19 @@ def events():
                    dict(q='Is the venue accessible?', a='Aenean lacinia bibendum nulla sed consectetur. Sample answer.')]
         else:
             body_html = (e.get('bodyHtml') or '').strip()
-            ov = (f'<div class="evd-ov"><div class="na-prose" style="margin-top:0">{body_html}</div>{poster}</div>' if body_html
+            ov = (f'<div class="evd-ov"><div><h3 class="evd-ov-h">Overview</h3><div class="na-prose" style="margin-top:16px">{body_html}</div></div>{poster}</div>' if body_html
                   else f'<div class="evd-ov is-solo">{poster}</div>')
-            tabs = [('Overview', ov)]
+            about_html = ov
+            extra = []
             if e.get('audience'):
                 au = ''.join(f'<li class="gi-check">{CHECK}<span>{w}</span></li>' for w in e['audience'])
-                tabs.append(('Who should attend', f'<div class="os-band on-dark text-white" style="padding:28px"><p class="label text-white/55">Who should attend</p><ul class="evd-who mt-5 grid gap-3">{au}</ul></div>'))
+                extra.append(('Who Should Attend', 'Who it’s <span class="sh-soft">for.</span>', f'<div class="os-band on-dark mt-8 text-white" style="padding:28px"><ul class="evd-who grid gap-3">{au}</ul></div>', 'audience'))
             agenda = e.get('agenda') or []
             speakers = e.get('speakers') or []
             faq = e.get('faq') or []
 
-        blocks.append(('About This Event', 'What to <span class="sh-soft">expect.</span>', tabs_html(tabs), 'about', len(tabs) > 1))
+        blocks.append(('About This Event', 'What to <span class="sh-soft">expect.</span>', f'<div class="mt-8">{about_html}</div>', 'about', False))
+        blocks.extend((lab, t, c, bid, False) for lab, t, c, bid in extra)
         if agenda:
             tl = ''.join(f'''<li><span class="evd-tl-time">{x.get('time', '')}</span><span class="evd-tl-rail" aria-hidden="true"></span><div class="evd-tl-body"><p class="text-[16px] font-semibold tracking-[-0.015em]">{x.get('title', '')}</p>{f'<p class="mt-1 text-[14px] leading-relaxed text-ink-dark">{x["text"]}</p>' if x.get('text') else ''}</div></li>''' for x in agenda)
             blocks.append(('Programme', 'How the <span class="sh-soft">day runs.</span>', f'<ol class="evd-tl mt-8">{tl}</ol>', 'programme', False))
@@ -1657,7 +1648,7 @@ def contact():
 <section id="message" class="py-12 lg:py-16">
   <div class="wrap grid gap-4 lg:grid-cols-12">
     <form id="contact-form" class="ct-form lg:col-span-7" novalidate>
-      <div class="flex flex-wrap items-center justify-between gap-3"><div class="sh-top min-w-0 flex-1"><span class="sh-num">01</span><span class="sh-label">Send a message</span><span class="sh-rule" aria-hidden="true"></span></div><span class="ct-status"><span class="ct-status-dot" aria-hidden="true"></span>Preview form</span></div>
+      <div class="flex flex-wrap items-center justify-between gap-3"><div class="sh-top min-w-0 flex-1"><span class="sh-num">01</span><span class="sh-label">Send a message</span><span class="sh-rule" aria-hidden="true"></span></div><span class="ct-status" data-forms-off><span class="ct-status-dot" aria-hidden="true"></span>Preview form</span></div>
       <h2 class="mt-5 text-[26px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[32px]">How can <span class="text-ink-mid">we help?</span></h2>
 
       <fieldset class="ct-step mt-6">
@@ -1669,10 +1660,10 @@ def contact():
       <fieldset class="ct-step mt-6">
         <legend class="ct-step-h"><span class="ct-step-n">2</span>Your details</legend>
         <div class="mt-3 grid gap-3 sm:grid-cols-2">
-          <label class="ct-field"><span>Full name</span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="7" r="3"/><path d="M4 16.5c.8-3 3.2-4.6 6-4.6s5.2 1.6 6 4.6"/></svg><input name="name" type="text" autocomplete="name" placeholder="Your name" required></span></label>
-          <label class="ct-field"><span>Email</span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2"/><path d="m3.5 6 6.5 4.5L16.5 6"/></svg><input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></span></label>
-          <label class="ct-field"><span>Phone <em>optional</em></span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5h3l1.5 3.7-2 1.2a10 10 0 0 0 6.1 6.1l1.2-2 3.7 1.5v3a1.7 1.7 0 0 1-1.8 1.7C8.4 17.2 2.8 11.6 2.3 4.3A1.7 1.7 0 0 1 4 2.5Z"/></svg><input name="phone" type="tel" autocomplete="tel" placeholder="+212 …"></span></label>
-          <label class="ct-field"><span>Organisation <em>optional</em></span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3" width="9" height="14" rx="1"/><path d="M12.5 8h4v9h-4M6.5 6.5h3M6.5 9.5h3M6.5 12.5h3"/></svg><input name="org" type="text" autocomplete="organization" placeholder="School, association, company…"></span></label>
+          <label class="ct-field"><span>Full name</span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="7" r="3"/><path d="M4 16.5c.8-3 3.2-4.6 6-4.6s5.2 1.6 6 4.6"/></svg><input name="name" type="text" maxlength="120" autocomplete="name" placeholder="Your name" required></span></label>
+          <label class="ct-field"><span>Email</span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2"/><path d="m3.5 6 6.5 4.5L16.5 6"/></svg><input name="email" type="email" maxlength="160" autocomplete="email" placeholder="you@example.com" required></span></label>
+          <label class="ct-field"><span>Phone <em>optional</em></span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5h3l1.5 3.7-2 1.2a10 10 0 0 0 6.1 6.1l1.2-2 3.7 1.5v3a1.7 1.7 0 0 1-1.8 1.7C8.4 17.2 2.8 11.6 2.3 4.3A1.7 1.7 0 0 1 4 2.5Z"/></svg><input name="phone" type="tel" maxlength="40" autocomplete="tel" placeholder="+212 …"></span></label>
+          <label class="ct-field"><span>Organisation <em>optional</em></span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3" width="9" height="14" rx="1"/><path d="M12.5 8h4v9h-4M6.5 6.5h3M6.5 9.5h3M6.5 12.5h3"/></svg><input name="org" type="text" maxlength="160" autocomplete="organization" placeholder="School, association, company…"></span></label>
         </div>
       </fieldset>
 
@@ -1682,9 +1673,10 @@ def contact():
         <div class="mt-2 flex items-start justify-between gap-4"><label class="ct-consent"><input type="checkbox" name="consent" required><span>I agree that AFCD Foundation may use these details to reply to my message. See our <a href="#privacy" class="underline underline-offset-2">Privacy Policy</a>.</span></label><span class="shrink-0 pt-0.5 text-[12px] text-ink-mid"><span class="ct-count">0</span> / 1000</span></div>
       </fieldset>
 
+      <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="hp">
       <p class="form-error mt-5 hidden rounded-2xl bg-[#FEF3F2] px-4 py-3 text-sm text-[#B42318]" role="alert">Please add your name, a valid email, a message and your consent.</p>
       <div class="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-ink-light pt-5">
-        <p class="max-w-[40ch] text-[12.5px] leading-relaxed text-ink-mid">This form isn’t connected yet, so nothing is sent. For now, please email the address shown above.</p>
+        <p class="max-w-[40ch] text-[12.5px] leading-relaxed text-ink-mid" data-forms-off>This form isn’t connected yet, so nothing is sent. For now, please email the address shown above.</p><p class="max-w-[40ch] text-[12.5px] leading-relaxed text-ink-mid" data-forms-on hidden>Your message goes straight to the AFCD team inbox.</p>
         <button type="submit" class="btn-dark btn-cta min-h-[52px] px-7">Send message <span class="arr" aria-hidden="true">↗</span></button>
       </div>
     </form>

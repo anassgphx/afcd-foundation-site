@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import { makeApp, addUser, client, fakeRunner, pngBytes, ORIGIN } from './helpers.ts';
-import { auditLog, pillars, pillarRevisions, publishJobs } from '../src/server/db/schema.ts';
+import { auditLog, pillars, pillarRevisions, publishJobs, redirects } from '../src/server/db/schema.ts';
 import { importPillars, readSitePillars, contentFromSite, type PillarSnapshot } from '../src/server/modules/pillars/service.ts';
 import { pillarEntries } from '../src/server/modules/pillars/render.ts';
 import { loadConfig } from '../src/server/config.ts';
@@ -118,6 +118,80 @@ describe('pillars', () => {
   });
 });
 
+describe('adding, ordering and removing pillars', () => {
+  let c: Awaited<ReturnType<typeof setup>>;
+  beforeEach(async () => { c = await setup(); await importPillars(h.db, h.cfg, null, SITE_PILLARS); });
+  const fill = { short: 'Health', summary: 'Better health for young people.', intro: 'Health and well-being in communities.', approachTitle: 'Healthy', approachSoft: 'together.',
+    view: 'We work with local health actors.', principles: ['Community-led'], steps: [{ title: 'Learn', text: 'Health education sessions.' }] };
+
+  it('adds a pillar as a draft, offers it to other content only once live, and publishes its own page', async () => {
+    expect((await c.rev.post('/pillars', { name: 'Health', key: 'health' })).status).toBe(403);
+    expect((await c.ed.post('/pillars', { name: 'Projects', key: 'projects' })).status).toBe(409);            // reserved page name
+    expect((await c.ed.post('/pillars', { name: 'Youth', key: 'youth-empowerment' })).status).toBe(409);      // taken
+    expect((await c.ed.post('/pillars', { name: 'Bad', key: 'Bad Key' })).status).toBe(422);
+    const { status, body } = await c.ed.post('/pillars', { name: 'Health and Well-being', key: 'health' });
+    expect(status).toBe(201);
+    expect((await c.ed.get('/pillars')).body.map((p: any) => p.key)).not.toContain('health');                  // not linkable yet
+    const { body: p } = await c.ed.get(`/pillars/${body.id}`);
+    expect(p).toMatchObject({ key: 'health', publicFile: 'health.html', number: '03', status: 'draft' });
+    expect(['#A8DDFB', '#FBE38A']).toContain(p.content.colour);                                                // a colour not in use yet
+    const notReady = await c.ed.post(`/pillars/${p.id}/transition`, { action: 'submit' });
+    expect(notReady.status).toBe(422);
+    expect(JSON.stringify(notReady.body.details)).toMatch(/summary/);
+    expect((await c.ed.put(`/pillars/${p.id}`, { ...editable(p), ...fill })).status).toBe(200);
+    expect((await c.ed.post(`/pillars/${p.id}/transition`, { action: 'submit' })).status).toBe(200);
+    expect((await c.rev.post(`/pillars/${p.id}/transition`, { action: 'approve' })).status).toBe(200);
+    expect((await c.admin.post(`/pillars/${p.id}/publish`)).status).toBe(200);
+    const data = JSON.parse(readFileSync(join(h.siteRoot, 'src/data/pillars.json'), 'utf8'));
+    expect(data.pillars.map((x: any) => [x.number, x.key, x.file])).toEqual([['01', 'youth-empowerment', 'youth-empowerment.html'], ['02', 'green-thumbs', 'environment-climate.html'], ['03', 'health', 'health.html']]);
+    expect(readFileSync(join(h.siteRoot, 'health.html'), 'utf8')).toContain('<h1>Health and Well-being</h1>');
+    expect((await c.ed.get('/pillars')).body.map((p: any) => p.key)).toContain('health');                      // now linkable
+  });
+
+  it('reorders the pillars (numbers follow), for publishers only', async () => {
+    const list = (await c.ed.get('/pillars/records')).body;
+    const ids = list.map((x: any) => x.id).reverse();
+    expect((await c.ed.post('/pillars/order', { ids })).status).toBe(403);
+    expect((await c.admin.post('/pillars/order', { ids: ids.slice(1) })).status).toBe(422);
+    expect((await c.admin.post('/pillars/order', { ids })).status).toBe(200);
+    const data = JSON.parse(readFileSync(join(h.siteRoot, 'src/data/pillars.json'), 'utf8'));
+    expect(data.pillars.map((x: any) => [x.number, x.key])).toEqual([['01', 'green-thumbs'], ['02', 'youth-empowerment']]);
+    expect((await c.ed.get('/pillars/records')).body.map((x: any) => x.key)).toEqual(['green-thumbs', 'youth-empowerment']);
+  });
+
+  it('deletes drafts, blocks removing a pillar still in use, and removes a live one through review with a redirect', async () => {
+    const draft = (await c.ed.post('/pillars', { name: 'Draft only', key: 'draft-only' })).body;
+    expect((await c.ed.raw('DELETE', `/pillars/${draft.id}`)).status).toBe(200);
+    expect((await h.db.select().from(pillars).where(eq(pillars.id, draft.id))).length).toBe(0);
+
+    // green-thumbs is used by the Eco Citizen project and objective SO-03
+    const env = (await c.ed.get('/pillars/records')).body.find((x: any) => x.key === 'green-thumbs');
+    const blocked = await c.ed.post(`/pillars/${env.id}/transition`, { action: 'request_removal' });
+    expect(blocked.status).toBe(409);
+    expect(JSON.stringify(blocked.body.details)).toMatch(/Eco Citizen/);
+    expect((await c.ed.raw('DELETE', `/pillars/${env.id}`)).status).toBe(409);                               // live: removal goes through review
+
+    // a new pillar, published, then removed
+    const { body: n } = await c.ed.post('/pillars', { name: 'Health', key: 'health' });
+    const { body: p } = await c.ed.get(`/pillars/${n.id}`);
+    await c.ed.put(`/pillars/${n.id}`, { ...editable(p), ...fill });
+    await c.ed.post(`/pillars/${n.id}/transition`, { action: 'submit' }); await c.rev.post(`/pillars/${n.id}/transition`, { action: 'approve' });
+    expect((await c.admin.post(`/pillars/${n.id}/publish`)).status).toBe(200);
+    expect((await c.ed.post(`/pillars/${n.id}/transition`, { action: 'request_removal' })).status).toBe(200);
+    expect((await c.ed.post(`/pillars/${n.id}/transition`, { action: 'approve' })).status).toBe(403);
+    expect((await c.rev.post(`/pillars/${n.id}/transition`, { action: 'approve' })).status).toBe(200);
+    const rm = await c.admin.post(`/pillars/${n.id}/publish`);
+    expect(rm.status).toBe(200); expect(rm.body.removed).toBe(true);
+    expect(readFileSync(join(h.siteRoot, 'health.html'), 'utf8')).toContain('<!-- studio-redirect -->');
+    expect(readFileSync(join(h.siteRoot, 'pillars.html'), 'utf8')).not.toContain('health.html');
+    expect(JSON.parse(readFileSync(join(h.siteRoot, 'src/data/pillars.json'), 'utf8')).pillars).toHaveLength(2);
+    expect((await h.db.select().from(redirects).where(eq(redirects.source, 'health.html')))[0]).toMatchObject({ destination: 'pillars.html', status: 'active' });
+    expect((await h.db.select().from(pillars).where(eq(pillars.id, n.id))).length).toBe(0);
+    expect((await h.db.select().from(auditLog).where(eq(auditLog.action, 'pillar.remove'))).length).toBe(1);
+    expect((await c.ed.post('/pillars', { name: 'Health again', key: 'health' })).status).toBe(409);         // the old address is a redirect now
+  });
+});
+
 describe('pillar delivery failures', () => {
   it('leaves the live site and the live pillar names alone when the build fails', async () => {
     let fail = false;
@@ -158,7 +232,7 @@ describe('pillar pages through the real generator', () => {
       const { provenance: _p, ...c } = contentFromSite(s);
       const number = String(i + 1).padStart(2, '0');
       const publicFile = { 'youth-empowerment': 'youth-empowerment.html', 'women-empowerment': 'womens-empowerment.html', 'green-thumbs': 'environment-climate.html', 'digital-empowerment': 'digital-inclusion.html' }[s.key]!;
-      return { id: `rev-${i}`, snap: { key: s.key, number, publicFile, ...c } as PillarSnapshot };
+      return { id: `rev-${i}`, sort: i, snap: { key: s.key, number, publicFile, ...c } as PillarSnapshot };
     });
     const write = async (file: string, items: typeof live) => { writeFileSync(file, JSON.stringify({ version: 1, source: 'AFCD Studio', pillars: await pillarEntries(h.db, items) }, null, 2)); return file; };
     h = await makeApp();
@@ -180,5 +254,17 @@ describe('pillar pages through the real generator', () => {
     const page = readFileSync(join(after, 'digital-inclusion.html'), 'utf8');
     expect(page).toContain('Digital &amp; AI'); expect(page).toContain('Edited intro.');
     expect(readFileSync(join(after, 'youth-empowerment.html'), 'utf8')).toContain('Digital &amp; AI');   // "Other pillars" cards
+
+    // a fifth pillar added in Studio gets its own page, and the count follows everywhere
+    const fifth = { id: 'rev-new', sort: 10, snap: { ...live[3].snap, key: 'health-wellbeing', publicFile: 'health-wellbeing.html', name: 'Health and Well-being', short: 'Health', summary: 'A new pillar summary.', intro: 'A new pillar.', highlights: [] } };
+    const five = realBuild(join(root, 'five'), await write(join(root, 'five.json'), [...live, fifth]));
+    const newPage = readFileSync(join(five, 'health-wellbeing.html'), 'utf8');
+    expect(newPage).toContain('Pillar 05<span class="text-black/40"> / 05</span>');
+    expect(existsSync(join(five, 'fr/health-wellbeing.html'))).toBe(true);
+    const hub = readFileSync(join(five, 'pillars.html'), 'utf8');
+    expect(hub).toContain('Five pillars.'); expect(hub).toContain('href="health-wellbeing.html"');
+    expect(hub).toContain('Digital Inclusion and Innovation and Health and Well-being: the five pillars');
+    expect(readFileSync(join(five, 'youth-empowerment.html'), 'utf8')).toContain('Pillar 01<span class="text-black/40"> / 05</span>');
+    expect(readFileSync(join(five, 'sitemap.xml'), 'utf8')).toContain('health-wellbeing.html');
   }, 180_000);
 });

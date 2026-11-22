@@ -99,6 +99,12 @@ if STUDIO_PILLARS:
     PILLARS = [(p['key'], p['number'], p['name'], p['summary'], p['highlights']) for p in STUDIO_PILLARS]
     _names = {p['key']: p['name'] for p in STUDIO_PILLARS}
     OBJECTIVES = [(r, t, d, [(_names.get(sl, n), sl) for n, sl in links]) for r, t, d, links in OBJECTIVES]
+# How many pillars there are, for "Pillar 02 / 04" and "Four pillars" (Studio can add and remove pillars).
+PILLAR_COUNT = len(PILLARS)
+PILLARS_TOTAL = f'{PILLAR_COUNT:02d}'
+PILLARS_WORD = (['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'][PILLAR_COUNT]
+                if PILLAR_COUNT <= 12 else str(PILLAR_COUNT))
+PILLARS_WORD_CAP = PILLARS_WORD[:1].upper() + PILLARS_WORD[1:]
 
 # name, pillar slug, pillar name, category, detail page (or None), one-line summary
 # Project data lives in src/data/projects.json (managed by AFCD Studio). STUDIO_PROJECTS_JSON can point elsewhere for previews.
@@ -130,6 +136,8 @@ def media_img(m, cls, sizes='100vw', eager=False):
 
 PILLAR_FILE = {'youth-empowerment': 'youth-empowerment.html', 'women-empowerment': 'womens-empowerment.html',
                'green-thumbs': 'environment-climate.html', 'digital-empowerment': 'digital-inclusion.html'}
+if STUDIO_PILLARS:   # Studio pillars bring their own page file (<key>.html for pillars added in Studio)
+    PILLAR_FILE = {p['key']: p['file'] for p in STUDIO_PILLARS}
 
 
 def page(name, title, description, active, body, parent=None):
@@ -412,7 +420,7 @@ def about():
         <div><dt>Founded</dt><dd>2007</dd></div>
         <div><dt>Roots</dt><dd>Ait Ourir, Al Haouz</dd></div>
         <div><dt>Main office</dt><dd>Marrakech</dd></div>
-        <div><dt>Pillars</dt><dd>4</dd></div>
+        <div><dt>Pillars</dt><dd>{PILLAR_COUNT}</dd></div>
       </dl>
     </div>
     <div class="relative lg:col-span-6">
@@ -475,7 +483,7 @@ def about():
         'Six strategic <span class="text-ink-mid">objectives.</span>',
         'The institutional objectives behind our programmes and reporting, and the people and places we serve.',
         ['strategy', 'who-we-serve'], 'Strategy &amp; Objectives · AFCD Foundation',
-        'AFCD Foundation’s six strategic objectives, linked to its four pillars, and who it works with across Morocco.')
+        f'AFCD Foundation’s six strategic objectives, linked to its {PILLARS_WORD} pillars, and who it works with across Morocco.')
     sub('team.html', 'Our Team', 'About · Our Team',
         'The people who carry <span class="text-ink-mid">our work forward.</span>',
         'The team, volunteers and alumni who run AFCD programmes in Marrakech, Al Haouz and across Morocco.',
@@ -616,13 +624,13 @@ def pillars():
                          for s2, n2, t2, _d2, _r2 in PILLARS if s2 != slug)
         brand = f'<span class="pg-tag">Programme brand: {PILLAR_BRAND[slug]}</span>' if PILLAR_BRAND.get(slug) else ''
         photo = media_img(PILLAR_IMAGE[slug], 'h-full w-full rounded-[22px]', '(min-width: 1024px) 40vw, 100vw') if PILLAR_IMAGE.get(slug) else ph(t + ' · programme photo', 'h-full w-full rounded-[22px]', '#FFFFFF')
-        body = page_header([('Our Pillars', 'pillars.html'), (t, PILLAR_FILE[slug])], f'Pillar {n} / 04', t, PILLAR_INTRO[slug]) + f'''
+        body = page_header([('Our Pillars', 'pillars.html'), (t, PILLAR_FILE[slug])], f'Pillar {n} / {PILLARS_TOTAL}', t, PILLAR_INTRO[slug]) + f'''
 
 <section id="overview" class="pt-8 lg:pt-10">
   <div class="wrap">
     <div class="pl-hero pl-hero-2" style="--c:{tone}">
       <div class="flex flex-col">
-        <div class="flex flex-wrap items-center gap-2"><span class="pl-hero-n">Pillar {n}<span class="text-black/40"> / 04</span></span>{brand}</div>
+        <div class="flex flex-wrap items-center gap-2"><span class="pl-hero-n">Pillar {n}<span class="text-black/40"> / {PILLARS_TOTAL}</span></span>{brand}</div>
         <p class="mt-5 text-[18px] font-medium leading-[1.4] tracking-[-0.015em] md:text-[24px] md:leading-[1.3]">{d}</p>
         <dl class="pl-stats mt-7">
           <div class="pl-stat"><dt>Projects</dt><dd>{len(projs)}</dd></div>
@@ -687,7 +695,7 @@ def pillars():
 </section>
 
 <nav id="other-pillars" class="border-t border-ink-light py-14 lg:py-16" aria-label="Other pillars">
-  <div class="wrap">{sec_head('05 / Other Pillars', 'Four pillars, <span class="sh-soft">one shared future.</span>', ('All pillars', 'pillars.html'))}
+  <div class="wrap">{sec_head('05 / Other Pillars', f'{PILLARS_WORD_CAP} pillars, <span class="sh-soft">one shared future.</span>', ('All pillars', 'pillars.html'))}
     <ul class="mt-8 grid gap-3 md:grid-cols-3 lg:mt-10">{others}</ul>
   </div>
 </nav>
@@ -704,8 +712,8 @@ def pillars():
         <span class="mt-6 flex flex-wrap gap-2">{''.join(f'<span class="pg-tag">{r}</span>' for r in rel)}</span>
       </a></li>''' for slug, n, t, d, rel in PILLARS)
     body = page_header([('Our Pillars', 'pillars.html')], 'Our Pillars',
-                       'Four pillars. <span class="text-ink-mid">One shared future.</span>',
-                       'Four areas of action shape every AFCD programme, from leadership to the environment and digital inclusion.') + f'''
+                       f'{PILLARS_WORD_CAP} pillars. <span class="text-ink-mid">One shared future.</span>',
+                       f'{PILLARS_WORD_CAP} areas of action shape every AFCD programme, from leadership to the environment and digital inclusion.') + f'''
 
 <section class="py-10 lg:py-14">
   <div class="wrap">
@@ -716,7 +724,7 @@ def pillars():
 ''' + cta_band('Find your place in our work.', 'Volunteer, join a programme when calls open, or partner with us on a pillar.',
                   ('Get Involved', 'get-involved.html'), ('All projects', 'projects.html'))
     page('pillars.html', 'Our Pillars · AFCD Foundation',
-         'Youth Empowerment, Women’s Empowerment, Environment and Climate and Digital Inclusion and Innovation: the four pillars of AFCD Foundation’s work.',
+         (', '.join(t for _s, _n, t, _d, _r in PILLARS[:-1]) + ' and ' if len(PILLARS) > 1 else '') + f'{PILLARS[-1][2]}: the {PILLARS_WORD} pillars of AFCD Foundation’s work.',
          'pillars', body)
 
 
@@ -745,7 +753,7 @@ def projects():
     all_cards = ''.join(project_card(p) for p in PROJECTS)
     body = page_header([('Projects', 'projects.html')], 'Projects',
                        'Our work <span class="text-ink-mid">in action.</span>',
-                       'How shared ideas become community initiatives, across our four pillars.', points=('<b>10</b> Projects listed', '<b>3</b> Case studies')) + f'''
+                       f'How shared ideas become community initiatives, across our {PILLARS_WORD} pillars.', points=('<b>10</b> Projects listed', '<b>3</b> Case studies')) + f'''
 
 <section id="featured" class="scroll-mt-28 py-14 lg:py-16">
   <div class="wrap">{sec_head('01 / Featured Projects', 'Selected <span class="sh-soft">case studies.</span>', desc='Three projects told in depth: the context, our approach, the activities and the results.')}
@@ -1470,12 +1478,12 @@ def partners():
         <span class="mt-5 block text-[16px] font-semibold leading-snug tracking-[-0.015em]">{n}</span>
         <span class="pr-scope">{ico(g)}{g}</span>
       </li>''' for g, names in PARTNERS for n in names)
-    models = [('fund', 'Fund', 'Support a programme under one of our four pillars, from a single cohort to multi-year work.'),
+    models = [('fund', 'Fund', f'Support a programme under one of our {PILLARS_WORD} pillars, from a single cohort to multi-year work.'),
               ('design', 'Co-design', 'Build an initiative with AFCD and the community, from the first idea to the final report.'),
               ('share', 'Share expertise', 'Train, mentor or host participants, and bring your organisation’s know-how to a programme.')]
     mhtml = ''.join(f'<li class="wd-card" style="--c:#F3F3F3"><span class="flex items-start justify-between"><span class="wd-ico">{ico(k)}</span><span class="wd-n">{i:02d}</span></span><span class="mt-8 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for i, (k, t, d) in enumerate(models, 1))
     steps = [('Tell us about your organisation', 'Share your goals and the communities or pillar you’d like to support.'),
-             ('Explore the fit together', 'We look at how your goals connect with our four pillars and current programmes.'),
+             ('Explore the fit together', f'We look at how your goals connect with our {PILLARS_WORD} pillars and current programmes.'),
              ('Co-design and launch', 'We agree the plan, launch the work together and report on what it achieves.')]
     shtml = ''.join(f'<li class="os-step"><span class="os-step-k">{i:02d}</span><span class="os-step-dot" aria-hidden="true"></span><span class="mt-5 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for i, (t, d) in enumerate(steps, 1))
 
@@ -1547,7 +1555,7 @@ def involved():
              d='Co-design and fund community initiatives with an organisation rooted in Moroccan communities since 2007.',
              who='International, national and local organisations, institutions and companies.',
              items=['Fund a programme or a pillar', 'Co-design an initiative', 'Share expertise and mentoring'],
-             steps=['Tell us about your organisation and goals', 'We explore fit with our four pillars together', 'Co-design, launch and report on the work'],
+             steps=['Tell us about your organisation and goals', f'We explore fit with our {PILLARS_WORD} pillars together', 'Co-design, launch and report on the work'],
              cta='Start a partnership'),
         dict(id='alumni', n='04', tone='#FBE38A', t='Alumni Club', topic='Alumni club',
              d='Stay connected with fellow alumni of AFCD programmes and keep the change going.',

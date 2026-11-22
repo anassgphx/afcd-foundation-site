@@ -12,7 +12,8 @@ import type { PillarSnapshot } from './service.ts';
 export const approachTitleHtml = (s: Pick<PillarSnapshot, 'approachTitle' | 'approachSoft'>) =>
   s.approachSoft ? `${esc(s.approachTitle)} <span class="text-white/45">${esc(s.approachSoft)}</span>` : esc(s.approachTitle);
 
-export async function pillarEntries(db: DB, live: { id: string; snap: PillarSnapshot }[]) {
+/** `sort` is the pillar's place in the list; numbers (01, 02, …) follow it, so they always run 1..n on the website. */
+export async function pillarEntries(db: DB, live: { id: string; snap: PillarSnapshot; sort: number }[]) {
   const ids = [...new Set(live.map((x) => x.snap.mediaId).filter(Boolean) as string[])];
   const rows = ids.length ? await db.select().from(media).where(inArray(media.id, ids)) : [];
   const image = (id: string | null) => {
@@ -22,9 +23,9 @@ export async function pillarEntries(db: DB, live: { id: string; snap: PillarSnap
     return { src: ref.src, srcset: ref.srcset, w: ref.w, h: ref.h, alt: m.alt, fx: m.focalX ?? 50, fy: m.focalY ?? 50 };
   };
   return live
-    .sort((a, b) => a.snap.number.localeCompare(b.snap.number))
-    .map(({ id, snap: s }) => ({
-      key: s.key, number: s.number, file: s.publicFile, revision: id,
+    .sort((a, b) => a.sort - b.sort || a.snap.number.localeCompare(b.snap.number))
+    .map(({ id, snap: s }, i) => ({
+      key: s.key, number: String(i + 1).padStart(2, '0'), file: s.publicFile, revision: id,
       name: esc(s.name), short: esc(s.short), summary: esc(s.summary), intro: esc(s.intro), colour: s.colour, brand: esc(s.brand),
       highlights: s.highlights.map(esc),
       approach: { title: approachTitleHtml(s), view: esc(s.view), principles: s.principles.map(esc), steps: s.steps.map((x) => [esc(x.title), esc(x.text)]) },

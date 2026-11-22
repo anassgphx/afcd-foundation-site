@@ -120,6 +120,13 @@
       "when": 1795375887766,
       "tag": "0016_pillars",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795377292754,
+      "tag": "0017_pillar_removal",
+      "breakpoints": true
     }
   ]
 }

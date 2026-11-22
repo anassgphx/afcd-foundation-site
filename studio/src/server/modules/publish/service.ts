@@ -163,15 +163,17 @@ export class Publisher {
 
   /** Live pillar revisions (optionally overriding one). */
   async livePillars(override?: { pillarId: string; revisionId: string | null }) {
-    const rows = await this.db.select({ id: pillars.id, rev: pillars.publishedRevisionId }).from(pillars);
+    const rows = await this.db.select({ id: pillars.id, rev: pillars.publishedRevisionId, draft: pillars.draft, sort: pillars.sort }).from(pillars);
+    // Until the current pillar content is imported into Studio, the site keeps the pillars written in src/content.py.
+    if (!rows.length || rows.some((r) => !r.draft)) return null;
     const map = new Map(rows.filter((r) => r.rev).map((r) => [r.id, r.rev as string]));
-    if (override?.revisionId) map.set(override.pillarId, override.revisionId);
-    if (!rows.length || map.size < rows.length) return null;   // some pillar has no Studio content yet: the site keeps src/content.py
+    if (override) { if (override.revisionId) map.set(override.pillarId, override.revisionId); else map.delete(override.pillarId); }
+    if (!map.size) return null;
     const revs = await this.db.select().from(pillarRevisions).where(inArray(pillarRevisions.id, [...map.values()]));
-    return revs.map((r) => ({ id: r.id, snap: r.snapshot as unknown as PillarSnapshot }));
+    return revs.map((r) => ({ id: r.id, snap: r.snapshot as unknown as PillarSnapshot, sort: rows.find((x) => x.id === r.pillarId)?.sort ?? 0 }));
   }
 
-  /** pillars.json exists only once every pillar's content is in Studio (all four are imported together). Returns photo ids. */
+  /** pillars.json exists once the pillar content is in Studio, and lists the live pillars in their order. Returns photo ids. */
   private async writePillars(file: string, override?: { pillarId: string; revisionId: string | null }) {
     const live = await this.livePillars(override);
     if (!live) { if (existsSync(file)) rmSync(file); return [] as string[]; }
@@ -742,6 +744,7 @@ export class Publisher {
     return this.locked(async () => {
       const [p] = await this.db.select().from(pillars).where(eq(pillars.id, pillarId));
       if (!p) throw new AppError(404, 'Pillar not found.');
+      if (p.status === 'approved' && p.removeRequested) return this.removePillar(actor, p);
       if (p.status !== 'approved' || !p.approvedRevisionId) throw new AppError(409, 'Only an approved pillar can be published.');
       const [rev] = await this.db.select().from(pillarRevisions).where(eq(pillarRevisions.id, p.approvedRevisionId));
       const snap = rev.snapshot as unknown as PillarSnapshot;
@@ -766,8 +769,62 @@ export class Publisher {
     });
   }
 
+  /** Takes an approved removal live: the pillar leaves pillars.json, its page becomes a redirect to pillars.html (also in
+   *  French and Arabic), the site is rebuilt and checked, and only then is the pillar deleted from Studio. */
+  private async removePillar(actor: NonNullable<Actor>, p: typeof pillars.$inferSelect) {
+    const [rev] = p.publishedRevisionId ? await this.db.select().from(pillarRevisions).where(eq(pillarRevisions.id, p.publishedRevisionId)) : [];
+    if (!rev) throw new AppError(409, 'This pillar is not on the website.');
+    const snap = rev.snapshot as unknown as PillarSnapshot;
+    const file = p.publicFile, root = this.cfg.siteRoot;
+    let redirectId: string | null = null;
+    const { job, log } = await this.deliver('remove_pillar', actor, p.id, rev.id, async (log) => {
+      try {
+        for (const f of [resolve(root, file), resolve(root, 'src/pages', file), resolve(root, 'fr', file), resolve(root, 'ar', file)]) if (existsSync(f)) rmSync(f);
+        const [existing] = await this.db.select().from(redirects).where(eq(redirects.source, file));
+        if (!existing) {
+          const value = { source: file, destination: 'pillars.html', code: 301 };
+          const [r] = await this.db.insert(redirects).values({ ...value, reason: `Pillar “${p.name}” removed from the website`, status: 'active', published: value, publishedAt: new Date(), createdBy: actor.id, updatedBy: actor.id }).returning();
+          redirectId = r.id;
+        }
+        await this.writeSite({ pillar: { pillarId: p.id, revisionId: null } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        const hub = readFileSync(resolve(root, 'pillars.html'), 'utf8');
+        if (hub.includes(`href="${file}"`)) throw new Error('pillars.html still links to the removed pillar.');
+        if (!existsSync(resolve(root, file)) || !readFileSync(resolve(root, file), 'utf8').includes(STUB_MARK)) throw new Error(`${file} was not turned into a redirect.`);
+      } catch (e) { if (redirectId) await this.db.delete(redirects).where(eq(redirects.id, redirectId)); throw e; }
+    }, `Removing pillar “${p.name}” failed`);
+    await this.db.transaction(async (tx) => {
+      await tx.delete(pillars).where(eq(pillars.id, p.id));
+      await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+      await audit(tx, actor, 'pillar.remove', { type: 'pillar', id: p.id }, `Removed pillar “${snap.name}” from the website; ${file} now redirects to pillars.html`, { jobId: job.id, revisionId: rev.id });
+    });
+    return { jobId: job.id, revisionId: rev.id, file: 'pillars.html', removed: true };
+  }
+
+  /** New order of the pillars (numbers follow it). Rebuilds and checks the hub when pillar content is managed in Studio. */
+  async reorderPillars(actor: NonNullable<Actor>, next: { id: string; sort: number; number: string }[], before: { id: string; sort: number }[]) {
+    return this.locked(async () => {
+      const apply = async (rows: { id: string; sort: number; number?: string }[]) => { for (const r of rows) await this.db.update(pillars).set(r.number ? { sort: r.sort, number: r.number } : { sort: r.sort }).where(eq(pillars.id, r.id)); };
+      const live = await this.livePillars();
+      if (!live) { await apply(next); await audit(this.db, actor, 'pillar.reorder', { type: 'pillar' }, 'Changed the order of the pillars'); return { rebuilt: false }; }
+      const { job, log } = await this.deliver('reorder_pillars', actor, null, null, async (log) => {
+        await apply(next);
+        try {
+          await this.writeSite();
+          log.push(await this.runner(this.cfg, { kind: 'live' }));
+          const hub = readFileSync(resolve(this.cfg.siteRoot, 'pillars.html'), 'utf8');
+          const want = (await this.livePillars())!.sort((a, b) => a.sort - b.sort).map((x) => hub.indexOf(`href="${x.snap.publicFile}"`));
+          if (want.some((i) => i < 0) || want.some((i, k) => k > 0 && i < want[k - 1])) throw new Error('pillars.html does not show the new order.');
+        } catch (e) { await apply(before); throw e; }
+      }, 'Changing the order of the pillars failed');
+      await this.db.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+      await audit(this.db, actor, 'pillar.reorder', { type: 'pillar' }, 'Changed the order of the pillars on the website', { jobId: job.id });
+      return { rebuilt: true, jobId: job.id };
+    });
+  }
+
   /** Builds the pillar's page with the saved working copy in an isolated folder. */
-  async previewPillar(pillarId: string, snap: PillarSnapshot) {
+  async previewPillar(pillarId: string, snap: PillarSnapshot, sort = 0) {
     return this.locked(async () => {
       this.cleanupPreviews();
       const token = randomBytes(16).toString('hex');
@@ -777,7 +834,7 @@ export class Publisher {
       this.writeData(dataFile, await this.liveEntries());
       const live = await this.livePillars();
       if (!live) throw new AppError(409, 'Import the current pillar content first.');
-      const list = await pillarEntries(this.db, live.filter((x) => x.snap.key !== snap.key).concat({ id: 'preview', snap }));
+      const list = await pillarEntries(this.db, live.filter((x) => x.snap.key !== snap.key).concat({ id: 'preview', snap, sort }));
       writeFileSync(pillarsFile, JSON.stringify({ version: 1, source: 'AFCD Studio (preview)', pillars: list }, null, 2));
       await this.writeNews(resolve(dir, 'news.json'), pagesDir, await this.liveArticles());
       await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, newsFile: resolve(dir, 'news.json'), pillarsFile });

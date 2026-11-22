@@ -1,68 +1,124 @@
-// Pillars: the four strategic pillars and the pages built from them (Our Pillars and one page per pillar).
-// The set of pillars, their numbers and their page addresses are fixed; editors change the content through review.
+// Pillars: AFCD's strategic pillars and the pages built from them (Our Pillars and one page per pillar).
+// One master–detail screen: every pillar on the left (add, reorder), the selected pillar's editor on the right. On a
+// phone the list and the editor are separate steps. Adding, editing and removing all go through review.
 import { useCallback, useEffect, useState } from 'react';
-import { api, post, put, ApiError } from '../api.ts';
-import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import { api, del, post, put, ApiError } from '../api.ts';
+import { Badge, Icon, Link, LiveBadge, Modal, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { EditorHeader, Field, ListEditor, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
-import { DataTable, EmptyState, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 import '../pillars.css';
 
 type Row = { id: string; key: string; number: string; name: string; draftName: string; short: string; summary: string; colour: string; draftColour: string; publicFile: string;
-  status: string; imported: boolean; mediaId: string | null; publishedRevisionId: string | null; updatedAt: string; projects: number };
+  status: string; imported: boolean; mediaId: string | null; publishedRevisionId: string | null; updatedAt: string; projects: number; sort: number; removeRequested: boolean };
 
-export function PillarsList() {
-  const can = useCan(); const toast = useToast(); const me = useMe();
-  const [rows, setRows] = useState<Row[] | null>(null); const [busy, setBusy] = useState(false);
-  const load = () => api<Row[]>('/pillars/records').then(setRows).catch(() => setRows([]));
-  useEffect(() => { load(); }, []);
+const slugify = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[’']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+const WIDE = '(min-width: 900px)';
+function useWide() {
+  const [wide, setWide] = useState(() => typeof matchMedia === 'undefined' || matchMedia(WIDE).matches);
+  useEffect(() => { const m = matchMedia(WIDE); const k = () => setWide(m.matches); m.addEventListener('change', k); return () => m.removeEventListener('change', k); }, []);
+  return wide;
+}
+
+export function PillarsScreen({ id }: { id?: string }) {
+  const can = useCan(); const toast = useToast(); const wide = useWide();
+  const [rows, setRows] = useState<Row[] | null>(null); const [busy, setBusy] = useState('');
+  const [adding, setAdding] = useState(false); const [name, setName] = useState(''); const [key, setKey] = useState(''); const [keyEdited, setKeyEdited] = useState(false); const [err, setErr] = useState('');
+  const [order, setOrder] = useState<Row[] | null>(null); const [confirmOrder, setConfirmOrder] = useState(false);
+  const load = useCallback(() => api<Row[]>('/pillars/records').then(setRows).catch(() => setRows([])), []);
+  useEffect(() => { load(); }, [load]);
+  // on a wide screen the detail pane is never empty: open the first pillar
+  useEffect(() => { if (wide && !id && rows?.length) { const first = rows.find((r) => r.imported); if (first) navigate(`/studio/pillars/${first.id}`); } }, [wide, id, rows]);
+
   async function importContent() {
-    setBusy(true);
+    setBusy('import');
     try { const r = await post<{ imported: number }>('/pillars/import'); toast(`Imported the content of ${r.imported} pillar${r.imported === 1 ? '' : 's'} from the current website`); await load(); }
-    catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
+    catch (e) { toast((e as Error).message, true); } finally { setBusy(''); }
   }
+  async function create() {
+    setErr(''); setBusy('add');
+    try { const r = await post<{ id: string }>('/pillars', { name: name.trim(), key }); setAdding(false); await load(); navigate(`/studio/pillars/${r.id}`); toast('Pillar added as a draft'); }
+    catch (e) { setErr(e instanceof ApiError && e.details?.length ? e.details.map((d) => d.message).join(' ') : (e as Error).message); } finally { setBusy(''); }
+  }
+  async function saveOrder() {
+    setBusy('order');
+    try { const r = await post<{ rebuilt: boolean }>('/pillars/order', { ids: order!.map((x) => x.id) }); setOrder(null); setConfirmOrder(false); await load(); toast(r.rebuilt ? 'New order published and checked on Our Pillars' : 'Order saved'); }
+    catch (e) { setConfirmOrder(false); toast((e as Error).message, true); } finally { setBusy(''); }
+  }
+  const move = (i: number, d: -1 | 1) => setOrder((o) => { const n = [...o!]; [n[i], n[i + d]] = [n[i + d], n[i]]; return n; });
   const missing = (rows ?? []).filter((r) => !r.imported).length;
-  const columns: Column<Row>[] = [
-    { key: 'name', header: 'Pillar', sort: (r) => r.number, csv: (r) => r.draftName, render: (r) => <div className="dt-main"><span className="dt-thumb pl-num-thumb" style={{ background: r.draftColour }}>{r.number}</span><span className="min-w-0">
-      {r.imported ? <Link className="title" to={`/studio/pillars/${r.id}`}>{r.draftName}</Link> : <span className="title">{r.name}</span>}<span className="sub pl-sum">{r.imported ? r.summary : 'Content not imported yet'}</span></span></div> },
-    { key: 'page', header: 'Page', hideBelow: 900, sort: (r) => r.publicFile, csv: (r) => r.publicFile, render: (r) => <a className="mono sub" href={me.siteUrl + r.publicFile} target="_blank" rel="noopener">{r.publicFile}</a> },
-    { key: 'projects', header: 'Live projects', align: 'right', hideBelow: 700, sort: (r) => -r.projects, csv: (r) => String(r.projects), render: (r) => <span className="sub">{r.projects || '—'}</span> },
-    { key: 'status', header: 'Status', sort: (r) => r.status, csv: (r) => r.status, render: (r) => r.imported ? <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div> : <span className="sub">—</span> },
-    { key: 'updated', header: 'Updated', align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => r.imported ? <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> : <span className="sub">—</span> },
-  ];
-  return <>
-    <div className="page-h"><div><h1>Pillars</h1><p>The four pillars of AFCD’s work: the Our Pillars page and one page per pillar. Changes reach the website only after review and publishing.</p></div></div>
-    {rows && missing > 0 && <div className="notice n-info"><div><b>{missing === rows.length ? 'The pillar pages are still written in the site’s code.' : `${missing} pillar${missing === 1 ? ' is' : 's are'} not in Studio yet.`}</b> Import their current text to edit it here. The website stays exactly as it is until someone publishes a change.</div>
-      {can('pillar.publish') && <button className="btn btn-primary btn-sm" disabled={busy} onClick={importContent}>{busy ? 'Importing…' : 'Import current content'}</button>}</div>}
-    <section className="card">
-      {!rows ? <Loading /> : <DataTable id="pillars" rows={rows} total={rows.length} rowKey={(r) => r.id} columns={columns} csvName="afcd-pillars"
-        onOpen={(r) => r.imported && navigate(`/studio/pillars/${r.id}`)} empty={<EmptyState icon="pillars" text="No pillars" />} />}
-    </section>
+  const shown = order ?? rows ?? [];
+  const liveCount = (rows ?? []).filter((r) => r.publishedRevisionId).length;
+
+  const list = <aside className="pl-master card" aria-label="All pillars">
+    <div className="pl-master-h">
+      <div><h1>Pillars</h1><p className="muted">{rows ? `${liveCount} on the website${rows.length > liveCount ? ` · ${rows.length - liveCount} not yet` : ''}` : ' '}</p></div>
+      {can('pillar.create') && !order && missing === 0 && <button className="btn btn-primary btn-sm" onClick={() => { setName(''); setKey(''); setKeyEdited(false); setErr(''); setAdding(true); }}><Icon n="plus" />Add</button>}
+    </div>
+    {rows && missing > 0 && <div className="notice n-info pl-master-note"><div><b>{missing === rows.length ? 'The pillar pages are still written in the site’s code.' : `${missing} pillar${missing === 1 ? ' is' : 's are'} not in Studio yet.`}</b> Import their current text to edit it here. The website stays exactly as it is until someone publishes a change.
+      {can('pillar.publish') && <button className="btn btn-primary btn-sm" style={{ marginTop: 8 }} disabled={!!busy} onClick={importContent}>{busy === 'import' ? 'Importing…' : 'Import current content'}</button>}</div></div>}
+    {!rows ? <Loading /> : <ol className={`pl-items${order ? ' ordering' : ''}`}>
+      {shown.map((r, i) => {
+        const inner = <>
+          <span className="pl-item-n" style={{ background: r.draftColour }}>{order ? String(i + 1).padStart(2, '0') : r.number}</span>
+          <span className="pl-item-t"><b>{r.imported ? r.draftName : r.name}</b>
+            <span className="pl-item-s">{!r.imported ? 'Content not imported yet' : r.removeRequested ? 'Removal requested' : !r.publishedRevisionId ? `New · ${r.publicFile}` : r.short || r.publicFile}</span></span>
+          {!order && r.imported && <span className="pl-item-b">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></span>}
+        </>;
+        return <li key={r.id} className={r.id === id ? 'on' : ''}>
+          {order ? <div className="pl-item">{inner}<span className="pl-item-mv">
+              <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${r.draftName} up`}>↑</button>
+              <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === shown.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${r.draftName} down`}>↓</button></span></div>
+            : r.imported ? <Link className="pl-item" to={`/studio/pillars/${r.id}`} aria-current={r.id === id ? 'page' : undefined}>{inner}</Link>
+            : <div className="pl-item is-off">{inner}</div>}
+        </li>;
+      })}
+    </ol>}
+    {rows && rows.length > 1 && missing === 0 && can('pillar.publish') && <div className="pl-master-f">
+      {order ? <><button className="btn btn-sm" onClick={() => setOrder(null)}>Cancel</button><button className="btn btn-primary btn-sm" disabled={order.every((r, i) => r.id === rows[i].id)} onClick={() => setConfirmOrder(true)}>Save order…</button></>
+        : <button className="btn btn-ghost btn-sm" onClick={() => setOrder([...rows])}><Icon n="menu" />Change order</button>}
+    </div>}
     <p className="muted pl-foot">The homepage’s pillar section is edited in <Link to="/studio/home">Homepage</Link>, and the header’s pillar links in <Link to="/studio/menus">Menus</Link>. Projects choose their pillars in their own record.</p>
-  </>;
+  </aside>;
+
+  return <div className={`pl-md${id ? ' has-detail' : ''}`}>
+    {(wide || !id) && list}
+    {id ? <div className="pl-detail"><PillarEditor key={id} id={id} onChanged={load} /></div>
+      : wide && rows && <div className="pl-detail pl-empty card"><Icon n="pillars" /><p>{missing ? 'Import the current pillar content to start.' : 'Choose a pillar.'}</p></div>}
+
+    {adding && <Modal size="sm" title="Add a pillar" onClose={() => setAdding(false)} footer={<><button className="btn" onClick={() => setAdding(false)}>Cancel</button><button className="btn btn-primary" disabled={name.trim().length < 2 || !key || busy === 'add'} onClick={create}>{busy === 'add' ? 'Adding…' : 'Add as draft'}</button></>}>
+      <div className="modal-b stack">
+        <Field label="Name" hint="You can change it later."><input className="input" autoFocus maxLength={60} value={name} onChange={(e) => { setName(e.target.value); if (!keyEdited) setKey(slugify(e.target.value)); }} aria-label="Name" /></Field>
+        <Field label="Page address" hint={<>The pillar’s page will be <span className="mono">{key || '…'}.html</span>. It cannot change once the pillar is added.</>}>
+          <div className="pl-addr"><input className="input mono" maxLength={60} value={key} onChange={(e) => { setKey(slugify(e.target.value)); setKeyEdited(true); }} aria-label="Page address" /><span className="mono muted">.html</span></div></Field>
+        <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>It starts as a draft. It appears on the website, and can be linked from projects, stories and events, once it is reviewed and published. Add it to the homepage and the header menu in Homepage and Menus.</p>
+        {err && <div className="notice n-warn" role="alert"><div>{err}</div></div>}
+      </div></Modal>}
+    {confirmOrder && <Modal size="sm" title="Publish the new order?" onClose={() => !busy && setConfirmOrder(false)} footer={<><button className="btn" disabled={!!busy} onClick={() => setConfirmOrder(false)}>Cancel</button><button className="btn btn-ok" disabled={!!busy} onClick={saveOrder}><Icon n="rocket" />{busy === 'order' ? 'Publishing and checking…' : 'Publish order'}</button></>}>
+      <div className="modal-b"><p style={{ margin: 0 }}>Pillar numbers follow the order (“Pillar 02 / {String(rows!.length).padStart(2, '0')}”). Our Pillars and every pillar page are rebuilt and checked. Pushing to the hosted site is a separate, authorized step.</p></div></Modal>}
+  </div>;
 }
 
 type Step = { title: string; text: string };
 type Form = { name: string; short: string; summary: string; intro: string; colour: string; brand: string; highlights: string[]; approachTitle: string; approachSoft: string;
   view: string; principles: string[]; steps: Step[]; activities: number[]; groups: number[]; mediaId: string | null; provenance: string };
-type Loaded = { id: string; key: string; number: string; publicFile: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; verifiedAt: string | null;
+type Loaded = { id: string; key: string; number: string; publicFile: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; verifiedAt: string | null; removeRequested: boolean; usage: string[];
   content: Form | null; projects: { id: string; slug: string; name: string; live: boolean; primary: boolean }[]; media: MediaItem[]; problems: string[];
   lists: { activities: string[]; groups: string[] }; colours: { value: string; label: string }[];
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] } };
 
-export function PillarEditor({ id }: { id: string }) {
+export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => void }) {
   const can = useCan(); const me = useMe(); const toast = useToast();
   const [p, setP] = useState<Loaded | null>(null); const [f, setF] = useState<Form | null>(null);
   const [photo, setPhoto] = useState<MediaItem | null>(null);
   const [dirty, setDirty] = useState(false); const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
-  const [dialog, setDialog] = useState<null | 'photo' | 'preview' | 'publish' | 'changes'>(null);
+  const [dialog, setDialog] = useState<null | 'photo' | 'preview' | 'publish' | 'changes' | 'remove' | 'delete'>(null);
   const [url, setUrl] = useState(''); const [comment, setComment] = useState('');
 
   const load = useCallback(async () => {
     const d = await api<Loaded>(`/pillars/${id}`);
-    setP(d); setF(d.content ? structuredClone(d.content) : null); setPhoto(d.media[0] ?? null); setDirty(false);
+    setP(d); setF(d.content ? structuredClone(d.content) : null); setPhoto(d.media[0] ?? null); setDirty(false); onChanged?.();
   }, [id]);
   useEffect(() => { load().catch((e) => toast(e.message, true)); }, [load]);
   useEffect(() => { const k = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (dirty) save(); } }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); });
@@ -84,12 +140,22 @@ export function PillarEditor({ id }: { id: string }) {
     if (dirty && !(await save())) return;
     setBusy(action); setErrs([]);
     try { await post(`/pillars/${id}/transition`, { action, ...extra }); await load(); setDialog(null); setComment('');
-      toast({ submit: 'Sent for review', approve: 'Approved', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft' }[action] ?? 'Done'); }
+      toast({ submit: 'Sent for review', approve: 'Approved', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft', request_removal: 'Removal sent for review' }[action] ?? 'Done'); }
     catch (e) { setDialog(null); showErr(e); } finally { setBusy(''); }
   }
   async function publish() {
     setBusy('publish');
+    if (p!.removeRequested) {
+      try { await post(`/pillars/${id}/publish`); toast(`Removed from the website; ${p!.publicFile} now redirects to Our Pillars`); onChanged?.(); navigate('/studio/pillars'); }
+      catch (e) { setDialog(null); showErr(e); } finally { setBusy(''); }
+      return;
+    }
     try { await post(`/pillars/${id}/publish`); await load(); setDialog(null); toast(`Published and verified on ${p!.publicFile} and Our Pillars`); }
+    catch (e) { setDialog(null); showErr(e); } finally { setBusy(''); }
+  }
+  async function deleteDraft() {
+    setBusy('delete');
+    try { await del(`/pillars/${id}`); toast('Draft pillar deleted'); onChanged?.(); navigate('/studio/pillars'); }
     catch (e) { setDialog(null); showErr(e); } finally { setBusy(''); }
   }
   async function preview() {
@@ -104,15 +170,17 @@ export function PillarEditor({ id }: { id: string }) {
 
   return <>
     <EditorHeader back={{ to: '/studio/pillars', label: 'Pillars' }} title={f.name} file={p.publicFile} status={status} live={live} dirty={dirty}
-      extra={<span className="pill"><span className="pl-dot" style={{ background: f.colour }} aria-hidden="true" />Pillar {p.number} / 04</span>}
+      extra={<span className="pill"><span className="pl-dot" style={{ background: f.colour }} aria-hidden="true" />Pillar {p.number}</span>}
       actions={<>
         <button className="btn" onClick={preview} disabled={!!busy}><Icon n="eye" />{busy === 'preview' ? 'Building…' : 'Preview'}</button>
         {editable && dirty && <button className="btn btn-primary" onClick={save} disabled={!!busy} title="Save (⌘S)"><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save draft'}</button>}
         {!dirty && ['draft', 'changes_requested'].includes(status) && can('pillar.update') && <button className="btn btn-primary" disabled={!!busy || p.problems.length > 0} onClick={() => act('submit')}><Icon n="send" />Submit for review</button>}
-        {!dirty && status === 'approved' && can('pillar.publish') && <button className="btn btn-primary" disabled={!!busy} onClick={() => setDialog('publish')}><Icon n="rocket" />Publish…</button>}
+        {!dirty && status === 'approved' && can('pillar.publish') && <button className="btn btn-primary" disabled={!!busy} onClick={() => setDialog('publish')}><Icon n="rocket" />{p.removeRequested ? 'Remove from website…' : 'Publish…'}</button>}
       </>} />
     {errs.length > 0 && <div className="notice n-warn" role="alert"><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErrs([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
-    {status === 'in_review' && can('pillar.update') && <div className="notice n-info"><div>In review: read-only. Withdraw it to edit.</div></div>}
+    {p.removeRequested && <div className="notice n-warn"><div><b>Removal from the website {status === 'approved' ? 'approved' : 'requested'}.</b> Publishing takes this pillar off Our Pillars, turns <span className="mono">{p.publicFile}</span> into a redirect to <span className="mono">pillars.html</span> and deletes it from Studio. Withdraw to keep it.</div></div>}
+    {!live && status !== 'in_review' && !p.removeRequested && <div className="notice n-info"><div>New pillar: not on the website yet. Its page will be <span className="mono">{p.publicFile}</span>, numbered in the list order.</div></div>}
+    {status === 'in_review' && !p.removeRequested && can('pillar.update') && <div className="notice n-info"><div>In review: read-only. Withdraw it to edit.</div></div>}
     <div className="ed-layout">
       <SectionNav sections={[
         { id: 'basics', label: 'Pillar', icon: 'pillars', done: !!f.name },
@@ -135,7 +203,7 @@ export function PillarEditor({ id }: { id: string }) {
             </div></Field>
           <Field label="Programme brand" count={[f.brand.length, 40]} hint="Optional tag shown on the pillar page, e.g. Green Thumbs."><input className="input" maxLength={40} value={f.brand} onChange={(x) => set('brand', x.target.value)} aria-label="Programme brand" /></Field>
           <Field label="Page address" span={2} hint="Fixed, so links to this pillar keep working.">
-            <div className="pl-fixed"><span className="mono">{p.publicFile}</span><span className="muted">·</span><span className="mono">pillars.html#{p.key}</span><span className="muted">· Pillar {p.number} / 04</span>
+            <div className="pl-fixed"><span className="mono">{p.publicFile}</span><span className="muted">·</span><span className="mono">pillars.html#{p.key}</span><span className="muted">· numbered by its place in the list</span>
               {live && <a className="btn btn-sm" href={me.siteUrl + p.publicFile} target="_blank" rel="noopener"><Icon n="ext" />Open</a>}</div></Field>
         </Section>
         <Section id="text" title="Summary and introduction" desc="Plain text. The site’s typography is applied automatically.">
@@ -201,7 +269,9 @@ export function PillarEditor({ id }: { id: string }) {
         {['draft', 'changes_requested'].includes(status) && can('pillar.update') && <button className="btn btn-primary" disabled={!!busy} onClick={() => act('submit')}><Icon n="send" />Submit for review</button>}
         {status === 'in_review' && can('pillar.approve') && <><button className="btn btn-ok" disabled={!!busy} onClick={() => act('approve')}><Icon n="check" />Approve</button><button className="btn" onClick={() => setDialog('changes')}>Request changes</button></>}
         {status === 'approved' && can('pillar.publish') && <button className="btn btn-ok" disabled={!!busy} onClick={() => setDialog('publish')}><Icon n="rocket" />Publish</button>}
-        {['in_review', 'approved'].includes(status) && can('pillar.update') && <button className="btn btn-ghost" onClick={() => act('withdraw')}><Icon n="undo" />Withdraw to draft</button>}
+        {['in_review', 'approved'].includes(status) && can('pillar.update') && <button className="btn btn-ghost" onClick={() => act('withdraw')}><Icon n="undo" />{p.removeRequested ? 'Keep it (withdraw removal)' : 'Withdraw to draft'}</button>}
+        {live && !p.removeRequested && ['draft', 'changes_requested', 'published'].includes(status) && can('pillar.update') && <button className="btn btn-ghost btn-danger" onClick={() => setDialog('remove')}>Remove from website…</button>}
+        {!live && status !== 'in_review' && can('pillar.update') && <button className="btn btn-ghost btn-danger" onClick={() => setDialog('delete')}><Icon n="x" />Delete draft pillar</button>}
         {(p.history.revisions.length > 0 || p.history.comments.some((c) => c.body)) && <details className="ed-history"><summary>History</summary>
           <ol className="timeline">{p.history.revisions.slice(0, 8).map((r) => <li key={r.id}><b>Revision {r.number} · {r.reason}{r.id === p.publishedRevisionId ? ' · live' : ''}</b><small>{fmtDate(r.createdAt)}</small>
             {editable && r.id !== p.history.revisions[0]?.id && <button className="btn btn-sm btn-ghost" style={{ padding: 0, height: 'auto' }} onClick={async () => { if (confirm(`Copy revision ${r.number} into the draft?`)) { await post(`/pillars/${id}/revisions/${r.id}/restore`); await load(); toast('Revision restored as a draft'); } }}>Restore this version</button>}</li>)}
@@ -212,6 +282,13 @@ export function PillarEditor({ id }: { id: string }) {
     {dialog === 'photo' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { if (m[0]) { setPhoto(m[0]); set('mediaId', m[0].id); } setDialog(null); }} />}
     {dialog === 'preview' && <Modal wide title={`Preview · ${p.publicFile} with this draft`} onClose={() => setDialog(null)}><div className="preview-wrap"><iframe title="Pillar preview" src={url} style={{ width: Math.min(1280, window.innerWidth - 80) }} /></div></Modal>}
     {dialog === 'changes' && <Modal size="sm" title="Request changes" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={!comment.trim()} onClick={() => act('request_changes', { comment })}>Send to author</button></>}><div className="modal-b"><textarea className="textarea" autoFocus aria-label="What needs to change" value={comment} onChange={(e) => setComment(e.target.value)} /></div></Modal>}
-    {dialog === 'publish' && <Modal size="sm" title="Publish this pillar?" onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-ok" disabled={!!busy} onClick={publish}><Icon n="rocket" />{busy ? 'Publishing and checking…' : 'Publish'}</button></>}><div className="modal-b"><p style={{ margin: 0 }}>Rebuilds <span className="mono">{p.publicFile}</span>, <span className="mono">pillars.html</span> and the pages that name this pillar, then checks the result. Pushing to the hosted site is a separate, authorized step.</p></div></Modal>}
+    {dialog === 'remove' && <Modal size="sm" title="Remove this pillar from the website?" onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button>{p.usage.length === 0 && <button className="btn btn-primary" disabled={!!busy || dirty} onClick={() => act('request_removal')}>Send removal for review</button>}</>}>
+      <div className="modal-b stack">{p.usage.length ? <><p style={{ margin: 0 }}>Other content still uses this pillar. Link each to another pillar first:</p><ul className="pl-usage">{p.usage.map((u) => <li key={u}>{u}</li>)}</ul></>
+        : <p style={{ margin: 0 }}>A reviewer approves the removal, then publishing takes the pillar off Our Pillars, turns <span className="mono">{p.publicFile}</span> into a redirect to <span className="mono">pillars.html</span> and deletes it from Studio. Its revisions go with it.{dirty ? ' Save or discard your changes first.' : ''}</p>}</div></Modal>}
+    {dialog === 'delete' && <Modal size="sm" title="Delete this draft pillar?" onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button>{p.usage.length === 0 && <button className="btn btn-primary btn-danger" disabled={!!busy} onClick={deleteDraft}>{busy === 'delete' ? 'Deleting…' : 'Delete permanently'}</button>}</>}>
+      <div className="modal-b">{p.usage.length ? <><p style={{ margin: 0 }}>Other content still uses this pillar:</p><ul className="pl-usage">{p.usage.map((u) => <li key={u}>{u}</li>)}</ul></>
+        : <p style={{ margin: 0 }}>It was never on the website. The draft and its history are deleted and cannot be restored.</p>}</div></Modal>}
+    {dialog === 'publish' && p.removeRequested && <Modal size="sm" title="Remove from the website now?" onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary btn-danger" disabled={!!busy} onClick={publish}>{busy ? 'Removing and checking…' : 'Remove'}</button></>}><div className="modal-b"><p style={{ margin: 0 }}>Rebuilds Our Pillars without it, turns <span className="mono">{p.publicFile}</span> into a redirect to <span className="mono">pillars.html</span>, checks the result, then deletes the pillar from Studio.</p></div></Modal>}
+    {dialog === 'publish' && !p.removeRequested && <Modal size="sm" title="Publish this pillar?" onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-ok" disabled={!!busy} onClick={publish}><Icon n="rocket" />{busy ? 'Publishing and checking…' : 'Publish'}</button></>}><div className="modal-b"><p style={{ margin: 0 }}>Rebuilds <span className="mono">{p.publicFile}</span>, <span className="mono">pillars.html</span> and the pages that name this pillar, then checks the result. Pushing to the hosted site is a separate, authorized step.</p></div></Modal>}
   </>;
 }

@@ -160,7 +160,8 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   });
 
   // ---------------------------------------------------------------- Strategy references
-  api.get('/pillars', perm('project.read'), async (c) => c.json(await db.select().from(t.pillars).orderBy(asc(t.pillars.sort))));
+  // pillars that projects, stories, events and opportunities may link to (live ones; a new pillar appears once published)
+  api.get('/pillars', perm('project.read'), async (c) => c.json(await PL.linkablePillars(db)));
   api.get('/objectives', perm('project.read'), async (c) => {
     const objs = await db.select().from(t.objectives).orderBy(asc(t.objectives.sort));
     const links = await db.select({ o: t.objectivePillars.objectiveId, key: t.pillars.key }).from(t.objectivePillars).innerJoin(t.pillars, eq(t.pillars.id, t.objectivePillars.pillarId));
@@ -306,6 +307,9 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   // ---------------------------------------------------------------- Pillars (the four strategic pillars and their pages)
   api.get('/pillars/records', perm('pillar.read'), async (c) => c.json(await PL.listPillars(db)));
   api.post('/pillars/import', perm('pillar.publish'), async (c) => c.json(await PL.importPillars(db, cfg, actor(c))));
+  api.post('/pillars', perm('pillar.create'), async (c) => c.json(await PL.createPillar(db, cfg, actor(c), await c.req.json()), 201));
+  api.post('/pillars/order', perm('pillar.publish'), async (c) => { const { next, before } = await PL.planOrder(db, (await c.req.json())?.ids); return c.json(await publisher.reorderPillars(actor(c), next, before)); });
+  api.delete('/pillars/:id{[0-9a-f-]{36}}', perm('pillar.update'), async (c) => c.json(await PL.deleteDraftPillar(db, actor(c), c.req.param('id'))));
   api.get('/pillars/:id{[0-9a-f-]{36}}', perm('pillar.read'), async (c) => {
     const p = await PL.loadPillar(db, c.req.param('id'));
     const mediaRows = p.mediaId ? await db.select().from(t.media).where(eq(t.media.id, p.mediaId)) : [];
@@ -320,7 +324,8 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   });
   api.post('/pillars/:id/publish', perm('pillar.publish'), async (c) => c.json(await publisher.publishPillar(actor(c), c.req.param('id'))));
   api.post('/pillars/:id/preview', perm('pillar.read'), async (c) => {
-    const r = await publisher.previewPillar(c.req.param('id'), PL.toPillarSnapshot(await PL.loadPillar(db, c.req.param('id'))));
+    const p = await PL.loadPillar(db, c.req.param('id'));
+    const r = await publisher.previewPillar(p.id, PL.toPillarSnapshot(p), p.sort);
     return c.json({ url: `/studio/preview/${r.token}/${r.file}` });
   });
   api.post('/pillars/:id/revisions/:rev/restore', perm('pillar.update'), async (c) => { await PL.restorePillarRevision(db, cfg, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });

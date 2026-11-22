@@ -88,6 +88,8 @@ export const pillars = pgTable('pillars', {
   submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
   updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
   updatedAt: updatedAt(),
+  // 0017: the pending review is about removing the pillar from the website (its page becomes a redirect to pillars.html)
+  removeRequested: boolean('remove_requested').notNull().default(false),
 }, (t) => [uniqueIndex('pillars_key_uq').on(t.key)]);
 
 export const pillarRevisions = pgTable('pillar_revisions', {

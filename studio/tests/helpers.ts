@@ -34,6 +34,8 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
     const out = mode.kind === 'live' ? cfg.siteRoot : mode.outDir;
     const data = JSON.parse(readFileSync(dataFile, 'utf8')) as { projects: any[] };
     writeFileSync(join(out, 'projects.html'), data.projects.map((p) => `<li>${p.name}</li>`).join('\n'));
+    const newsFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/news.json') : mode.newsFile;
+    if (newsFile && existsSync(newsFile)) writeFileSync(join(out, 'news.html'), (JSON.parse(readFileSync(newsFile, 'utf8')).articles as any[]).map((a) => `<li><a href="${a.url}">${a.title}</a></li>`).join('\n'));
     // Stand-in for build.mjs: every page source becomes a root page and a sitemap entry.
     const pagesDir = mode.kind === 'live' ? join(cfg.siteRoot, 'src/pages') : mode.pagesDir;
     const files = existsSync(pagesDir) ? readdirSync(pagesDir).filter((f) => f.endsWith('.html')) : [];

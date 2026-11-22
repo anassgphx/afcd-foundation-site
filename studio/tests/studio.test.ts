@@ -208,6 +208,6 @@ describe('delivery failures and escaping', () => {
     const { seed } = await import('../src/server/seed.ts');
     const { STRATEGY } = await import('./helpers.ts');
     const again = await seed(h.db, h.cfg, { strategy: STRATEGY });
-    expect(again).toEqual({ pillars: 0, objectives: 0, projects: 0, skipped: 1 });
+    expect(again).toEqual({ pillars: 0, objectives: 0, projects: 0, skipped: 1, news: 0 });
   });
 });

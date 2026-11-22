@@ -7,13 +7,15 @@ import { resolve } from 'node:path';
 import { eq } from 'drizzle-orm';
 import type { DB } from './db/client.ts';
 import type { Config } from './config.ts';
-import { pillars, objectives, objectivePillars, projects, projectPillars, projectObjectives, projectRevisions } from './db/schema.ts';
+import { pillars, objectives, objectivePillars, projects, projectPillars, projectObjectives, projectRevisions, articles, articlePillars, articleRevisions } from './db/schema.ts';
+import { loadArticle, toArticleSnapshot } from './modules/news/service.ts';
 import { loadProject, toSnapshot } from './modules/projects/service.ts';
 import { audit } from './audit.ts';
 
 const unescape = (s: string) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
 type SiteData = {
+  news?: { pillar: string; date: string; title: string; excerpt: string; type: string }[];
   pillars: { key: string; number: string; name: string; description: string; colour: string; file: string }[];
   objectives: { ref: string; title: string; description: string; pillars: string[] }[];
 };
@@ -25,6 +27,7 @@ import sys, json; sys.path.insert(0, 'src'); import content as c
 print(json.dumps({
   'pillars': [dict(key=k, number=n, name=t, description=d, colour=c.PILLAR_TONE[k], file=c.PILLAR_FILE[k]) for k, n, t, d, _r in c.PILLARS],
   'objectives': [dict(ref=r, title=t, description=d, pillars=[s for _n, s in l]) for r, t, d, l in c.OBJECTIVES],
+  'news': [dict(pillar=n[0], date=n[1], title=n[3], excerpt=n[4], type=c.NEWS_TYPES[i]) for i, n in enumerate(c.NEWS)],
 }))`;
   return JSON.parse(execFileSync('python3', ['-I', '-c', py], { cwd: cfg.siteRoot, encoding: 'utf8' }));
 }
@@ -81,6 +84,23 @@ export async function seed(db: DB, cfg: Config, opts: { strategy?: SiteData; pro
       await audit(tx, null, 'project.import', { type: 'project', id: p.id }, `Imported “${p.name}” from the current website`);
     });
     report.projects++;
+  }
+  // Legacy stories: they live on the old blog, so they are imported as published links (no body text here).
+  const TYPE_KEY: Record<string, 'participant_story' | 'call_for_applications' | 'programme_news'> = { 'Participant story': 'participant_story', 'Call for applications': 'call_for_applications', 'Programme news': 'programme_news' };
+  (report as Record<string, number>).news = 0;
+  for (const [i, n] of (site.news ?? []).entries()) {
+    const slug = n.title.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[’']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+    if ((await db.select({ id: articles.id }).from(articles).where(eq(articles.slug, slug))).length) continue;
+    const pillar = pl.find((x) => x.name === unescape(n.pillar));
+    await db.transaction(async (tx) => {
+      const [a] = await tx.insert(articles).values({ slug, title: unescape(n.title), excerpt: unescape(n.excerpt), type: TYPE_KEY[n.type] ?? 'programme_news', publishDate: n.date, featured: i === 0, externalUrl: 'https://afcdfoundation.org/blog/', status: 'published' }).returning();
+      if (pillar) await tx.insert(articlePillars).values({ articleId: a.id, pillarId: pillar.id, isPrimary: true });
+      const snap = toArticleSnapshot(await loadArticle(tx as unknown as DB, a.id));
+      const [rev] = await tx.insert(articleRevisions).values({ articleId: a.id, number: 1, snapshot: snap as unknown as Record<string, unknown>, reason: 'imported' }).returning();
+      await tx.update(articles).set({ publishedRevisionId: rev.id, publishedAt: new Date() }).where(eq(articles.id, a.id));
+      await audit(tx, null, 'news.import', { type: 'article', id: a.id }, `Imported story “${a.title}” (links to the old blog)`);
+    });
+    (report as Record<string, number>).news++;
   }
   return report;
 }

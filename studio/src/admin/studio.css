@@ -288,3 +288,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .field .between, .field > div[style] { min-width: 0; }
 .modal .row .field input.mono { min-width: 0; }
 @media (max-width: 860px) { .b-canvas { height: 75vh; } .b-device { min-height: 0; } }
+
+/* ---------- News writer ---------- */
+.writer { display: flex; flex-direction: column; min-height: calc(100vh - 56px); }
+.w-body { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 0; }
+.w-paper { border: 0; margin: 0; padding: 40px clamp(20px, 6vw, 80px) 60px; min-width: 0; background: #fff; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.w-paper > * { width: 100%; max-width: 720px; }
+.w-title { border: 0; resize: none; font: 600 34px/1.15 Inter, system-ui, sans-serif; letter-spacing: -.03em; padding: 0; field-sizing: content; }
+.w-excerpt { border: 0; resize: none; font: 400 18px/1.5 Inter, system-ui, sans-serif; color: var(--ink-2); padding: 0; field-sizing: content; }
+.w-title:focus, .w-excerpt:focus, .w-text:focus { outline: none; box-shadow: none; }
+.w-tools { position: sticky; top: 56px; z-index: 2; display: flex; align-items: center; gap: 4px; padding: 8px 0; margin-top: 8px; background: #fff; border-bottom: 1px solid var(--line); }
+.w-tools button { height: 28px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 12.5px; }
+.w-tools button:hover { border-color: var(--accent); }
+.w-text { flex: 1; min-height: 60vh; border: 0; resize: none; padding: 16px 0; font: 400 17px/1.8 Georgia, 'Times New Roman', serif; color: var(--ink); }
+.w-side { border-left: 1px solid var(--line); background: #fff; overflow-y: auto; }
+.w-tabs { margin: 12px; display: grid; grid-template-columns: repeat(5, 1fr); }
+.w-tabs button { padding: 0 4px; }
+@media (max-width: 960px) { .w-body { grid-template-columns: 1fr; } .w-side { border-left: 0; border-top: 1px solid var(--line); } .w-title { font-size: 28px; } }
+.scroll-x .table th { position: static; }

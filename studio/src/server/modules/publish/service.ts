@@ -5,13 +5,16 @@ import { promisify } from 'node:util';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, renameSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { desc, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, lte } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
 import { media, pages, pageRevisions, projects, projectRevisions, publishJobs } from '../../db/schema.ts';
 import { buildCtx, canvasHtml, docMediaIds, pageSource, type PageSnapshot } from '../pages/render.ts';
 import { snapshotOf } from '../pages/service.ts';
 import { validateDoc } from '../pages/blocks.ts';
+import { articles, articleRevisions } from '../../db/schema.ts';
+import { articleFile, articleSource, listingEntry, newsCtx, type ArticleSnapshot } from '../news/render.ts';
+import { loadArticle, toArticleSnapshot } from '../news/service.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import { derivativeFiles } from '../media/service.ts';
@@ -20,7 +23,7 @@ import { loadProject, toSnapshot, type Snapshot } from '../projects/service.ts';
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
 
-export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages' }) => Promise<string>;
+export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string }) => Promise<string>;
 
 /** Default runner: the real generator and build. Tests inject a fake. */
 export const realRunner: BuildRunner = async (cfg, mode) => {
@@ -30,7 +33,7 @@ export const realRunner: BuildRunner = async (cfg, mode) => {
     const b = await run('npm', ['run', 'build'], { ...opts, env: { ...process.env } });
     return [a.stdout, b.stdout, b.stderr].join('\n');
   }
-  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir };
+  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}) };
   const a = mode.only === 'pages' ? { stdout: '' } : await run('python3', ['-I', 'src/content.py'], { ...opts, env });
   const b = await run('node', ['build.mjs'], { ...opts, env });
   return [a.stdout, b.stdout].join('\n');
@@ -81,9 +84,39 @@ export class Publisher {
   }
 
   /** Writes everything Studio owns into the site sources: project data, Studio page sources and image files. */
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null } } = {}) {
+  /** Live articles (optionally overriding one), newest first. */
+  async liveArticles(override?: { articleId: string; revisionId: string | null }) {
+    const live = await this.db.select({ id: articles.id, rev: articles.publishedRevisionId }).from(articles).where(isNotNull(articles.publishedRevisionId));
+    const map = new Map(live.map((r) => [r.id, r.rev as string]));
+    if (override) { if (override.revisionId) map.set(override.articleId, override.revisionId); else map.delete(override.articleId); }
+    if (!map.size) return [] as { id: string; snap: ArticleSnapshot }[];
+    const revs = await this.db.select().from(articleRevisions).where(inArray(articleRevisions.id, [...map.values()]));
+    return revs.map((r) => ({ id: r.id, snap: r.snapshot as unknown as ArticleSnapshot }))
+      .sort((a, b) => b.snap.publishDate.localeCompare(a.snap.publishDate) || a.snap.title.localeCompare(b.snap.title));
+  }
+
+  /** News listing data + article page sources. Returns media ids used. */
+  private async writeNews(dataFile: string, pagesDir: string, live: { id: string; snap: ArticleSnapshot }[], projectOverride?: { projectId: string; revisionId: string | null }) {
+    const ctx = await newsCtx(this.db, live.map((x) => x.snap), { projectOverride });
+    const listing = live.map((x) => listingEntry(x.snap, ctx, x.id));
+    const tmp = `${dataFile}.${randomBytes(4).toString('hex')}.tmp`;
+    mkdirSync(resolve(dataFile, '..'), { recursive: true });
+    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), articles: listing }, null, 2) + '\n'); renameSync(tmp, dataFile);
+    mkdirSync(pagesDir, { recursive: true });
+    for (const x of live) {
+      const file = articleFile(x.snap); if (!file) continue;
+      const others = listing.filter((l) => l.slug !== x.snap.slug);
+      writeFileSync(resolve(pagesDir, file), articleSource(x.snap, ctx, x.id, others));
+    }
+    return live.flatMap((x) => [x.snap.heroMediaId, ...x.snap.galleryMediaIds].filter(Boolean) as string[]);
+  }
+
+  get newsFile() { return resolve(this.cfg.siteRoot, 'src/data/news.json'); }
+
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null } } = {}) {
     const entries = await this.liveEntries(o.project);
     this.writeData(this.dataFile, entries);
+    const newsMedia = await this.writeNews(this.newsFile, resolve(this.cfg.siteRoot, 'src/pages'), await this.liveArticles(o.article), o.project);
     const live = await this.livePages(o.page);
     const ctx = await buildCtx(this.db, live.map((x) => x.snap.doc), { projectOverride: o.project });
     const dir = resolve(this.cfg.siteRoot, 'src/pages');
@@ -93,7 +126,7 @@ export class Publisher {
       const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
       writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
     }
-    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc))], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
     return { entries, live };
   }
 
@@ -318,6 +351,102 @@ export class Publisher {
     const doc = validateDoc(snap.doc).doc;
     const ctx = await buildCtx(this.db, [doc], { editor: true });
     return canvasHtml(this.cfg, { ...snap, doc }, ctx);
+  }
+
+  // ---------------------------------------------------------------- News & Stories
+  /** Publishes the approved revision. `actor` is null when the scheduler publishes a scheduled story. */
+  async publishArticle(actor: Actor, articleId: string, opts: { scheduled?: boolean } = {}) {
+    return this.locked(async () => {
+      const [a] = await this.db.select().from(articles).where(eq(articles.id, articleId));
+      if (!a) throw new AppError(404, 'Story not found.');
+      const ok = opts.scheduled ? a.status === 'scheduled' : a.status === 'approved';
+      if (!ok || !a.approvedRevisionId) throw new AppError(409, opts.scheduled ? 'This story is no longer scheduled.' : 'Only an approved story can be published.');
+      const [rev] = await this.db.select().from(articleRevisions).where(eq(articleRevisions.id, a.approvedRevisionId));
+      const snap = rev.snapshot as unknown as ArticleSnapshot;
+      const file = articleFile(snap);
+      const [job] = await this.db.insert(publishJobs).values({ kind: opts.scheduled ? 'publish_article_scheduled' : 'publish_article', entityId: articleId, revisionId: rev.id, requestedBy: actor?.id ?? null }).returning();
+      const log: string[] = [];
+      try {
+        await this.writeSite({ article: { articleId, revisionId: rev.id } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        const listing = readFileSync(resolve(this.cfg.siteRoot, 'news.html'), 'utf8');
+        if (!listing.includes(escapeHtml(snap.title))) throw new Error('The story is missing from news.html.');
+        if (file && !readFileSync(resolve(this.cfg.siteRoot, file), 'utf8').includes(`data-studio-article-rev="${rev.id}"`)) throw new Error(`${file} does not contain the published revision.`);
+      } catch (e) {
+        const msg = (e as Error).message;
+        try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
+        await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        if (opts.scheduled) await this.db.update(articles).set({ status: 'approved', scheduledAt: null }).where(eq(articles.id, articleId));
+        await audit(this.db, actor, 'news.publish_failed', { type: 'article', id: articleId }, `Publishing “${a.title}” failed: ${msg}`, { jobId: job.id, scheduled: !!opts.scheduled });
+        throw new AppError(409, `Publishing failed, the live site was left as it was. ${msg}`);
+      }
+      await this.db.transaction(async (tx) => {
+        await tx.update(articles).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, scheduledAt: null, updatedAt: new Date() }).where(eq(articles.id, articleId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'news.publish', { type: 'article', id: articleId }, `${opts.scheduled ? 'Scheduled publish' : 'Published'} “${a.title}” (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file };
+    });
+  }
+
+  async unpublishArticle(actor: NonNullable<Actor>, articleId: string) {
+    return this.locked(async () => {
+      const [a] = await this.db.select().from(articles).where(eq(articles.id, articleId));
+      if (!a) throw new AppError(404, 'Story not found.');
+      if (!a.publishedRevisionId) throw new AppError(409, 'This story is not on the live site.');
+      const [rev] = await this.db.select().from(articleRevisions).where(eq(articleRevisions.id, a.publishedRevisionId));
+      const file = articleFile(rev.snapshot as unknown as ArticleSnapshot);
+      const [job] = await this.db.insert(publishJobs).values({ kind: 'unpublish_article', entityId: articleId, revisionId: rev.id, requestedBy: actor.id }).returning();
+      const log: string[] = [];
+      try {
+        if (file) this.removeOrphanPages(file);
+        await this.writeSite({ article: { articleId, revisionId: null } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        if (file && existsSync(resolve(this.cfg.siteRoot, file))) throw new Error(`${file} is still on the site.`);
+      } catch (e) {
+        const msg = (e as Error).message;
+        try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
+        await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        throw new AppError(409, `Unpublishing failed, the live site was left as it was. ${msg}`);
+      }
+      await this.db.transaction(async (tx) => {
+        await tx.update(articles).set({ status: 'draft', publishedRevisionId: null, publishedAt: null, updatedAt: new Date() }).where(eq(articles.id, articleId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'news.unpublish', { type: 'article', id: articleId }, `Unpublished “${a.title}”`, { jobId: job.id });
+      });
+      return { jobId: job.id };
+    });
+  }
+
+  /** Builds the saved working copy (article page + listing) in an isolated folder. */
+  async previewArticle(articleId: string) {
+    return this.locked(async () => {
+      const snap = toArticleSnapshot(await loadArticle(this.db, articleId));
+      this.cleanupPreviews();
+      const token = randomBytes(16).toString('hex');
+      const dir = resolve(this.cfg.previewDir, token);
+      const pagesDir = resolve(dir, 'pages'), outDir = resolve(dir, 'site'), dataFile = resolve(dir, 'projects.json');
+      mkdirSync(pagesDir, { recursive: true }); mkdirSync(outDir, { recursive: true });
+      this.writeData(dataFile, await this.liveEntries());
+      const live = (await this.liveArticles({ articleId, revisionId: null })).concat({ id: 'preview', snap })
+        .sort((a, b) => b.snap.publishDate.localeCompare(a.snap.publishDate));
+      await this.writeNews(resolve(dir, 'news.json'), pagesDir, live);
+      await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, newsFile: resolve(dir, 'news.json') });
+      const file = articleFile(snap) ?? 'news.html';
+      if (!existsSync(resolve(outDir, file))) throw new AppError(409, 'The preview could not be generated.');
+      return { token, file };
+    });
+  }
+
+  /** Publishes stories whose scheduled time has come. Safe to call repeatedly (status check inside the lock). */
+  async runScheduled(now = new Date()) {
+    const due = await this.db.select({ id: articles.id }).from(articles).where(and(eq(articles.status, 'scheduled'), lte(articles.scheduledAt, now)));
+    const results: { id: string; ok: boolean; error?: string }[] = [];
+    for (const d of due) {
+      try { await this.publishArticle(null, d.id, { scheduled: true }); results.push({ id: d.id, ok: true }); }
+      catch (e) { results.push({ id: d.id, ok: false, error: (e as Error).message }); }
+    }
+    return results;
   }
 
   async recentJobs(limit = 10) {

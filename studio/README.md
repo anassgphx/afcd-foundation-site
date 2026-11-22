@@ -12,10 +12,11 @@ Custom content management for the AFCD Foundation website. Architecture: [`docs/
 - **Preview** with the real site templates (desktop, tablet, mobile) in an isolated folder.
 - **Publishing** into the existing site pipeline (`src/data/projects.json` → `src/content.py` → `build.mjs`). Success is only recorded after the built pages are checked; a failed build restores the previous site files and is shown in Publishing. Linked pillar pages, the project listing and the sitemap update automatically.
 - **Visual page builder** (Pages): create pages from templates (blank, content, campaign); add, reorder (drag or buttons), duplicate, hide and delete blocks; edit them in an inspector; see a live canvas with the real site styles at desktop, tablet and mobile width; undo/redo (⌘Z / ⇧⌘Z) and ⌘S to save. 13 approved blocks: page header, section heading, text, image, image + text, key figures, link cards, projects (live, by pillar or hand-picked), quote, questions, call to action, divider, spacer. Blocks are versioned and validated; editors cannot add HTML, CSS or scripts, links are allow-listed. Pages go through the same review and verified publishing as projects, and pages listing projects refresh when a project is published. Existing template pages and addresses are protected.
+- **News & Stories**: a distraction-free writing workspace (title, summary, text with subheadings, quotes, lists, bold, italic and links), types (programme news, participant story, call for applications, event recap), topics, author, date, featured flag, linked pillars and related projects, hero photo and gallery, SEO fields. Same review workflow, plus **scheduling**: an approved story can be scheduled and Studio publishes it at that time (checked every minute while Studio runs; failures return it to Approved and show on Publishing). Each story gets its own page `news-<slug>.html` and the News & Stories listing is rebuilt from Studio. The 3 existing stories were imported as links to the old blog.
 - Append-only activity log, publishing history, users and roles.
 - The 4 pillars, 6 objectives and 10 existing projects are imported from the current website (idempotent).
 
-Not built yet (planned phases): more blocks (video, timeline, team, partners, news feed, forms, hero slider, pillar explorer), editing the existing template pages and homepage in the builder, reusable saved sections, news, partners, opportunities, forms, SEO studio, translations, scheduling, MFA, notifications, backups automation.
+Not built yet (planned phases): more blocks (video, timeline, team, partners, news feed, forms, hero slider, pillar explorer), editing the existing template pages and homepage in the builder, reusable saved sections, partners, opportunities, forms, SEO studio, translations, scheduling, MFA, notifications, backups automation.
 
 ## Run it locally
 
@@ -27,6 +28,11 @@ npm run db:seed               # creates the local database and imports current s
 npm run user:create -- --email you@example.org --name "Your Name" --role super_admin
 npm run build:admin
 npm start                     # http://localhost:4400/studio/
+```
+
+Stop Studio before running `db:seed`, `db:migrate` or `user:create`: the local PGlite database must only be opened by one process at a time.
+
+```bash
 ```
 
 `user:create` asks for the password (or reads `STUDIO_NEW_PASSWORD`); it is never passed on the command line.

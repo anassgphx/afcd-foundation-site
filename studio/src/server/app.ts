@@ -18,6 +18,7 @@ import { audit } from './audit.ts';
 import * as P from './modules/projects/service.ts';
 import * as M from './modules/media/service.ts';
 import * as G from './modules/pages/service.ts';
+import * as N from './modules/news/service.ts';
 import { blockCatalog } from './modules/pages/blocks.ts';
 import { Publisher, type BuildRunner } from './modules/publish/service.ts';
 
@@ -97,7 +98,10 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
     const [{ failed24h }] = await db.select({ failed24h: count() }).from(t.publishJobs).where(and(eq(t.publishJobs.status, 'failed'), gte(t.publishJobs.createdAt, new Date(Date.now() - 864e5))));
     const pageRows = await db.select({ status: t.pages.status, live: sql<boolean>`${t.pages.publishedRevisionId} is not null` }).from(t.pages);
     const pagesInfo = { total: pageRows.length, live: pageRows.filter((r) => r.live).length, review: pageRows.filter((r) => r.status === 'in_review' || r.status === 'approved').length };
-    return c.json({ counts, live, pendingEdits, mediaTotal, mediaNeedsRights, recent, queue, jobs: jobs.map(({ log: _l, ...j }) => j), failed24h, pages: pagesInfo });
+    const newsRows = await db.select({ status: t.articles.status, scheduledAt: t.articles.scheduledAt, title: t.articles.title, id: t.articles.id, live: sql<boolean>`${t.articles.publishedRevisionId} is not null` }).from(t.articles);
+    const news = { live: newsRows.filter((r) => r.live).length, review: newsRows.filter((r) => r.status === 'in_review').length,
+      scheduled: newsRows.filter((r) => r.status === 'scheduled').map((r) => ({ id: r.id, title: r.title, at: r.scheduledAt })) };
+    return c.json({ counts, live, pendingEdits, mediaTotal, mediaNeedsRights, recent, queue, jobs: jobs.map(({ log: _l, ...j }) => j), failed24h, pages: pagesInfo, news });
   });
 
   // ---------------------------------------------------------------- Strategy references
@@ -197,6 +201,28 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
     const html = await publisher.canvas({ slug: 'canvas', noindex: true, ...body.data, doc: body.data.doc as never });
     return c.json({ html });
   });
+
+
+  // ---------------------------------------------------------------- News & Stories
+  api.get('/news', perm('news.read'), async (c) => c.json(await N.listArticles(db)));
+  api.post('/news', perm('news.create'), async (c) => c.json(await N.createArticle(db, actor(c), await c.req.json()), 201));
+  api.get('/news/:id', perm('news.read'), async (c) => {
+    const a = await N.loadArticle(db, c.req.param('id'));
+    const ids = [a.heroMediaId, ...a.galleryMediaIds].filter(Boolean) as string[];
+    const mediaRows = ids.length ? await db.select().from(t.media).where(inArray(t.media.id, ids)) : [];
+    return c.json({ ...a, media: mediaRows.map(withUrl), problems: await N.articleProblems(db, a), history: await N.articleHistory(db, a.id) });
+  });
+  api.put('/news/:id', perm('news.update'), async (c) => c.json(await N.updateArticle(db, actor(c), c.req.param('id'), await c.req.json())));
+  api.post('/news/:id/transition', async (c) => {
+    const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default(''), at: z.string().max(40).optional() }).safeParse(await c.req.json());
+    if (!body.success || !N.articleTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, N.articleTransitionPerm(body.data.action)!);
+    return c.json(await N.transitionArticle(db, actor(c), u.role, c.req.param('id'), body.data.action, { comment: body.data.comment, at: body.data.at }));
+  });
+  api.post('/news/:id/publish', perm('news.publish'), async (c) => c.json(await publisher.publishArticle(actor(c), c.req.param('id'))));
+  api.post('/news/:id/unpublish', perm('news.publish'), async (c) => c.json(await publisher.unpublishArticle(actor(c), c.req.param('id'))));
+  api.post('/news/:id/preview', perm('news.read'), async (c) => { const r = await publisher.previewArticle(c.req.param('id')); return c.json({ url: `/studio/preview/${r.token}/${r.file}` }); });
+  api.post('/news/:id/revisions/:rev/restore', perm('news.update'), async (c) => { await N.restoreArticleRevision(db, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
 
   // ---------------------------------------------------------------- Publishing jobs, audit, users
   api.get('/publish-jobs', perm('dashboard.read'), async (c) => c.json(await publisher.recentJobs(30)));

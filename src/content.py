@@ -875,58 +875,92 @@ NEWS_PLACEHOLDERS = [
 ]
 
 
+# Stories come from src/data/news.json (written by AFCD Studio). Without it, the legacy NEWS list above is used.
+_NEWS_FILE = Path(os.environ.get('STUDIO_NEWS_JSON') or Path(__file__).parent / 'data' / 'news.json')
+
+
+def news_items():
+    if _NEWS_FILE.exists():
+        import json as _j
+        return _j.loads(_NEWS_FILE.read_text(encoding='utf-8'))['articles']
+    blog = 'https://afcdfoundation.org/blog/'
+    return [dict(slug=f'legacy-{i}', url=blog, external=True, title=n[3], excerpt=n[4], type=NEWS_TYPES[i], pillar=n[0], colour=NEWS_PILLAR[n[0]],
+                 date=n[1], dateLabel=n[2], hero=None, photo=n[5], featured=(i == 0)) for i, n in enumerate(NEWS)]
+
+
 def news():
-    lead = NEWS[0]
+    items = news_items()
+    lead = next((x for x in items if x.get('featured')), items[0] if items else None)
+    rest = [x for x in items if x is not lead]
     blog = 'https://afcdfoundation.org/blog/'
 
-    def card(pillar, typ, title, excerpt, photo, date=None, iso=None, placeholder=False):
-        meta = f'<time datetime="{iso}">{date}</time>' if date else '<span>Placeholder</span>'
-        href = '#' if placeholder else blog
-        attrs = ' aria-disabled="true" tabindex="-1"' if placeholder else ''
-        return f'''
+    def link(x):
+        return f'href="{x["url"]}"' + (' target="_blank" rel="noopener"' if x.get('external') else '')
+
+    def card(x=None, placeholder=None):
+        if placeholder:
+            pillar, typ, title, excerpt = placeholder
+            return f'''
       <li class="nw-item" data-type="{typ}">
-        <a href="{href}" class="nw-card group{' is-ph' if placeholder else ''}"{attrs}>
-          <div class="relative">{ph(photo, 'aspect-[16/10] w-full rounded-[20px]')}<span class="nw-type">{typ}</span></div>
-          <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{NEWS_PILLAR[pillar]}"></span>{pillar}</span><span aria-hidden="true">·</span>{meta}</span>
+        <a href="#" class="nw-card group is-ph" aria-disabled="true" tabindex="-1">
+          <div class="relative">{ph('Story photo', 'aspect-[16/10] w-full rounded-[20px]')}<span class="nw-type">{typ}</span></div>
+          <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{NEWS_PILLAR[pillar]}"></span>{pillar}</span><span aria-hidden="true">·</span><span>Placeholder</span></span>
           <span class="mt-3 block text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">{title}</span>
           <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{excerpt}</span>
-          <span class="nw-read">{'Coming soon' if placeholder else 'Read the story'} <span aria-hidden="true">↗</span></span>
+          <span class="nw-read">Coming soon <span aria-hidden="true">↗</span></span>
+        </a>
+      </li>'''
+        pic = media_img(x.get('hero'), 'aspect-[16/10] w-full rounded-[20px]', '(min-width:1024px) 33vw, 100vw') or ph(x.get('photo') or x['title'], 'aspect-[16/10] w-full rounded-[20px]')
+        return f'''
+      <li class="nw-item" data-type="{x['type']}">
+        <a {link(x)} class="nw-card group">
+          <div class="relative">{pic}<span class="nw-type">{x['type']}</span></div>
+          <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{x['colour']}"></span>{x['pillar']}</span><span aria-hidden="true">·</span><time datetime="{x['date']}">{x['dateLabel']}</time></span>
+          <span class="mt-3 block text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">{x['title']}</span>
+          <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{x['excerpt']}</span>
+          <span class="nw-read">Read the story <span aria-hidden="true">↗</span></span>
         </a>
       </li>'''
 
-    cards = ''.join(card(n[0], NEWS_TYPES[i], n[3], n[4], n[5], n[2], n[1]) for i, n in enumerate(NEWS) if i > 0)
-    cards += ''.join(card(p[0], p[1], p[2], p[3], 'Story photo', placeholder=True) for p in NEWS_PLACEHOLDERS)
-    present = [NEWS_TYPES[i] for i in range(1, len(NEWS))] + [p[1] for p in NEWS_PLACEHOLDERS]
-    types = ['All stories'] + [t for t in ['Call for applications', 'Participant story', 'Programme news'] if t in present]
+    # Placeholders (clearly marked) only fill the grid up to six cards; real stories replace them.
+    fill = NEWS_PLACEHOLDERS[:max(0, 6 - len(rest))]
+    cards = ''.join(card(x) for x in rest) + ''.join(card(placeholder=p) for p in fill)
+    present = [x['type'] for x in rest] + [p[1] for p in fill]
+    types = ['All stories'] + [t for t in ['Call for applications', 'Participant story', 'Programme news', 'Event recap'] if t in present]
     chips = ''.join(f'<button type="button" class="nw-chip" data-news-filter="{"all" if i == 0 else t}" aria-pressed="{"true" if i == 0 else "false"}">{t}</button>' for i, t in enumerate(types))
     topics = ''.join(f'<li><a class="os-area" href="pillars.html#{sl}"><span class="os-area-dot" style="--c:{NEWS_PILLAR[n]}" aria-hidden="true"></span><span class="flex-1">{n}</span><span class="os-area-arr" aria-hidden="true">↗</span></a></li>'
                      for n, sl in [('Youth Empowerment', 'youth-empowerment'), ('Women’s Empowerment', 'women-empowerment'), ('Environment and Climate', 'green-thumbs'), ('Digital Inclusion and Innovation', 'digital-empowerment')])
-
-    body = page_header([('News &amp; Stories', 'news.html')], 'News &amp; Stories',
-                       'Stories from <span class="text-ink-mid">our communities.</span>',
-                       'News, calls for applications and participant stories from AFCD’s programmes.') + f'''
-
+    note = ('Some stories still open on the current afcdfoundation.org blog. ' if any(x.get('external') for x in items) else '') + \
+           ('Lorem ipsum cards are placeholders until more stories are published.' if fill else '')
+    feat = ''
+    if lead:
+        lpic = media_img(lead.get('hero'), 'aspect-[16/10] w-full rounded-[24px] lg:aspect-auto lg:h-full lg:min-h-[420px]', '(min-width:1024px) 60vw, 100vw', eager=True) or ph(lead.get('photo') or lead['title'], 'aspect-[16/10] w-full rounded-[24px] lg:aspect-auto lg:h-full lg:min-h-[420px]')
+        feat = f'''
 <section id="featured" class="pt-8 lg:pt-10">
   <div class="wrap">
-    <a href="{blog}" class="nw-feat group">
-      <div class="relative lg:col-span-7">{ph(lead[5], 'aspect-[16/10] w-full rounded-[24px] lg:aspect-auto lg:h-full lg:min-h-[420px]')}<span class="nw-type">Featured · {NEWS_TYPES[0]}</span></div>
+    <a {link(lead)} class="nw-feat group">
+      <div class="relative lg:col-span-7">{lpic}<span class="nw-type">Featured · {lead['type']}</span></div>
       <div class="flex flex-col p-2 lg:col-span-5 lg:p-6">
-        <span class="flex flex-wrap items-center gap-x-3 text-[13px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{NEWS_PILLAR[lead[0]]}"></span>{lead[0]}</span><span aria-hidden="true">·</span><time datetime="{lead[1]}">{lead[2]}</time></span>
-        <h2 class="mt-5 text-[30px] font-semibold leading-[1.06] tracking-[-0.04em] md:text-[42px]">{lead[3]}</h2>
-        <p class="mt-5 text-[16px] leading-relaxed text-ink-dark">{lead[4]}</p>
+        <span class="flex flex-wrap items-center gap-x-3 text-[13px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{lead['colour']}"></span>{lead['pillar']}</span><span aria-hidden="true">·</span><time datetime="{lead['date']}">{lead['dateLabel']}</time></span>
+        <h2 class="mt-5 text-[30px] font-semibold leading-[1.06] tracking-[-0.04em] md:text-[42px]">{lead['title']}</h2>
+        <p class="mt-5 text-[16px] leading-relaxed text-ink-dark">{lead['excerpt']}</p>
         <span class="btn-dark btn-cta mt-8 min-h-[48px] self-start px-6 text-[14px] lg:mt-auto">Read the story <span class="arr" aria-hidden="true">↗</span></span>
       </div>
     </a>
   </div>
 </section>
+'''
 
+    body = page_header([('News &amp; Stories', 'news.html')], 'News &amp; Stories',
+                       'Stories from <span class="text-ink-mid">our communities.</span>',
+                       'News, calls for applications and participant stories from AFCD’s programmes.') + feat + f'''
 <section id="stories" class="py-14 lg:py-16">
   <div class="wrap">{sec_head('01 / All Stories', 'Latest from <span class="sh-soft">AFCD.</span>', ('Current blog', blog))}
     <div class="nw-chips mt-8" role="group" aria-label="Filter stories">{chips}</div>
     <ul class="nw-grid mt-6" id="news-grid">{cards}
     </ul>
     <p class="nw-empty mt-6 hidden text-[15px] text-ink-mid" role="status">No stories in this category yet.</p>
-    {placeholder_note('Real stories open on the current afcdfoundation.org blog. Lorem ipsum cards are placeholders until the news feed is connected.')}
+    {placeholder_note(note) if note else ''}
   </div>
 </section>
 

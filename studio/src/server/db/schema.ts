@@ -105,7 +105,7 @@ export const media = pgTable('media', {
 
 // ---------------------------------------------------------------- Projects
 export const workflowEnum = pgEnum('workflow_status', [
-  'draft', 'in_review', 'changes_requested', 'approved', 'published', 'archived',
+  'draft', 'in_review', 'changes_requested', 'approved', 'scheduled', 'published', 'archived',
 ]);
 
 export const projects = pgTable('projects', {
@@ -219,3 +219,61 @@ export const pageRevisions = pgTable('page_revisions', {
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex('page_revisions_num_uq').on(t.pageId, t.number)]);
+
+// ---------------------------------------------------------------- News & Stories
+export const articleTypeEnum = pgEnum('article_type', ['programme_news', 'participant_story', 'call_for_applications', 'event_recap']);
+
+export const articles = pgTable('articles', {
+  id: id(),
+  slug: text('slug').notNull(),                   // public file: news-<slug>.html (unless externalUrl)
+  title: text('title').notNull(),
+  excerpt: text('excerpt').notNull().default(''),
+  body: text('body').notNull().default(''),       // safe rich text subset (see modules/news/render.ts)
+  type: articleTypeEnum('type').notNull().default('programme_news'),
+  tags: jsonb('tags').$type<string[]>().notNull().default([]),
+  authorName: text('author_name').notNull().default(''),
+  authorRole: text('author_role').notNull().default(''),
+  publishDate: text('publish_date').notNull(),     // YYYY-MM-DD shown on the site
+  featured: boolean('featured').notNull().default(false),
+  externalUrl: text('external_url').notNull().default(''),   // legacy posts that still live on the old blog
+  heroMediaId: uuid('hero_media_id').references(() => media.id, { onDelete: 'set null' }),
+  seoTitle: text('seo_title').notNull().default(''),
+  seoDescription: text('seo_description').notNull().default(''),
+  status: workflowEnum('status').notNull().default('draft'),
+  scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
+  publishedRevisionId: uuid('published_revision_id'),
+  approvedRevisionId: uuid('approved_revision_id'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('articles_slug_uq').on(t.slug), index('articles_status_idx').on(t.status), index('articles_sched_idx').on(t.scheduledAt)]);
+
+export const articlePillars = pgTable('article_pillars', {
+  articleId: uuid('article_id').notNull().references(() => articles.id, { onDelete: 'cascade' }),
+  pillarId: uuid('pillar_id').notNull().references(() => pillars.id, { onDelete: 'restrict' }),
+  isPrimary: boolean('is_primary').notNull().default(false),
+}, (t) => [primaryKey({ columns: [t.articleId, t.pillarId] })]);
+
+export const articleProjects = pgTable('article_projects', {
+  articleId: uuid('article_id').notNull().references(() => articles.id, { onDelete: 'cascade' }),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'restrict' }),
+}, (t) => [primaryKey({ columns: [t.articleId, t.projectId] })]);
+
+export const articleGallery = pgTable('article_gallery', {
+  articleId: uuid('article_id').notNull().references(() => articles.id, { onDelete: 'cascade' }),
+  mediaId: uuid('media_id').notNull().references(() => media.id, { onDelete: 'restrict' }),
+  sort: integer('sort').notNull().default(0),
+}, (t) => [primaryKey({ columns: [t.articleId, t.mediaId] })]);
+
+export const articleRevisions = pgTable('article_revisions', {
+  id: id(),
+  articleId: uuid('article_id').notNull().references(() => articles.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('article_revisions_num_uq').on(t.articleId, t.number)]);

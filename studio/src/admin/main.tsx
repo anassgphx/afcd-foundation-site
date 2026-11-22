@@ -9,6 +9,7 @@ import { ProjectsList } from './pages/Projects.tsx';
 import { ProjectEditor } from './pages/ProjectEditor.tsx';
 import { PagesList } from './pages/PagesList.tsx';
 import { Builder } from './pages/Builder.tsx';
+import { NewsList, ArticleEditor } from './pages/News.tsx';
 import { MediaLibrary } from './pages/Media.tsx';
 import { ApprovalQueue, Publishing, ActivityLog, Users } from './pages/Admin.tsx';
 
@@ -51,7 +52,10 @@ type NavItem = { to: string; label: string; icon: string; perm: string; match?: 
 const NAV: { group: string; items: NavItem[] }[] = [
   { group: 'Overview', items: [{ to: '/studio/', label: 'Dashboard', icon: 'dash', perm: 'dashboard.read', match: /^\/studio\/?$/ }] },
   { group: 'Website', items: [{ to: '/studio/pages', label: 'Pages', icon: 'layers', perm: 'page.read', match: /^\/studio\/pages/ }] },
-  { group: 'Content', items: [{ to: '/studio/projects', label: 'Projects', icon: 'folder', perm: 'project.read', match: /^\/studio\/projects/ }] },
+  { group: 'Content', items: [
+    { to: '/studio/projects', label: 'Projects', icon: 'folder', perm: 'project.read', match: /^\/studio\/projects/ },
+    { to: '/studio/news', label: 'News & Stories', icon: 'log', perm: 'news.read', match: /^\/studio\/news/ },
+  ] },
   { group: 'Media', items: [{ to: '/studio/media', label: 'Media Library', icon: 'image', perm: 'media.read' }] },
   { group: 'Workflow', items: [
     { to: '/studio/approvals', label: 'Approval Queue', icon: 'inbox', perm: 'project.read' },
@@ -111,6 +115,9 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 }
 
 function route(path: string): { title: string; el: React.ReactElement; full?: boolean } {
+  const nw = path.match(/^\/studio\/news\/([0-9a-f-]{36})$/);
+  if (nw) return { title: 'Story', el: <ArticleEditor key={nw[1]} id={nw[1]} />, full: true };
+  if (path.startsWith('/studio/news')) return { title: 'News & Stories', el: <NewsList /> };
   const pg = path.match(/^\/studio\/pages\/([0-9a-f-]{36})$/);
   if (pg) return { title: 'Page builder', el: <Builder key={pg[1]} id={pg[1]} />, full: true };
   if (path.startsWith('/studio/pages')) return { title: 'Pages', el: <PagesList /> };

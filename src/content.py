@@ -186,16 +186,27 @@ def tag(text, dark=False):
 
 
 def cta_band(title, text, primary, secondary):
+    ways = [('Volunteer', 'Give time to activities in Ait Ourir and beyond.', 'get-involved.html#volunteer'),
+            ('Join a programme', 'Apply when calls open for youth and women’s programmes.', 'get-involved.html#programs'),
+            ('Partner with us', 'Co-design and fund community initiatives.', 'get-involved.html#partner')]
+    rows = ''.join(f'''<li><a href="{h}" class="cta-way"><span class="cta-way-n">{i:02d}</span><span class="min-w-0 flex-1"><span class="block text-[16px] font-semibold tracking-[-0.015em]">{t}</span><span class="mt-0.5 block text-[13.5px] leading-snug text-ink-mid">{d}</span></span><span class="cta-way-arr" aria-hidden="true">↗</span></a></li>''' for i, (t, d, h) in enumerate(ways, 1))
     return f'''
-<section class="bg-ink-pure text-white on-dark">
-  <div class="wrap grid gap-8 py-16 lg:grid-cols-12 lg:items-end lg:py-24">
-    <div class="lg:col-span-8">
-      <h2 class="h2">{title}</h2>
-      <p class="body mt-5 max-w-[52ch] text-white/70">{text}</p>
-    </div>
-    <div class="flex flex-wrap items-center gap-x-7 gap-y-4 lg:col-span-4 lg:justify-end">
-      <a href="{primary[1]}" class="btn-light btn-cta min-h-[50px] px-7">{primary[0]} {ARR}</a>
-      <a href="{secondary[1]}" class="link-arrow text-white">{secondary[0]} {ARR}</a>
+<section class="cta-wrap py-10 lg:py-14">
+  <div class="wrap">
+    <div class="cta-card">
+      <div class="cta-glow" aria-hidden="true"></div>
+      <div class="grid gap-10 lg:grid-cols-12 lg:items-center lg:gap-14">
+        <div class="lg:col-span-7">
+          <span class="cta-kicker"><span class="tb-dot" aria-hidden="true"></span>Get involved</span>
+          <h2 class="mt-6 text-[38px] font-semibold leading-[1.02] tracking-[-0.045em] md:text-[56px] lg:text-[64px]" style="text-wrap:balance">{title}</h2>
+          <p class="mt-5 max-w-[52ch] text-[16px] leading-relaxed text-ink-dark md:text-[17px]">{text}</p>
+          <div class="mt-8 flex flex-wrap items-center gap-x-7 gap-y-4">
+            <a href="{primary[1]}" class="btn-dark btn-cta min-h-[50px] px-7">{primary[0]} {ARR}</a>
+            <a href="{secondary[1]}" class="link-arrow">{secondary[0]} {ARR}</a>
+          </div>
+        </div>
+        <ul class="grid gap-2 lg:col-span-5">{rows}</ul>
+      </div>
     </div>
   </div>
 </section>'''
@@ -607,45 +618,96 @@ DETAILS = {
 }
 
 
+PILLAR_TONE = {'youth-empowerment': '#FFB2B9', 'women-empowerment': '#A8DDFB', 'green-thumbs': '#82E591', 'digital-empowerment': '#FBE38A'}
+
+
 def project_details():
-    for file, d in DETAILS.items():
-        facts = ''.join(f'<div class="flex items-baseline justify-between gap-4 border-t border-ink-light py-3.5"><dt class="label text-ink-mid">{k}</dt><dd class="text-right text-[15px] font-medium">{v}</dd></div>' for k, v in d['facts'])
-        rows = ''.join(f'''
-        <div class="grid gap-3 border-t border-ink-light py-8 md:grid-cols-12 md:gap-8">
-          <h2 class="label pt-1 text-ink-mid md:col-span-3">{k}</h2>
-          <p class="text-xl leading-[1.5] tracking-[-0.01em] md:col-span-9">{v}</p>
-        </div>''' for k, v in d['rows'])
-        gallery = ''.join(f'<div>{ph(d["name"] + " · gallery", "aspect-[4/3] w-full")}</div>' for _ in range(3))
-        body = page_header([('Projects', 'projects.html'), (d['name'], file)], f'{d["pillar"]} · {d["cat"]}', d['name'], d['lede'], points=(d['pillar'], d['cat'])) + f'''
+    files = list(DETAILS)
+    for idx, (file, d) in enumerate(DETAILS.items()):
+        tone = PILLAR_TONE[d['slug']]
+        pdesc = next(p[3] for p in PILLARS if p[0] == d['slug'])
+        objs = [(ref, text) for ref, text, _desc, links in OBJECTIVES if any(sl == d['slug'] for _n, sl in links)]
+        dot = f'<span class="pj-dot" style="--c:{tone}"></span>'
+        facts = ''.join(f'<div class="pj-fact"><dt>{k}</dt><dd>{dot if k == "Pillar" else ""}{v}</dd></div>' for k, v in d['facts'])
+        n_rows = len(d['rows'])
+        steps = ''.join(f'''
+        <li class="pj-step{' is-result' if k == 'Results' else ''}">
+          <span class="flex items-center justify-between"><span class="pj-step-n">{i:02d}</span><span class="pj-step-k">{k}</span></span>
+          <p class="mt-6 text-[17px] leading-[1.55] tracking-[-0.01em] md:text-[18px]">{v}</p>
+        </li>''' for i, (k, v) in enumerate(d['rows'], 1))
+        obj_html = ''.join(f'<li><a href="strategy.html#{ref.lower()}" class="pj-obj"><span class="so-ref">{ref}</span><span class="flex-1">{text}</span><span aria-hidden="true">↗</span></a></li>' for ref, text in objs)
+        prev_f = files[idx - 1]; next_f = files[(idx + 1) % len(files)]
+        def nav(f, label):
+            o = DETAILS[f]
+            return f'''<a href="{f}" class="pj-nav group"><span class="label text-ink-mid">{label}</span><span class="mt-3 flex items-center gap-3"><span class="pj-dot" style="--c:{PILLAR_TONE[o['slug']]}"></span><span class="text-[24px] font-semibold tracking-[-0.03em] md:text-[30px]">{o['name']}</span></span><span class="mt-1 block text-[14px] text-ink-mid">{o['pillar']} · {o['cat']}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a>'''
+        body = page_header([('Projects', 'projects.html'), (d['name'], file)], f'{d["pillar"]} · {d["cat"]}', d['name'], d['lede']) + f'''
 
-<section class="pt-12 lg:pt-16">
-  <div class="wrap">{ph(d['photo'], 'aspect-[16/9] w-full rounded-3xl md:aspect-[21/9]')}</div>
-</section>
-
-<section class="py-14 lg:py-16">
-  <div class="wrap grid gap-12 lg:grid-cols-12 lg:gap-16">
-    <aside class="lg:col-span-4">
-      <div class="lg:sticky lg:top-28">
-        <p class="label">At a glance</p>
-        <dl class="mt-5 border-b border-ink-light">{facts}</dl>
-        <a href="pillars.html#{d['slug']}" class="link-arrow mt-6">About {d['pillar']} {ARR}</a>
-      </div>
-    </aside>
-    <div class="min-w-0 lg:col-span-8">{rows}
-      <div class="border-t border-ink-light pt-10">
-        <p class="label text-ink-mid">Gallery</p>
-        <div class="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3">{gallery}</div>
-      </div>
+<section class="pt-8 lg:pt-10">
+  <div class="wrap">
+    <div class="pj-hero">
+      {ph(d['photo'], 'aspect-[16/10] w-full rounded-[28px] md:aspect-[21/9]')}
+      <dl class="pj-facts" style="--f:{len(d['facts'])}">{facts}</dl>
     </div>
   </div>
 </section>
 
-<section class="border-t border-ink-light">
-  <a href="{d['next_']}" class="group wrap flex items-center justify-between gap-6 py-12 lg:py-16">
-    <span><span class="label block text-ink-mid">Next project</span><span class="mt-3 block text-3xl font-semibold tracking-[-0.035em] group-hover:underline md:text-5xl">{d['next_name']}</span></span>
-    <span class="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-ink-light text-xl transition-colors group-hover:border-ink-pure group-hover:bg-ink-pure group-hover:text-white" aria-hidden="true">→</span>
-  </a>
-</section>'''
+<section id="story" class="py-14 lg:py-16">
+  <div class="wrap">{sec_head('01 / Project Story', 'From context <span class="sh-soft">to results.</span>', f'{n_rows} steps', desc='What the project responded to, how it worked and what it achieved.')}
+    <ol class="pj-steps mt-8 lg:mt-10" style="--n:{n_rows}">{steps}
+    </ol>
+  </div>
+</section>
+
+<section id="overview" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap grid gap-10 lg:grid-cols-12 lg:gap-16">
+    <div class="lg:col-span-5">
+      <div class="sh-top"><span class="sh-num">02</span><span class="sh-label">Overview</span></div>
+      <blockquote class="mt-8 text-[28px] font-semibold leading-[1.1] tracking-[-0.035em] md:text-[36px]">“Lorem ipsum dolor sit amet, <span class="text-ink-mid">consectetur adipiscing elit.</span>”</blockquote>
+      <p class="mt-4 text-[13px] text-ink-mid">Placeholder text · to be replaced by AFCD</p>
+    </div>
+    <div class="grid gap-5 text-[16px] leading-[1.75] text-ink-dark lg:col-span-7">
+      <p class="text-[20px] leading-[1.5] tracking-[-0.01em] text-ink-pure md:text-[22px]">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus, posuere velit aliquet. Donec ullamcorper nulla non metus auctor fringilla.</p>
+      <p>Sed posuere consectetur est at lobortis. Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum. Maecenas faucibus mollis interdum, nullam quis risus eget urna mollis ornare vel eu leo.</p>
+      <p>Aenean lacinia bibendum nulla sed consectetur. Curabitur blandit tempus porttitor. Etiam porta sem malesuada magna mollis euismod. Nulla vitae elit libero, a pharetra augue. Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh.</p>
+      <ul class="mt-2 grid gap-2 sm:grid-cols-2">
+        <li class="os-act"><span class="os-act-n">01</span><span>Lorem ipsum dolor sit amet, consectetur.</span></li>
+        <li class="os-act"><span class="os-act-n">02</span><span>Vestibulum id ligula porta felis euismod.</span></li>
+        <li class="os-act"><span class="os-act-n">03</span><span>Cras mattis consectetur purus sit amet.</span></li>
+        <li class="os-act"><span class="os-act-n">04</span><span>Maecenas faucibus mollis interdum nullam.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="pillar" class="pb-14 lg:pb-16">
+  <div class="wrap grid gap-4 lg:grid-cols-12">
+    <div class="pj-pillar lg:col-span-7" style="--c:{tone}">
+      <p class="label text-black/60">Part of our pillar</p>
+      <p class="mt-4 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[40px]">{d['pillar']}</p>
+      <p class="mt-4 max-w-[52ch] text-[15.5px] leading-relaxed text-black/75">{pdesc}</p>
+      <a href="pillars.html#{d['slug']}" class="btn-dark btn-cta mt-8 min-h-[46px] px-6 text-[14px]">Explore the pillar <span class="arr" aria-hidden="true">↗</span></a>
+    </div>
+    <div class="rounded-[28px] border border-ink-light p-6 md:p-8 lg:col-span-5">
+      <p class="label text-ink-mid">Strategic objectives</p>
+      <ul class="mt-5 grid gap-2">{obj_html}</ul>
+    </div>
+  </div>
+</section>
+
+<section id="gallery" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('03 / Gallery', 'In <span class="sh-soft">pictures.</span>', 'Photos to come')}
+    <div class="pj-gallery mt-8 lg:mt-10">
+      {ph(d['name'] + ' · gallery', 'pj-g1 w-full rounded-[24px]')}
+      {ph(d['name'] + ' · gallery', 'pj-g2 w-full rounded-[24px]')}
+      {ph(d['name'] + ' · gallery', 'pj-g3 w-full rounded-[24px]')}
+    </div>
+  </div>
+</section>
+
+<nav class="border-t border-ink-light py-10 lg:py-12" aria-label="More projects">
+  <div class="wrap grid gap-3 md:grid-cols-2">{nav(prev_f, 'Previous project')}{nav(next_f, 'Next project')}</div>
+</nav>''' + cta_band('Be part of the next edition.', 'Calls for applications, volunteering and partnerships open throughout the year.',
+               ('Get Involved', 'get-involved.html'), ('All projects', 'projects.html'))
         page(file, f'{d["name"]} · AFCD Foundation', f'{d["name"]}: {d["lede"]}', 'projects', body)
 
 

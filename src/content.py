@@ -996,33 +996,104 @@ def partners():
 
 
 # ---------------------------------------------------------------- Get Involved
+GI_ICONS = {
+    'volunteer': '<path d="M10 16.5s-6-3.6-6-8a3.3 3.3 0 0 1 6-1.9 3.3 3.3 0 0 1 6 1.9c0 4.4-6 8-6 8Z"/>',
+    'programs': '<path d="M2.5 7 10 4l7.5 3L10 10 2.5 7Z"/><path d="M5.5 8.3v3.7c0 1.1 2 2 4.5 2s4.5-.9 4.5-2V8.3"/>',
+    'partner': '<path d="m3 10 3-3 3 2 2-2 3 3"/><path d="M3 10l4 4 1.5-1M17 10l-4 4-3-2.5"/>',
+    'alumni': '<circle cx="7" cy="7" r="2.5"/><circle cx="13.5" cy="8.5" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M12 13c1.9-.4 3.8.8 4.5 3"/>',
+}
+
+
 def involved():
     ways = [
-        ('volunteer', '01', 'Volunteer', 'Give time to activities in Ait Ourir and beyond.',
-         ['Help run workshops and community days', 'Support events and campaigns', 'Bring your skills to a programme'], 'Become a volunteer'),
-        ('programs', '02', 'Join a Programme', 'Apply when calls open for youth and women’s programmes.',
-         ['Leadership and entrepreneurship tracks', 'Environmental and climate projects', 'Digital skills workshops'], 'Ask about open calls'),
-        ('partner', '03', 'Partner With Us', 'Co-design and fund community initiatives.',
-         ['Fund a programme or a pillar', 'Co-design an initiative', 'Share expertise and mentoring'], 'Start a partnership'),
-        ('alumni', '04', 'Alumni Club', 'Stay connected with the 2,700 alumni of AFCD programmes.',
-         ['Meet fellow alumni', 'Mentor new participants', 'Hear about new opportunities first'], 'Join the alumni club'),
+        dict(id='volunteer', n='01', tone='#FFB2B9', t='Volunteer', topic='Volunteering',
+             d='Give time to activities in Ait Ourir and beyond, alongside AFCD’s team and participants.',
+             who='Students, professionals and community members who want to help locally.',
+             items=['Help run workshops and community days', 'Support events and awareness campaigns', 'Bring your skills to a programme'],
+             steps=['Tell us where you are and what you’d like to do', 'We match you with an activity or event', 'Join the team on the day'],
+             cta='Become a volunteer'),
+        dict(id='programs', n='02', tone='#A8DDFB', t='Join a Programme', topic='Joining a programme',
+             d='Apply when calls open for youth and women’s programmes in leadership, environment and digital skills.',
+             who='Young people and women; criteria vary by programme and call.',
+             items=['Leadership and entrepreneurship tracks', 'Environmental and climate projects', 'Digital skills workshops'],
+             steps=['Watch News &amp; Stories for open calls', 'Apply following the call’s instructions', 'Take part and lead your own initiative'],
+             cta='Ask about open calls'),
+        dict(id='partner', n='03', tone='#82E591', t='Partner With Us', topic='Partnership',
+             d='Co-design and fund community initiatives with an organisation rooted in Moroccan communities since 2007.',
+             who='International, national and local organisations, institutions and companies.',
+             items=['Fund a programme or a pillar', 'Co-design an initiative', 'Share expertise and mentoring'],
+             steps=['Tell us about your organisation and goals', 'We explore fit with our four pillars together', 'Co-design, launch and report on the work'],
+             cta='Start a partnership'),
+        dict(id='alumni', n='04', tone='#FBE38A', t='Alumni Club', topic='Alumni club',
+             d='Stay connected with fellow alumni of AFCD programmes and keep the change going.',
+             who='Past participants of AFCD programmes.',
+             items=['Meet fellow alumni', 'Mentor new participants', 'Hear about new opportunities first'],
+             steps=['Tell us your programme and year', 'We reconnect you with the alumni network', 'Mentor, meet and take part'],
+             cta='Join the alumni club'),
     ]
-    cards = ''.join(f'''
-    <li id="{sid}" class="scroll-mt-28 flex flex-col rounded-3xl border border-ink-light bg-white p-6 md:p-8">
-      <div class="flex items-center justify-between"><span class="text-[11px] tabular-nums text-ink-mid">{n}</span><span class="brand-line brand-line-thin block w-10 rounded-full" aria-hidden="true"></span></div>
-      <h2 class="mt-8 text-[32px] font-semibold leading-[1.05] tracking-[-0.035em]">{t}</h2>
-      <p class="mt-3 text-[15px] leading-relaxed text-ink-dark">{d}</p>
-      <ul class="mt-6 border-b border-ink-light text-[15px]">{''.join(f'<li class="border-t border-ink-light py-3">{b}</li>' for b in bullets)}</ul>
-      <a href="contact.html" class="btn-dark btn-cta mt-8 self-start">{cta} {ARR}</a>
-    </li>''' for sid, n, t, d, bullets, cta in ways)
+    def ico(k):
+        return f'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{GI_ICONS[k]}</svg>'
+    tabs = ''.join(f'''<button type="button" class="gi-tab" role="tab" id="tab-{w['id']}" aria-controls="{w['id']}" aria-selected="{'true' if i == 0 else 'false'}" style="--c:{w['tone']}"><span class="gi-tab-ico">{ico(w['id'])}</span><span class="min-w-0 flex-1 text-left"><span class="block text-[11px] font-medium tabular-nums text-ink-mid">{w['n']}</span><span class="block text-[17px] font-semibold tracking-[-0.02em]">{w['t']}</span></span><span class="gi-tab-arr" aria-hidden="true">→</span></button>''' for i, w in enumerate(ways))
+    check = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10.5 3.2 3L15 6.5"/></svg>'
+    panels = ''.join(f'''
+      <article id="{w['id']}" class="gi-panel scroll-mt-32" role="tabpanel" aria-labelledby="tab-{w['id']}" style="--c:{w['tone']}">
+        <div class="gi-panel-top">
+          <span class="gi-panel-ico">{ico(w['id'])}</span>
+          <span class="pl-hero-n">{w['n']}<span class="text-black/40"> / 04</span></span>
+        </div>
+        <h2 class="mt-6 text-[34px] font-semibold leading-[1.02] tracking-[-0.045em] md:text-[48px]">{w['t']}</h2>
+        <p class="mt-4 max-w-[52ch] text-[16.5px] leading-relaxed text-black/75">{w['d']}</p>
+        <div class="mt-8 grid gap-3 md:grid-cols-2">
+          <div class="gi-box"><p class="label text-ink-mid">What you’ll do</p><ul class="mt-4 grid gap-2.5">{''.join(f'<li class="gi-check">{check}<span>{x}</span></li>' for x in w['items'])}</ul></div>
+          <div class="gi-box"><p class="label text-ink-mid">How it works</p><ol class="mt-4 grid gap-2.5">{''.join(f'<li class="gi-stepline"><span class="gi-stepline-n">{k}</span><span>{x}</span></li>' for k, x in enumerate(w['steps'], 1))}</ol></div>
+        </div>
+        <div class="mt-6 flex flex-wrap items-center justify-between gap-4">
+          <p class="max-w-[46ch] text-[14px] leading-relaxed text-black/65"><b class="font-semibold text-black">Who it’s for:</b> {w['who']}</p>
+          <a href="contact.html?topic={w['topic'].replace(' ', '+')}#message" class="btn-dark btn-cta min-h-[50px] px-7">{w['cta']} {ARR}</a>
+        </div>
+      </article>''' for w in ways)
+    journey = [('Choose your path', 'Volunteer, join a programme, partner with us or reconnect as an alumnus.'),
+               ('Get in touch', 'Send us a message with the right topic, and it goes straight to the right team.'),
+               ('Take part', 'We follow up with next steps, and you join AFCD’s community in action.')]
+    jhtml = ''.join(f'<li class="os-step"><span class="os-step-k">{i:02d}</span><span class="os-step-dot" aria-hidden="true"></span><span class="mt-5 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for i, (t, d) in enumerate(journey, 1))
+
     body = page_header([('Get Involved', 'get-involved.html')], 'Get Involved',
                        'Let’s create change <span class="text-ink-mid">together.</span>',
-                       'Join our community, explore opportunities or collaborate with AFCD Foundation to create meaningful and lasting impact.', points=('Volunteer', 'Programmes', 'Partner', 'Alumni')) + f'''
+                       'Join our community, explore opportunities or collaborate with AFCD Foundation to create meaningful and lasting impact.') + f'''
 
-<section class="py-14 lg:py-16">
+<section id="paths" class="pt-8 lg:pt-10">
   <div class="wrap">
-    <ul class="grid gap-4 md:grid-cols-2">{cards}
-    </ul>
+    <div class="gi-shell">
+      <div class="gi-side">
+        <p class="label text-ink-mid">Choose your path</p>
+        <div class="gi-tabs mt-4" role="tablist" aria-label="Ways to get involved">{tabs}</div>
+        <div class="gi-side-note">
+          <p class="text-[14px] font-semibold">Not sure where you fit?</p>
+          <p class="mt-1 text-[13.5px] leading-relaxed text-ink-dark">Write to us and we’ll suggest the right way to take part.</p>
+          <a href="contact.html#message" class="link-arrow mt-3 text-[13.5px]">Send a message {ARR}</a>
+        </div>
+      </div>
+      <div class="gi-panels">{panels}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how" class="py-14 lg:py-16">
+  <div class="wrap">{sec_head('01 / How It Works', 'Three steps <span class="sh-soft">to take part.</span>', 'Simple and personal', desc='Whichever path you choose, getting started looks the same.')}
+    <ol class="os-steps gi-journey mt-8 lg:mt-10">{jhtml}
+    </ol>
+  </div>
+</section>
+
+<section id="calls" class="pb-6 lg:pb-8">
+  <div class="wrap">
+    <a href="news.html" class="gi-calls group">
+      <span class="cta-kicker" style="background:#fff;color:#000"><span class="tb-dot" aria-hidden="true"></span>Open calls</span>
+      <span class="mt-6 block text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[44px]">Looking for the next call <span class="text-white/45">for applications?</span></span>
+      <span class="mt-4 block max-w-[52ch] text-[15.5px] leading-relaxed text-white/65">Calls for youth and women’s programmes are published on News &amp; Stories and in our newsletter.</span>
+      <span class="btn-light btn-cta mt-8 min-h-[48px] px-6 text-[14px]">See News &amp; Stories {ARR}</span>
+    </a>
   </div>
 </section>
 ''' + cta_band('Not sure where you fit?', 'Write to us and we’ll find the right way for you to take part.',

@@ -42,6 +42,28 @@
     });
   })();
 
+  /* ---------- Get Involved: path tabs on desktop (all panels stay visible on small screens) ---------- */
+  (function () {
+    var tabs = $$('.gi-tab'); if (!tabs.length) return;
+    var panels = $$('.gi-panel'), mq = window.matchMedia('(min-width: 1024px)');
+    function select(id, focus) {
+      tabs.forEach(function (t) { var on = t.getAttribute('aria-controls') === id; t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1; if (on && focus) t.focus(); });
+      panels.forEach(function (p) { p.hidden = mq.matches && p.id !== id; });
+    }
+    function sync() { document.documentElement.classList.toggle('js-tabs', mq.matches); var cur = tabs.filter(function (t) { return t.getAttribute('aria-selected') === 'true'; })[0]; select(cur.getAttribute('aria-controls')); }
+    tabs.forEach(function (t, i) {
+      t.addEventListener('click', function () { select(t.getAttribute('aria-controls')); history.replaceState(null, '', '#' + t.getAttribute('aria-controls')); });
+      t.addEventListener('keydown', function (e) {
+        var d = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+        if (d) { e.preventDefault(); select(tabs[(i + d + tabs.length) % tabs.length].getAttribute('aria-controls'), true); }
+      });
+    });
+    var fromHash = location.hash.slice(1);
+    if (fromHash && $('#' + fromHash + '.gi-panel')) tabs.forEach(function (t) { t.setAttribute('aria-selected', t.getAttribute('aria-controls') === fromHash ? 'true' : 'false'); });
+    (mq.addEventListener ? mq.addEventListener('change', sync) : mq.addListener(sync));
+    sync();
+  })();
+
   /* ---------- Values: the coloured card cycles through the four values ---------- */
   (function () {
     $$('.vl-row').forEach(function (row) {
@@ -149,6 +171,12 @@
         if (ddCur) ddCur.innerHTML = r.nextElementSibling.innerHTML;
       });
     });
+    // Pre-select a topic from links such as contact.html?topic=Volunteering
+    var wanted = new URLSearchParams(location.search).get('topic');
+    if (wanted) {
+      var match = $$('input[name="topic"]', form).filter(function (r) { return r.value.toLowerCase() === wanted.toLowerCase(); })[0];
+      if (match) { match.checked = true; match.dispatchEvent(new Event('change')); }
+    }
     // Character counter
     var count = $('.ct-count', form);
     if (count && form.message) form.message.addEventListener('input', function () { count.textContent = form.message.value.length; });

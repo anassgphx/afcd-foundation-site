@@ -8,7 +8,10 @@ import { randomBytes } from 'node:crypto';
 import { desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
-import { media, projects, projectRevisions, publishJobs } from '../../db/schema.ts';
+import { media, pages, pageRevisions, projects, projectRevisions, publishJobs } from '../../db/schema.ts';
+import { buildCtx, canvasHtml, docMediaIds, pageSource, type PageSnapshot } from '../pages/render.ts';
+import { snapshotOf } from '../pages/service.ts';
+import { validateDoc } from '../pages/blocks.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import { derivativeFiles } from '../media/service.ts';
@@ -17,7 +20,7 @@ import { loadProject, toSnapshot, type Snapshot } from '../projects/service.ts';
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
 
-export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string }) => Promise<string>;
+export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages' }) => Promise<string>;
 
 /** Default runner: the real generator and build. Tests inject a fake. */
 export const realRunner: BuildRunner = async (cfg, mode) => {
@@ -28,7 +31,7 @@ export const realRunner: BuildRunner = async (cfg, mode) => {
     return [a.stdout, b.stdout, b.stderr].join('\n');
   }
   const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir };
-  const a = await run('python3', ['-I', 'src/content.py'], { ...opts, env });
+  const a = mode.only === 'pages' ? { stdout: '' } : await run('python3', ['-I', 'src/content.py'], { ...opts, env });
   const b = await run('node', ['build.mjs'], { ...opts, env });
   return [a.stdout, b.stdout].join('\n');
 };
@@ -67,8 +70,35 @@ export class Publisher {
     renameSync(tmp, file);   // atomic replace
   }
 
-  private async copyMedia(entries: Snapshot[], destDir: string, prune: boolean) {
-    const ids = [...new Set(entries.flatMap((e) => e.media ?? []))];
+  /** Live Studio pages (optionally overriding one page with another revision, or removing it). */
+  async livePages(override?: { pageId: string; revisionId: string | null }) {
+    const live = await this.db.select({ id: pages.id, rev: pages.publishedRevisionId }).from(pages).where(isNotNull(pages.publishedRevisionId));
+    const map = new Map(live.map((r) => [r.id, r.rev as string]));
+    if (override) { if (override.revisionId) map.set(override.pageId, override.revisionId); else map.delete(override.pageId); }
+    if (!map.size) return [] as { id: string; snap: PageSnapshot }[];
+    const revs = await this.db.select().from(pageRevisions).where(inArray(pageRevisions.id, [...map.values()]));
+    return revs.map((r) => ({ id: r.id, snap: r.snapshot as unknown as PageSnapshot }));
+  }
+
+  /** Writes everything Studio owns into the site sources: project data, Studio page sources and image files. */
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null } } = {}) {
+    const entries = await this.liveEntries(o.project);
+    this.writeData(this.dataFile, entries);
+    const live = await this.livePages(o.page);
+    const ctx = await buildCtx(this.db, live.map((x) => x.snap.doc), { projectOverride: o.project });
+    const dir = resolve(this.cfg.siteRoot, 'src/pages');
+    mkdirSync(dir, { recursive: true });
+    for (const { id, snap } of live) {
+      const file = resolve(dir, `${snap.slug}.html`);
+      const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
+      writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
+    }
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc))], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    return { entries, live };
+  }
+
+  private async copyMedia(mediaIds: string[], destDir: string, prune: boolean) {
+    const ids = [...new Set(mediaIds)];
     const rows = ids.length ? await this.db.select().from(media).where(inArray(media.id, ids)) : [];
     mkdirSync(destDir, { recursive: true });
     const keep = new Set<string>();
@@ -102,9 +132,7 @@ export class Publisher {
 
   /** Writes the live site from the database state. Used to restore the previous state when a delivery fails. */
   private async rebuildFromDb(log: string[]) {
-    const entries = await this.liveEntries();
-    this.writeData(this.dataFile, entries);
-    await this.copyMedia(entries, resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.writeSite();
     log.push(await this.runner(this.cfg, { kind: 'live' }));
   }
 
@@ -121,9 +149,7 @@ export class Publisher {
         ? ((await this.db.select().from(projectRevisions).where(eq(projectRevisions.id, p.publishedRevisionId)))[0]?.snapshot as unknown as Snapshot)?.file ?? null
         : null;
       try {
-        const entries = await this.liveEntries({ projectId, revisionId: rev.id });
-        this.writeData(this.dataFile, entries);
-        await this.copyMedia(entries, resolve(this.cfg.siteRoot, 'assets/media'), true);
+        const { entries } = await this.writeSite({ project: { projectId, revisionId: rev.id } });
         if (previousFile && previousFile !== snap.file) this.removeOrphanPages(previousFile);
         log.push(await this.runner(this.cfg, { kind: 'live' }));
         this.verifyLive(entries, { file: snap.file, revisionId: rev.id, name: escapeHtml(snap.name) });
@@ -154,9 +180,7 @@ export class Publisher {
       const [job] = await this.db.insert(publishJobs).values({ kind: 'unpublish_project', entityId: projectId, revisionId: rev.id, requestedBy: actor.id }).returning();
       const log: string[] = [];
       try {
-        const entries = await this.liveEntries({ projectId, revisionId: null });
-        this.writeData(this.dataFile, entries);
-        await this.copyMedia(entries, resolve(this.cfg.siteRoot, 'assets/media'), true);
+        const { entries } = await this.writeSite({ project: { projectId, revisionId: null } });
         if (snap.file) this.removeOrphanPages(snap.file);
         log.push(await this.runner(this.cfg, { kind: 'live' }));
         this.verifyLive(entries, { file: snap.file, revisionId: null, name: snap.name, removed: true });
@@ -207,6 +231,93 @@ export class Publisher {
       const p = resolve(this.cfg.previewDir, d);
       if (Date.now() - statSync(p).mtimeMs > 60 * 60 * 1000) rmSync(p, { recursive: true, force: true });
     }
+  }
+
+  // ---------------------------------------------------------------- Pages
+  private async deliver(kind: string, actor: NonNullable<Actor>, entityId: string, revisionId: string, apply: (log: string[]) => Promise<void>, failLabel: string) {
+    const [job] = await this.db.insert(publishJobs).values({ kind, entityId, revisionId, requestedBy: actor.id }).returning();
+    const log: string[] = [];
+    try { await apply(log); }
+    catch (e) {
+      const msg = (e as Error).message;
+      try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
+      await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+      await audit(this.db, actor, `${kind}_failed`, { type: 'page', id: entityId }, `${failLabel}: ${msg}`, { jobId: job.id });
+      throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
+    }
+    return { job, log };
+  }
+
+  async publishPage(actor: NonNullable<Actor>, pageId: string) {
+    return this.locked(async () => {
+      const [p] = await this.db.select().from(pages).where(eq(pages.id, pageId));
+      if (!p) throw new AppError(404, 'Page not found.');
+      if (p.status !== 'approved' || !p.approvedRevisionId) throw new AppError(409, 'Only an approved page can be published.');
+      const [rev] = await this.db.select().from(pageRevisions).where(eq(pageRevisions.id, p.approvedRevisionId));
+      const snap = rev.snapshot as unknown as PageSnapshot;
+      const { job, log } = await this.deliver('publish_page', actor, pageId, rev.id, async (log) => {
+        await this.writeSite({ page: { pageId, revisionId: rev.id } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        const out = resolve(this.cfg.siteRoot, `${snap.slug}.html`);
+        if (!existsSync(out) || !readFileSync(out, 'utf8').includes(`data-studio-page-rev="${rev.id}"`)) throw new Error(`${snap.slug}.html does not contain the published revision.`);
+        if (!snap.noindex && !readFileSync(resolve(this.cfg.siteRoot, 'sitemap.xml'), 'utf8').includes(`${snap.slug}.html`)) throw new Error('The page is missing from sitemap.xml.');
+      }, `Publishing “${p.title}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(pages).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, updatedAt: new Date() }).where(eq(pages.id, pageId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'page.publish', { type: 'page', id: pageId }, `Published page “${p.title}” (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file: `${snap.slug}.html` };
+    });
+  }
+
+  async unpublishPage(actor: NonNullable<Actor>, pageId: string) {
+    return this.locked(async () => {
+      const [p] = await this.db.select().from(pages).where(eq(pages.id, pageId));
+      if (!p) throw new AppError(404, 'Page not found.');
+      if (!p.publishedRevisionId) throw new AppError(409, 'This page is not on the live site.');
+      const [rev] = await this.db.select().from(pageRevisions).where(eq(pageRevisions.id, p.publishedRevisionId));
+      const slug = (rev.snapshot as unknown as PageSnapshot).slug;
+      const { job, log } = await this.deliver('unpublish_page', actor, pageId, rev.id, async (log) => {
+        this.removeOrphanPages(`${slug}.html`);
+        await this.writeSite({ page: { pageId, revisionId: null } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        if (existsSync(resolve(this.cfg.siteRoot, `${slug}.html`))) throw new Error(`${slug}.html is still on the site.`);
+      }, `Unpublishing “${p.title}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(pages).set({ status: 'draft', publishedRevisionId: null, publishedAt: null, updatedAt: new Date() }).where(eq(pages.id, pageId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'page.unpublish', { type: 'page', id: pageId }, `Unpublished page “${p.title}”`, { jobId: job.id });
+      });
+      return { jobId: job.id };
+    });
+  }
+
+  /** Full preview of the saved working copy through the real build (isolated folder). */
+  async previewPage(pageId: string) {
+    return this.locked(async () => {
+      const [p] = await this.db.select().from(pages).where(eq(pages.id, pageId));
+      if (!p) throw new AppError(404, 'Page not found.');
+      const snap = { ...snapshotOf(p), doc: validateDoc(p.doc).doc };
+      this.cleanupPreviews();
+      const token = randomBytes(16).toString('hex');
+      const dir = resolve(this.cfg.previewDir, token);
+      const pagesDir = resolve(dir, 'pages'), outDir = resolve(dir, 'site'), dataFile = resolve(dir, 'projects.json');
+      mkdirSync(pagesDir, { recursive: true }); mkdirSync(outDir, { recursive: true });
+      this.writeData(dataFile, await this.liveEntries());
+      const ctx = await buildCtx(this.db, [snap.doc]);
+      writeFileSync(resolve(pagesDir, `${snap.slug}.html`), pageSource(snap, ctx, 'preview'));
+      await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, only: 'pages' });
+      if (!existsSync(resolve(outDir, `${snap.slug}.html`))) throw new AppError(409, 'The preview could not be generated.');
+      return { token, file: `${snap.slug}.html` };
+    });
+  }
+
+  /** Instant canvas for the builder from an unsaved document (no build, no files). */
+  async canvas(snap: PageSnapshot) {
+    const doc = validateDoc(snap.doc).doc;
+    const ctx = await buildCtx(this.db, [doc], { editor: true });
+    return canvasHtml(this.cfg, { ...snap, doc }, ctx);
   }
 
   async recentJobs(limit = 10) {

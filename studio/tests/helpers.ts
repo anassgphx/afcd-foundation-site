@@ -1,5 +1,5 @@
 // Test harness: in-memory PostgreSQL (PGlite), a temporary site folder and a fake build runner.
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import sharp from 'sharp';
@@ -34,7 +34,12 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
     const out = mode.kind === 'live' ? cfg.siteRoot : mode.outDir;
     const data = JSON.parse(readFileSync(dataFile, 'utf8')) as { projects: any[] };
     writeFileSync(join(out, 'projects.html'), data.projects.map((p) => `<li>${p.name}</li>`).join('\n'));
-    writeFileSync(join(out, 'sitemap.xml'), '<urlset/>');
+    // Stand-in for build.mjs: every page source becomes a root page and a sitemap entry.
+    const pagesDir = mode.kind === 'live' ? join(cfg.siteRoot, 'src/pages') : mode.pagesDir;
+    const files = existsSync(pagesDir) ? readdirSync(pagesDir).filter((f) => f.endsWith('.html')) : [];
+    for (const f of files) writeFileSync(join(out, f), readFileSync(join(pagesDir, f), 'utf8').replace(/^---[\s\S]*?---\n/, ''));
+    writeFileSync(join(out, 'sitemap.xml'), `<urlset>${files.map((f) => `<loc>${f}</loc>`).join('')}</urlset>`);
+    if (mode.kind === 'preview' && mode.only === 'pages') return 'fake page preview ok';
     for (const p of data.projects) if (p.file) writeFileSync(join(out, p.file), `<section data-studio-rev="${p.detail.revision}"><h1>${p.name}</h1><p>${p.detail.lede}</p></section>`);
     return 'fake build ok';
   };
@@ -46,6 +51,10 @@ export async function makeApp(opts: { runner?: BuildRunner } = {}) {
   mkdirSync(join(siteRoot, 'src/data'), { recursive: true });
   mkdirSync(join(siteRoot, 'src/pages'), { recursive: true });
   mkdirSync(join(siteRoot, 'assets'), { recursive: true });
+  mkdirSync(join(siteRoot, 'src/partials'), { recursive: true });
+  writeFileSync(join(siteRoot, 'src/partials/head.html'), '<!doctype html>\n<html>\n<head>\n<title>{{title}}</title>\n<meta name="description" content="{{description}}">\n</head>\n');
+  writeFileSync(join(siteRoot, 'src/partials/header.html'), '<header><a class="{{cur:about}}"{{aria:about}}>About</a></header>');
+  writeFileSync(join(siteRoot, 'src/partials/footer.html'), '<footer></footer>');
   writeFileSync(join(siteRoot, 'src/data/projects.json'), JSON.stringify({ projects: [
     { slug: 'eco-citizen', file: 'project-eco-citizen.html', name: 'Eco Citizen', pillar: 'green-thumbs', category: 'Environment', summary: 'Awareness.',
       detail: { lede: 'Awareness.', facts: [['Pillar', 'Environment and Climate'], ['Location', 'Ait Ourir']], rows: [['Context', 'Waste.']], photo: 'Eco Citizen' } },

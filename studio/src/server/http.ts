@@ -30,7 +30,7 @@ export const securityHeaders: MiddlewareHandler = async (c, next) => {
     c.header('Content-Security-Policy',
       "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
       "font-src 'self' https://fonts.gstatic.com; script-src 'self'; frame-src 'self'; frame-ancestors 'self'; " +
-      "form-action 'self'; base-uri 'none'; object-src 'none'");
+      "form-action 'self'; base-uri 'self'; object-src 'none'");
   }
 };
 

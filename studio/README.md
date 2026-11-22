@@ -11,10 +11,11 @@ Custom content management for the AFCD Foundation website. Architecture: [`docs/
 - **Workflow**: Draft → In review → Changes requested / Approved → Published → Archived. Authors cannot approve their own work. Approval freezes a revision; later edits create a new draft without changing the live page. Older revisions can be restored as a draft.
 - **Preview** with the real site templates (desktop, tablet, mobile) in an isolated folder.
 - **Publishing** into the existing site pipeline (`src/data/projects.json` → `src/content.py` → `build.mjs`). Success is only recorded after the built pages are checked; a failed build restores the previous site files and is shown in Publishing. Linked pillar pages, the project listing and the sitemap update automatically.
+- **Visual page builder** (Pages): create pages from templates (blank, content, campaign); add, reorder (drag or buttons), duplicate, hide and delete blocks; edit them in an inspector; see a live canvas with the real site styles at desktop, tablet and mobile width; undo/redo (⌘Z / ⇧⌘Z) and ⌘S to save. 13 approved blocks: page header, section heading, text, image, image + text, key figures, link cards, projects (live, by pillar or hand-picked), quote, questions, call to action, divider, spacer. Blocks are versioned and validated; editors cannot add HTML, CSS or scripts, links are allow-listed. Pages go through the same review and verified publishing as projects, and pages listing projects refresh when a project is published. Existing template pages and addresses are protected.
 - Append-only activity log, publishing history, users and roles.
 - The 4 pillars, 6 objectives and 10 existing projects are imported from the current website (idempotent).
 
-Not built yet (planned phases): visual page builder, homepage editing, news, partners, opportunities, forms, SEO studio, translations, scheduling, MFA, notifications, backups automation.
+Not built yet (planned phases): more blocks (video, timeline, team, partners, news feed, forms, hero slider, pillar explorer), editing the existing template pages and homepage in the builder, reusable saved sections, news, partners, opportunities, forms, SEO studio, translations, scheduling, MFA, notifications, backups automation.
 
 ## Run it locally
 

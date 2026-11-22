@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { setCookie, deleteCookie } from 'hono/cookie';
 import { HTTPException } from 'hono/http-exception';
 import { bodyLimit } from 'hono/body-limit';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
@@ -17,6 +17,8 @@ import { ROLE_LABELS, ROLE_PERMISSIONS, ROLES, type Role } from './rbac.ts';
 import { audit } from './audit.ts';
 import * as P from './modules/projects/service.ts';
 import * as M from './modules/media/service.ts';
+import * as G from './modules/pages/service.ts';
+import { blockCatalog } from './modules/pages/blocks.ts';
 import { Publisher, type BuildRunner } from './modules/publish/service.ts';
 
 const MIME: Record<string, string> = {
@@ -93,7 +95,9 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
       .from(t.projects).where(inArray(t.projects.status, ['in_review', 'approved'])).orderBy(asc(t.projects.updatedAt));
     const jobs = await publisher.recentJobs(5);
     const [{ failed24h }] = await db.select({ failed24h: count() }).from(t.publishJobs).where(and(eq(t.publishJobs.status, 'failed'), gte(t.publishJobs.createdAt, new Date(Date.now() - 864e5))));
-    return c.json({ counts, live, pendingEdits, mediaTotal, mediaNeedsRights, recent, queue, jobs: jobs.map(({ log: _l, ...j }) => j), failed24h });
+    const pageRows = await db.select({ status: t.pages.status, live: sql<boolean>`${t.pages.publishedRevisionId} is not null` }).from(t.pages);
+    const pagesInfo = { total: pageRows.length, live: pageRows.filter((r) => r.live).length, review: pageRows.filter((r) => r.status === 'in_review' || r.status === 'approved').length };
+    return c.json({ counts, live, pendingEdits, mediaTotal, mediaNeedsRights, recent, queue, jobs: jobs.map(({ log: _l, ...j }) => j), failed24h, pages: pagesInfo });
   });
 
   // ---------------------------------------------------------------- Strategy references
@@ -162,6 +166,38 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
     return c.json({ ok: true });
   });
 
+
+  // ---------------------------------------------------------------- Pages (visual builder)
+  api.get('/pages', perm('page.read'), async (c) => c.json(await G.listPages(db)));
+  api.get('/pages/catalog', perm('page.read'), (c) => c.json({
+    blocks: blockCatalog(),
+    templates: Object.entries(G.TEMPLATES).map(([id, t]) => ({ id, label: t.label, description: t.description })),
+    links: readdirSync(cfg.siteRoot).filter((f) => /^[a-z0-9-]+\.html$/.test(f) && f !== '404.html').sort(),
+  }));
+  api.post('/pages', perm('page.create'), async (c) => c.json(await G.createPage(db, cfg, actor(c), await c.req.json()), 201));
+  api.get('/pages/:id', perm('page.read'), async (c) => {
+    const [p] = await db.select().from(t.pages).where(eq(t.pages.id, c.req.param('id')));
+    if (!p) throw new AppError(404, 'Page not found.');
+    return c.json({ ...p, problems: await G.pageProblems(db, p), history: await G.pageHistory(db, p.id) });
+  });
+  api.put('/pages/:id', perm('page.update'), async (c) => c.json(await G.savePage(db, cfg, actor(c), c.req.param('id'), await c.req.json())));
+  api.post('/pages/:id/transition', async (c) => {
+    const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
+    if (!body.success || !G.pageTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, G.pageTransitionPerm(body.data.action)!);
+    return c.json(await G.transitionPage(db, actor(c), u.role, c.req.param('id'), body.data.action, body.data.comment));
+  });
+  api.post('/pages/:id/publish', perm('page.publish'), async (c) => c.json(await publisher.publishPage(actor(c), c.req.param('id'))));
+  api.post('/pages/:id/unpublish', perm('page.publish'), async (c) => c.json(await publisher.unpublishPage(actor(c), c.req.param('id'))));
+  api.post('/pages/:id/preview', perm('page.read'), async (c) => { const r = await publisher.previewPage(c.req.param('id')); return c.json({ url: `/studio/preview/${r.token}/${r.file}` }); });
+  api.post('/pages/:id/revisions/:rev/restore', perm('page.update'), async (c) => { await G.restorePageRevision(db, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
+  api.post('/pages/canvas', perm('page.read'), bodyLimit({ maxSize: 512 * 1024, onError: () => { throw new AppError(422, 'The page is too large.'); } }), async (c) => {
+    const body = z.object({ title: z.string().max(200), description: z.string().max(400).default(''), navSection: z.string().max(20).default('none'), doc: z.unknown() }).safeParse(await c.req.json());
+    if (!body.success) throw new AppError(422, 'Invalid canvas request.');
+    const html = await publisher.canvas({ slug: 'canvas', noindex: true, ...body.data, doc: body.data.doc as never });
+    return c.json({ html });
+  });
+
   // ---------------------------------------------------------------- Publishing jobs, audit, users
   api.get('/publish-jobs', perm('dashboard.read'), async (c) => c.json(await publisher.recentJobs(30)));
   api.get('/audit', perm('audit.read'), async (c) => {
@@ -222,6 +258,20 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
     if (!p) return c.html('<p style="font:15px system-ui;padding:24px">This preview has expired. Open a new preview from AFCD Studio.</p>', 404);
     // The preview is the real public template; it only needs its own scripts and styles.
     c.header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; frame-ancestors 'self'");
+    return sendFile(c, p, { private: true });
+  });
+
+  // Site assets for the builder canvas (iframe srcdoc with <base href="/studio/site/">).
+  app.get('/studio/site/*', (c) => {
+    requireUser(c);
+    const rest = c.req.path.slice('/studio/site/'.length);
+    if (rest.startsWith('assets/media/')) {
+      const name = rest.slice('assets/media/'.length);
+      if (!/^[0-9a-f]{24}-\d+\.webp$/.test(name)) return c.notFound();
+      return sendFile(c, resolve(cfg.mediaDir, name), { private: true });
+    }
+    const p = resolve(cfg.siteRoot, rest);
+    if (!p.startsWith(resolve(cfg.siteRoot, 'assets') + '/')) return c.notFound();
     return sendFile(c, p, { private: true });
   });
 

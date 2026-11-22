@@ -7,6 +7,8 @@ import { Icon, Link, MeCtx, ToastHost, initials, navigate, useCan, useMe, usePat
 import { Dashboard } from './pages/Dashboard.tsx';
 import { ProjectsList } from './pages/Projects.tsx';
 import { ProjectEditor } from './pages/ProjectEditor.tsx';
+import { PagesList } from './pages/PagesList.tsx';
+import { Builder } from './pages/Builder.tsx';
 import { MediaLibrary } from './pages/Media.tsx';
 import { ApprovalQueue, Publishing, ActivityLog, Users } from './pages/Admin.tsx';
 
@@ -48,6 +50,7 @@ function Login({ onDone }: { onDone: () => void }) {
 type NavItem = { to: string; label: string; icon: string; perm: string; match?: RegExp };
 const NAV: { group: string; items: NavItem[] }[] = [
   { group: 'Overview', items: [{ to: '/studio/', label: 'Dashboard', icon: 'dash', perm: 'dashboard.read', match: /^\/studio\/?$/ }] },
+  { group: 'Website', items: [{ to: '/studio/pages', label: 'Pages', icon: 'layers', perm: 'page.read', match: /^\/studio\/pages/ }] },
   { group: 'Content', items: [{ to: '/studio/projects', label: 'Projects', icon: 'folder', perm: 'project.read', match: /^\/studio\/projects/ }] },
   { group: 'Media', items: [{ to: '/studio/media', label: 'Media Library', icon: 'image', perm: 'media.read' }] },
   { group: 'Workflow', items: [
@@ -100,14 +103,17 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             <button className="btn btn-ghost icon-btn" onClick={onLogout} aria-label="Sign out" title="Sign out"><Icon n="logout" /></button>
           </div>
         </header>
-        <main className="content" id="main">{page.el}</main>
+        <main className={`content${page.full ? ' content-full' : ''}`} id="main">{page.el}</main>
       </div>
       {mobile && <div className="overlay" style={{ zIndex: 30, background: 'rgba(0,0,0,.25)' }} onClick={() => setMobile(false)} />}
     </div>
   );
 }
 
-function route(path: string): { title: string; el: React.ReactElement } {
+function route(path: string): { title: string; el: React.ReactElement; full?: boolean } {
+  const pg = path.match(/^\/studio\/pages\/([0-9a-f-]{36})$/);
+  if (pg) return { title: 'Page builder', el: <Builder key={pg[1]} id={pg[1]} />, full: true };
+  if (path.startsWith('/studio/pages')) return { title: 'Pages', el: <PagesList /> };
   const m = path.match(/^\/studio\/projects\/([0-9a-f-]{36}|new)$/);
   if (m) return { title: m[1] === 'new' ? 'New project' : 'Edit project', el: <ProjectEditor key={m[1]} id={m[1]} /> };
   if (path.startsWith('/studio/projects')) return { title: 'Projects', el: <ProjectsList /> };

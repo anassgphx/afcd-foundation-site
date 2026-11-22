@@ -189,3 +189,33 @@ export const publishJobs = pgTable('publish_jobs', {
   createdAt: createdAt(),
   finishedAt: timestamp('finished_at', { withTimezone: true }),
 }, (t) => [index('publish_jobs_created_idx').on(t.createdAt)]);
+
+// ---------------------------------------------------------------- Pages (visual page builder)
+export const pages = pgTable('pages', {
+  id: id(),
+  slug: text('slug').notNull(),                   // public file: <slug>.html
+  title: text('title').notNull(),
+  description: text('description').notNull().default(''),
+  navSection: text('nav_section').notNull().default('none'),   // which main-menu item is highlighted
+  noindex: boolean('noindex').notNull().default(false),
+  doc: jsonb('doc').$type<{ version: number; blocks: unknown[] }>().notNull(),   // working copy (versioned block schema)
+  status: workflowEnum('status').notNull().default('draft'),
+  publishedRevisionId: uuid('published_revision_id'),
+  approvedRevisionId: uuid('approved_revision_id'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('pages_slug_uq').on(t.slug), index('pages_status_idx').on(t.status)]);
+
+export const pageRevisions = pgTable('page_revisions', {
+  id: id(),
+  pageId: uuid('page_id').notNull().references(() => pages.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),   // { slug, title, description, navSection, noindex, doc }
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('page_revisions_num_uq').on(t.pageId, t.number)]);

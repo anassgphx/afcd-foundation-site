@@ -15,6 +15,9 @@ import { validateDoc } from '../pages/blocks.ts';
 import { articles, articleRevisions } from '../../db/schema.ts';
 import { articleFile, articleSource, listingEntry, newsCtx, type ArticleSnapshot } from '../news/render.ts';
 import { loadArticle, toArticleSnapshot } from '../news/service.ts';
+import { partners, partnerRevisions } from '../../db/schema.ts';
+import { partnerEntries } from '../partners/render.ts';
+import type { PartnerSnapshot } from '../partners/service.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import { derivativeFiles } from '../media/service.ts';
@@ -23,7 +26,7 @@ import { loadProject, toSnapshot, type Snapshot } from '../projects/service.ts';
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
 
-export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string }) => Promise<string>;
+export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string; partnersFile?: string }) => Promise<string>;
 
 /** Default runner: the real generator and build. Tests inject a fake. */
 export const realRunner: BuildRunner = async (cfg, mode) => {
@@ -33,7 +36,7 @@ export const realRunner: BuildRunner = async (cfg, mode) => {
     const b = await run('npm', ['run', 'build'], { ...opts, env: { ...process.env } });
     return [a.stdout, b.stdout, b.stderr].join('\n');
   }
-  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}) };
+  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}), ...(mode.partnersFile ? { STUDIO_PARTNERS_JSON: mode.partnersFile } : {}) };
   const a = mode.only === 'pages' ? { stdout: '' } : await run('python3', ['-I', 'src/content.py'], { ...opts, env });
   const b = await run('node', ['build.mjs'], { ...opts, env });
   return [a.stdout, b.stdout].join('\n');
@@ -113,9 +116,33 @@ export class Publisher {
 
   get newsFile() { return resolve(this.cfg.siteRoot, 'src/data/news.json'); }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null } } = {}) {
+  get partnersFile() { return resolve(this.cfg.siteRoot, 'src/data/partners.json'); }
+
+  /** Live partners (optionally overriding one). */
+  async livePartners(override?: { partnerId: string; revisionId: string | null }) {
+    const live = await this.db.select({ id: partners.id, rev: partners.publishedRevisionId }).from(partners).where(isNotNull(partners.publishedRevisionId));
+    const map = new Map(live.map((r) => [r.id, r.rev as string]));
+    if (override) { if (override.revisionId) map.set(override.partnerId, override.revisionId); else map.delete(override.partnerId); }
+    if (!map.size) return [] as { id: string; snap: PartnerSnapshot }[];
+    const revs = await this.db.select().from(partnerRevisions).where(inArray(partnerRevisions.id, [...map.values()]));
+    return revs.map((r) => ({ id: r.id, snap: r.snapshot as unknown as PartnerSnapshot }));
+  }
+
+  /** partners.json is only written once partner records exist in Studio, so the site keeps its own list until the import. Returns logo media ids. */
+  private async writePartners(file: string, override?: { partnerId: string; revisionId: string | null }, projectOverride?: { projectId: string; revisionId: string | null }) {
+    if (!(await this.db.select({ id: partners.id }).from(partners).limit(1)).length) return [] as string[];
+    const live = await this.livePartners(override);
+    const list = await partnerEntries(this.db, live, { projectOverride });
+    mkdirSync(resolve(file, '..'), { recursive: true });
+    const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), partners: list }, null, 2) + '\n'); renameSync(tmp, file);
+    return live.map((x) => x.snap.logoMediaId).filter(Boolean) as string[];
+  }
+
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null } } = {}) {
     const entries = await this.liveEntries(o.project);
     this.writeData(this.dataFile, entries);
+    const partnerMedia = await this.writePartners(this.partnersFile, o.partner, o.project);
     const newsMedia = await this.writeNews(this.newsFile, resolve(this.cfg.siteRoot, 'src/pages'), await this.liveArticles(o.article), o.project);
     const live = await this.livePages(o.page);
     const ctx = await buildCtx(this.db, live.map((x) => x.snap.doc), { projectOverride: o.project });
@@ -126,7 +153,7 @@ export class Publisher {
       const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
       writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
     }
-    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
     return { entries, live };
   }
 
@@ -275,7 +302,7 @@ export class Publisher {
       const msg = (e as Error).message;
       try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
       await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
-      await audit(this.db, actor, `${kind}_failed`, { type: 'page', id: entityId }, `${failLabel}: ${msg}`, { jobId: job.id });
+      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('partner') ? 'partner' : 'page', id: entityId }, `${failLabel}: ${msg}`, { jobId: job.id });
       throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
     }
     return { job, log };
@@ -447,6 +474,77 @@ export class Publisher {
       catch (e) { results.push({ id: d.id, ok: false, error: (e as Error).message }); }
     }
     return results;
+  }
+
+  // ---------------------------------------------------------------- Partners
+  /** Checks partners.html. Uses the per-card revision marker when the template outputs it, otherwise the escaped name. */
+  private verifyPartner(name: string, revisionId: string, removed: boolean) {
+    const html = readFileSync(resolve(this.cfg.siteRoot, 'partners.html'), 'utf8');
+    const marked = html.includes('data-studio-partner-rev=');
+    const present = marked ? html.includes(`data-studio-partner-rev="${revisionId}"`) : html.includes(`>${escapeHtml(name)}<`);
+    if (removed && present) throw new Error('The partner is still listed on partners.html.');
+    if (!removed && !present) throw new Error('The partner is missing from partners.html.');
+  }
+
+  async publishPartner(actor: NonNullable<Actor>, partnerId: string) {
+    return this.locked(async () => {
+      const [p] = await this.db.select().from(partners).where(eq(partners.id, partnerId));
+      if (!p) throw new AppError(404, 'Partner not found.');
+      if (p.status !== 'approved' || !p.approvedRevisionId) throw new AppError(409, 'Only an approved partner can be published.');
+      const [rev] = await this.db.select().from(partnerRevisions).where(eq(partnerRevisions.id, p.approvedRevisionId));
+      const snap = rev.snapshot as unknown as PartnerSnapshot;
+      const { job, log } = await this.deliver('publish_partner', actor, partnerId, rev.id, async (log) => {
+        await this.writeSite({ partner: { partnerId, revisionId: rev.id } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyPartner(snap.name, rev.id, false);
+      }, `Publishing “${p.name}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(partners).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, updatedAt: new Date() }).where(eq(partners.id, partnerId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'partner.publish', { type: 'partner', id: partnerId }, `Published partner “${p.name}” (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file: 'partners.html' };
+    });
+  }
+
+  async unpublishPartner(actor: NonNullable<Actor>, partnerId: string) {
+    return this.locked(async () => {
+      const [p] = await this.db.select().from(partners).where(eq(partners.id, partnerId));
+      if (!p) throw new AppError(404, 'Partner not found.');
+      if (!p.publishedRevisionId) throw new AppError(409, 'This partner is not on the live site.');
+      const [rev] = await this.db.select().from(partnerRevisions).where(eq(partnerRevisions.id, p.publishedRevisionId));
+      const snap = rev.snapshot as unknown as PartnerSnapshot;
+      const { job, log } = await this.deliver('unpublish_partner', actor, partnerId, rev.id, async (log) => {
+        await this.writeSite({ partner: { partnerId, revisionId: null } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyPartner(snap.name, rev.id, true);
+      }, `Removing “${p.name}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(partners).set({ status: 'draft', publishedRevisionId: null, publishedAt: null, updatedAt: new Date() }).where(eq(partners.id, partnerId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'partner.unpublish', { type: 'partner', id: partnerId }, `Removed partner “${p.name}” from the website`, { jobId: job.id });
+      });
+      return { jobId: job.id };
+    });
+  }
+
+  /** Builds partners.html with the saved working copy in an isolated folder. */
+  async previewPartner(partnerId: string, snap: PartnerSnapshot) {
+    return this.locked(async () => {
+      this.cleanupPreviews();
+      const token = randomBytes(16).toString('hex');
+      const dir = resolve(this.cfg.previewDir, token);
+      const pagesDir = resolve(dir, 'pages'), outDir = resolve(dir, 'site'), dataFile = resolve(dir, 'projects.json'), partnersFile = resolve(dir, 'partners.json');
+      mkdirSync(pagesDir, { recursive: true }); mkdirSync(outDir, { recursive: true });
+      this.writeData(dataFile, await this.liveEntries());
+      const live = (await this.livePartners({ partnerId, revisionId: null })).concat({ id: 'preview', snap });
+      const list = await partnerEntries(this.db, live);
+      writeFileSync(partnersFile, JSON.stringify({ version: 1, source: 'AFCD Studio (preview)', partners: list }, null, 2));
+      await this.writeNews(resolve(dir, 'news.json'), pagesDir, await this.liveArticles());
+      await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, newsFile: resolve(dir, 'news.json'), partnersFile });
+      if (!existsSync(resolve(outDir, 'partners.html'))) throw new AppError(409, 'The preview could not be generated.');
+      return { token, file: 'partners.html', mediaIds: snap.logoMediaId ? [snap.logoMediaId] : [] };
+    });
   }
 
   async recentJobs(limit = 10) {

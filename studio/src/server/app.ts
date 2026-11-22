@@ -19,6 +19,8 @@ import * as P from './modules/projects/service.ts';
 import * as M from './modules/media/service.ts';
 import * as G from './modules/pages/service.ts';
 import * as N from './modules/news/service.ts';
+import * as PT from './modules/partners/service.ts';
+import { importPartners } from './modules/partners/import.ts';
 import { blockCatalog } from './modules/pages/blocks.ts';
 import { Publisher, type BuildRunner } from './modules/publish/service.ts';
 
@@ -104,7 +106,9 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
     const newsRows = await db.select({ status: t.articles.status, scheduledAt: t.articles.scheduledAt, title: t.articles.title, id: t.articles.id, live: sql<boolean>`${t.articles.publishedRevisionId} is not null` }).from(t.articles);
     const news = { live: newsRows.filter((r) => r.live).length, review: newsRows.filter((r) => r.status === 'in_review').length,
       scheduled: newsRows.filter((r) => r.status === 'scheduled').map((r) => ({ id: r.id, title: r.title, at: r.scheduledAt })) };
-    return c.json({ counts, live, pendingEdits, mediaTotal, mediaNeedsRights, recent, queue, jobs: jobs.map(({ log: _l, ...j }) => j), failed24h, pages: pagesInfo, news });
+    const ptRows = await db.select({ status: t.partners.status, live: sql<boolean>`${t.partners.publishedRevisionId} is not null` }).from(t.partners);
+    const partnersInfo = { total: ptRows.length, live: ptRows.filter((r) => r.live).length, review: ptRows.filter((r) => r.status === 'in_review' || r.status === 'approved').length };
+    return c.json({ counts, live, pendingEdits, mediaTotal, mediaNeedsRights, recent, queue, jobs: jobs.map(({ log: _l, ...j }) => j), failed24h, pages: pagesInfo, news, partners: partnersInfo });
   });
 
   // ---------------------------------------------------------------- Strategy references
@@ -226,6 +230,30 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
   api.post('/news/:id/unpublish', perm('news.publish'), async (c) => c.json(await publisher.unpublishArticle(actor(c), c.req.param('id'))));
   api.post('/news/:id/preview', perm('news.read'), async (c) => { const r = await publisher.previewArticle(c.req.param('id')); return c.json({ url: `/studio/preview/${r.token}/${r.file}` }); });
   api.post('/news/:id/revisions/:rev/restore', perm('news.update'), async (c) => { await N.restoreArticleRevision(db, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
+
+  // ---------------------------------------------------------------- Partners
+  api.get('/partners', perm('partner.read'), async (c) => c.json(await PT.listPartners(db)));
+  api.post('/partners', perm('partner.create'), async (c) => c.json(await PT.createPartner(db, actor(c), await c.req.json()), 201));
+  api.post('/partners/import', perm('partner.publish'), async (c) => c.json(await importPartners(db, cfg, actor(c))));
+  api.get('/partners/:id', perm('partner.read'), async (c) => {
+    const p = await PT.loadPartner(db, c.req.param('id'));
+    const mediaRows = p.logoMediaId ? await db.select().from(t.media).where(eq(t.media.id, p.logoMediaId)) : [];
+    return c.json({ ...p, media: mediaRows.map(withUrl), problems: await PT.partnerProblems(db, p), history: await PT.partnerHistory(db, p.id) });
+  });
+  api.put('/partners/:id', perm('partner.update'), async (c) => c.json(await PT.updatePartner(db, actor(c), c.req.param('id'), await c.req.json())));
+  api.post('/partners/:id/transition', async (c) => {
+    const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
+    if (!body.success || !PT.partnerTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, PT.partnerTransitionPerm(body.data.action)!);
+    return c.json(await PT.transitionPartner(db, actor(c), u.role, c.req.param('id'), body.data.action, { comment: body.data.comment }));
+  });
+  api.post('/partners/:id/publish', perm('partner.publish'), async (c) => c.json(await publisher.publishPartner(actor(c), c.req.param('id'))));
+  api.post('/partners/:id/unpublish', perm('partner.publish'), async (c) => c.json(await publisher.unpublishPartner(actor(c), c.req.param('id'))));
+  api.post('/partners/:id/preview', perm('partner.read'), async (c) => {
+    const r = await publisher.previewPartner(c.req.param('id'), PT.toPartnerSnapshot(await PT.loadPartner(db, c.req.param('id'))));
+    return c.json({ url: `/studio/preview/${r.token}/${r.file}` });
+  });
+  api.post('/partners/:id/revisions/:rev/restore', perm('partner.update'), async (c) => { await PT.restorePartnerRevision(db, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
 
   // ---------------------------------------------------------------- Publishing jobs, audit, users
   api.get('/publish-jobs', perm('dashboard.read'), async (c) => c.json(await publisher.recentJobs(30)));

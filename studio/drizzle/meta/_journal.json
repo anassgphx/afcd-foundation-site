@@ -22,6 +22,13 @@
       "when": 1795338580280,
       "tag": "0002_news",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795339768868,
+      "tag": "0003_partners",
+      "breakpoints": true
     }
   ]
 }

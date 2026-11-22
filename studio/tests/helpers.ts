@@ -36,6 +36,8 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
     writeFileSync(join(out, 'projects.html'), data.projects.map((p) => `<li>${p.name}</li>`).join('\n'));
     const newsFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/news.json') : mode.newsFile;
     if (newsFile && existsSync(newsFile)) writeFileSync(join(out, 'news.html'), (JSON.parse(readFileSync(newsFile, 'utf8')).articles as any[]).map((a) => `<li><a href="${a.url}">${a.title}</a></li>`).join('\n'));
+    const partnersFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/partners.json') : mode.partnersFile;
+    if (partnersFile && existsSync(partnersFile)) writeFileSync(join(out, 'partners.html'), (JSON.parse(readFileSync(partnersFile, 'utf8')).partners as any[]).map((p) => `<li data-studio-partner-rev="${p.revision}"><span>${p.name}</span></li>`).join('\n'));
     // Stand-in for build.mjs: every page source becomes a root page and a sitemap entry.
     const pagesDir = mode.kind === 'live' ? join(cfg.siteRoot, 'src/pages') : mode.pagesDir;
     const files = existsSync(pagesDir) ? readdirSync(pagesDir).filter((f) => f.endsWith('.html')) : [];
@@ -47,7 +49,7 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
   };
 }
 
-export async function makeApp(opts: { runner?: BuildRunner } = {}) {
+export async function makeApp(opts: { runner?: BuildRunner; partners?: { scope: string; names: string[] }[] } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'studio-test-'));
   const siteRoot = join(root, 'site');
   mkdirSync(join(siteRoot, 'src/data'), { recursive: true });
@@ -63,7 +65,7 @@ export async function makeApp(opts: { runner?: BuildRunner } = {}) {
   ] }));
   const cfg = loadConfig({ siteRoot, dataDir: join(root, 'data'), mediaDir: join(root, 'data/media'), previewDir: join(root, 'preview'), origin: ORIGIN, secureCookies: false });
   const { db, close } = await openDb(cfg, { memory: true });
-  await seed(db, cfg, { strategy: STRATEGY });
+  await seed(db, cfg, { strategy: STRATEGY, partners: opts.partners ?? [] });
   const { app } = createApp(db, cfg, { runner: opts.runner ?? fakeRunner() });
   return { app, db, cfg, close, siteRoot };
 }

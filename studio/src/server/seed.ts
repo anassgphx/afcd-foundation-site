@@ -11,6 +11,7 @@ import { pillars, objectives, objectivePillars, projects, projectPillars, projec
 import { loadArticle, toArticleSnapshot } from './modules/news/service.ts';
 import { loadProject, toSnapshot } from './modules/projects/service.ts';
 import { audit } from './audit.ts';
+import { importPartners } from './modules/partners/import.ts';
 
 const unescape = (s: string) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
@@ -32,7 +33,7 @@ print(json.dumps({
   return JSON.parse(execFileSync('python3', ['-I', '-c', py], { cwd: cfg.siteRoot, encoding: 'utf8' }));
 }
 
-export async function seed(db: DB, cfg: Config, opts: { strategy?: SiteData; projectsFile?: string } = {}) {
+export async function seed(db: DB, cfg: Config, opts: { strategy?: SiteData; projectsFile?: string; partners?: { scope: string; names: string[] }[] } = {}) {
   const site = opts.strategy ?? readSiteStrategy(cfg);
   const report = { pillars: 0, objectives: 0, projects: 0, skipped: 0 };
 
@@ -102,5 +103,6 @@ export async function seed(db: DB, cfg: Config, opts: { strategy?: SiteData; pro
     });
     (report as Record<string, number>).news++;
   }
+  (report as Record<string, number>).partners = (await importPartners(db, cfg, null, opts.partners ?? (opts.strategy ? [] : undefined))).imported;   // with injected strategy data (tests) the site is not read
   return report;
 }

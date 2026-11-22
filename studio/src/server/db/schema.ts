@@ -277,3 +277,47 @@ export const articleRevisions = pgTable('article_revisions', {
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex('article_revisions_num_uq').on(t.articleId, t.number)]);
+
+// ---------------------------------------------------------------- Partners (canonical organisation records)
+export const partnerScopeEnum = pgEnum('partner_scope', ['international', 'national', 'local']);
+
+export const partners = pgTable('partners', {
+  id: id(),
+  slug: text('slug').notNull(),
+  name: text('name').notNull(),
+  nameKey: text('name_key').notNull(),            // normalised name, prevents duplicate organisations
+  scope: partnerScopeEnum('scope').notNull(),
+  category: text('category').notNull().default(''),   // e.g. Embassy, Foundation, Association, Public institution
+  description: text('description').notNull().default(''),
+  websiteUrl: text('website_url').notNull().default(''),
+  sinceYear: integer('since_year'),
+  current: boolean('current').notNull().default(true),   // partnership confirmed as current by AFCD
+  verifiedAt: timestamp('verified_at', { withTimezone: true }),   // when AFCD last confirmed the details
+  provenance: text('provenance').notNull().default(''),   // where the record came from
+  logoMediaId: uuid('logo_media_id').references(() => media.id, { onDelete: 'set null' }),
+  sort: integer('sort').notNull().default(100),
+  status: workflowEnum('status').notNull().default('draft'),
+  publishedRevisionId: uuid('published_revision_id'),
+  approvedRevisionId: uuid('approved_revision_id'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('partners_slug_uq').on(t.slug), uniqueIndex('partners_name_key_uq').on(t.nameKey), index('partners_status_idx').on(t.status)]);
+
+export const partnerProjects = pgTable('partner_projects', {
+  partnerId: uuid('partner_id').notNull().references(() => partners.id, { onDelete: 'cascade' }),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'restrict' }),
+}, (t) => [primaryKey({ columns: [t.partnerId, t.projectId] })]);
+
+export const partnerRevisions = pgTable('partner_revisions', {
+  id: id(),
+  partnerId: uuid('partner_id').notNull().references(() => partners.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('partner_revisions_num_uq').on(t.partnerId, t.number)]);

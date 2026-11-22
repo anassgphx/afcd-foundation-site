@@ -10,6 +10,7 @@ import { ProjectEditor } from './pages/ProjectEditor.tsx';
 import { PagesList } from './pages/PagesList.tsx';
 import { Builder } from './pages/Builder.tsx';
 import { NewsList, ArticleEditor } from './pages/News.tsx';
+import { PartnersList, PartnerEditor } from './pages/Partners.tsx';
 import { MediaLibrary } from './pages/Media.tsx';
 import { ApprovalQueue, Publishing, ActivityLog, Users } from './pages/Admin.tsx';
 
@@ -99,6 +100,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
   { group: 'Content', items: [
     { to: '/studio/projects', label: 'Projects', icon: 'folder', perm: 'project.read', match: /^\/studio\/projects/ },
     { to: '/studio/news', label: 'News & Stories', icon: 'log', perm: 'news.read', match: /^\/studio\/news/ },
+    { to: '/studio/partners', label: 'Partners', icon: 'partner', perm: 'partner.read', match: /^\/studio\/partners/ },
   ] },
   { group: 'Media', items: [{ to: '/studio/media', label: 'Media Library', icon: 'image', perm: 'media.read' }] },
   { group: 'Workflow', items: [
@@ -159,6 +161,9 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 }
 
 function route(path: string): { title: string; el: React.ReactElement; full?: boolean } {
+  const pt = path.match(/^\/studio\/partners\/([0-9a-f-]{36})$/);
+  if (pt) return { title: 'Partner', el: <PartnerEditor key={pt[1]} id={pt[1]} /> };
+  if (path.startsWith('/studio/partners')) return { title: 'Partners', el: <PartnersList /> };
   const nw = path.match(/^\/studio\/news\/([0-9a-f-]{36})$/);
   if (nw) return { title: 'Story', el: <ArticleEditor key={nw[1]} id={nw[1]} />, full: true };
   if (path.startsWith('/studio/news')) return { title: 'News & Stories', el: <NewsList /> };

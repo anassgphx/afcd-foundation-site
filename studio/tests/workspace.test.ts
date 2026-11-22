@@ -29,7 +29,7 @@ describe('top bar search and notifications', () => {
     expect((await ed.get('/notifications')).body.find((n: any) => n.kind === 'changes')).toBeTruthy();
     // form messages: administrators only
     await h.db.insert(formSubmissions).values({ formKey: 'contact', email: 'x@example.org', name: 'X', status: 'new' });
-    expect((await admin.get('/notifications')).body.find((n: any) => n.kind === 'forms').title).toBe('1 new contact message');
+    expect((await admin.get('/notifications')).body.find((n: any) => n.kind === 'forms').title).toBe('1 unread message in the Inbox');
     expect((await rev.get('/notifications')).body.find((n: any) => n.kind === 'forms')).toBeUndefined();
   });
 });

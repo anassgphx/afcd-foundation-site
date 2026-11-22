@@ -1,5 +1,5 @@
 // Dashboard overview: one read across every module, filtered by the user's permissions. Only real counts and records.
-import { and, count, desc, eq, gte, inArray, isNotNull, lte, ne, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
 import { articles, events, formSubmissions, media, opportunities, pageContents, pages, partners, projects, publishJobs, seoAudits } from '../../db/schema.ts';
 import { can, type Role } from '../../rbac.ts';
@@ -91,8 +91,8 @@ export async function overview(db: DB, user: { id: string; role: Role }) {
     health.push({ key: 'media', label: 'Media', value: need ? `${need} to fix` : `${total} ready`, tone: need ? 'warn' : 'ok', href: '/studio/media', detail: need ? 'Need alt text or confirmed usage rights before they can be published.' : `${total} images, all with alt text and rights` });
   }
   if (can(role, 'forms.read')) {
-    const [{ n }] = await db.select({ n: count() }).from(formSubmissions).where(and(eq(formSubmissions.formKey, 'contact'), eq(formSubmissions.status, 'new')));
-    health.push({ key: 'forms', label: 'Messages', value: n ? `${n} new` : 'None new', tone: n ? 'warn' : 'ok', href: '/studio/forms', detail: n ? 'From the website contact form, waiting for a reply.' : 'Contact form inbox is clear' });
+    const [{ n }] = await db.select({ n: count() }).from(formSubmissions).where(and(eq(formSubmissions.formKey, 'contact'), eq(formSubmissions.spam, false), isNull(formSubmissions.archivedAt), isNull(formSubmissions.readAt)));
+    health.push({ key: 'forms', label: 'Messages', value: n ? `${n} unread` : 'None unread', tone: n ? 'warn' : 'ok', href: '/studio/inbox', detail: n ? 'From the website contact form, not opened yet.' : 'Inbox is clear' });
   }
 
   // website delivery, in plain words, with what it was about

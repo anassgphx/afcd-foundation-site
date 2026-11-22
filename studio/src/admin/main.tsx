@@ -13,7 +13,7 @@ import { NewsList, ArticleEditor } from './pages/News.tsx';
 import { PartnersList, PartnerEditor } from './pages/Partners.tsx';
 import { EventsList, EventEditor } from './pages/Events.tsx';
 import { OpportunitiesList, OpportunityEditor } from './pages/Opportunities.tsx';
-import { FormsPage } from './pages/Forms.tsx';
+import { InboxPage } from './pages/Inbox.tsx';
 import { SeoPage } from './pages/Seo.tsx';
 import { TranslationsPage } from './pages/Translations.tsx';
 import { MenusPage } from './pages/Menus.tsx';
@@ -118,7 +118,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { to: '/studio/partners', label: 'Partners', icon: 'partner', perm: 'partner.read', match: /^\/studio\/partners/ },
   ] },
   { group: 'Media', items: [{ to: '/studio/media', label: 'Media Library', icon: 'image', perm: 'media.read' }] },
-  { group: 'Inbox', items: [{ to: '/studio/forms', label: 'Forms', icon: 'mail', perm: 'forms.read', match: /^\/studio\/forms/ }] },
+  { group: 'Messages', items: [{ to: '/studio/inbox', label: 'Inbox', icon: 'mail', perm: 'forms.read', match: /^\/studio\/(inbox|forms)/ }] },
   { group: 'Workflow', items: [
     { to: '/studio/approvals', label: 'Approval Queue', icon: 'inbox', perm: 'project.read' },
     { to: '/studio/publishing', label: 'Publishing', icon: 'globe', perm: 'dashboard.read' },
@@ -136,6 +136,14 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   const [queue, setQueue] = useState(0);
   useEffect(() => { setMobile(false); }, [path]);
   useEffect(() => { if (can('project.read')) api('/projects').then((p: any[]) => setQueue(p.filter((x) => x.status === 'in_review' || x.status === 'approved').length)).catch(() => {}); }, [path]);
+  // Inbox unread badge: on navigation, when the Inbox changes something, and every 2 minutes while Studio is open
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (!can('forms.read')) return;
+    const f = () => { api<{ unread: number }>('/inbox/unread').then((r) => setUnread(r.unread)).catch(() => {}); };
+    f(); window.addEventListener('studio:inbox', f); const t = setInterval(f, 120_000);
+    return () => { window.removeEventListener('studio:inbox', f); clearInterval(t); };
+  }, [path]);
   const isOn = (i: NavItem) => (i.match ? i.match.test(path) : path.startsWith(i.to));
   // the active-page highlight glides to the selected item (measured after every navigation and resize)
   const navRef = useRef<HTMLElement>(null);
@@ -148,7 +156,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
     const t = setTimeout(measure, 400);
     document.fonts?.ready.then(measure).catch(() => {});
     return () => { clearTimeout(t); ro.disconnect(); };
-  }, [path, collapsed, queue]);
+  }, [path, collapsed, queue, unread]);
   const links: NavLink[] = NAV.flatMap((g) => g.items.filter((i) => can(i.perm)).map((i) => ({ to: i.to, label: i.label, icon: i.icon, perm: i.perm, group: g.group })));
   useRecent(path, links);
   const page = route(path);
@@ -163,7 +171,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             if (!items.length) return null;
             return <div className="nav-group" key={g.group}><span className="nav-label">{g.group}</span>
               {items.map((i) => <Link key={i.to} to={i.to} className={isOn(i) ? 'on' : ''} aria-current={isOn(i) ? 'page' : undefined} title={i.label}>
-                <Icon n={i.icon} /><span className="nav-text">{i.label}</span>{i.to.endsWith('approvals') && queue > 0 && <em className="count">{queue}</em>}
+                <Icon n={i.icon} /><span className="nav-text">{i.label}</span>{i.to.endsWith('approvals') && queue > 0 && <em className="count">{queue}</em>}{i.to.endsWith('/inbox') && unread > 0 && <em className="count" aria-label={`${unread} unread`}>{unread}</em>}
               </Link>)}
             </div>;
           })}
@@ -197,7 +205,7 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   if (path.startsWith('/studio/seo')) return { title: 'SEO', el: <SeoPage key={path} /> };
   if (path.startsWith('/studio/translations')) return { title: 'Translations', el: <TranslationsPage /> };
   if (path.startsWith('/studio/menus')) return { title: 'Menus', el: <MenusPage /> };
-  if (path.startsWith('/studio/forms')) return { title: 'Forms', el: <FormsPage /> };
+  if (path.startsWith('/studio/inbox') || path.startsWith('/studio/forms')) return { title: 'Inbox', el: <InboxPage /> };
   const op = path.match(/^\/studio\/opportunities\/([0-9a-f-]{36})$/);
   if (op) return { title: 'Opportunity', el: <OpportunityEditor key={op[1]} id={op[1]} /> };
   if (path.startsWith('/studio/opportunities')) return { title: 'Opportunities', el: <OpportunitiesList /> };

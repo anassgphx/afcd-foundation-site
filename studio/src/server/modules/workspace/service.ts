@@ -1,6 +1,6 @@
 // Top-bar workspace features: search across Studio records, and notifications computed from real state
 // (nothing is stored). Every query is filtered by the signed-in user's permissions; form messages are never searched.
-import { and, count, desc, eq, gte, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
 import { articles, events, formSubmissions, opportunities, pageContents, pages, partners, projects, publishJobs, seoOverrides } from '../../db/schema.ts';
 import { can, type Role } from '../../rbac.ts';
@@ -63,8 +63,9 @@ export async function notifications(db: DB, user: { id: string; role: Role }): P
     }
   }
   if (can(role, 'forms.read')) {
-    const [{ n, last }] = await db.select({ n: count(), last: sql<Date | null>`max(${formSubmissions.createdAt})` }).from(formSubmissions).where(and(eq(formSubmissions.formKey, 'contact'), eq(formSubmissions.status, 'new')));
-    if (n) notes.push({ id: `forms:${n}:${new Date(last ?? Date.now()).toISOString()}`, kind: 'forms', title: `${n} new contact message${n === 1 ? '' : 's'}`, sub: 'From the website contact form', href: '/studio/forms', at: new Date(last ?? Date.now()).toISOString() });
+    // unread contact messages in the Inbox (spam and archived ones never notify)
+    const [{ n, last }] = await db.select({ n: count(), last: sql<Date | null>`max(${formSubmissions.createdAt})` }).from(formSubmissions).where(and(eq(formSubmissions.formKey, 'contact'), eq(formSubmissions.spam, false), isNull(formSubmissions.archivedAt), isNull(formSubmissions.readAt)));
+    if (n) notes.push({ id: `forms:${n}:${new Date(last ?? Date.now()).toISOString()}`, kind: 'forms', title: `${n} unread message${n === 1 ? '' : 's'} in the Inbox`, sub: 'From the website contact form', href: '/studio/inbox?view=unread', at: new Date(last ?? Date.now()).toISOString() });
   }
   return notes.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 30);
 }

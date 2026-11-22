@@ -416,13 +416,17 @@ export const opportunityRevisions = pgTable('opportunity_revisions', {
   createdAt: createdAt(),
 }, (t) => [uniqueIndex('opportunity_revisions_num_uq').on(t.opportunityId, t.number)]);
 
-// ---------------------------------------------------------------- Forms (submissions from the public site; personal data)
-export const submissionStatusEnum = pgEnum('submission_status', ['new', 'in_progress', 'done', 'spam']);
+// ---------------------------------------------------------------- Forms / Inbox (submissions from the public site; personal data)
+// Status is the reply workflow; spam, archive, read and star are separate so a message keeps its status when it is
+// archived or flagged. 0015_inbox moved the old enum (new, in_progress, done, spam) to this shape.
+export const SUBMISSION_STATUSES = ['new', 'in_progress', 'replied', 'closed'] as const;
+export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number];
 
 export const formSettings = pgTable('form_settings', {
   key: text('key').primaryKey(),                          // 'contact' | 'newsletter'
   enabled: boolean('enabled').notNull().default(true),     // accepting submissions
   retentionDays: integer('retention_days').notNull().default(365),
+  closedRetentionMonths: integer('closed_retention_months'),   // delete closed messages this long after closing; null = off
   updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
   updatedAt: updatedAt(),
 });
@@ -434,15 +438,39 @@ export const formSubmissions = pgTable('form_submissions', {
   name: text('name').notNull().default(''),
   email: text('email').notNull().default(''),
   data: jsonb('data').$type<Record<string, string>>().notNull().default({}),
-  status: submissionStatusEnum('status').notNull().default('new'),
+  status: text('status').$type<SubmissionStatus>().notNull().default('new'),
+  spam: boolean('spam').notNull().default(false),
+  spamReason: text('spam_reason'),                         // honeypot | too_fast | rate_limit | manual
+  readAt: timestamp('read_at', { withTimezone: true }),    // first opened by a staff member (shared team inbox)
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
   assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
-  note: text('note').notNull().default(''),               // internal, staff only
+  note: text('note').notNull().default(''),               // legacy single note; 0015 copied it into submission_events
   consentAt: timestamp('consent_at', { withTimezone: true }),
   ipHash: text('ip_hash'),                                 // salted hash, for rate limiting only
   page: text('page').notNull().default(''),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-}, (t) => [index('form_submissions_form_idx').on(t.formKey, t.status, t.createdAt), index('form_submissions_ip_idx').on(t.ipHash, t.createdAt)]);
+}, (t) => [index('form_submissions_form_idx').on(t.formKey, t.status, t.createdAt), index('form_submissions_ip_idx').on(t.ipHash, t.createdAt),
+  index('form_submissions_inbox_idx').on(t.formKey, t.spam, t.archivedAt, t.readAt)]);
+
+/** Personal star: each staff member keeps their own starred list. */
+export const submissionStars = pgTable('submission_stars', {
+  submissionId: uuid('submission_id').notNull().references(() => formSubmissions.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: createdAt(),
+}, (t) => [primaryKey({ columns: [t.submissionId, t.userId] })]);
+
+/** Activity on a message: internal notes (body) and changes (kind + meta). Deleted with the message. */
+export const submissionEvents = pgTable('submission_events', {
+  id: id(),
+  submissionId: uuid('submission_id').notNull().references(() => formSubmissions.id, { onDelete: 'cascade' }),
+  actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+  kind: text('kind').notNull(),                            // note | status | assign | archive | unarchive | spam | not_spam | reply
+  body: text('body').notNull().default(''),                // note text only
+  meta: jsonb('meta').$type<Record<string, unknown>>(),
+  createdAt: createdAt(),
+}, (t) => [index('submission_events_sub_idx').on(t.submissionId, t.createdAt)]);
 
 export const newsletterSubscribers = pgTable('newsletter_subscribers', {
   id: id(),

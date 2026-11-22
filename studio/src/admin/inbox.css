@@ -1,0 +1,174 @@
+/* Inbox: filters · message list · reading pane. Uses the Studio tokens from studio.css; every class here starts with ix-.
+   Wide: three panes side by side, each scrolling on its own. ≤1100px: filters become a chip strip above two panes.
+   ≤760px (phone): one pane at a time; opening a message shows the reader with a back button. */
+.ix-page { --ix-h: calc(100vh - 56px - 132px); }
+.ix-head { margin-bottom: 14px; }
+.ix-notice { margin-bottom: 12px; }
+.ix { display: grid; grid-template-columns: 216px minmax(300px, 400px) minmax(0, 1fr); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; min-height: 520px; }
+.ix.ix-subs { grid-template-columns: 216px minmax(0, 1fr); background: transparent; border: 0; gap: 14px; overflow: visible; }
+.ix kbd { display: inline-block; min-width: 16px; padding: 0 4px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; font: 600 10.5px/15px ui-monospace, Menlo, monospace; text-align: center; color: var(--ink-2); background: #fff; }
+
+/* ---------- Filters ---------- */
+.ix-filters { padding: 10px 8px; border-right: 1px solid var(--line); background: var(--sunken); height: var(--ix-h); min-height: 520px; overflow-y: auto; }
+.ix-subs .ix-filters { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); height: auto; align-self: start; }
+.ix-fgroup { display: grid; gap: 1px; padding: 6px 0; }
+.ix-fgroup + .ix-fgroup { border-top: 1px solid var(--line); }
+.ix-flabel { padding: 6px 10px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.ix-fnone { padding: 2px 10px 6px; }
+.ix-f { display: flex; align-items: center; gap: 9px; width: 100%; height: 32px; padding: 0 10px; border: 0; border-radius: var(--r-sm); background: none; color: var(--ink-2); font-weight: 500; text-align: left; cursor: pointer; white-space: nowrap; }
+.ix-f > span:not(.ix-sdot) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ix-f svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--muted); }
+.ix-f em { font-style: normal; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.ix-f em.ix-badge { min-width: 20px; height: 18px; padding: 0 6px; border-radius: 9px; background: var(--info); color: #fff; display: inline-grid; place-items: center; }
+.ix-f:hover { background: var(--canvas); color: var(--ink); }
+.ix-f.on { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0,0,0,.05); }
+.ix-f.on svg { color: var(--ink); }
+.ix-sdot { width: 8px; height: 8px; margin: 0 4px; border-radius: 50%; flex-shrink: 0; background: var(--faint); }
+.ix-sdot.s-new { background: var(--info); } .ix-sdot.s-in_progress { background: #D97706; } .ix-sdot.s-replied { background: var(--ok); } .ix-sdot.s-closed { background: var(--faint); }
+
+/* ---------- List ---------- */
+.ix-list { display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--line); height: var(--ix-h); min-height: 520px; }
+.ix-list-h { padding: 12px 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+.ix-list-t { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.ix-list-t h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.ix-list-tools { display: flex; gap: 6px; }
+.ix-search { flex: 1; min-width: 0; }
+.ix-search input { width: 100%; padding-right: 28px; }
+.ix-search .dt-clear { position: absolute; right: 6px; top: 6px; border: 0; background: none; font-size: 16px; line-height: 20px; color: var(--muted); cursor: pointer; }
+.ix-sort { width: auto; flex-shrink: 0; }
+.ix-bulk { display: flex; align-items: center; gap: 4px; min-height: 38px; margin: 0 -12px; padding: 4px 12px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.ix-bulk.on { background: var(--info-bg); }
+.ix-bulk b { margin-right: 4px; font-size: 12.5px; }
+.ix-bulk .check { margin-right: 6px; }
+.ix-bulk .check input { margin: 0; }
+.ix-rows { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; overscroll-behavior: contain; }
+.ix-skel { padding: 12px; display: grid; gap: 18px; } .ix-skel > div { display: grid; gap: 7px; }
+.ix-row { position: relative; display: flex; align-items: flex-start; border-bottom: 1px solid var(--line); transition: background-color .12s; }
+.ix-row:hover { background: var(--sunken); }
+.ix-row.on { background: var(--canvas); box-shadow: inset 3px 0 0 var(--accent); }
+.ix-row.sel { background: var(--info-bg); }
+.ix-check { margin: 17px 0 0 12px; width: 15px; height: 15px; accent-color: var(--accent); flex-shrink: 0; }
+.ix-row-main { flex: 1; min-width: 0; display: flex; gap: 10px; padding: 12px 4px 12px 10px; border: 0; background: none; text-align: left; cursor: pointer; color: inherit; }
+.ix-av { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--canvas); border: 1px solid var(--line); color: var(--ink-2); font-size: 11.5px; font-weight: 600; flex-shrink: 0; }
+.ix-row.unread .ix-av { background: var(--ink); border-color: var(--ink); color: #fff; }
+.ix-av-lg { width: 44px; height: 44px; font-size: 15px; }
+.ix-row-b { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.ix-row-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ix-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.ix-row.unread .ix-name { font-weight: 700; }
+.ix-row-top time { font-size: 11.5px; white-space: nowrap; }
+.ix-row.unread .ix-row-top time { color: var(--info); font-weight: 600; }
+.ix-unread { width: 8px; height: 8px; border-radius: 50%; background: var(--info); flex-shrink: 0; }
+.ix-prev { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ix-row.unread .ix-prev { color: var(--ink-2); }
+.ix-row-meta { display: flex; align-items: center; gap: 5px; min-width: 0; flex-wrap: wrap; margin-top: 2px; }
+.ix-chip { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: var(--canvas); border: 1px solid var(--line); font-size: 11px; font-weight: 500; color: var(--ink-2); white-space: nowrap; }
+.ix-st { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.ix-st.s-new { background: var(--info-bg); color: var(--info); } .ix-st.s-in_progress { background: var(--warn-bg); color: var(--warn); }
+.ix-st.s-replied { background: var(--ok-bg); color: var(--ok); } .ix-st.s-closed { background: var(--canvas); color: var(--muted); } .ix-st.s-spam { background: var(--bad-bg); color: var(--bad); }
+.ix-who { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--violet-bg); color: var(--violet); font-size: 9.5px; font-weight: 700; }
+.ix-star { display: grid; place-items: center; width: 32px; height: 32px; margin: 8px 6px 0 0; border: 0; border-radius: var(--r-sm); background: none; color: var(--faint); cursor: pointer; flex-shrink: 0; }
+.ix-star svg { width: 16px; height: 16px; }
+.ix-star:hover { background: var(--canvas); color: var(--ink-2); }
+.ix-star.on { color: #D97706; }
+.ix-more { padding: 12px; text-align: center; }
+
+/* ---------- Reading pane ---------- */
+.ix-read { min-width: 0; height: var(--ix-h); min-height: 520px; overflow-y: auto; overscroll-behavior: contain; }
+.ix-read-empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 6px; padding: 24px; text-align: center; color: var(--muted); }
+.ix-read-empty svg { width: 30px; height: 30px; color: var(--faint); }
+.ix-read-empty b { color: var(--ink); font-size: 14px; }
+.ix-read-b { display: grid; gap: 16px; padding: 14px 24px 32px; max-width: 820px; }
+.ix-read-top { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: -14px -24px 0; padding: 8px 16px; background: rgba(255,255,255,.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+.ix-back { display: none; margin-right: auto; }
+.ix-back svg { width: 15px; height: 15px; }
+.ix-read-actions { display: flex; align-items: center; gap: 2px; }
+.ix-read-actions .icon-btn { width: 32px; padding: 0; }
+.ix-read-actions .ix-star { margin: 0; }
+.ix-sender { display: flex; gap: 14px; align-items: center; }
+.ix-sender h2 { margin: 6px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.ix-sender p { margin: 0; overflow-wrap: anywhere; }
+.ix-controls { display: flex; gap: 12px 20px; flex-wrap: wrap; align-items: flex-end; padding: 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--sunken); }
+.ix-ctl { display: grid; gap: 5px; min-width: 0; }
+.ix-ctl > span { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.ix-ctl .select { min-width: 190px; }
+.ix-seg { flex-wrap: wrap; background: #fff; }
+.ix-seg button { display: inline-flex; align-items: center; gap: 2px; height: 28px; }
+.ix-seg button .ix-sdot { margin: 0 3px 0 0; width: 7px; height: 7px; }
+.ix-seg button.on { background: var(--accent); color: #fff; }
+.ix-seg button.on .ix-sdot { box-shadow: 0 0 0 2px rgba(255,255,255,.35); }
+.ix-seg button:disabled { cursor: default; }
+.ix-body { white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px 18px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); font-size: 14.5px; line-height: 1.65; }
+.ix-reply { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ix-reply svg { width: 15px; height: 15px; }
+.ix-nudge .btn { margin-left: 6px; }
+.ix-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 20px; margin: 0; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.ix-facts dt { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.ix-facts dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.ix-facts a { color: var(--ink); }
+.ix-activity h3 { margin: 0 0 10px; font-size: 13.5px; font-weight: 600; }
+.ix-note-form { display: grid; gap: 6px; margin-bottom: 14px; }
+.ix-note-form .textarea { min-height: 64px; background: var(--warn-bg); border-color: #FDE68A; }
+.ix-note-f { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ix-timeline { list-style: none; margin: 0; padding: 0 0 0 4px; display: grid; gap: 10px; }
+.ix-timeline > li { position: relative; display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; color: var(--ink-2); }
+.ix-timeline > li:not(:last-child)::before { content: ""; position: absolute; left: 3.5px; top: 14px; bottom: -12px; width: 1px; background: var(--line); }
+.ix-ev-dot { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--line-strong); flex-shrink: 0; position: relative; }
+.ix-timeline i { font-style: normal; font-weight: 600; color: var(--ink); }
+.ix-timeline .ix-ev-note { margin-left: 18px; }
+.ix-timeline .ix-ev-note::before { display: none; }
+.ix-note { flex: 1; padding: 10px 12px; border-radius: var(--r-sm); background: var(--warn-bg); border: 1px solid #FDE68A; }
+.ix-note-h { display: flex; align-items: center; gap: 8px; } .ix-note-h .btn { margin-left: auto; height: 24px; }
+.ix-note p { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); font-size: 13px; }
+
+/* ---------- Subscribers & settings ---------- */
+.ix-subs-b { min-width: 0; overflow: hidden; }
+.ix-subs-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 16px; flex-wrap: wrap; }
+.ix-subs-h h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.ix-subs-h p { margin: 4px 0 0; max-width: 620px; }
+.ix-sub-act { white-space: nowrap; }
+.ix-settings fieldset { margin: 0; padding: 12px 14px 14px; border: 1px solid var(--line); border-radius: var(--r); display: grid; gap: 12px; }
+.ix-settings legend { padding: 0 6px; font-weight: 600; }
+
+/* ---------- Narrower screens ---------- */
+@media (max-width: 1100px) {
+  .ix-page { --ix-h: calc(100vh - 56px - 190px); }
+  .ix, .ix.ix-subs { grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); }
+  .ix.ix-subs { grid-template-columns: minmax(0, 1fr); }
+  .ix-filters { grid-column: 1 / -1; height: auto; min-height: 0; display: flex; gap: 4px; padding: 8px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+  .ix-subs .ix-filters { border-radius: var(--r); }
+  .ix-filters::-webkit-scrollbar { display: none; }
+  .ix-fgroup { display: contents; }
+  .ix-flabel, .ix-fnone { display: none; }
+  .ix-f { width: auto; flex-shrink: 0; height: 32px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; }
+  .ix-f > span:not(.ix-sdot) { overflow: visible; }
+  .ix-f.on { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: none; }
+  .ix-f.on svg, .ix-f.on em { color: #fff; }
+}
+@media (max-width: 760px) {
+  .ix-page { --ix-h: auto; }
+  .ix-head .pills .btn { height: 36px; }
+  .ix { grid-template-columns: minmax(0, 1fr); margin: 0 calc(-1 * clamp(16px, 2vw, 32px)); border-radius: 0; border-left: 0; border-right: 0; }
+  .ix.ix-subs { margin: 0; }
+  .ix, .ix-list, .ix-read { overflow: visible; }   /* the page scrolls, so the reader's toolbar can stick under the top bar */
+  .ix-list, .ix-read { height: auto; min-height: 0; border-right: 0; }
+  .ix-rows { overflow: visible; }
+  .ix-read { display: none; }
+  .ix.ix-reading .ix-list, .ix.ix-reading .ix-filters { display: none; }
+  .ix.ix-reading .ix-read { display: block; }
+  .ix-page:has(.ix-reading) .ix-head, .ix-page:has(.ix-reading) .ix-notice { display: none; }
+  .ix-back { display: inline-flex; }
+  .ix-read-top { margin: -14px -16px 0; padding: 8px 10px; top: 56px; }
+  .ix-read-b { padding: 14px 16px 28px; }
+  .ix-list-tools { flex-wrap: wrap; }
+  .ix-sort { flex: 1; }
+  .ix-row-main { padding: 14px 4px 14px 10px; }
+  .ix-star { width: 40px; height: 40px; }
+  .ix-controls { display: grid; }
+  .ix-ctl .select { min-width: 0; width: 100%; }
+  .ix-seg { display: grid; grid-template-columns: 1fr 1fr; }
+  .ix-seg button { height: 34px; justify-content: center; }
+  .ix-reply .btn { width: 100%; height: 40px; }
+  .ix-bulk small { display: none; }
+}
+

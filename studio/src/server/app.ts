@@ -31,6 +31,7 @@ import * as JOBS from './modules/jobs/service.ts';
 import * as TR from './modules/translations/service.ts';
 import { registerMenuRoutes } from './modules/menus/routes.ts';
 import { registerReviewRoutes } from './modules/review/routes.ts';
+import { registerInboxRoutes } from './modules/inbox/routes.ts';
 import * as HM from './modules/home/service.ts';
 import * as WS from './modules/workspace/service.ts';
 import { overview as dashboardOverview } from './modules/workspace/overview.ts';
@@ -347,34 +348,8 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   });
   api.post('/opportunities/:id/revisions/:rev/restore', perm('opportunity.update'), async (c) => { await OP.restoreOpportunityRevision(db, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
 
-  // ---------------------------------------------------------------- Forms (personal data: administrators only)
-  api.get('/forms', perm('forms.read'), async (c) => c.json(await FM.overview(db)));
-  api.get('/forms/:key/submissions', perm('forms.read'), async (c) => {
-    const key = c.req.param('key'); if (!FM.isFormKey(key)) throw new AppError(404, 'Unknown form.');
-    return c.json(await FM.listSubmissions(db, key, c.req.query('status') ?? null));
-  });
-  api.patch('/forms/submissions/:id', perm('forms.manage'), async (c) => { await FM.updateSubmission(db, actor(c), c.req.param('id'), await c.req.json()); return c.json({ ok: true }); });
-  api.post('/forms/submissions/delete', perm('forms.manage'), async (c) => {
-    const b = z.object({ ids: z.array(z.string().uuid()).max(500) }).safeParse(await c.req.json());
-    if (!b.success) throw new AppError(422, 'Invalid selection.');
-    return c.json({ deleted: await FM.deleteSubmissions(db, actor(c), b.data.ids) });
-  });
-  api.get('/forms/subscribers', perm('forms.read'), async (c) => c.json(await FM.listSubscribers(db)));
-  api.post('/forms/subscribers/:id/:action', perm('forms.manage'), async (c) => {
-    const a = c.req.param('action'); if (a !== 'unsubscribe' && a !== 'delete') throw new AppError(404, 'Unknown action.');
-    await FM.setSubscriber(db, actor(c), c.req.param('id'), a); return c.json({ ok: true });
-  });
-  api.put('/forms/:key/settings', perm('forms.manage'), async (c) => {
-    const key = c.req.param('key'); if (!FM.isFormKey(key)) throw new AppError(404, 'Unknown form.');
-    await FM.saveSettings(db, actor(c), key, await c.req.json()); return c.json({ ok: true });
-  });
-  api.get('/forms/export/:what', perm('forms.read'), async (c) => {
-    const w = c.req.param('what'); if (w !== 'contact' && w !== 'newsletter') throw new AppError(404, 'Unknown export.');
-    const csv = await FM.exportCsv(db, actor(c), w);
-    c.header('Content-Type', 'text/csv; charset=utf-8'); c.header('Cache-Control', 'no-store');
-    c.header('Content-Disposition', `attachment; filename="afcd-${w}-${new Date().toISOString().slice(0, 10)}.csv"`);
-    return c.body(csv);
-  });
+  // ---------------------------------------------------------------- Inbox: website messages and newsletter list (personal data, forms.read / forms.manage)
+  registerInboxRoutes(api);   // modules/inbox
 
   // ---------------------------------------------------------------- SEO studio
   api.get('/seo/audit', perm('seo.read'), async (c) => c.json({ last: await SEO.lastAudit(db), history: await SEO.auditHistory(db) }));

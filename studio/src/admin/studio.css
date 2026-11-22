@@ -737,3 +737,29 @@ a.db-h:hover { border-color: var(--line-strong); box-shadow: 0 8px 22px -16px rg
 .seo-ev { margin: 0; padding-left: 16px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-2); display: grid; gap: 2px; overflow-wrap: anywhere; }
 .seo-steps { margin: 0 0 14px; padding-left: 20px; display: grid; gap: 8px; line-height: 1.55; }
 @media (max-width: 1000px) { .seo-issues-wrap:has(.seo-drawer) { grid-template-columns: 1fr; } .seo-drawer { position: static; max-height: none; } }
+
+/* homepage editor: field opened from a click in the canvas */
+@keyframes hpFlash { 0% { box-shadow: 0 0 0 3px rgba(37,99,235,.45); background: rgba(37,99,235,.07); } 100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); background: transparent; } }
+.hp-flash { animation: hpFlash 1.6s ease-out; border-radius: 8px; }
+
+/* homepage editor: sized to the space it really has (the app sidebar takes part of the window), not the window */
+.builder { container: bld / inline-size; }
+@container bld (max-width: 1240px) {
+  .b-body { grid-template-columns: 200px minmax(0, 1fr) 300px; }
+  .b-layer-main small, .b-grip { display: none; }
+}
+@container bld (max-width: 1060px) {
+  .b-body { grid-template-columns: 64px minmax(0, 1fr) 290px; }
+  .b-left > .between { justify-content: center; padding: 10px 6px 6px !important; }
+  .b-left > .between > b, .b-add-t { display: none; }
+  .b-scroll { padding: 0 6px 12px; }
+  .b-layer-main { justify-content: center; padding: 8px 4px; }
+  .b-layer-main > svg, .b-layer-main > .min-w-0, .b-layer-act { display: none; }
+  .b-layer-main .hp-num { font-weight: 600; }
+}
+@container bld (max-width: 760px) {
+  .b-body { grid-template-columns: 1fr; }
+  .b-left, .b-right { max-height: none; border: 0; border-bottom: 1px solid var(--line); }
+  .b-layers { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; }
+  .b-canvas { height: 70vh; }
+}

@@ -194,7 +194,7 @@ export function Builder({ id }: { id: string }) {
         <div className="b-canvas" ref={canvasBox} onClick={() => setSel(null)}>
           {/* The page renders at the real device width and is scaled down to fit, so layouts match the live site. */}
           <div className="b-device" style={{ width: device * scale, height: canvasH }} onClick={(e) => e.stopPropagation()}>
-            <iframe ref={frame} title="Page canvas" srcDoc={html} onLoad={wire} style={{ width: device, height: canvasH / scale, transform: `scale(${scale})`, transformOrigin: '0 0' }} />
+            <iframe ref={frame} title="Page canvas" srcDoc={html} onLoad={wire} style={{ width: device, height: canvasH / scale, zoom: scale }} />
           </div>
           <span className="b-zoom">{device}px · {Math.round(scale * 100)}%</span>
         </div>

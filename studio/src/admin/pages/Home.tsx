@@ -38,6 +38,9 @@ export function HomeEditor() {
   const [html, setHtml] = useState('');
   const base = useRef<string | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
+  const [focusKey, setFocusKey] = useState<{ key: string; n: number } | null>(null);   // field clicked in the canvas
+  const scrollY = useRef(0);
+  const fromCanvas = useRef(false);   // canvas scroll, kept across reloads so typing never jumps the page back to the top
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 900, h: 700 });
   useEffect(() => { const el = box.current; if (!el) return; const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height })); ro.observe(el); return () => ro.disconnect(); });
@@ -81,10 +84,43 @@ export function HomeEditor() {
     const doc = frame.current?.contentDocument; if (!doc) return;
     doc.querySelectorAll<HTMLElement>('[data-block-id]').forEach((el) => {
       el.classList.toggle('is-selected', el.dataset.blockId === sel);
-      el.onclick = (e) => { e.preventDefault(); e.stopPropagation(); setSel(el.dataset.blockId!); };
+      el.onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        // a click on a text or photo of the page opens that exact field in the inspector
+        const f = (e.target as HTMLElement).closest<HTMLElement>('[data-sf]');
+        if (el.dataset.blockId !== sel) fromCanvas.current = true; setSel(el.dataset.blockId!);
+        if (f && el.contains(f)) setFocusKey((x) => ({ key: f.dataset.sf!, n: (x?.n ?? 0) + 1 }));
+      };
     });
+    doc.querySelectorAll<HTMLElement>('[data-sf]').forEach((el) => el.classList.toggle('sf-on', el.dataset.sf === focusKey?.key && !!el.closest(`[data-block-id="${sel}"]`)));
+    const win = frame.current?.contentWindow; if (win) win.onscroll = () => { scrollY.current = win.scrollY; };
+  }, [sel, focusKey]);
+  const pending = useRef(false);   // a section picked before the canvas finished loading
+  const reveal = useCallback(() => {
+    const el = frame.current?.contentDocument?.querySelector<HTMLElement>(`[data-block-id="${sel}"]`); const win = frame.current?.contentWindow;
+    if (!el || !win) { pending.current = true; return; }
+    const top = Math.max(0, Math.round(el.getBoundingClientRect().top + win.scrollY));
+    win.scrollTo({ top, behavior: 'instant' as ScrollBehavior }); scrollY.current = top;   // smooth scrolling stalls inside the scaled canvas
   }, [sel]);
-  useEffect(() => { wire(); frame.current?.contentDocument?.querySelector(`[data-block-id="${sel}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, [sel, wire]);
+  useEffect(() => { wire(); }, [wire]);
+  // scroll to a section picked in the list; a click on the page itself leaves the view where it is
+  useEffect(() => { if (fromCanvas.current) fromCanvas.current = false; else reveal(); }, [sel]);
+  const onFrameLoad = useCallback(() => { const w = frame.current?.contentWindow; const y = scrollY.current;
+    const put = () => w?.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior });
+    put(); requestAnimationFrame(put); wire();
+    if (pending.current) { pending.current = false; reveal(); } }, [wire, reveal]);
+  // focus and flash the inspector field that matches the clicked text or photo
+  useEffect(() => {
+    if (!focusKey) return;
+    const t = setTimeout(() => {
+      const box = document.querySelector<HTMLElement>(`[data-field="${CSS.escape(focusKey.key)}"]`); if (!box) return;
+      box.closest('details')?.setAttribute('open', '');
+      box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      box.querySelector<HTMLElement>('input,textarea,button')?.focus({ preventScroll: true });
+      box.classList.remove('hp-flash'); void box.offsetWidth; box.classList.add('hp-flash');
+    }, 60);
+    return () => clearTimeout(t);
+  }, [focusKey]);
 
   // ---- saving: explicit, and automatic 3 s after the last change (never over newer work, never while approved)
   const showErr = (e: unknown) => setErrs(e instanceof ApiError && e.details?.length ? (e.details as { path: string; message: string }[]).map((x) => x.message) : [e instanceof Error ? e.message : 'Something went wrong.']);
@@ -126,7 +162,7 @@ export function HomeEditor() {
   async function preview() { if (save !== 'saved' && !(await doSave(true))) return; setBusy('preview'); try { const r = await post<{ url: string }>('/home/preview'); setUrl(r.url); setDialog({ kind: 'preview' }); } catch (e) { showErr(e); } finally { setBusy(''); } }
 
   if (!d) return <Loading />;
-  const scale = Math.min(1, Math.max(0.2, (size.w - 8) / device)); const canvasH = Math.max(400, size.h - 28);
+  const scale = Math.min(1, Math.max(0.1, (size.w - 8) / device)); const canvasH = Math.max(400, size.h - 28);
   const selEntry = st.layout.find((e) => e.id === sel) ?? null;
   const nChanges = Object.keys(st.values).length + (same(st.layout, d.siteSections.map((s) => ({ kind: 'section', id: s.id, hidden: false }))) ? 0 : 1);
   const saveLabel = { saved: 'All changes saved', saving: 'Saving…', unsaved: 'Unsaved changes', failed: 'Save failed' }[save];
@@ -155,13 +191,13 @@ export function HomeEditor() {
     <div className="b-body">
       <aside className="b-left">
         <div className="between" style={{ padding: '10px 12px 6px' }}><b style={{ fontSize: 13 }}>Sections</b>
-          {editable && <button className="btn btn-sm btn-primary" onClick={() => setDialog({ kind: 'library' })}><Icon n="plus" />Add section</button>}</div>
+          {editable && <button className="btn btn-sm btn-primary" onClick={() => setDialog({ kind: 'library' })}><Icon n="plus" /><span className="b-add-t">Add section</span></button>}</div>
         <ol className="b-scroll b-layers" aria-label="Homepage sections">{st.layout.map((e, i) => (
           <li key={e.id} className={`b-layer${sel === e.id ? ' on' : ''}${e.hidden ? ' off' : ''}`} draggable={editable}
             onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', String(i)); ev.dataTransfer.effectAllowed = 'move'; }}
             onDragOver={(ev) => { if (editable) { ev.preventDefault(); ev.currentTarget.classList.add('drop'); } }} onDragLeave={(ev) => ev.currentTarget.classList.remove('drop')}
             onDrop={(ev) => { ev.preventDefault(); ev.currentTarget.classList.remove('drop'); move(Number(ev.dataTransfer.getData('text/plain')), i); }}>
-            <button className="b-layer-main" onClick={() => setSel(e.id)} aria-current={sel === e.id}>
+            <button className="b-layer-main" title={label(e)} onClick={() => { if (sel === e.id) reveal(); else setSel(e.id); }} aria-current={sel === e.id}>
               <span className="b-grip" aria-hidden="true">⋮⋮</span>
               <span className="hp-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
               <Icon n={e.kind === 'section' ? SECTION_ICON[e.id] ?? 'layers' : 'plus'} width={15} height={15} />
@@ -180,9 +216,9 @@ export function HomeEditor() {
 
       <div className="b-canvas" ref={box} onClick={() => setSel(null)}>
         <div className="b-device" style={{ width: device * scale, height: canvasH }} onClick={(ev) => ev.stopPropagation()}>
-          <iframe ref={frame} title="Homepage canvas" srcDoc={html} onLoad={wire} style={{ width: device, height: canvasH / scale, transform: `scale(${scale})`, transformOrigin: '0 0' }} />
+          <iframe ref={frame} title="Homepage canvas" srcDoc={html} onLoad={onFrameLoad} style={{ width: device, height: canvasH / scale, zoom: scale }} />
         </div>
-        <span className="b-zoom">{device}px · {Math.round(scale * 100)}% · click a section to edit it</span>
+        <span className="b-zoom">{device}px · {Math.round(scale * 100)}% · click any text or photo to edit it</span>
       </div>
 
       <aside className="b-right">
@@ -231,7 +267,7 @@ function SectionFields({ fields, values, media, editable, onChange, onPickImage 
       <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} disabled={!editable} onClick={() => onPickImage(f.key)}><Icon n="image" />Choose photo</button></>; }
     else if (f.type === 'rich' || String(v).length > 60) control = <textarea className="textarea" maxLength={f.type === 'rich' ? 700 : 300} value={v} onChange={(e) => onChange(f, e.target.value.replace(/\n/g, ' '))} aria-label={f.label} />;
     else control = <input className="input" maxLength={f.key.endsWith('.value') ? 24 : 240} value={v} onChange={(e) => onChange(f, e.target.value)} aria-label={f.label} />;
-    return <div key={f.key} className={`field${changed ? ' hp-changed' : ''}`}><span>{f.label}{changed && <em className="hp-dot">edited</em>}</span>{control}
+    return <div key={f.key} data-field={f.key} className={`field${changed ? ' hp-changed' : ''}`}><span>{f.label}{changed && <em className="hp-dot">edited</em>}</span>{control}
       {f.type === 'rich' && <small>**Double stars** highlight words, as on the page.</small>}
       {changed && editable && <button type="button" className="btn btn-ghost btn-sm" style={{ padding: 0, height: 'auto', justifySelf: 'start' }} onClick={() => onChange(f, null)}>Reset to the original</button>}</div>;
   })}</>;

@@ -35,6 +35,12 @@ const CANVAS_CSS = `<style>
 [data-block-id] a,[data-block-id] summary,[data-block-id] button{pointer-events:none}
 [data-reveal],.reveal{opacity:1!important;transform:none!important}
 .hx-slide:not(.is-on),.hx-copy[hidden]{display:none}
+*,*::before,*::after{transition:none!important;animation:none!important}
+html{scroll-behavior:auto!important}
+[data-sf]{cursor:text;border-radius:4px}
+img[data-sf],[data-sf] img{cursor:pointer}
+[data-sf]:hover{outline:1.5px solid rgba(37,99,235,.7);outline-offset:3px}
+[data-sf].sf-on{outline:2px solid #2563EB;outline-offset:3px;background-color:rgba(37,99,235,.06)}
 </style>`;
 
 /** Field values for lib/page-fields.mjs: chosen photos ({ mediaId }) become { src, srcset, w, h, alt, fx, fy }. */
@@ -63,7 +69,9 @@ export async function homeCanvas(db: DB, cfg: Config, file: string, values: Reco
   const blockHtml = new Map(blocks.map((b) => [b.id, renderBlocks({ version: 1, blocks: [{ ...b, hidden: false }] }, { ...ctx, pageTitle: 'Home', editor: true })
     .replace(/^<div data-block-id="[^"]+"(?: data-hidden="1")?>|<\/div>$/g, '')]));
   const items: LayoutItem[] = layout.map((e) => (e.kind === 'section' ? { section: e.id, hidden: e.hidden } : { block: e.id, html: blockHtml.get(e.id) ?? '', hidden: e.hidden }));
-  const body = composeSections(applyFields(pageBody(cfg.siteRoot, file), await resolveFieldValues(db, values)), items,
+  const body = composeSections(applyFields(pageBody(cfg.siteRoot, file), await resolveFieldValues(db, values), { mark: true }), items,
     (id, html, kind) => `<div data-block-id="${esc(id)}"${kind.startsWith('hidden') ? ' data-hidden="1"' : ''}>${html}</div>`);
-  return [head.trimEnd(), '<body class="font-sans">', mark(part('header')).trimEnd(), `<main id="main" data-page="home">${body}</main>`, mark(part('footer')).trimEnd(), '</body></html>'].join('\n');
+  // every image loads at once: lazy loading inside a scaled, scrolled iframe can leave sections empty
+  return [head.trimEnd(), '<body class="font-sans">', mark(part('header')).trimEnd(), `<main id="main" data-page="home">${body}</main>`, mark(part('footer')).trimEnd(), '</body></html>'].join('\n')
+    .replace(/\sloading="lazy"/g, ' loading="eager"');
 }

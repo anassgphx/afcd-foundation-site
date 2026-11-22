@@ -823,3 +823,10 @@ a.db-h:hover { border-color: var(--line-strong); box-shadow: 0 8px 22px -16px rg
 /* compact rail: numbers only; the selected section's name shows on the canvas toolbar and in the inspector */
 @container bld (max-width: 1060px) { .b-layer { height: 40px; } }
 .b-layer-act { padding: 0 4px 0 18px; }
+
+/* homepage editor: status chip in the header; notices only when action is needed, flush with the toolbar */
+.b-chip { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+.b-chip.is-ok { color: #166534; border-color: #BBF7D0; background: #F0FDF4; }
+.b-chip.is-warn { color: #92400E; border-color: #FDE68A; background: #FFFBEB; cursor: help; }
+.b-chip.is-info { color: #1E3A8A; border-color: #BFDBFE; background: #EFF6FF; cursor: help; }
+.builder > .b-notice { margin: 0; border-radius: 0; border-width: 0 0 1px; padding: 8px 12px; }

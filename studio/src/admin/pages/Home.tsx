@@ -210,6 +210,16 @@ export function HomeEditor() {
 
   actionsRef.current = actionsFor; runActRef.current = runAct; labelRef.current = (id) => { const e = st.layout.find((x) => x.id === id); return e ? label(e) : id; };
   if (!d) return <Loading />;
+  // one quiet status chip in the header instead of a banner; banners are kept for things that need action
+  const reviewable = d.content && ['draft', 'changes_requested'].includes(status);
+  const nothing = d.problems.length === 1 && /nothing is changed/i.test(d.problems[0]);
+  const chip: { text: string; tone: 'muted' | 'ok' | 'warn' | 'info'; tip?: string } | null =
+    status === 'in_review' ? { text: 'In review · read-only', tone: 'info', tip: 'Withdraw it to edit.' }
+    : status === 'approved' ? { text: 'Approved · ready to publish', tone: 'ok' }
+    : !reviewable || save !== 'saved' ? null
+    : nothing || !d.content ? { text: 'No changes', tone: 'muted', tip: 'Edit a section to start a draft.' }
+    : d.problems.length ? { text: `${d.problems.length} to fix before review`, tone: 'warn', tip: d.problems.join('\n') }
+    : { text: 'Ready for review', tone: 'ok' };
   const scale = Math.min(1, Math.max(0.1, (size.w - 8) / device)); const canvasH = Math.max(400, size.h - 28); scaleRef.current = scale;
   const selEntry = st.layout.find((e) => e.id === sel) ?? null;
   const nChanges = Object.keys(st.values).length + (same(st.layout, d.siteSections.map((s) => ({ kind: 'section', id: s.id, hidden: false }))) ? 0 : 1);
@@ -220,6 +230,7 @@ export function HomeEditor() {
       <div className="b-title"><b>Homepage</b><span className="mono muted">index.html</span></div>
       <span className="pills">{live && status !== 'published' && <LiveBadge />}{d.content ? <Badge s={status} /> : <span className="pill">Original</span>}</span>
       <span className={`muted hp-save is-${save}`} role="status" style={{ fontSize: 12 }}>{saveLabel}</span>
+      {chip && <span className={`b-chip is-${chip.tone}`} title={chip.tip}>{chip.text}</span>}
       <span style={{ flex: 1 }} />
       <div className="seg" role="group" aria-label="Device">{DEVICES.map(([w, ic, l]) => <button key={w} className={device === w ? 'on' : ''} onClick={() => setDevice(w)} title={l} aria-label={l}><Icon n={ic} width={15} height={15} style={{ verticalAlign: -3 }} /></button>)}</div>
       <button className="btn btn-ghost icon-btn" onClick={undo} disabled={!past.length || !editable} title="Undo (⌘Z)" aria-label="Undo"><Icon n="undo" /></button>
@@ -227,14 +238,13 @@ export function HomeEditor() {
       <button className="btn btn-ghost" onClick={() => setDialog({ kind: 'history' })}><Icon n="clock" />History</button>
       <button className="btn" onClick={preview} disabled={!!busy}><Icon n="eye" />{busy === 'preview' ? 'Building…' : 'Preview'}</button>
       {editable && <button className="btn" onClick={() => doSave()} disabled={save === 'saved' || save === 'saving'}><Icon n="save" />Save</button>}
-      {d.content && ['draft', 'changes_requested'].includes(status) && can('page.update') && <button className="btn btn-primary" onClick={() => act('submit')} disabled={!!busy}><Icon n="send" />Submit for review</button>}
+      {d.content && ['draft', 'changes_requested'].includes(status) && can('page.update') && <button className="btn btn-primary" onClick={() => act('submit')} disabled={!!busy || (save === 'saved' && d.problems.length > 0)} title={save === 'saved' && d.problems.length ? d.problems.join(' · ') : undefined}><Icon n="send" />Submit for review</button>}
       {status === 'in_review' && can('page.approve') && <><button className="btn" onClick={() => setDialog({ kind: 'changes' })}>Request changes</button><button className="btn btn-ok" onClick={() => act('approve')} disabled={!!busy}><Icon n="check" />Approve</button></>}
       {status === 'approved' && can('page.publish') && <button className="btn btn-ok" onClick={() => setDialog({ kind: 'publish' })}><Icon n="rocket" />Publish</button>}
       {d.content && ['in_review', 'approved'].includes(status) && can('page.update') && <button className="btn btn-ghost" onClick={() => act('withdraw')}><Icon n="undo" />Withdraw</button>}
     </div>
     {errs.length > 0 && <div className="notice n-warn b-notice" role="alert"><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErrs([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
-    {d.content && d.problems.length > 0 && ['draft', 'changes_requested'].includes(status) && save === 'saved' && <div className="notice n-info b-notice"><div><b>Before review:</b> {d.problems.join(' · ')}</div></div>}
-    {status === 'in_review' && <div className="notice n-info b-notice">In review: read-only. Withdraw it to edit.</div>}
+    {status === 'changes_requested' && <div className="notice n-warn b-notice" role="status"><div><b>Changes requested.</b> Update the homepage, then submit it for review again.{d.history.comments.filter((x) => x.kind === 'request_changes' && x.body).slice(-1).map((x) => <q key={x.id} style={{ marginLeft: 6 }}>{x.body}</q>)}</div></div>}
 
     <div className="b-body">
       <aside className="b-left">

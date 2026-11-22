@@ -267,60 +267,61 @@
     });
   })();
 
-  /* ---------- Hero slider ---------- */
+  /* ---------- Hero slider (cinematic, story bar) ---------- */
   (function () {
-    if (!$('#hero')) return;
-    var slides = $$('.hero-slide'), dots = $$('.hero-dot'), bars = $$('.hero-progress-bar');
-    var cur = 0, playing = !reduce, DURATION = 7000, start = 0, elapsed = 0, raf, userPaused = reduce;
-    var pauseBtn = $('#hero-pause');
+    var root = $('#hero'); if (!root) return;
+    var slides = $$('.hx-slide', root), copies = $$('.hx-copy', root), tabs = $$('[data-go]', root);
+    var bars = $$('.hx-bars .hx-bar i', root), count = $('.hx-count', root), pb = $('[data-pause]', root);
+    var cur = 0, DUR = 7000, done = 0, t0 = performance.now(), userPaused = reduce, hover = false;
+    var rtl = function () { return doc.dir === 'rtl' ? -1 : 1; };
+    function running() { return !userPaused && !hover; }
     function go(i) {
-      i = (i + slides.length) % slides.length;
-      slides.forEach(function (s, k) {
-        var on = k === i; s.classList.toggle('active', on);
-        if (on) { s.removeAttribute('inert'); s.removeAttribute('aria-hidden'); } else { s.setAttribute('inert', ''); s.setAttribute('aria-hidden', 'true'); }
-      });
-      dots.forEach(function (d, k) { if (k === i) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current'); });
-      bars.forEach(function (b, k) { b.style.transform = 'scaleX(' + (k < i ? 1 : 0) + ')'; });
-      cur = i; $('#hero-cur').textContent = pad(i + 1); elapsed = 0; start = performance.now();
-      if (!playing) bars[i].style.transform = 'scaleX(1)';
+      cur = (i + slides.length) % slides.length; done = 0; t0 = performance.now();
+      slides.forEach(function (s, k) { var on = k === cur; s.classList.toggle('is-on', on); if (on) s.removeAttribute('aria-hidden'); else s.setAttribute('aria-hidden', 'true'); });
+      copies.forEach(function (c, k) { c.classList.toggle('is-on', k === cur); c.hidden = k !== cur; });
+      tabs.forEach(function (t) { var on = +t.dataset.go === cur; t.classList.toggle('is-on', on); t.setAttribute('aria-current', on ? 'true' : 'false'); });
+      bars.forEach(function (b, k) { b.style.transform = 'scaleX(' + (k < cur || (k === cur && userPaused) ? 1 : 0) + ')'; });
+      if (count) count.textContent = pad(cur + 1);
+    }
+    function setPaused(on) {
+      userPaused = on; root.classList.toggle('is-paused', on);
+      pb.setAttribute('aria-label', on ? 'Play slideshow' : 'Pause slideshow');
+      if (!on) t0 = performance.now();
     }
     function tick(now) {
-      if (playing) {
-        var p = Math.min(1, (elapsed + now - start) / DURATION);
+      if (running()) {
+        var p = Math.min(1, done + (now - t0) / DUR);
         bars[cur].style.transform = 'scaleX(' + p + ')';
         if (p >= 1) go(cur + 1);
       }
-      raf = requestAnimationFrame(tick);
+      requestAnimationFrame(tick);
     }
-    function setPlaying(on) {
-      if (on === playing) return;
-      if (on) { start = performance.now(); } else { elapsed += performance.now() - start; }
-      playing = on;
-      $('#ico-pause').classList.toggle('hidden', !on); $('#ico-play').classList.toggle('hidden', on);
-      pauseBtn.setAttribute('aria-label', on ? 'Pause slideshow' : 'Play slideshow');
+    function hold(on) {
+      if (on === hover) return;
+      if (on) done = Math.min(1, done + (performance.now() - t0) / DUR); else t0 = performance.now();
+      hover = on;
     }
-    function userAct() { userPaused = true; setPlaying(false); }
-    $('#hero-next').addEventListener('click', function () { userAct(); go(cur + (doc.dir === 'rtl' ? -1 : 1)); });
-    $('#hero-prev').addEventListener('click', function () { userAct(); go(cur - (doc.dir === 'rtl' ? -1 : 1)); });
-    dots.forEach(function (d, k) { d.addEventListener('click', function () { userAct(); go(k); }); });
-    pauseBtn.addEventListener('click', function () { userPaused = playing; setPlaying(!playing); });
-    var hero = $('#hero');
-    hero.addEventListener('mouseenter', function () { setPlaying(false); });
-    hero.addEventListener('mouseleave', function () { if (!userPaused) setPlaying(true); });
-    hero.addEventListener('focusin', function () { setPlaying(false); });
-    hero.setAttribute('tabindex', '-1');
-    hero.addEventListener('keydown', function (e) {
-      if (e.key === 'ArrowRight') { userAct(); go(cur + (doc.dir === 'rtl' ? -1 : 1)); }
-      if (e.key === 'ArrowLeft') { userAct(); go(cur - (doc.dir === 'rtl' ? -1 : 1)); }
+    function user(i) { go(i); }
+    tabs.forEach(function (t) { t.addEventListener('click', function () { user(+t.dataset.go); }); });
+    $('[data-prev]', root).addEventListener('click', function () { user(cur - rtl()); });
+    $('[data-next]', root).addEventListener('click', function () { user(cur + rtl()); });
+    pb.addEventListener('click', function () { if (!userPaused) done = Math.min(1, done + (performance.now() - t0) / DUR); setPaused(!userPaused); });
+    root.addEventListener('mouseenter', function () { hold(true); });
+    root.addEventListener('mouseleave', function () { hold(false); });
+    root.addEventListener('focusin', function () { hold(true); });
+    root.addEventListener('focusout', function (e) { if (!root.contains(e.relatedTarget)) hold(false); });
+    root.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight') user(cur + rtl());
+      if (e.key === 'ArrowLeft') user(cur - rtl());
     });
     var tx = null;
-    hero.addEventListener('touchstart', function (e) { tx = e.touches[0].clientX; }, { passive: true });
-    hero.addEventListener('touchend', function (e) {
+    root.addEventListener('touchstart', function (e) { tx = e.touches[0].clientX; }, { passive: true });
+    root.addEventListener('touchend', function (e) {
       if (tx === null) return; var dx = e.changedTouches[0].clientX - tx; tx = null;
-      if (Math.abs(dx) > 45) { userAct(); go(cur + (dx < 0 ? 1 : -1) * (doc.dir === 'rtl' ? -1 : 1)); }
+      if (Math.abs(dx) > 45) user(cur + (dx < 0 ? 1 : -1) * rtl());
     });
-    if (reduce) { $('#ico-pause').classList.add('hidden'); $('#ico-play').classList.remove('hidden'); pauseBtn.setAttribute('aria-label', 'Play slideshow'); }
-    go(0); raf = requestAnimationFrame(tick);
+    if (reduce) setPaused(true);
+    go(0); requestAnimationFrame(tick);
   })();
 
   /* ---------- About band: mission / vision / approach slider ---------- */

@@ -94,7 +94,7 @@ export async function view(db: DB, cfg: Config, actor: NonNullable<Actor>) {
   const [by] = row.updatedBy ? await db.select({ name: users.name }).from(users).where(eq(users.id, row.updatedBy)) : [];
   const { _revision, ...pubMenu } = (pub ?? {}) as Menu & { _revision?: string };
   return {
-    status: row.status, draft, revision: _revision ?? null, publishedAt: row.publishedAt, updatedAt: row.updatedAt, updatedByName: by?.name ?? null, submittedBy: row.submittedBy,
+    status: row.status, draft, published: pub ? pubMenu : null, revision: _revision ?? null, publishedAt: row.publishedAt, updatedAt: row.updatedAt, updatedByName: by?.name ?? null, submittedBy: row.submittedBy,
     pending: JSON.stringify(draft) !== JSON.stringify(pub ? pubMenu : null),
     linkIssues: checkLinks(cfg, draft), pages: sitePages(cfg), navKeys: NAV_KEYS,
   };

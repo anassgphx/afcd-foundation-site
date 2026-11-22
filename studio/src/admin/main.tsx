@@ -20,7 +20,8 @@ import { MenusPage } from './pages/Menus.tsx';
 import { HomeEditor } from './pages/Home.tsx';
 import { Breadcrumbs, Notifications, SearchButton, UserMenu, useRecent, type NavLink } from './Topbar.tsx';
 import { MediaLibrary } from './pages/Media.tsx';
-import { ApprovalQueue, Publishing, ActivityLog, Users } from './pages/Admin.tsx';
+import { Publishing, ActivityLog, Users } from './pages/Admin.tsx';
+import { ApprovalsPage } from './pages/Approvals.tsx';
 
 function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
@@ -216,7 +217,7 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   if (m) return { title: m[1] === 'new' ? 'New project' : 'Edit project', el: <ProjectEditor key={m[1]} id={m[1]} /> };
   if (path.startsWith('/studio/projects')) return { title: 'Projects', el: <ProjectsList /> };
   if (path.startsWith('/studio/media')) return { title: 'Media Library', el: <MediaLibrary /> };
-  if (path.startsWith('/studio/approvals')) return { title: 'Approval Queue', el: <ApprovalQueue /> };
+  if (path.startsWith('/studio/approvals')) return { title: 'Approval Queue', el: <ApprovalsPage /> };
   if (path.startsWith('/studio/publishing')) return { title: 'Publishing', el: <Publishing /> };
   if (path.startsWith('/studio/activity')) return { title: 'Activity Log', el: <ActivityLog /> };
   if (path.startsWith('/studio/users')) return { title: 'Users & Roles', el: <Users /> };

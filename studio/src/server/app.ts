@@ -30,6 +30,7 @@ import * as GSC from './modules/google/gsc.ts';
 import * as JOBS from './modules/jobs/service.ts';
 import * as TR from './modules/translations/service.ts';
 import { registerMenuRoutes } from './modules/menus/routes.ts';
+import { registerReviewRoutes } from './modules/review/routes.ts';
 import * as HM from './modules/home/service.ts';
 import * as WS from './modules/workspace/service.ts';
 import { overview as dashboardOverview } from './modules/workspace/overview.ts';
@@ -429,6 +430,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   api.post('/seo/schema/publish', perm('seo.publish'), async (c) => c.json(await publisher.publishSchema(actor(c))));
   api.post('/seo/schema/unpublish', perm('seo.publish'), async (c) => c.json(await publisher.unpublishSchema(actor(c))));
   registerMenuRoutes(api);   // website menus (modules/menus)
+  registerReviewRoutes(api); // approval queue across all content (modules/review)
 
   // ---------------------------------------------------------------- SEO Pro: Google Search Console + background jobs
   // Admins (seo.publish) connect, choose the property, change sync settings and disconnect; SEO editors (seo.update)

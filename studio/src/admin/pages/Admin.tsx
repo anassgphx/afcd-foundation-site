@@ -5,22 +5,6 @@ import { Badge, Icon, Link, Modal, ago, fmtDate, useCan, useMe, useToast } from 
 import { DataTable, EmptyState, ListToolbar, useUrlState, type Column } from '../DataTable.tsx';
 import { Loading } from './Dashboard.tsx';
 
-export function ApprovalQueue() {
-  const [rows, setRows] = useState<any[] | null>(null);
-  useEffect(() => { api<any[]>('/projects').then((p) => setRows(p.filter((x) => ['in_review', 'approved', 'changes_requested'].includes(x.status)))).catch(() => setRows([])); }, []);
-  const groups = [['in_review', 'Waiting for review'], ['approved', 'Approved, ready to publish'], ['changes_requested', 'Sent back to authors']] as const;
-  return <>
-    <div className="page-h"><div><h1>Approval Queue</h1><p>Content moving through review. Approvers cannot approve their own submissions.</p></div></div>
-    {!rows ? <Loading /> : <div className="grid">{groups.map(([s, label]) => {
-      const list = rows.filter((r) => r.status === s);
-      return <section className="card" key={s}><div className="card-h"><h2>{label}</h2><span className="muted">{list.length}</span></div>
-        {list.length === 0 ? <div className="empty">Nothing here.</div> : <table className="table"><tbody>{list.map((r) => (
-          <tr key={r.id}><td><Link className="title" to={`/studio/projects/${r.id}`}>{r.name}</Link><div className="sub">{r.pillars.map((p: any) => p.name).join(' · ')}</div></td>
-            <td style={{ width: 1 }}><Badge s={r.status} /></td><td className="sub" style={{ width: 1, whiteSpace: 'nowrap' }}>{ago(r.updatedAt)}</td></tr>))}</tbody></table>}
-      </section>; })}</div>}
-  </>;
-}
-
 export function Publishing() {
   const [jobs, setJobs] = useState<any[] | null>(null); const [open, setOpen] = useState<any>(null);
   useEffect(() => { api<any[]>('/publish-jobs').then(setJobs).catch(() => setJobs([])); }, []);

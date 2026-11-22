@@ -658,3 +658,42 @@ body.show-notes .note { display: block; }
 
 /* RTL font fallback for Arabic preview */
 [dir="rtl"] body { font-family: Inter, "Noto Sans Arabic", "Geeza Pro", Tahoma, sans-serif; }
+
+/* Inner page header: soft brand-glow panel, breadcrumb pill, title + "at a glance" card */
+.phd { position: relative; overflow: hidden; isolation: isolate; border-radius: 32px; border: 1px solid #ECECEC; background: #FAFAFA; padding: 18px; }
+.phd-glow { position: absolute; inset: 0; z-index: -1; pointer-events: none; background:
+    radial-gradient(520px 300px at 0% 0%, rgba(255,178,185,.38), transparent 70%),
+    radial-gradient(520px 320px at 55% 0%, rgba(168,221,251,.32), transparent 70%),
+    radial-gradient(520px 340px at 100% 100%, rgba(251,227,138,.34), transparent 70%),
+    radial-gradient(420px 300px at 20% 110%, rgba(130,229,145,.22), transparent 70%); }
+.phd-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.phd-crumbs ol { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 38px; padding: 4px 14px 4px 4px; border-radius: 9999px; background: rgba(255,255,255,.85); border: 1px solid #EAEAEA; font-size: 13px; color: var(--mid); backdrop-filter: blur(8px); }
+.phd-crumbs a { transition: color .2s ease; }
+.phd-crumbs a:hover { color: #000; }
+.phd-home { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9999px; background: #000; color: #fff !important; }
+.phd-home svg { width: 14px; height: 14px; }
+.phd-sep { color: #C8C8C8; }
+.phd-cur { color: #000; font-weight: 500; }
+.phd-label { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 12px; border-radius: 9999px; background: #000; color: #fff; font-size: 11px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; }
+.phd-body { margin-top: 28px; display: grid; gap: 22px; }
+.phd-main { display: flex; flex-direction: column; justify-content: flex-end; padding: 4px 4px 0; }
+.phd-card { align-self: end; padding: 20px; border-radius: 24px; background: rgba(255,255,255,.92); border: 1px solid #EAEAEA; box-shadow: 0 30px 60px -40px rgba(0,0,0,.25); backdrop-filter: blur(10px); }
+.phd-kicker { font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; color: var(--mid); }
+.phd-lead { margin-top: 10px; font-size: 16.5px; line-height: 1.6; color: var(--charcoal); }
+.phd-card .sh-points { margin-top: 16px; }
+.phd-jumps { margin-top: 18px; padding-top: 16px; border-top: 1px solid #EFEFEF; }
+.phd-jumps ul { margin-top: 8px; display: grid; gap: 2px; }
+.phd-jump { display: flex; align-items: center; gap: 12px; min-height: 38px; padding: 0 10px; margin: 0 -10px; border-radius: 12px; font-size: 14px; font-weight: 500; transition: background-color .2s ease; }
+.phd-jump:hover { background: #F3F3F3; }
+.phd-jn { font-size: 11px; color: var(--mid); font-variant-numeric: tabular-nums; }
+.phd-jt { flex: 1; }
+.phd-ja { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 9999px; border: 1px solid #E5E5E5; font-size: 11px; transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
+.phd-jump:hover .phd-ja { background: #000; color: #fff; border-color: #000; }
+.phd-line { position: absolute; left: 0; right: 0; bottom: 0; }
+@media (min-width: 640px) { .phd-jumps ul { grid-template-columns: 1fr 1fr; column-gap: 24px; } }
+@media (min-width: 1024px) {
+  .phd { padding: 26px 26px 30px; }
+  .phd-body { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 40px; margin-top: 56px; align-items: end; }
+  .phd-main { padding: 0 14px 10px; min-height: 260px; }
+  .phd-card { padding: 26px; }
+}

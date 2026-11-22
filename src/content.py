@@ -74,30 +74,62 @@ PROJECTS = [
 
 
 def page(name, title, description, active, body):
+    body = body.replace('{{JUMPS}}', jumps_html(body))
     (OUT / name).write_text(
         f'---\ntitle: {title}\ndescription: {description}\nactive: {active}\n---\n<span id="top"></span>\n{body.strip()}\n'
     )
 
 
+def jumps_html(body):
+    """'On this page' links, built from the page's own <section id> + its heading label."""
+    import re as _re
+    items = []
+    for m in _re.finditer(r'<section id="([^"]+)"', body):
+        nxt = body.find('<section', m.end())
+        chunk = body[m.end():nxt if nxt != -1 else None]
+        lab = (_re.search(r'class="sh-label">([^<]+)<', chunk)
+               or _re.search(r'class="label[^"]*">\d+ / ([^<]+)<', chunk)
+               or _re.search(r'<h2[^>]*>([^<]+)<', chunk))
+        if lab:
+            items.append((m.group(1), lab.group(1).strip()))
+    if len(items) < 2:
+        return ''
+    links = ''.join(
+        f'<li><a class="phd-jump" href="#{i}"><span class="phd-jn">{n:02d}</span><span class="phd-jt">{t}</span><span class="phd-ja" aria-hidden="true">↓</span></a></li>'
+        for n, (i, t) in enumerate(items, 1))
+    return f'<nav class="phd-jumps" aria-label="On this page"><p class="phd-kicker">On this page</p><ul>{links}</ul></nav>'
+
+
+HOME_ICO = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.2 8 2.8l5.5 4.4V13a.8.8 0 0 1-.8.8H9.6V10H6.4v3.8H3.3a.8.8 0 0 1-.8-.8V7.2Z"/></svg>'
+
+
 def page_header(crumbs, label, title, lead, extra='', points=()):
     trail = ''.join(
-        f'<li><a class="hover:text-ink-pure" href="{href}">{text}</a></li><li aria-hidden="true">/</li>'
+        f'<li class="phd-sep" aria-hidden="true">/</li><li><a href="{href}">{text}</a></li>'
         for text, href in crumbs[:-1]
-    ) + f'<li aria-current="page" class="text-ink-pure">{crumbs[-1][0]}</li>'
+    ) + f'<li class="phd-sep" aria-hidden="true">/</li><li aria-current="page" class="phd-cur">{crumbs[-1][0]}</li>'
     return f'''
-<section class="page-head relative overflow-hidden border-b border-ink-light">
-  <div class="wrap pb-14 pt-8 lg:pb-20 lg:pt-12">
-    <header class="sh">
-      <div class="sh-top">
-        <nav aria-label="Breadcrumb" class="text-[13px] text-ink-mid">
-          <ol class="flex flex-wrap items-center gap-2"><li><a class="hover:text-ink-pure" href="index.html">Home</a></li><li aria-hidden="true">/</li>{trail}</ol>
+<section class="page-head">
+  <div class="wrap pb-10 pt-5 lg:pb-14 lg:pt-8">
+    <header class="phd">
+      <div class="phd-glow" aria-hidden="true"></div>
+      <div class="phd-top">
+        <nav aria-label="Breadcrumb" class="phd-crumbs">
+          <ol><li><a href="index.html" class="phd-home" aria-label="Home">{HOME_ICO}</a></li>{trail}</ol>
         </nav>
-        <span class="sh-rule" aria-hidden="true"></span><span class="sh-meta">{label}</span>
+        <span class="phd-label"><span class="tb-dot" aria-hidden="true"></span>{label}</span>
       </div>
-      <div class="sh-body">
-        <h1 class="sh-title sh-xl">{title}</h1>
-        <div class="sh-aside"><p class="sh-desc">{lead}</p>{points_html(points)}</div>
+      <div class="phd-body">
+        <div class="phd-main">
+          <h1 class="sh-title sh-xl">{title}</h1>
+        </div>
+        <div class="phd-card">
+          <p class="phd-kicker">At a glance</p>
+          <p class="phd-lead">{lead}</p>{points_html(points)}
+          {{{{JUMPS}}}}
+        </div>
       </div>
+      <div class="brand-line brand-line-thin phd-line" aria-hidden="true"></div>
     </header>{extra}
   </div>
 </section>'''

@@ -1,0 +1,304 @@
+{
+  "version": 2,
+  "source": "AFCD Studio",
+  "generatedAt": "2026-11-22T01:22:56.866Z",
+  "projects": [
+    {
+      "seo": {
+        "title": "",
+        "description": ""
+      },
+      "file": "project-leadership-lab.html",
+      "name": "Leadership Lab 2.0",
+      "slug": "leadership-lab",
+      "sort": 10,
+      "media": [],
+      "detail": {
+        "hero": null,
+        "lede": "Supporting emerging leaders through entrepreneurship and civic engagement.",
+        "rows": [
+          [
+            "Context",
+            "A large youth population in Morocco is turning to entrepreneurship, and attitudes toward innovation and risk-taking are shifting."
+          ],
+          [
+            "Approach",
+            "Adapts practices from the U.S. entrepreneurial system and principles of participatory democracy."
+          ],
+          [
+            "Activities",
+            "Year-long civic engagement and entrepreneurship training tracks for selected young people."
+          ],
+          [
+            "Results",
+            "Participant stories shared on the AFCD blog (2023)."
+          ]
+        ],
+        "facts": [
+          [
+            "Pillar",
+            "Youth Empowerment"
+          ],
+          [
+            "Category",
+            "Youth Leadership"
+          ],
+          [
+            "Format",
+            "Year-long training"
+          ]
+        ],
+        "photo": "Leadership Lab 2.0 · project photo",
+        "gallery": [],
+        "revision": "424835c6-50fd-44e0-b58b-8ff4599a5837",
+        "objectives": []
+      },
+      "pillar": "youth-empowerment",
+      "pillars": [
+        "youth-empowerment"
+      ],
+      "summary": "Supporting emerging leaders through entrepreneurship and civic engagement.",
+      "category": "Youth Leadership"
+    },
+    {
+      "seo": {
+        "title": "",
+        "description": ""
+      },
+      "file": null,
+      "name": "Youth First Academy",
+      "slug": "youth-first-academy",
+      "sort": 20,
+      "media": [],
+      "detail": {},
+      "pillar": "youth-empowerment",
+      "pillars": [
+        "youth-empowerment"
+      ],
+      "summary": "",
+      "category": "Youth Programme"
+    },
+    {
+      "seo": {
+        "title": "",
+        "description": ""
+      },
+      "file": null,
+      "name": "Let’s Dialogue",
+      "slug": "lets-dialogue",
+      "sort": 30,
+      "media": [],
+      "detail": {},
+      "pillar": "youth-empowerment",
+      "pillars": [
+        "youth-empowerment"
+      ],
+      "summary": "",
+      "category": "Bootcamp"
+    },
+    {
+      "seo": {
+        "title": "",
+        "description": ""
+      },
+      "file": null,
+      "name": "META Skills for Women Empowerment",
+      "slug": "meta-skills-for-women-empowerment",
+      "sort": 40,
+      "media": [],
+      "detail": {},
+      "pillar": "women-empowerment",
+      "pillars": [
+        "women-empowerment"
+      ],
+      "summary": "",
+      "category": "Skills Training"
+    },
+    {
+      "seo": {
+        "title": "",
+        "description": ""
+      },
+      "file": null,
+      "name": "TOT: Gender-based violence",
+      "slug": "tot-gender-based-violence",
+      "sort": 50,
+      "media": [],
+      "detail": {},
+      "pillar": "women-empowerment",
+      "pillars": [
+        "women-empowerment"
+      ],
+      "summary": "",
+      "category": "Training of Trainers"
+    },
+    {
+      "seo": {
+        "title": "",
+        "description": ""
+      },
+      "file": "project-eco-citizen.html",
+      "name": "Eco Citizen",
+      "slug": "eco-citizen",
+      "sort": 60,
+      "media": [],
+      "detail": {
+        "hero": null,
+        "lede": "Encouraging environmental awareness and community-led action.",
+        "rows": [
+          [
+            "Context",
+            "Residents and decision-makers in Ait Ourir describe household waste management as a persistent problem."
+          ],
+          [
+            "Approach",
+            "A participatory process bringing residents, local NGOs and elected representatives together."
+          ],
+          [
+            "Activities",
+            "Awareness campaigns (2020), then workshops on waste sorting and recycling and training for new local committees (2021)."
+          ],
+          [
+            "Results",
+            "Alternative waste-management proposals developed with the community."
+          ]
+        ],
+        "facts": [
+          [
+            "Pillar",
+            "Environment and Climate"
+          ],
+          [
+            "Category",
+            "Environment"
+          ],
+          [
+            "Location",
+            "Ait Ourir"
+          ],
+          [
+            "Years",
+            "2020 – 2021"
+          ]
+        ],
+        "photo": "Eco Citizen · Ait Ourir 2021",
+        "gallery": [],
+        "revision": "23c144b8-994e-4604-befc-ffab7338c594",
+        "objectives": []
+      },
+      "pillar": "green-thumbs",
+      "pillars": [
+        "green-thumbs"
+      ],
+      "summary": "Encouraging environmental awareness and community-led action.",
+      "category": "Environment"
+    },
+    {
+      "seo": {
+        "title": "",
+        "description": ""
+      },
+      "file": null,
+      "name": "Oxygen",
+      "slug": "oxygen",
+      "sort": 70,
+      "media": [],
+      "detail": {},
+      "pillar": "green-thumbs",
+      "pillars": [
+        "green-thumbs"
+      ],
+      "summary": "",
+      "category": "Environment"
+    },
+    {
+      "seo": {
+        "title": "",
+        "description": ""
+      },
+      "file": null,
+      "name": "Al Haouz Environmental Film Festival",
+      "slug": "al-haouz-environmental-film-festival",
+      "sort": 80,
+      "media": [],
+      "detail": {},
+      "pillar": "green-thumbs",
+      "pillars": [
+        "green-thumbs"
+      ],
+      "summary": "",
+      "category": "Culture &amp; Environment"
+    },
+    {
+      "seo": {
+        "title": "",
+        "description": ""
+      },
+      "file": "project-youth-green-generation.html",
+      "name": "Youth Green Generation",
+      "slug": "youth-green-generation",
+      "sort": 90,
+      "media": [],
+      "detail": {
+        "hero": null,
+        "lede": "Supporting young people in developing responses to climate challenges.",
+        "rows": [
+          [
+            "Context",
+            "Builds on AFCD’s earlier climate projects, locally and nationally (blog, November 2023)."
+          ],
+          [
+            "Approach",
+            "Empowering young people to take the lead on climate action in their communities."
+          ],
+          [
+            "Activities",
+            "Call for applications for the 2024 cohort."
+          ]
+        ],
+        "facts": [
+          [
+            "Pillar",
+            "Environment and Climate"
+          ],
+          [
+            "Category",
+            "Climate Action"
+          ],
+          [
+            "Cohort",
+            "2024"
+          ]
+        ],
+        "photo": "Youth Green Generation · 2024 call",
+        "gallery": [],
+        "revision": "9f5b1845-7f3c-4844-be74-68c7c246da0f",
+        "objectives": []
+      },
+      "pillar": "green-thumbs",
+      "pillars": [
+        "green-thumbs"
+      ],
+      "summary": "Supporting young people in developing responses to climate challenges.",
+      "category": "Climate Action"
+    },
+    {
+      "seo": {
+        "title": "",
+        "description": ""
+      },
+      "file": null,
+      "name": "SAADA Initiative Project",
+      "slug": "saada-initiative-project",
+      "sort": 100,
+      "media": [],
+      "detail": {},
+      "pillar": "digital-empowerment",
+      "pillars": [
+        "digital-empowerment"
+      ],
+      "summary": "",
+      "category": "Digital Skills"
+    }
+  ]
+}

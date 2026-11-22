@@ -8,7 +8,7 @@ Anything AFCD still has to supply is shown as a visible placeholder, never inven
 import os, re
 from pathlib import Path
 
-OUT = Path(__file__).parent / 'pages'
+OUT = Path(os.environ.get('STUDIO_OUT') or Path(__file__).parent / 'pages')
 ARR = '<span class="arr" aria-hidden="true">↗</span>'
 
 # Official values (AFCD Connect institutional profile)
@@ -91,28 +91,30 @@ PILLARS = [
 ]
 
 # name, pillar slug, pillar name, category, detail page (or None), one-line summary
-PROJECTS = [
-    ('Leadership Lab 2.0', 'youth-empowerment', 'Youth Empowerment', 'Youth Leadership', 'project-leadership-lab.html',
-     'Supporting emerging leaders through entrepreneurship and civic engagement.'),
-    ('Youth First Academy', 'youth-empowerment', 'Youth Empowerment', 'Youth Programme', None,
-     ''),
-    ('Let’s Dialogue', 'youth-empowerment', 'Youth Empowerment', 'Bootcamp', None,
-     ''),
-    ('META Skills for Women Empowerment', 'women-empowerment', 'Women’s Empowerment', 'Skills Training', None,
-     ''),
-    ('TOT: Gender-based violence', 'women-empowerment', 'Women’s Empowerment', 'Training of Trainers', None,
-     ''),
-    ('Eco Citizen', 'green-thumbs', 'Environment and Climate', 'Environment', 'project-eco-citizen.html',
-     'Encouraging environmental awareness and community-led action.'),
-    ('Oxygen', 'green-thumbs', 'Environment and Climate', 'Environment', None,
-     ''),
-    ('Al Haouz Environmental Film Festival', 'green-thumbs', 'Environment and Climate', 'Culture & Environment', None,
-     ''),
-    ('Youth Green Generation', 'green-thumbs', 'Environment and Climate', 'Climate Action', 'project-youth-green-generation.html',
-     'Supporting young people in developing responses to climate challenges.'),
-    ('SAADA Initiative Project', 'digital-empowerment', 'Digital Inclusion and Innovation', 'Digital Skills', None,
-     ''),
-]
+# Project data lives in src/data/projects.json (managed by AFCD Studio). STUDIO_PROJECTS_JSON can point elsewhere for previews.
+import json as _json
+_PROJECTS_FILE = Path(os.environ.get('STUDIO_PROJECTS_JSON') or Path(__file__).parent / 'data' / 'projects.json')
+_PROJECT_DATA = _json.loads(_PROJECTS_FILE.read_text(encoding='utf-8'))['projects']
+_PILLAR_NAMES = {'youth-empowerment': 'Youth Empowerment', 'women-empowerment': 'Women’s Empowerment',
+                 'green-thumbs': 'Environment and Climate', 'digital-empowerment': 'Digital Inclusion and Innovation'}
+from html import escape as _esc
+# keep the file order unless Studio gives an explicit sort value
+_PROJECT_DATA = [p for _i, p in sorted(enumerate(_PROJECT_DATA), key=lambda ip: (ip[1].get('sort', (ip[0] + 1) * 10), ip[0]))]
+PROJECTS = [(p['name'], p['pillar'], _PILLAR_NAMES[p['pillar']], p['category'], p['file'] if p.get('detail') else None, p.get('summary') or '')
+            for p in _PROJECT_DATA]
+# every pillar a project is linked to (primary first); Studio exports "pillars", older data only has "pillar"
+PROJECT_PILLARS = {p['name']: (p.get('pillars') or [p['pillar']]) for p in _PROJECT_DATA}
+
+
+def media_img(m, cls, sizes='100vw', eager=False):
+    """Responsive <img> for a Studio media item ({src, srcset, w, h, alt}). Falls back to a placeholder if missing."""
+    if not m:
+        return ''
+    load = 'eager" fetchpriority="high' if eager else 'lazy'
+    return (f'<img src="{m["src"]}" srcset="{m["srcset"]}" sizes="{sizes}" width="{m["w"]}" height="{m["h"]}" '
+            f'alt="{_esc(m.get("alt") or "")}" loading="{load}" decoding="async" class="{cls} object-cover" '
+            f'style="object-position:{m.get("fx", 50)}% {m.get("fy", 50)}%">')
+
 
 
 PILLAR_FILE = {'youth-empowerment': 'youth-empowerment.html', 'women-empowerment': 'womens-empowerment.html',
@@ -568,7 +570,7 @@ def pillars():
     for i, (slug, n, t, d, rel) in enumerate(PILLARS):
         tone = PILLAR_TONE[slug]
         objs = [(ref, text, desc) for ref, text, desc, links in OBJECTIVES if any(sl == slug for _n, sl in links)]
-        projs = [p for p in PROJECTS if p[1] == slug]
+        projs = [p for p in PROJECTS if slug in PROJECT_PILLARS.get(p[0], [p[1]])]
         linked = [o[0] for o in objs]
         cross = [(r, t, d_) for r, t, d_, l in OBJECTIVES if not l]
         rest = [(r, t, d_) for r, t, d_, l in OBJECTIVES if l and r not in linked]
@@ -746,34 +748,8 @@ def projects():
 
 
 # ---------------------------------------------------------------- Project detail pages
-DETAILS = {
-    'project-leadership-lab.html': dict(
-        name='Leadership Lab 2.0', pillar='Youth Empowerment', slug='youth-empowerment', cat='Youth Leadership',
-        lede='Supporting emerging leaders through entrepreneurship and civic engagement.',
-        facts=[('Pillar', 'Youth Empowerment'), ('Category', 'Youth Leadership'), ('Format', 'Year-long training')],
-        rows=[('Context', 'A large youth population in Morocco is turning to entrepreneurship, and attitudes toward innovation and risk-taking are shifting.'),
-              ('Approach', 'Adapts practices from the U.S. entrepreneurial system and principles of participatory democracy.'),
-              ('Activities', 'Year-long civic engagement and entrepreneurship training tracks for selected young people.'),
-              ('Results', 'Participant stories shared on the AFCD blog (2023).')],
-        photo='Leadership Lab 2.0 · project photo', next_='project-eco-citizen.html', next_name='Eco Citizen'),
-    'project-eco-citizen.html': dict(
-        name='Eco Citizen', pillar='Environment and Climate', slug='green-thumbs', cat='Environment',
-        lede='Encouraging environmental awareness and community-led action.',
-        facts=[('Pillar', 'Environment and Climate'), ('Category', 'Environment'), ('Location', 'Ait Ourir'), ('Years', '2020 – 2021')],
-        rows=[('Context', 'Residents and decision-makers in Ait Ourir describe household waste management as a persistent problem.'),
-              ('Approach', 'A participatory process bringing residents, local NGOs and elected representatives together.'),
-              ('Activities', 'Awareness campaigns (2020), then workshops on waste sorting and recycling and training for new local committees (2021).'),
-              ('Results', 'Alternative waste-management proposals developed with the community.')],
-        photo='Eco Citizen · Ait Ourir 2021', next_='project-youth-green-generation.html', next_name='Youth Green Generation'),
-    'project-youth-green-generation.html': dict(
-        name='Youth Green Generation', pillar='Environment and Climate', slug='green-thumbs', cat='Climate Action',
-        lede='Supporting young people in developing responses to climate challenges.',
-        facts=[('Pillar', 'Environment and Climate'), ('Category', 'Climate Action'), ('Cohort', '2024')],
-        rows=[('Context', 'Builds on AFCD’s earlier climate projects, locally and nationally (blog, November 2023).'),
-              ('Approach', 'Empowering young people to take the lead on climate action in their communities.'),
-              ('Activities', 'Call for applications for the 2024 cohort.')],
-        photo='Youth Green Generation · 2024 call', next_='project-leadership-lab.html', next_name='Leadership Lab 2.0'),
-}
+DETAILS = {p['file']: dict(name=p['name'], pillar=_PILLAR_NAMES[p['pillar']], slug=p['pillar'], cat=p['category'], **p['detail'])
+           for p in _PROJECT_DATA if p.get('detail') and p.get('file')}
 
 
 PILLAR_TONE = {'youth-empowerment': '#FFB2B9', 'women-empowerment': '#A8DDFB', 'green-thumbs': '#82E591', 'digital-empowerment': '#FBE38A'}
@@ -784,7 +760,15 @@ def project_details():
     for idx, (file, d) in enumerate(DETAILS.items()):
         tone = PILLAR_TONE[d['slug']]
         pdesc = next(p[3] for p in PILLARS if p[0] == d['slug'])
-        objs = [(ref, text) for ref, text, _desc, links in OBJECTIVES if any(sl == d['slug'] for _n, sl in links)]
+        if d.get('objectives'):
+            objs = [(ref, text) for ref, text, _desc, _l in OBJECTIVES if ref in d['objectives']]
+        else:
+            objs = [(ref, text) for ref, text, _desc, links in OBJECTIVES if any(sl == d['slug'] for _n, sl in links)]
+        hero = media_img(d.get('hero'), 'aspect-[16/10] w-full rounded-[28px] md:aspect-[21/9]', eager=True) or ph(d['photo'], 'aspect-[16/10] w-full rounded-[28px] md:aspect-[21/9]')
+        gal = d.get('gallery') or []
+        def g(i, cls):
+            return media_img(gal[i], cls + ' w-full rounded-[24px]', '(min-width:1024px) 50vw, 100vw') if i < len(gal) else ph(d['name'] + ' · gallery', cls + ' w-full rounded-[24px]')
+        rev = d.get('revision') or ''
         dot = f'<span class="pj-dot" style="--c:{tone}"></span>'
         facts = ''.join(f'<div class="pj-fact"><dt>{k}</dt><dd>{dot if k == "Pillar" else ""}{v}</dd></div>' for k, v in d['facts'])
         n_rows = len(d['rows'])
@@ -800,10 +784,10 @@ def project_details():
             return f'''<a href="{f}" class="pj-nav group"><span class="label text-ink-mid">{label}</span><span class="mt-3 flex items-center gap-3"><span class="pj-dot" style="--c:{PILLAR_TONE[o['slug']]}"></span><span class="text-[24px] font-semibold tracking-[-0.03em] md:text-[30px]">{o['name']}</span></span><span class="mt-1 block text-[14px] text-ink-mid">{o['pillar']} · {o['cat']}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a>'''
         body = page_header([('Projects', 'projects.html'), (d['name'], file)], f'{d["pillar"]} · {d["cat"]}', d['name'], d['lede']) + f'''
 
-<section class="pt-8 lg:pt-10">
+<section class="pt-8 lg:pt-10" data-studio-rev="{rev}">
   <div class="wrap">
     <div class="pj-hero">
-      {ph(d['photo'], 'aspect-[16/10] w-full rounded-[28px] md:aspect-[21/9]')}
+      {hero}
       <dl class="pj-facts" style="--f:{len(d['facts'])}">{facts}</dl>
     </div>
   </div>
@@ -855,9 +839,9 @@ def project_details():
 <section id="gallery" class="border-t border-ink-light py-14 lg:py-16">
   <div class="wrap">{sec_head('03 / Gallery', 'In <span class="sh-soft">pictures.</span>', 'Photos to come')}
     <div class="pj-gallery mt-8 lg:mt-10">
-      {ph(d['name'] + ' · gallery', 'pj-g1 w-full rounded-[24px]')}
-      {ph(d['name'] + ' · gallery', 'pj-g2 w-full rounded-[24px]')}
-      {ph(d['name'] + ' · gallery', 'pj-g3 w-full rounded-[24px]')}
+      {g(0, 'pj-g1')}
+      {g(1, 'pj-g2')}
+      {g(2, 'pj-g3')}
     </div>
   </div>
 </section>

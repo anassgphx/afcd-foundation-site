@@ -1,0 +1,88 @@
+// Test harness: in-memory PostgreSQL (PGlite), a temporary site folder and a fake build runner.
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import sharp from 'sharp';
+import { loadConfig } from '../src/server/config.ts';
+import { openDb } from '../src/server/db/client.ts';
+import { createApp } from '../src/server/app.ts';
+import { users } from '../src/server/db/schema.ts';
+import { hashPassword } from '../src/server/auth/session.ts';
+import { seed } from '../src/server/seed.ts';
+import type { BuildRunner } from '../src/server/modules/publish/service.ts';
+import type { Role } from '../src/server/rbac.ts';
+
+export const ORIGIN = 'http://localhost:4400';
+export const PW = 'correct horse battery staple';
+
+export const STRATEGY = {
+  pillars: [
+    { key: 'youth-empowerment', number: '01', name: 'Youth Empowerment', description: 'Youth', colour: '#FFB2B9', file: 'youth-empowerment.html' },
+    { key: 'green-thumbs', number: '03', name: 'Environment and Climate', description: 'Env', colour: '#82E591', file: 'environment-climate.html' },
+  ],
+  objectives: [
+    { ref: 'SO-01', title: 'Youth leadership', description: 'd', pillars: ['youth-empowerment'] },
+    { ref: 'SO-03', title: 'Climate action', description: 'd', pillars: ['green-thumbs'] },
+  ],
+};
+
+/** Fake of content.py + build.mjs: writes projects.html and one page per project from the exported JSON. */
+export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
+  return async (cfg, mode) => {
+    if (opts.fail?.()) throw new Error('build exploded');
+    const dataFile = mode.kind === 'live' ? resolve(cfg.siteRoot, 'src/data/projects.json') : mode.dataFile;
+    const out = mode.kind === 'live' ? cfg.siteRoot : mode.outDir;
+    const data = JSON.parse(readFileSync(dataFile, 'utf8')) as { projects: any[] };
+    writeFileSync(join(out, 'projects.html'), data.projects.map((p) => `<li>${p.name}</li>`).join('\n'));
+    writeFileSync(join(out, 'sitemap.xml'), '<urlset/>');
+    for (const p of data.projects) if (p.file) writeFileSync(join(out, p.file), `<section data-studio-rev="${p.detail.revision}"><h1>${p.name}</h1><p>${p.detail.lede}</p></section>`);
+    return 'fake build ok';
+  };
+}
+
+export async function makeApp(opts: { runner?: BuildRunner } = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'studio-test-'));
+  const siteRoot = join(root, 'site');
+  mkdirSync(join(siteRoot, 'src/data'), { recursive: true });
+  mkdirSync(join(siteRoot, 'src/pages'), { recursive: true });
+  mkdirSync(join(siteRoot, 'assets'), { recursive: true });
+  writeFileSync(join(siteRoot, 'src/data/projects.json'), JSON.stringify({ projects: [
+    { slug: 'eco-citizen', file: 'project-eco-citizen.html', name: 'Eco Citizen', pillar: 'green-thumbs', category: 'Environment', summary: 'Awareness.',
+      detail: { lede: 'Awareness.', facts: [['Pillar', 'Environment and Climate'], ['Location', 'Ait Ourir']], rows: [['Context', 'Waste.']], photo: 'Eco Citizen' } },
+  ] }));
+  const cfg = loadConfig({ siteRoot, dataDir: join(root, 'data'), mediaDir: join(root, 'data/media'), previewDir: join(root, 'preview'), origin: ORIGIN, secureCookies: false });
+  const { db, close } = await openDb(cfg, { memory: true });
+  await seed(db, cfg, { strategy: STRATEGY });
+  const { app } = createApp(db, cfg, { runner: opts.runner ?? fakeRunner() });
+  return { app, db, cfg, close, siteRoot };
+}
+
+export async function addUser(db: Awaited<ReturnType<typeof makeApp>>['db'], email: string, role: Role) {
+  await db.insert(users).values({ email, name: email.split('@')[0], role, passwordHash: await hashPassword(PW) });
+}
+
+/** A signed-in client: keeps the session cookie and sends the CSRF token like the admin app does. */
+export async function client(app: Awaited<ReturnType<typeof makeApp>>['app'], email: string) {
+  const login = await app.request('/studio/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: ORIGIN }, body: JSON.stringify({ email, password: PW }) });
+  if (login.status !== 200) throw new Error(`login failed ${login.status}`);
+  const cookie = login.headers.get('set-cookie')!.split(';')[0];
+  const me = await (await app.request('/studio/api/me', { headers: { Cookie: cookie } })).json();
+  const call = async (method: string, path: string, body?: unknown, extra: Record<string, string> = {}) => {
+    const res = await app.request(`/studio/api${path}`, {
+      method, headers: { Cookie: cookie, Origin: ORIGIN, 'X-CSRF-Token': me.csrf, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...extra },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    return { status: res.status, body: await res.json().catch(() => null) as any };
+  };
+  return { cookie, csrf: me.csrf as string, get: (p: string) => call('GET', p), post: (p: string, b: unknown = {}) => call('POST', p, b), put: (p: string, b: unknown) => call('PUT', p, b), raw: call };
+}
+
+export const pngBytes = () => sharp({ create: { width: 800, height: 600, channels: 3, background: { r: 120, g: 160, b: 90 } } }).png().toBuffer();
+
+export const projectInput = (over: Record<string, unknown> = {}) => ({
+  name: 'Green Schools', slug: 'green-schools', category: 'Climate Action', summary: 'Schools act on climate.',
+  context: 'Schools asked for support.', approach: '', activities: 'Workshops.', results: '', location: 'Marrakech', years: '2026',
+  extraFacts: [], hasDetailPage: true, photoCaption: '', heroMediaId: null, galleryMediaIds: [],
+  pillarKeys: ['green-thumbs', 'youth-empowerment'], primaryPillarKey: 'green-thumbs', objectiveRefs: ['SO-03'],
+  seoTitle: '', seoDescription: '', sort: 50, reference: '', ...over,
+});

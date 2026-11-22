@@ -6,6 +6,7 @@ import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type 
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
+import '../writer.css';
 
 export const TYPES: [string, string][] = [['programme_news', 'Programme news'], ['participant_story', 'Participant story'], ['call_for_applications', 'Call for applications'], ['event_recap', 'Event recap']];
 const typeLabel = (t: string) => TYPES.find((x) => x[0] === t)?.[1] ?? t;
@@ -115,39 +116,67 @@ export function ArticleEditor({ id }: { id: string }) {
     requestAnimationFrame(() => { el.focus(); el.setSelectionRange(s + pre.length, s + pre.length + sel.length); });
   };
   const file = f.externalUrl ? null : `news-${f.slug}.html`;
+  const onBodyKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    const k = e.key.toLowerCase();
+    if (k === 'b') { e.preventDefault(); wrap('**', '**', 'bold text'); }
+    else if (k === 'i') { e.preventDefault(); wrap('*', '*', 'italic text'); }
+    else if (k === 'k') { e.preventDefault(); wrap('[', '](about.html)', 'link text'); }
+  };
+  const problems = a.problems;
+  const canSubmit = ['draft', 'changes_requested'].includes(status) && can('news.update');
+  const canPublish = status === 'approved' && can('news.publish');
+  const hero = f.heroMediaId ? media[f.heroMediaId] : null;
+  const TABS = [['details', 'Details', 'log'], ['links', 'Links', 'layers'], ['media', 'Media', 'image'], ['seo', 'SEO', 'search'], ['translations', 'FR · AR', 'globe'], ['publish', 'Publish', 'rocket']] as const;
 
   return <div className="writer">
-    <div className="b-bar">
+    <div className="b-bar wr-bar">
       <button className="btn btn-ghost icon-btn" onClick={() => navigate('/studio/news')} aria-label="Back to stories"><Icon n="chev" style={{ transform: 'rotate(180deg)' }} /></button>
       <div className="b-title"><b>{f.title || 'Untitled story'}</b><span className="mono muted">{file ?? 'Links to the old blog'}</span></div>
       <span className="pills">{live && status !== 'published' && <LiveBadge />}<Badge s={status} label={status === 'scheduled' && a.scheduledAt ? `Scheduled · ${fmtDate(a.scheduledAt)}` : undefined} /></span>
-      {dirty && <span className="muted" style={{ fontSize: 12 }}>Unsaved</span>}
+      <span className={`wr-save${dirty ? ' dirty' : ''}`} role="status">{busy === 'save' ? 'Saving…' : dirty ? 'Unsaved changes' : 'All changes saved'}</span>
       <span style={{ flex: 1 }} />
-      <span className="muted" style={{ fontSize: 12 }}>{words} words · {Math.max(1, Math.round(words / 200))} min read</span>
+      <span className="wr-stats" title="Reading time at about 200 words a minute">{words.toLocaleString('en-GB')} word{words === 1 ? '' : 's'} · {Math.max(1, Math.round(words / 200))} min read</span>
       <button className="btn" onClick={preview} disabled={!!busy}><Icon n="eye" />{busy === 'preview' ? 'Building…' : 'Preview'}</button>
-      {editable && <button className="btn btn-primary" onClick={save} disabled={!dirty || !!busy}><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save'}</button>}
+      {editable && dirty && <button className="btn btn-primary" onClick={save} disabled={!!busy} title="Save (⌘S)"><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save draft'}</button>}
+      {!dirty && canSubmit && <button className="btn btn-primary" disabled={!!busy || problems.length > 0} title={problems.length ? `${problems.length} thing${problems.length === 1 ? '' : 's'} to fix first (see Publish)` : undefined} onClick={() => act('submit')}><Icon n="send" />Submit for review</button>}
+      {!dirty && canPublish && <button className="btn btn-primary" disabled={!!busy} onClick={() => setDialog('publish')}><Icon n="rocket" />Publish…</button>}
     </div>
     {errs.length > 0 && <div className="notice n-warn b-notice" role="alert"><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErrs([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
     {!editable && can('news.update') && <div className="notice n-info b-notice">{status === 'in_review' ? 'In review: read-only. Withdraw it to edit.' : status === 'scheduled' ? 'Scheduled: read-only. Unschedule it to edit.' : status === 'archived' ? 'Archived. Restore it to edit.' : ''}</div>}
 
     <div className="w-body">
       <fieldset className="w-paper" disabled={!editable}>
+        {hero ? <figure className="wr-cover"><img src={hero.url} alt={hero.alt} />
+            {editable && <span className="wr-cover-acts"><button type="button" className="btn btn-sm" onClick={() => setDialog('hero')}><Icon n="image" />Change</button><button type="button" className="btn btn-sm" onClick={() => set('heroMediaId', null)}>Remove</button></span>}</figure>
+          : editable && <button type="button" className="wr-cover-add" onClick={() => setDialog('hero')}><Icon n="image" /><span><b>Add a cover photo</b><small>Shown at the top of the story and on its card. Without one, a neutral placeholder is used.</small></span></button>}
         <textarea className="w-title" rows={1} maxLength={160} placeholder="Story title" value={f.title} onChange={(e) => set('title', e.target.value.replace(/\n/g, ' '))} aria-label="Title" />
-        <textarea className="w-excerpt" rows={2} maxLength={320} placeholder="A one or two sentence summary for cards and search results" value={f.excerpt} onChange={(e) => set('excerpt', e.target.value.replace(/\n/g, ' '))} aria-label="Summary" />
-        <div className="w-tools" role="toolbar" aria-label="Formatting">
-          <button type="button" onClick={() => wrap('\n\n## ', '\n\n', 'Subheading')} title="Subheading">H2</button>
-          <button type="button" onClick={() => wrap('**', '**', 'bold text')} title="Bold"><b>B</b></button>
-          <button type="button" onClick={() => wrap('*', '*', 'italic text')} title="Italic"><i>I</i></button>
-          <button type="button" onClick={() => wrap('[', '](about.html)', 'link text')} title="Link">Link</button>
-          <button type="button" onClick={() => wrap('\n\n> ', '\n\n', 'A quote from a participant')} title="Quote">“ Quote</button>
-          <button type="button" onClick={() => wrap('\n\n- ', '\n', 'List item')} title="List">• List</button>
-          <span className="muted" style={{ marginLeft: 'auto', fontSize: 11.5 }}>Blank line = new paragraph</span>
+        <button type="button" className="wr-meta" onClick={() => setTab('details')} title="Edit in Details">
+          <span>{typeLabel(f.type)}</span><span>{f.publishDate ? new Date(`${f.publishDate}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'No date'}</span>
+          <span>{f.authorName ? `By ${f.authorName}${f.authorRole ? `, ${f.authorRole}` : ''}` : 'No author yet'}</span>{f.tags.length > 0 && <span>{f.tags.slice(0, 3).join(', ')}</span>}
+        </button>
+        <div className="wr-excerpt">
+          <textarea className="w-excerpt" rows={2} maxLength={320} placeholder="A one or two sentence summary for cards and search results" value={f.excerpt} onChange={(e) => set('excerpt', e.target.value.replace(/\n/g, ' '))} aria-label="Summary" />
+          <small className={f.excerpt.length > 160 ? 'warn' : ''}>{f.excerpt.length} / 160 recommended{f.excerpt.length > 160 ? ' · search results cut it here' : ''}</small>
         </div>
-        <textarea ref={bodyRef} className="w-text" placeholder={f.externalUrl ? 'This story links to the old blog. Write it here to publish it on the new site, then clear the old-blog link.' : 'Write the story…'} value={f.body} maxLength={30000} onChange={(e) => set('body', e.target.value)} aria-label="Story text" />
+        <div className="w-tools wr-tools" role="toolbar" aria-label="Formatting">
+          <span className="wr-group"><button type="button" onClick={() => wrap('\n\n## ', '\n\n', 'Subheading')} aria-label="Subheading">H2</button></span>
+          <span className="wr-group"><button type="button" onClick={() => wrap('**', '**', 'bold text')} aria-label="Bold" aria-keyshortcuts="Meta+B" title="Bold · ⌘B"><b>B</b></button>
+            <button type="button" onClick={() => wrap('*', '*', 'italic text')} aria-label="Italic" aria-keyshortcuts="Meta+I" title="Italic · ⌘I"><i>I</i></button>
+            <button type="button" onClick={() => wrap('[', '](about.html)', 'link text')} aria-label="Link" aria-keyshortcuts="Meta+K" title="Link · ⌘K"><Icon n="ext" width={14} height={14} />Link</button></span>
+          <span className="wr-group"><button type="button" onClick={() => wrap('\n\n> ', '\n\n', 'A quote from a participant')} aria-label="Quote">“ Quote</button>
+            <button type="button" onClick={() => wrap('\n\n- ', '\n', 'List item')} aria-label="Bulleted list">• List</button></span>
+          <span className="wr-hint">Blank line = new paragraph · ⌘S saves</span>
+        </div>
+        <textarea ref={bodyRef} className="w-text" placeholder={f.externalUrl ? 'This story links to the old blog. Write it here to publish it on the new site, then clear the old-blog link.' : 'Write the story…'} value={f.body} maxLength={30000} onChange={(e) => set('body', e.target.value)} onKeyDown={onBodyKey} aria-label="Story text" />
       </fieldset>
 
       <aside className="w-side">
-        <div className="seg w-tabs">{([['details', 'Details'], ['links', 'Links'], ['media', 'Media'], ['seo', 'SEO'], ['translations', 'Languages'], ['publish', 'Publish']] as const).map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
+        {problems.length > 0 && ['draft', 'changes_requested'].includes(status) && <button type="button" className="wr-ready" onClick={() => setTab('publish')}>
+          <span className="wr-ready-n">{problems.length}</span><span><b>{problems.length === 1 ? '1 thing' : `${problems.length} things`} before review</b><small>{problems[0]}{problems.length > 1 ? ` · +${problems.length - 1} more` : ''}</small></span><Icon n="chev" width={14} height={14} /></button>}
+        {problems.length === 0 && ['draft', 'changes_requested'].includes(status) && <div className="wr-ready ok"><span className="wr-ready-n"><Icon n="check" width={13} height={13} /></span><span><b>Ready for review</b><small>Everything a reviewer needs is filled in.</small></span></div>}
+        <div className="wr-tabs" role="tablist" aria-label="Story settings">{TABS.map(([k, l, ic]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+          <Icon n={ic} width={16} height={16} /><span>{l}</span>{k === 'publish' && problems.length > 0 && ['draft', 'changes_requested'].includes(status) && <i className="wr-dot" aria-label={`${problems.length} to fix`} />}</button>)}</div>
         <fieldset className="b-insp stack" disabled={!editable && tab !== 'publish' && tab !== 'translations'}>
           {tab === 'details' && <>
             <Fld label="Type"><select className="select" value={f.type} onChange={(e) => set('type', e.target.value)} aria-label="Type">{TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Fld>

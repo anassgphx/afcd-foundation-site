@@ -25,6 +25,7 @@ import * as OP from './modules/opportunities/service.ts';
 import * as FM from './modules/forms/service.ts';
 import * as SEO from './modules/seo/service.ts';
 import * as RD from './modules/seo/redirects.ts';
+import * as SCH from './modules/seo/schema.ts';
 import * as HM from './modules/home/service.ts';
 import * as WS from './modules/workspace/service.ts';
 import { overview as dashboardOverview } from './modules/workspace/overview.ts';
@@ -411,6 +412,18 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
   api.post('/seo/redirects/:id/enable', perm('seo.update'), async (c) => { await RD.setRedirectStatus(db, actor(c), c.req.param('id'), 'draft'); return c.json({ ok: true }); });
   api.delete('/seo/redirects/:id', perm('seo.update'), async (c) => { await RD.deleteRedirect(db, actor(c), c.req.param('id')); return c.json({ ok: true }); });
   api.post('/seo/redirects/publish', perm('seo.publish'), async (c) => c.json(await publisher.publishRedirects(actor(c), requireUser(c).role)));
+  // structured data: drafted (seo.update), reviewed by someone else (seo.approve), published (seo.publish)
+  api.get('/seo/schema', perm('seo.read'), async (c) => c.json(await SCH.settingsView(db, cfg, await publisher.schemaLive())));
+  api.put('/seo/schema', perm('seo.update'), async (c) => { await SCH.saveSettings(db, actor(c), await c.req.json()); return c.json(await SCH.settingsView(db, cfg, await publisher.schemaLive())); });
+  api.post('/seo/schema/transition', async (c) => {
+    const body = z.object({ action: z.enum(['submit', 'withdraw', 'request_changes', 'approve']), comment: z.string().max(2000).optional() }).safeParse(await c.req.json());
+    if (!body.success) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, SCH.SCHEMA_ACTIONS[body.data.action]);
+    await SCH.transitionSettings(db, actor(c), u.role, body.data.action, body.data.comment ?? '');
+    return c.json(await SCH.settingsView(db, cfg, await publisher.schemaLive()));
+  });
+  api.post('/seo/schema/publish', perm('seo.publish'), async (c) => c.json(await publisher.publishSchema(actor(c))));
+  api.post('/seo/schema/unpublish', perm('seo.publish'), async (c) => c.json(await publisher.unpublishSchema(actor(c))));
 
   // ---------------------------------------------------------------- Top bar: search and notifications (permission-filtered)
   api.get('/search', async (c) => { const u = requireUser(c); return c.json(await WS.search(db, u.role, c.req.query('q') ?? '')); });

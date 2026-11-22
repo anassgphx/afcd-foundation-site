@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, renameSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { and, desc, eq, inArray, isNotNull, lte } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
@@ -35,6 +35,8 @@ import { loadProject, toSnapshot, type Snapshot } from '../projects/service.ts';
 import { redirects } from '../../db/schema.ts';
 import { checkRedirect, redirectsFile, stubHtml, STUB_MARK, REDIRECTS_HEADER } from '../seo/redirects.ts';
 import type { Role } from '../../rbac.ts';
+import { seoSettings } from '../../db/schema.ts';
+import { buildSchemaFile, KEY as SCHEMA_KEY, settingsSchema, type LiveForSchema, type SchemaSettings } from '../seo/schema.ts';
 
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
@@ -270,13 +272,14 @@ export class Publisher {
     return ids;
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { revisionId: string | null }; redirects?: 'pending' } = {}) {
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null } = {}) {
     const entries = await this.liveEntries(o.project);
     await this.writeRedirects(o.redirects === 'pending');
     this.writeData(this.dataFile, entries);
     const partnerMedia = await this.writePartners(this.partnersFile, o.partner, o.project);
     const eventMedia = await this.writeEvents(this.eventsFile, o.event, o.project);
     const seoMedia = await this.writeSeo(o.seo);
+    await this.writeSchema(o.schema, o.article, o.event);
     const pending = { article: o.article, event: o.event, opportunity: o.opportunity, partner: o.partner };
     const homeMedia = await this.writeFields(o.home, { projectOverride: o.project, pending });
     const oppMedia = await this.writeOpportunities(resolve(this.cfg.siteRoot, 'src/pages'), [this.cfg.siteRoot], await this.liveOpportunities(o.opportunity), o.project);
@@ -1057,6 +1060,85 @@ export class Publisher {
         await audit(tx, actor, 'redirect.publish', { type: 'redirect' }, `Published redirects: ${want.length} live, ${gone.length} removed`, { jobId: job.id });
       });
       return { jobId: job.id, live: want.length, removed: gone.length };
+    });
+  }
+
+  // ---------------------------------------------------------------- Structured data (schema.json, read by build.mjs)
+  get schemaFile() { return resolve(this.cfg.siteRoot, 'src/data/schema.json'); }
+  /** Published records the generated markup describes (with the same pending overrides as the rest of the delivery). */
+  async schemaLive(article?: { articleId: string; revisionId: string | null }, event?: { eventId: string; revisionId: string | null }): Promise<LiveForSchema> {
+    const arts = await this.liveArticles(article); const evs = await this.liveEvents(event);
+    const ids = [...arts.map((a) => a.snap.heroMediaId), ...evs.map((e) => e.snap.posterMediaId)].filter(Boolean) as string[];
+    const rows = ids.length ? await this.db.select().from(media).where(inArray(media.id, ids)) : [];
+    const img = (id: string | null) => { const m = id ? rows.find((r) => r.id === id) : null; if (!m) return null; const r = publicRef(m, 'assets/media/'); return { src: r.src, w: r.w, h: r.h }; };
+    return { articles: arts.map((a) => ({ snap: a.snap, img: img(a.snap.heroMediaId) })), events: evs.map((e) => ({ snap: e.snap, img: img(e.snap.posterMediaId) })) };
+  }
+  /** schema.json exists only while structured data settings are published. undefined = as published; null = none. */
+  private async writeSchema(override: { settings: SchemaSettings; revision: string } | null | undefined, article?: { articleId: string; revisionId: string | null }, event?: { eventId: string; revisionId: string | null }) {
+    let cur = override;
+    if (cur === undefined) {
+      const [row] = await this.db.select().from(seoSettings).where(eq(seoSettings.key, SCHEMA_KEY));
+      const pub = row?.published as (SchemaSettings & { _revision?: string }) | null | undefined;
+      cur = pub?._revision ? { settings: settingsSchema.parse({ organization: pub.organization, articles: pub.articles, events: pub.events }), revision: pub._revision } : null;
+    }
+    if (!cur) { if (existsSync(this.schemaFile)) rmSync(this.schemaFile); return null; }
+    const out = buildSchemaFile(cur.settings, await this.schemaLive(article, event), cur.revision);
+    const tmp = `${this.schemaFile}.${randomBytes(4).toString('hex')}.tmp`;
+    mkdirSync(resolve(this.schemaFile, '..'), { recursive: true });
+    writeFileSync(tmp, JSON.stringify(out, null, 2) + '\n'); renameSync(tmp, this.schemaFile);
+    return out;
+  }
+  private verifySchema(revision: string, removed: boolean) {
+    const root = this.cfg.siteRoot; const home = readFileSync(resolve(root, 'index.html'), 'utf8');
+    const has = home.includes(`<meta name="studio-schema-rev" content="${revision}">`);
+    if (removed) { if (has) throw new Error('index.html still carries the removed structured data.'); return; }
+    if (!has) throw new Error('index.html does not carry the published structured data (build.mjs must apply src/data/schema.json).');
+    const data = JSON.parse(readFileSync(this.schemaFile, 'utf8')) as { pages: Record<string, { '@type': string }[]> };
+    for (const [file, objs] of Object.entries(data.pages)) {
+      const p = resolve(root, file); if (!existsSync(p)) throw new Error(`${file} is missing.`);
+      const html = readFileSync(p, 'utf8');
+      for (const o of objs) if (!html.includes(`"@type":"${o['@type']}"`)) throw new Error(`${file} does not carry its ${o['@type']} markup.`);
+    }
+  }
+
+  async publishSchema(actor: NonNullable<Actor>) {
+    return this.locked(async () => {
+      const [row] = await this.db.select().from(seoSettings).where(eq(seoSettings.key, SCHEMA_KEY));
+      if (!row || row.status !== 'approved' || !row.draft) throw new AppError(409, 'Only approved structured data settings can be published.');
+      const bf = resolve(this.cfg.siteRoot, 'build.mjs');
+      if (!existsSync(bf) || !/SCHEMA_JSON|schema\.json/.test(readFileSync(bf, 'utf8'))) throw new AppError(409, 'The website build does not read Studio’s structured data yet (build.mjs needs the schema.json hook). Nothing was changed.');
+      const settings = settingsSchema.parse(row.draft); const revision = randomUUID();
+      const { job, log } = await this.deliver('publish_seo_schema', actor, null, null, async (log) => {
+        await this.writeSite({ schema: { settings, revision } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifySchema(revision, false);
+      }, 'Publishing structured data failed');
+      await this.db.transaction(async (tx) => {
+        await tx.update(seoSettings).set({ status: 'published', published: { ...settings, _revision: revision }, publishedAt: new Date(), updatedAt: new Date() }).where(eq(seoSettings.key, SCHEMA_KEY));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'schema.publish', { type: 'seo_settings', id: SCHEMA_KEY }, 'Published structured data settings', { jobId: job.id, revision });
+      });
+      return { jobId: job.id, revision };
+    });
+  }
+
+  /** Takes Studio's structured data off the site: the homepage goes back to the markup written in build.mjs. */
+  async unpublishSchema(actor: NonNullable<Actor>) {
+    return this.locked(async () => {
+      const [row] = await this.db.select().from(seoSettings).where(eq(seoSettings.key, SCHEMA_KEY));
+      const rev = (row?.published as { _revision?: string } | null)?._revision;
+      if (!rev) throw new AppError(409, 'No structured data settings are on the live site.');
+      const { job, log } = await this.deliver('unpublish_seo_schema', actor, null, null, async (log) => {
+        await this.writeSite({ schema: null });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifySchema(rev, true);
+      }, 'Removing structured data failed');
+      await this.db.transaction(async (tx) => {
+        await tx.update(seoSettings).set({ status: 'draft', published: null, publishedAt: null, updatedAt: new Date() }).where(eq(seoSettings.key, SCHEMA_KEY));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'schema.unpublish', { type: 'seo_settings', id: SCHEMA_KEY }, 'Removed Studio structured data from the site', { jobId: job.id });
+      });
+      return { jobId: job.id };
     });
   }
 

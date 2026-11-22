@@ -62,6 +62,13 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
       const seo = JSON.parse(readFileSync(seoFile, 'utf8')).pages as Record<string, { title?: string; revision: string }>;
       for (const [f, o] of Object.entries(seo)) if (existsSync(join(out, f))) writeFileSync(join(out, f), `<title>${o.title ?? ''}</title><meta name="studio-seo-rev" content="${o.revision}">` + readFileSync(join(out, f), 'utf8'));
     }
+    // Stand-in for build.mjs's structured data (src/data/schema.json): revision marker on index.html, JSON-LD per page.
+    const schemaFile = join(cfg.siteRoot, 'src/data/schema.json');
+    if (mode.kind === 'live' && existsSync(schemaFile)) {
+      const sc = JSON.parse(readFileSync(schemaFile, 'utf8')) as { revision: string; pages: Record<string, unknown[]> };
+      if (existsSync(join(out, 'index.html'))) writeFileSync(join(out, 'index.html'), `<meta name="studio-schema-rev" content="${sc.revision}">` + readFileSync(join(out, 'index.html'), 'utf8'));
+      for (const [f, objs] of Object.entries(sc.pages)) if (existsSync(join(out, f))) writeFileSync(join(out, f), readFileSync(join(out, f), 'utf8') + objs.map((o) => `<script type="application/ld+json">${JSON.stringify(o)}</script>`).join(''));
+    }
     writeFileSync(join(out, 'sitemap.xml'), `<urlset>${files.map((f) => `<loc>${f}</loc>`).join('')}</urlset>`);
     if (mode.kind === 'preview' && mode.only === 'pages') return 'fake page preview ok';
     for (const p of data.projects) if (p.file) writeFileSync(join(out, p.file), `<section data-studio-rev="${p.detail.revision}"><h1>${p.name}</h1><p>${p.detail.lede}</p></section>`);

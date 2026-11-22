@@ -196,13 +196,103 @@ function InternalLinks({ a }: { a: AuditV2 }) {
 
 function Schema({ a }: { a: AuditV2 }) {
   const rows = a.pages;
-  return <section className="card">
+  return <><SchemaStudio /><section className="card">
+    <div className="card-h"><div><h2 style={{ margin: 0, fontSize: 15 }}>Found in the build</h2><p className="muted" style={{ margin: '2px 0 0', fontSize: 12.5 }}>What the last build audit read from every page.</p></div></div>
     <DataTable id="seo-schema" rows={rows} total={rows.length} rowKey={(p) => p.file} csvName="afcd-structured-data" columns={[
       { key: 'page', header: 'Page', sort: (p) => p.file, csv: (p) => p.file, render: (p) => <div><b className="title">{p.title || p.file}</b><div className="sub mono">{p.file}</div></div> },
       { key: 'types', header: 'Structured data found', sort: (p) => p.schema.join(','), csv: (p) => p.schema.join('; '), render: (p) => p.schema.length ? <div className="pills">{p.schema.map((t, i) => <span key={i} className="pill mono">{t}</span>)}</div> : <span className="muted">None</span> },
       { key: 'err', header: 'Valid', sort: (p) => p.schemaErrors.length, csv: (p) => (p.schemaErrors.length ? 'errors' : 'ok'), render: (p) => p.schemaErrors.length ? <span className="sev" style={{ ['--c' as string]: SEV.high.c }}>Cannot be read</span> : <span className="dt-state"><span className="dot" style={{ ['--c' as string]: '#16a34a' }} />OK</span> },
     ]} empty={<EmptyState icon="layers" text="No pages" />} />
     <p className="muted" style={{ fontSize: 12, padding: '0 16px 14px', margin: 0 }}>Read from the built pages: Organization and WebSite on the homepage, breadcrumbs on inner pages. Test a public page with Google’s <a href="https://search.google.com/test/rich-results" target="_blank" rel="noopener">Rich Results Test</a>. Structured data can help search engines understand a page; it does not guarantee rich results.</p>
+  </section></>;
+}
+
+type OrgForm = { alternateName: string; legalName: string; description: string; email: string; telephone: string; foundingDate: string; sameAs: string[] };
+type SchemaSet = { organization: OrgForm; articles: boolean; events: boolean };
+type Gen = { kind: 'Article' | 'Event'; file: string; title: string; ld: Record<string, unknown>; check: { errors: string[]; warnings: string[] } };
+type SchemaView = { buildSupport: boolean; status: string | null; draft: SchemaSet; published: (SchemaSet & { _revision?: string }) | null; publishedAt: string | null; updatedAt: string | null; updatedByName: string | null; submittedBy: string | null;
+  organization: { built: Record<string, unknown> | null; preview: Record<string, unknown> | null }; generated: Gen[] };
+const ORG_FIELDS: [keyof Omit<OrgForm, 'sameAs'>, string, string, number][] = [
+  ['alternateName', 'Short name', 'e.g. AFCD', 60], ['legalName', 'Legal name', 'Registered name of the association', 160], ['email', 'Public email', 'contact@…', 120],
+  ['telephone', 'Public phone', '+212 …', 24], ['foundingDate', 'Founded (year)', '2007', 4]];
+
+function SchemaStudio() {
+  const toast = useToast(); const can = useCan(); const me = useMe();
+  const [v, setV] = useState<SchemaView | null>(null); const [f, setF] = useState<SchemaSet | null>(null); const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
+  const [dialog, setDialog] = useState<'changes' | 'publish' | 'unpublish' | null>(null); const [comment, setComment] = useState(''); const [open, setOpen] = useState<string | null>(null);
+  const take = (x: SchemaView) => { setV(x); setF(structuredClone(x.draft)); };
+  useEffect(() => { api<SchemaView>('/seo/schema').then(take).catch((e) => toast(e.message, true)); }, []);
+  if (!v || !f) return <section className="card" style={{ marginBottom: 16 }}><Loading /></section>;
+  const status = v.status ?? 'draft'; const editable = can('seo.update') && !['in_review', 'approved'].includes(status);
+  const dirty = JSON.stringify(f) !== JSON.stringify(v.draft); const live = !!v.published?._revision;
+  const fail = (e: unknown) => setErrs(e instanceof ApiError && e.details?.length ? (e.details as { path: string; message: string }[]).map((d) => d.message) : [(e as Error).message]);
+  async function run(label: string, fn: () => Promise<unknown>, done: string) { setBusy(label); setErrs([]); try { await fn(); setDialog(null); setComment(''); toast(done); } catch (e) { setDialog(null); fail(e); } finally { setBusy(''); } }
+  const clean = () => ({ ...f, organization: { ...f.organization, sameAs: f.organization.sameAs.filter(Boolean) } });
+  const save = () => run('save', async () => take(await put<SchemaView>('/seo/schema', clean())), 'Draft saved. Nothing changes on the site until it is reviewed and published.');
+  const act = (action: string, done: string) => run(action, async () => { if (dirty) take(await put<SchemaView>('/seo/schema', clean())); take(await post<SchemaView>('/seo/schema/transition', { action, comment })); }, done);
+  const deliver = (kind: 'publish' | 'unpublish') => run(kind, async () => { await post(`/seo/schema/${kind}`); take(await api<SchemaView>('/seo/schema')); },
+    kind === 'publish' ? 'Published and verified on the website' : 'Removed. The homepage shows the markup written in the website’s build again.');
+  const org = f.organization; const setOrg = (k: keyof OrgForm, val: unknown) => setF({ ...f, organization: { ...org, [k]: val } });
+  const genBad = v.generated.filter((g) => g.check.errors.length).length;
+  return <section className="card sch" style={{ marginBottom: 16 }}>
+    <div className="card-h">
+      <div><h2 style={{ margin: 0, fontSize: 15 }}>Schema studio</h2><p className="muted" style={{ margin: '2px 0 0', fontSize: 12.5 }}>Reviewed structured data for the public site. Changes go live only after review and publishing.</p></div>
+      <div className="pills">{live && status !== 'published' && <LiveBadge />}<Badge s={status} />{v.updatedAt && <span className="muted" style={{ fontSize: 12 }}>Edited {ago(v.updatedAt)}{v.updatedByName ? ` by ${v.updatedByName}` : ''}</span>}</div>
+    </div>
+    {errs.length > 0 && <div className="notice n-bad" style={{ margin: '0 16px 12px' }}><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div></div>}
+    {!v.buildSupport && <div className="notice n-info" style={{ margin: '0 16px 12px' }}><div><b>Publishing is not available yet.</b> The website build (build.mjs) does not read Studio’s structured data file yet. You can edit, review and approve settings now; they can be published once the build is connected.</div></div>}
+    {status === 'changes_requested' && <div className="notice n-warn" style={{ margin: '0 16px 12px' }}><div>A reviewer asked for changes. Update the settings, then send them for review again.</div></div>}
+    <div className="sch-grid">
+      <fieldset className="sch-form" disabled={!editable}>
+        <h3>Organization profile <small className="muted">homepage · NGO</small></h3>
+        <p className="muted sch-help">Leave a field empty to keep what the website already says. Only public contact details belong here: tax identifiers, CNSS numbers and internal registration records are never published.</p>
+        <div className="sch-fields">
+          {ORG_FIELDS.map(([k, l, ph, max]) => <label key={k} className="field"><span>{l}</span><input className="input" maxLength={max} placeholder={String(v.organization.built?.[k] ?? ph)} value={org[k]} onChange={(e) => setOrg(k, e.target.value)} /></label>)}
+          <label className="field s2"><span>Description <em className={org.description.length > 290 ? 'near' : ''} style={{ fontStyle: 'normal', float: 'right', fontSize: 11.5 }}>{org.description.length} / 320</em></span>
+            <textarea className="textarea" maxLength={320} placeholder={String(v.organization.built?.description ?? '')} value={org.description} onChange={(e) => setOrg('description', e.target.value.replace(/\n/g, ' '))} /></label>
+          <label className="field s2"><span>Official profiles (sameAs)</span>
+            <textarea className="textarea mono" rows={3} placeholder={((v.organization.built?.sameAs as string[] | undefined) ?? []).join('\n')} value={org.sameAs.join('\n')} onChange={(e) => setOrg('sameAs', e.target.value.split('\n').map((x) => x.trim()).filter((x, i, arr) => x || i === arr.length - 1))} />
+            <small>One https:// address per line: the foundation’s own social and directory pages.</small></label>
+        </div>
+        <h3 style={{ marginTop: 18 }}>Generated markup</h3>
+        <label className="check"><input type="checkbox" checked={f.articles} onChange={(e) => setF({ ...f, articles: e.target.checked })} /> <span><b>Article</b> on each published story page</span></label>
+        <label className="check"><input type="checkbox" checked={f.events} onChange={(e) => setF({ ...f, events: e.target.checked })} /> <span><b>Event</b> on each published event page</span></label>
+      </fieldset>
+      <div className="sch-prev">
+        <div className="between"><b style={{ fontSize: 13 }}>Homepage preview</b><span className="muted" style={{ fontSize: 11.5 }}>current build + this draft</span></div>
+        {v.organization.preview ? <pre className="sch-json">{JSON.stringify(v.organization.preview, (k, val) => (k === '' ? val : val), 2).replace(/\n$/, '')}</pre> : <p className="muted">Build the website once to see the homepage markup.</p>}
+        {dirty && <p className="muted" style={{ fontSize: 11.5, margin: '6px 0 0' }}>Save to refresh the preview.</p>}
+      </div>
+    </div>
+    <div className="sch-gen">
+      <div className="between" style={{ padding: '0 16px 8px' }}><b style={{ fontSize: 13 }}>Markup for published stories and events · {v.generated.length}</b>{genBad > 0 && <span className="sev" style={{ ['--c' as string]: SEV.high.c }}>{genBad} left out until fixed</span>}</div>
+      {v.generated.length === 0 ? <p className="muted" style={{ padding: '0 16px 12px', margin: 0, fontSize: 12.5 }}>No stories or events are published through Studio yet. Markup appears here when they are.</p>
+        : <ul className="sch-list">{v.generated.map((g) => <li key={g.file}>
+          <button className="sch-row" onClick={() => setOpen(open === g.file ? null : g.file)} aria-expanded={open === g.file}>
+            <span className="pill mono">{g.kind}</span><span className="min-w-0"><b>{g.title}</b><small className="mono">{g.file}</small></span>
+            <span className="dt-state">{g.check.errors.length ? <><span className="dot" style={{ ['--c' as string]: '#dc2626' }} />{g.check.errors[0]}</> : g.check.warnings.length ? <><span className="dot" style={{ ['--c' as string]: '#d97706' }} />{g.check.warnings[0]}</> : <><span className="dot" style={{ ['--c' as string]: '#16a34a' }} />Valid</>}</span>
+            {((g.kind === 'Article' && !f.articles) || (g.kind === 'Event' && !f.events)) && <span className="muted" style={{ fontSize: 11.5 }}>switched off</span>}
+          </button>
+          {open === g.file && <pre className="sch-json">{JSON.stringify(g.ld, null, 2)}</pre>}
+        </li>)}</ul>}
+    </div>
+    <div className="sch-actions">
+      <span className="muted" style={{ fontSize: 12 }}>{live ? `Live since ${fmtDate(v.publishedAt!)}` : 'Not on the website yet: the site shows the markup written in its build.'}</span>
+      <span style={{ flex: 1 }} />
+      {editable && <button className="btn" disabled={!dirty || !!busy} onClick={save}>{busy === 'save' ? 'Saving…' : 'Save draft'}</button>}
+      {editable && can('seo.update') && (status === 'draft' || status === 'changes_requested' || status === 'published') && <button className="btn btn-primary" disabled={!!busy || (!dirty && (status === 'published' || !v.status))} onClick={() => act('submit', 'Sent for review')}>Submit for review</button>}
+      {status === 'in_review' && can('seo.update') && <button className="btn" disabled={!!busy} onClick={() => act('withdraw', 'Withdrawn to draft')}>Withdraw</button>}
+      {status === 'in_review' && can('seo.approve') && <><button className="btn" disabled={!!busy} onClick={() => setDialog('changes')}>Request changes</button>
+        <button className="btn btn-primary" disabled={!!busy || (v.submittedBy === me.user.id && me.user.role !== 'super_admin')} title={v.submittedBy === me.user.id && me.user.role !== 'super_admin' ? 'Someone other than the author must review' : undefined} onClick={() => act('approve', 'Approved')}>Approve</button></>}
+      {status === 'approved' && can('seo.update') && <button className="btn" disabled={!!busy} onClick={() => act('withdraw', 'Withdrawn to draft')}>Withdraw</button>}
+      {status === 'approved' && can('seo.publish') && <button className="btn btn-primary" disabled={!!busy || !v.buildSupport} title={v.buildSupport ? undefined : 'The website build does not read structured data from Studio yet'} onClick={() => setDialog('publish')}><Icon n="globe" />Publish</button>}
+      {live && can('seo.publish') && <button className="btn btn-ghost" disabled={!!busy} onClick={() => setDialog('unpublish')}>Remove from site</button>}
+    </div>
+    {dialog === 'changes' && <Modal size="sm" title="Request changes" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={!comment.trim()} onClick={() => act('request_changes', 'Changes requested')}>Send to author</button></>}><div className="modal-b"><textarea className="textarea" autoFocus aria-label="What needs to change" value={comment} onChange={(e) => setComment(e.target.value)} /></div></Modal>}
+    {dialog === 'publish' && <Modal size="sm" title="Publish structured data" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={busy === 'publish'} onClick={() => deliver('publish')}>{busy === 'publish' ? 'Publishing and verifying…' : 'Publish to the website'}</button></>}>
+      <div className="modal-b"><p style={{ marginTop: 0 }}>The website is rebuilt with these settings and every page is checked before it is recorded. If anything fails, the site is restored.</p>{genBad > 0 && <p className="muted">{genBad} item{genBad === 1 ? '' : 's'} with errors will be left out.</p>}</div></Modal>}
+    {dialog === 'unpublish' && <Modal size="sm" title="Remove Studio’s structured data" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={busy === 'unpublish'} onClick={() => deliver('unpublish')}>{busy === 'unpublish' ? 'Removing…' : 'Remove'}</button></>}>
+      <div className="modal-b"><p style={{ margin: 0 }}>The homepage goes back to the organization markup written in the website’s build, and story and event pages lose their generated markup. The draft stays in Studio.</p></div></Modal>}
   </section>;
 }
 

@@ -1,96 +1,212 @@
 // Dashboard: the overview of the whole website. Everything comes from the database and respects permissions;
-// nothing is invented. Order of importance: what needs you, site health, content, what's coming, recent activity.
-import { useEffect, useState } from 'react';
-import { api } from '../api.ts';
-import { Badge, Icon, Link, LiveBadge, ago, fmtDate, useCan, useMe } from '../ui.tsx';
+// nothing is invented. Order of importance: today's priorities, what needs you, content health, activity, quick actions.
+import { useEffect, useState, type ReactNode } from 'react';
+import { api, post } from '../api.ts';
+import { Badge, Icon, Link, LiveBadge, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import '../dashboard.css';
 
-type Mod = { key: string; label: string; href: string; icon: string; live: number; drafts: number; review: number; note?: string };
+type Mod = { key: string; label: string; href: string; icon: string; live: number; drafts: number; review: number; note?: string; scheduled?: number };
+type Kind = 'review' | 'publish' | 'changes' | 'failed';
 type Data = {
   today: string;
   modules: Mod[];
-  decisions: { id: string; kind: 'review' | 'publish' | 'changes' | 'failed'; title: string; sub: string; href: string; at: string }[];
+  decisions: { id: string; kind: Kind; title: string; sub: string; href: string; at: string }[];
+  decisionCounts?: Record<Kind, number>;
   health: { key: string; label: string; value: string; tone: 'ok' | 'warn' | 'bad'; href: string; detail: string }[];
   upcoming: { kind: string; title: string; date: string; href: string; label: string }[];
   recent: { kind: string; title: string; status: string; live: boolean; href: string; at: string }[];
   delivery: { id: string; label: string; what: string; status: string; at: string; error: string | null }[];
 };
+type Lang = { lang: string; name: string; native: string; dir: string; total: number; translated: number; status: string | null; live: boolean; publishedLive: boolean };
+
 const KIND_ICON: Record<string, string> = { Project: 'folder', Story: 'log', Event: 'calendar', Opportunity: 'spark', Partner: 'partner', Page: 'layers', Homepage: 'home' };
-const DECISION: Record<string, { icon: string; cta: string }> = { review: { icon: 'inbox', cta: 'Review' }, publish: { icon: 'rocket', cta: 'Publish' }, changes: { icon: 'undo', cta: 'Update' }, failed: { icon: 'alert', cta: 'Details' } };
+const DECISION: Record<Kind, { icon: string; cta: string; label: string }> = {
+  review: { icon: 'inbox', cta: 'Review', label: 'Review' }, publish: { icon: 'rocket', cta: 'Publish', label: 'Ready' },
+  changes: { icon: 'undo', cta: 'Update', label: 'Changes' }, failed: { icon: 'alert', cta: 'Details', label: 'Failed' },
+};
 const HEALTH_ICON: Record<string, string> = { delivery: 'globe', seo: 'search', media: 'image', forms: 'mail' };
 const isoAgo = (s: string) => s.replace(/(\d{4}-\d{2}-\d{2}T[\d:.]+Z)/, (m) => ago(m));
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const nf = new Intl.NumberFormat('en-GB');
 
 export function Dashboard() {
-  const me = useMe(); const can = useCan();
+  const me = useMe(); const can = useCan(); const toast = useToast();
   const [d, setD] = useState<Data | null>(null); const [err, setErr] = useState('');
-  useEffect(() => { api<Data>('/overview').then(setD).catch((e) => setErr(e.message)); }, []);
-  if (err) return <div className="notice n-bad">{err}</div>;
+  const [langs, setLangs] = useState<Lang[] | null>(null);
+  const [busy, setBusy] = useState('');
+  const canTr = can('translation.read');
+  useEffect(() => {
+    api<Data>('/overview').then(setD).catch((e) => setErr(e.message));
+    if (canTr) api<Lang[]>('/translations').then(setLangs).catch(() => setLangs([]));
+  }, [canTr]);
+
+  const any = (suffix: string) => me.permissions.some((p) => p.endsWith(suffix));
+  // counts per kind: from the server when it sends them, otherwise from the (capped) list
+  const counts: Record<Kind, number> = d?.decisionCounts ?? (['review', 'publish', 'changes', 'failed'] as Kind[]).reduce((a, k) => ({ ...a, [k]: d?.decisions.filter((x) => x.kind === k).length ?? 0 }), {} as Record<Kind, number>);
+  const pending = counts.review + counts.publish + counts.changes + counts.failed;
+  const news = d?.modules.find((m) => m.key === 'news');
+  const scheduled = news ? news.scheduled ?? Number(news.note?.match(/^(\d+) scheduled/)?.[1] ?? 0) : 0;
+
+  async function create(key: string, path: string, body: Record<string, unknown>, href: (id: string) => string) {
+    setBusy(key);
+    try { const r = await post<{ id: string }>(path, body); navigate(href(r.id)); }
+    catch (e) { toast((e as Error).message, true); setBusy(''); }
+  }
+  const stamp = () => Date.now().toString(36);
+  const today = d?.today ?? new Date().toISOString().slice(0, 10);
+  type Action = { key: string; label: string; hint: string; icon: string; to?: string; run?: () => void };
+  const actions = ([
+    can('news.create') && { key: 'story', label: 'New story', hint: 'News, blog post or press release', icon: 'log', run: () => create('story', '/news', { title: 'Untitled story', slug: `story-${stamp()}`, publishDate: today }, (id) => `/studio/news/${id}`) },
+    can('event.create') && { key: 'event', label: 'New event', hint: 'Workshop, training or meetup', icon: 'calendar', run: () => create('event', '/events', { title: 'Untitled event', slug: `untitled-${stamp()}`, startDate: today, registration: 'contact' }, (id) => `/studio/events/${id}`) },
+    can('opportunity.create') && { key: 'opp', label: 'New opportunity', hint: 'Call, job, volunteering or grant', icon: 'spark', run: () => create('opp', '/opportunities', { title: 'Untitled opportunity', slug: `untitled-${stamp()}`, applyMethod: 'contact' }, (id) => `/studio/opportunities/${id}`) },
+    can('project.create') && { key: 'project', label: 'New project', hint: 'A programme page with its story', icon: 'folder', to: '/studio/projects/new' },
+    can('partner.create') && { key: 'partner', label: 'Add partner', hint: 'Logo and link on the partners page', icon: 'partner', to: '/studio/partners' },
+    can('page.update') && { key: 'home', label: 'Edit homepage', hint: 'Sections, text and images', icon: 'home', to: '/studio/home' },
+    can('media.upload') && { key: 'media', label: 'Upload media', hint: 'Images with alt text and rights', icon: 'upload', to: '/studio/media' },
+    can('translation.update') && { key: 'tr', label: 'Translate', hint: 'French and Arabic versions', icon: 'globe', to: '/studio/translations' },
+  ].filter(Boolean)) as Action[];
+  const primary = actions.find((a) => a.run);
+
   const hour = new Date().getHours();
   const first = me.user.name.split(' ')[0];
-  const date = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-  const actions = [
-    can('project.create') && { to: '/studio/projects/new', label: 'New project', icon: 'folder' },
-    can('news.create') && { to: '/studio/news', label: 'New story', icon: 'log' },
-    can('event.create') && { to: '/studio/events', label: 'New event', icon: 'calendar' },
-    can('page.update') && { to: '/studio/home', label: 'Edit homepage', icon: 'home' },
-  ].filter(Boolean) as { to: string; label: string; icon: string }[];
+  const date = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const summary = !d ? 'Loading your overview…' : pending === 0 ? 'You’re all caught up. Nothing is waiting for you.'
+    : `${plural(pending, 'item')} need${pending === 1 ? 's' : ''} you: ${[counts.review && `${counts.review} to review`, counts.publish && `${counts.publish} ready to publish`, counts.changes && `${counts.changes} with changes requested`, counts.failed && plural(counts.failed, 'failed publish', 'failed publishes')].filter(Boolean).join(', ')}.`;
 
-  return <div className="db">
-    <div className="db-head">
-      <div><p className="db-date">{date}</p><h1>Good {hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}, {first}</h1>
-        <p className="muted">{!d ? 'Loading the website overview…' : d.decisions.length ? `${d.decisions.length} thing${d.decisions.length === 1 ? '' : 's'} need${d.decisions.length === 1 ? 's' : ''} your attention.` : 'Nothing needs your attention right now.'}</p></div>
-      {actions.length > 0 && <div className="db-actions">{actions.map((a, i) => <Link key={a.to + a.label} to={a.to} className={`btn${i === 0 ? ' btn-primary' : ''}`}><Icon n={i === 0 ? 'plus' : a.icon} />{a.label}</Link>)}</div>}
+  const tiles = [
+    any('.approve') && { key: 'review', label: 'To review', n: counts.review, href: '/studio/approvals', icon: 'inbox', empty: 'Nothing submitted', tone: 'info' },
+    any('.publish') && { key: 'publish', label: 'Ready to publish', n: counts.publish, href: '/studio/approvals', icon: 'rocket', empty: 'Nothing approved', tone: 'ok' },
+    (any('.update') || any('.create')) && { key: 'changes', label: 'Changes requested', n: counts.changes, href: '/studio/approvals', icon: 'undo', empty: 'None on your work', tone: 'warn' },
+    can('news.read') && { key: 'scheduled', label: 'Scheduled stories', n: scheduled, href: '/studio/news?status=scheduled', icon: 'clock', empty: 'None scheduled', tone: 'neutral' },
+    can('dashboard.read') && { key: 'failed', label: 'Failed publishes', n: counts.failed, href: '/studio/publishing', icon: 'alert', empty: 'None in 3 days', tone: 'bad' },
+  ].filter(Boolean) as { key: string; label: string; n: number; href: string; icon: string; empty: string; tone: string }[];
+
+  if (err) return <div className="notice n-bad" role="alert">{err}</div>;
+
+  return <div className="dsh">
+    {/* 1 · greeting and today's priorities */}
+    <header className="dsh-head">
+      <div className="min-w-0">
+        <p className="dsh-eyebrow">{date}<span aria-hidden="true"> · </span>{me.user.roleLabel}</p>
+        <h1>Good {hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}, {first}</h1>
+        <p className="dsh-sub" aria-live="polite">{summary}</p>
+      </div>
+      <div className="dsh-head-actions">
+        {me.siteUrl && <a className="btn" href={me.siteUrl} target="_blank" rel="noreferrer"><Icon n="ext" />View website</a>}
+        {primary && <button className="btn btn-primary" onClick={primary.run} disabled={!!busy}><Icon n="plus" />{busy === primary.key ? 'Creating…' : primary.label}</button>}
+      </div>
+    </header>
+
+    {tiles.length > 0 && <section aria-labelledby="dsh-pri">
+      <h2 id="dsh-pri" className="sr-only">Today’s priorities</h2>
+      <ul className="dsh-tiles" style={{ ['--n' as string]: tiles.length }}>{tiles.map((t) => <li key={t.key}>
+        <Link to={t.href} className={`dsh-tile t-${t.tone}${t.n && d ? ' is-on' : ''}`} aria-label={d ? `${t.label}: ${t.n}` : t.label}>
+          <span className="dsh-tile-top"><span>{t.label}</span><Icon n={t.icon} aria-hidden="true" /></span>
+          {!d ? <span className="skeleton" style={{ width: 40, height: 24 }} /> : <b>{t.n}</b>}
+          <small>{!d ? ' ' : t.n ? 'Open' : t.empty}</small>
+        </Link></li>)}</ul>
+    </section>}
+
+    {/* 2 · items that need you, and what's coming */}
+    <div className="dsh-row r-main">
+      <Panel id="dsh-need" title="Needs your attention" count={d ? pending : undefined} action={can('project.read') && <Link to="/studio/approvals" className="btn btn-sm btn-ghost">Approval queue<Icon n="chev" /></Link>}>
+        {!d ? <Rows /> : d.decisions.length === 0
+          ? <Empty icon="check" title="All clear" text="Submissions to review, approved items and publishing problems will show up here." ok />
+          : <>
+            <ul className="dsh-list">{d.decisions.map((n) => <li key={n.id}><Link to={n.href} className={`dsh-item k-${n.kind}`}>
+              <span className="dsh-ico"><Icon n={DECISION[n.kind].icon} /></span>
+              <span className="dsh-item-t"><b>{n.title}</b><small>{n.sub} · {ago(n.at)}</small></span>
+              <span className="dsh-cta">{DECISION[n.kind].cta}<Icon n="chev" /></span></Link></li>)}</ul>
+            {pending > d.decisions.length && <p className="dsh-more">Showing {d.decisions.length} of {pending}. <Link to="/studio/approvals">See everything in the approval queue</Link></p>}
+          </>}
+      </Panel>
+
+      <Panel id="dsh-soon" title="Coming up" hint="Next 45 days">
+        {!d ? <Rows /> : d.upcoming.length === 0 ? <Empty icon="calendar" title="Nothing scheduled" text="Events, application deadlines and scheduled stories will appear here." />
+          : <ol className="dsh-list">{d.upcoming.map((u, i) => { const dt = new Date(u.date.length === 10 ? `${u.date}T12:00:00Z` : u.date); const isToday = u.date.slice(0, 10) === d.today; return <li key={i}><Link to={u.href} className="dsh-item">
+            <span className={`dsh-date${isToday ? ' is-today' : ''}`}><small>{isToday ? 'Today' : dt.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}</small><b>{dt.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'UTC' })}</b></span>
+            <span className="dsh-item-t"><b>{u.title}</b><small>{u.kind} · {u.label}{u.date.length > 10 ? ` · ${fmtDate(u.date)}` : ''}</small></span></Link></li>; })}</ol>}
+      </Panel>
     </div>
 
-    {/* Site health: four plain answers */}
-    <div className="db-health">{(d?.health ?? Array.from({ length: 4 }, () => null)).map((h, i) => h
-      ? <Link key={h.key} to={h.href} className={`db-h tone-${h.tone}`}><span className="db-h-ico"><Icon n={HEALTH_ICON[h.key] ?? 'dash'} /></span><span className="min-w-0"><small>{h.label}</small><b>{h.value}</b><span className="db-h-d">{isoAgo(h.detail)}</span></span></Link>
-      : <div key={i} className="db-h"><div className="skeleton" style={{ width: '60%' }} /></div>)}</div>
+    {/* 3 · content health */}
+    <section className="dsh-section" aria-labelledby="dsh-health">
+      <div className="dsh-section-h"><h2 id="dsh-health">Content health</h2><p>What is live on the website, what is still in progress, and the site checks.</p></div>
+      <div className="dsh-row r-health">
+        <Panel id="dsh-content" title="Content" hint="Live · Drafts · In review">
+          {!d ? <Rows n={6} /> : d.modules.length === 0 ? <Empty icon="layers" title="No content areas" text="Your role doesn’t include any content areas." />
+            : <div className="dsh-table" role="table" aria-label="Content by type">
+              <div className="dsh-tr dsh-th" role="row"><span role="columnheader">Type</span><span role="columnheader">Live</span><span role="columnheader">Drafts</span><span role="columnheader">In review</span><span role="columnheader" className="dsh-note-h">Notes</span></div>
+              {d.modules.map((m) => <Link key={m.key} to={m.href} className="dsh-tr" role="row">
+                <span role="cell" className="dsh-type"><span className="dsh-ico sm"><Icon n={m.icon} /></span>{m.label}</span>
+                <span role="cell" data-l="Live" className="dsh-num"><b>{m.live}</b></span>
+                <span role="cell" data-l="Drafts" className={`dsh-num${m.drafts ? '' : ' zero'}`}>{m.drafts}</span>
+                <span role="cell" data-l="In review" className={`dsh-num${m.review ? ' hot' : ' zero'}`}>{m.review}</span>
+                <span role="cell" className="dsh-note">{m.note ?? ''}</span>
+              </Link>)}
+            </div>}
+        </Panel>
 
-    <div className="db-grid">
-      <div className="db-col">
-        <section className="card">
-          <div className="card-h"><h2>Needs your attention</h2><Link to="/studio/approvals" className="btn btn-sm btn-ghost">Approval queue</Link></div>
-          {!d ? <Loading /> : d.decisions.length === 0
-            ? <div className="db-clear"><Icon n="check" /><div><b>All clear</b><small>Reviews, items ready to publish and problems will show up here.</small></div></div>
-            : <ul className="db-list">{d.decisions.map((n) => <li key={n.id}><Link to={n.href} className={`db-row k-${n.kind}`}>
-              <span className="db-ico"><Icon n={DECISION[n.kind].icon} /></span><span className="min-w-0"><b>{n.title}</b><small>{n.sub} · {ago(n.at)}</small></span><span className="btn btn-sm">{DECISION[n.kind].cta}</span></Link></li>)}</ul>}
-        </section>
+        <div className="dsh-stack">
+          {canTr && <Panel id="dsh-tr" title="Translations" action={<Link to="/studio/translations" className="btn btn-sm btn-ghost">Open<Icon n="chev" /></Link>}>
+            {!langs ? <Rows n={2} /> : langs.length === 0 ? <Empty icon="globe" title="No translation data" text="Translation coverage couldn’t be loaded." />
+              : <ul className="dsh-langs">{langs.map((l) => { const pct = l.total ? Math.floor((l.translated / l.total) * 100) : 0; return <li key={l.lang}>
+                <div className="dsh-lang-top"><b>{l.name} <span lang={l.lang} dir={l.dir}>{l.native}</span></b><span className="dsh-pct">{pct}%</span></div>
+                <div className="dsh-bar" role="progressbar" aria-valuemin={0} aria-valuemax={l.total} aria-valuenow={l.translated} aria-label={`${l.name} coverage`}><span style={{ width: `${pct}%` }} /></div>
+                <div className="dsh-lang-sub"><small>{nf.format(l.translated)} of {nf.format(l.total)} texts · {nf.format(l.total - l.translated)} missing</small>
+                  <span className="pills">{l.status && <Badge s={l.status} />}<span className={`badge ${l.publishedLive ? 'b-live' : 'dsh-off'}`}>{l.publishedLive ? 'On the site' : 'Not on the site'}</span></span></div>
+              </li>; })}</ul>}
+          </Panel>}
 
-        <section className="card">
-          <div className="card-h"><h2>Website content</h2><span className="muted" style={{ fontSize: 12.5 }}>Live on the site · drafts · in review</span></div>
-          {!d ? <Loading /> : <div className="db-mods">{d.modules.map((m) => <Link key={m.key} to={m.href} className="db-mod">
-            <span className="db-mod-top"><span className="db-ico"><Icon n={m.icon} /></span><Icon n="chev" width={14} height={14} /></span>
-            <b>{m.live}</b><span className="db-mod-l">{m.label} live</span>
-            <span className="db-mod-sub">{[m.drafts && `${m.drafts} draft${m.drafts === 1 ? '' : 's'}`, m.review && `${m.review} in review`, m.note].filter(Boolean).join(' · ') || 'No drafts'}</span></Link>)}</div>}
-        </section>
+          {(!d || d.health.length > 0) && <Panel id="dsh-checks" title="Site checks">
+            {!d ? <Rows n={4} /> : <ul className="dsh-checks">{d.health.map((h) => <li key={h.key}><Link to={h.href} className={`dsh-check tone-${h.tone}`}>
+              <span className="dsh-ico sm"><Icon n={HEALTH_ICON[h.key] ?? 'dash'} /></span>
+              <span className="dsh-item-t"><b>{h.label}</b><small>{isoAgo(h.detail)}</small></span>
+              <span className="dsh-status"><i aria-hidden="true" />{h.value}</span></Link></li>)}</ul>}
+          </Panel>}
+        </div>
+      </div>
+    </section>
 
-        <section className="card">
-          <div className="card-h"><h2>Recently edited</h2></div>
-          {!d ? <Loading /> : d.recent.length === 0 ? <div className="empty">Nothing edited yet.</div>
-            : <ul className="db-list">{d.recent.map((r, i) => <li key={i}><Link to={r.href} className="db-row">
-              <span className="db-ico"><Icon n={KIND_ICON[r.kind] ?? 'dash'} /></span><span className="min-w-0"><b>{r.title}</b><small>{r.kind} · {ago(r.at)}</small></span>
+    {/* 4 · recent activity and publishing jobs */}
+    <section className="dsh-section" aria-labelledby="dsh-act">
+      <div className="dsh-section-h"><h2 id="dsh-act">Activity</h2><p>The latest edits across Studio and what was delivered to the website.</p></div>
+      <div className="dsh-row r-even">
+        <Panel id="dsh-recent" title="Recently edited" action={can('audit.read') && <Link to="/studio/activity" className="btn btn-sm btn-ghost">Activity log<Icon n="chev" /></Link>}>
+          {!d ? <Rows /> : d.recent.length === 0 ? <Empty icon="log" title="Nothing edited yet" text="Edits to projects, stories, events and pages will appear here." />
+            : <ul className="dsh-list">{d.recent.map((r, i) => <li key={i}><Link to={r.href} className="dsh-item">
+              <span className="dsh-ico sm"><Icon n={KIND_ICON[r.kind] ?? 'dash'} /></span>
+              <span className="dsh-item-t"><b>{r.title}</b><small>{r.kind} · {ago(r.at)}</small></span>
               <span className="pills">{r.live && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></span></Link></li>)}</ul>}
-        </section>
-      </div>
+        </Panel>
 
-      <div className="db-col">
-        <section className="card">
-          <div className="card-h"><h2>Coming up</h2></div>
-          {!d ? <Loading /> : d.upcoming.length === 0 ? <div className="empty">No events, deadlines or scheduled stories in the next weeks.</div>
-            : <ol className="db-cal">{d.upcoming.map((u, i) => { const dt = new Date(u.date.length === 10 ? `${u.date}T12:00:00Z` : u.date); return <li key={i}><Link to={u.href} className="db-cal-row">
-              <span className="db-cal-d"><b>{dt.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'UTC' })}</b><small>{dt.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}</small></span>
-              <span className="min-w-0"><b>{u.title}</b><small>{u.kind} · {u.label}{u.date.length > 10 ? ` · ${fmtDate(u.date)}` : ''}</small></span></Link></li>; })}</ol>}
-        </section>
-
-        {can('dashboard.read') && <section className="card">
-          <div className="card-h"><h2>Website delivery</h2><Link to="/studio/publishing" className="btn btn-sm btn-ghost">History</Link></div>
-          {!d ? <Loading /> : d.delivery.length === 0 ? <div className="empty">No publishing activity yet.</div>
-            : <ol className="db-feed">{d.delivery.map((j) => <li key={j.id} className={`st-${j.status}`}><span className="db-feed-dot" aria-hidden="true" />
-              <span className="min-w-0"><b>{j.label}</b>{j.what && <span className="db-feed-what">{j.what}</span>}<small>{j.status === 'failed' ? `Failed · ${j.error?.slice(0, 90) ?? ''}` : j.status === 'running' ? 'In progress' : 'Delivered and checked'} · {ago(j.at)}</small></span></li>)}</ol>}
-        </section>}
+        {can('dashboard.read') && <Panel id="dsh-pub" title="Publishing" action={<Link to="/studio/publishing" className="btn btn-sm btn-ghost">History<Icon n="chev" /></Link>}>
+          {!d ? <Rows /> : d.delivery.length === 0 ? <Empty icon="rocket" title="No publishing yet" text="Each update delivered to the website is listed here." />
+            : <ol className="dsh-feed">{d.delivery.map((j) => <li key={j.id} className={`st-${j.status}`}>
+              <span className="dsh-dot" aria-hidden="true" />
+              <span className="dsh-item-t"><b>{j.label}{j.what && <span className="dsh-what"> · {j.what}</span>}</b>
+                <small><span className="sr-only">Status: </span>{j.status === 'failed' ? `Failed · ${j.error?.slice(0, 90) ?? ''}` : j.status === 'running' ? 'In progress' : j.status === 'succeeded' ? 'Delivered and checked' : j.status} · {ago(j.at)}</small></span></li>)}</ol>}
+        </Panel>}
       </div>
-    </div>
+    </section>
+
+    {/* 5 · quick actions */}
+    {actions.length > 0 && <section className="dsh-section" aria-labelledby="dsh-quick">
+      <div className="dsh-section-h"><h2 id="dsh-quick">Quick actions</h2><p>New items start as drafts. Nothing goes live until it is reviewed and published.</p></div>
+      <ul className="dsh-actions">{actions.map((a) => { const inner = <><span className="dsh-ico"><Icon n={a.icon} /></span><span className="dsh-item-t"><b>{busy === a.key ? 'Creating…' : a.label}</b><small>{a.hint}</small></span><Icon n={a.run ? 'plus' : 'chev'} className="dsh-go" /></>;
+        return <li key={a.key}>{a.run ? <button type="button" className="dsh-action" onClick={a.run} disabled={!!busy}>{inner}</button> : <Link to={a.to!} className="dsh-action">{inner}</Link>}</li>; })}</ul>
+    </section>}
   </div>;
 }
+
+function Panel({ id, title, hint, count, action, children }: { id: string; title: string; hint?: string; count?: number; action?: ReactNode; children: ReactNode }) {
+  return <section className="dsh-panel" aria-labelledby={id}>
+    <div className="dsh-panel-h"><h3 id={id}>{title}{count != null && count > 0 && <span className="dsh-count">{count}</span>}</h3>{hint && <span className="dsh-hint">{hint}</span>}{action || null}</div>
+    {children}
+  </section>;
+}
+const Empty = ({ icon, title, text, ok }: { icon: string; title: string; text: string; ok?: boolean }) =>
+  <div className={`dsh-empty${ok ? ' ok' : ''}`}><span className="dsh-ico"><Icon n={icon} /></span><div><b>{title}</b><small>{text}</small></div></div>;
+const Rows = ({ n = 3 }: { n?: number }) => <div className="dsh-skel" aria-hidden="true">{Array.from({ length: n }, (_, i) => <div key={i} className="skeleton" style={{ width: `${90 - (i % 3) * 18}%` }} />)}</div>;
 
 export const Loading = () => <div className="card-b stack"><div className="skeleton" /><div className="skeleton" style={{ width: '70%' }} /><div className="skeleton" style={{ width: '50%' }} /></div>;

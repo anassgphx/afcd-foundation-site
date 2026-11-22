@@ -6,7 +6,7 @@ import { can, type Role } from '../../rbac.ts';
 import { todayMorocco } from '../events/render.ts';
 import { notifications } from './service.ts';
 
-type Mod = { key: string; label: string; href: string; icon: string; live: number; drafts: number; review: number; note?: string };
+type Mod = { key: string; label: string; href: string; icon: string; live: number; drafts: number; review: number; note?: string; scheduled?: number };
 type Recent = { kind: string; title: string; status: string; live: boolean; href: string; at: string };
 
 const JOB_LABEL: Record<string, string> = {
@@ -15,6 +15,8 @@ const JOB_LABEL: Record<string, string> = {
   publish_partner: 'Published a partner', unpublish_partner: 'Removed a partner', publish_event: 'Published an event', unpublish_event: 'Removed an event',
   publish_opportunity: 'Published an opportunity', unpublish_opportunity: 'Removed an opportunity', publish_seo: 'Published SEO settings', unpublish_seo: 'Restored a page’s own SEO',
   publish_home: 'Published the homepage', unpublish_home: 'Restored the original homepage', rebuild: 'Rebuilt the website',
+  publish_redirects: 'Published redirects', publish_seo_schema: 'Published structured data', unpublish_seo_schema: 'Removed structured data',
+  publish_translations: 'Published translations',
 };
 
 export async function overview(db: DB, user: { id: string; role: Role }) {
@@ -29,7 +31,7 @@ export async function overview(db: DB, user: { id: string; role: Role }) {
   if (can(role, 'project.read')) modules.push({ key: 'projects', label: 'Projects', href: '/studio/projects', icon: 'folder', ...(await statusCounts(projects)) });
   if (can(role, 'news.read')) {
     const [{ n }] = await db.select({ n: count() }).from(articles).where(eq(articles.status, 'scheduled'));
-    modules.push({ key: 'news', label: 'Stories', href: '/studio/news', icon: 'log', ...(await statusCounts(articles)), note: n ? `${n} scheduled` : undefined });
+    modules.push({ key: 'news', label: 'Stories', href: '/studio/news', icon: 'log', ...(await statusCounts(articles)), note: n ? `${n} scheduled` : undefined, scheduled: n });
   }
   if (can(role, 'event.read')) {
     const [{ n }] = await db.select({ n: count() }).from(events).where(and(isNotNull(events.publishedRevisionId), sql`coalesce(${events.endDate}, ${events.startDate}) >= ${today}`));
@@ -75,8 +77,13 @@ export async function overview(db: DB, user: { id: string; role: Role }) {
   }
   if (can(role, 'seo.read')) {
     const [a] = await db.select().from(seoAudits).orderBy(desc(seoAudits.createdAt)).limit(1);
-    const r = a?.result as { score: number; counts: { errors: number; warnings: number } } | undefined;
-    health.push({ key: 'seo', label: 'SEO', value: r ? `${r.score}/100` : 'Not checked', tone: !r ? 'warn' : r.counts.errors ? 'bad' : r.score >= 90 ? 'ok' : 'warn', href: '/studio/seo', detail: r ? `${r.counts.errors} errors, ${r.counts.warnings} warnings · checked ${a!.createdAt.toISOString()}` : 'Run the site audit' });
+    // audits store either { errors, warnings } (site audit) or severity counts (build audit)
+    const r = a?.result as { score?: number; scores?: { overall?: number }; counts?: Record<string, number> } | undefined;
+    const c = r?.counts ?? {}; const score = r?.score ?? r?.scores?.overall;
+    const errors = (c.errors ?? 0) + (c.critical ?? 0) + (c.high ?? 0); const warnings = (c.warnings ?? 0) + (c.medium ?? 0) + (c.low ?? 0);
+    const checked = a ? `checked ${a.createdAt.toISOString()}` : '';
+    health.push({ key: 'seo', label: 'SEO', value: r && score != null ? `${score}/100` : 'Not checked', tone: !r || score == null ? 'warn' : errors ? 'bad' : score >= 90 ? 'ok' : 'warn', href: '/studio/seo',
+      detail: r ? `${errors ? `${errors} serious issue${errors === 1 ? '' : 's'}` : 'No serious issues'}${warnings ? `, ${warnings} to improve` : ''} · ${checked}` : 'Run the site audit' });
   }
   if (can(role, 'media.read')) {
     const [{ total }] = await db.select({ total: count() }).from(media);
@@ -99,6 +106,8 @@ export async function overview(db: DB, user: { id: string; role: Role }) {
   }
   const delivery = jobs.map((j) => ({ id: j.id, label: JOB_LABEL[j.kind] ?? j.kind.replace(/_/g, ' '), what: (j.entityId && names.get(j.entityId)) || '', status: j.status, at: j.at.toISOString(), error: j.error }));
 
-  const decisions = (await notifications(db, user)).filter((n) => n.kind !== 'forms').slice(0, 8);
-  return { modules, recent: recent.slice(0, 8), upcoming: upcoming.slice(0, 8), health, delivery, decisions, today };
+  const all = (await notifications(db, user)).filter((n) => n.kind !== 'forms');
+  const decisionCounts = { review: 0, publish: 0, changes: 0, failed: 0 } as Record<string, number>;
+  for (const n of all) decisionCounts[n.kind] = (decisionCounts[n.kind] ?? 0) + 1;
+  return { modules, recent: recent.slice(0, 8), upcoming: upcoming.slice(0, 8), health, delivery, decisions: all.slice(0, 8), decisionCounts, today };
 }

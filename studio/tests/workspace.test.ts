@@ -45,6 +45,8 @@ describe('dashboard overview', () => {
     expect(body.modules.find((m: any) => m.key === 'projects').live).toBe(1);
     expect(body.health.map((x: any) => x.key)).toEqual(['delivery', 'seo', 'media', 'forms']);
     expect(body.recent[0]).toMatchObject({ kind: 'Project', title: 'Eco Citizen' });
+    expect(body.decisionCounts).toEqual({ review: 0, publish: 0, changes: 0, failed: 0 });
+    expect(body.modules.find((m: any) => m.key === 'news').scheduled).toBe(0);
     const limited = (await mm.get('/overview')).body;
     expect(limited.health.map((x: any) => x.key)).not.toContain('forms');   // messages are personal data
   });

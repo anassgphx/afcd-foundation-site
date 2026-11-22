@@ -1028,3 +1028,13 @@ body.show-notes .note { display: block; }
 .topbar-light .tb-lang .lang-btn:hover { color: #000; }
 .topbar-light .tb-lang .lang-btn[aria-pressed="true"] { background: #000; color: #fff; }
 .mainbar.mainbar-light { background: #fff; border-bottom: 1px solid #EDEDEC; color: var(--deep); }
+
+/* Get Involved: neutral palette (no pastel tones) */
+.gi-tab[aria-selected="true"] { background: #000; color: #fff; }
+.gi-tab[aria-selected="true"] .gi-tab-ico { background: #fff; color: #000; }
+.gi-tab[aria-selected="true"] .text-ink-mid { color: rgba(255,255,255,.55); }
+.gi-tab[aria-selected="true"] .gi-tab-arr { color: #fff; }
+.gi-panel { background: #F6F6F6; border: 1px solid #ECECEC; }
+.gi-panel .text-black\/75 { color: var(--charcoal); }
+.gi-panel .text-black\/65 { color: var(--dark); }
+.gi-panel .gi-box { background: #fff; border: 1px solid #ECECEC; }

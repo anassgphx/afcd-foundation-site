@@ -782,6 +782,7 @@ PILLAR_TONE = {'youth-empowerment': '#FFB2B9', 'women-empowerment': '#A8DDFB', '
 def project_details():
     files = list(DETAILS)
     for idx, (file, d) in enumerate(DETAILS.items()):
+        pevents = [x for x in EVENTS if x.get('project') == file]
         tone = PILLAR_TONE[d['slug']]
         pdesc = next(p[3] for p in PILLARS if p[0] == d['slug'])
         objs = [(ref, text) for ref, text, _desc, links in OBJECTIVES if any(sl == d['slug'] for _n, sl in links)]
@@ -852,8 +853,14 @@ def project_details():
   </div>
 </section>
 
+<section id="events" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('03 / Events', 'Project <span class="sh-soft">events.</span>', f'{len(pevents)} linked' if pevents else 'None yet', ('All events', 'events.html'))}
+    {f'<ul class="ev-list mt-8 lg:mt-10">{"".join(event_row(x, compact=True) for x in pevents)}</ul>' if pevents else '<div class="mt-8 rounded-[24px] border border-dashed border-ink-light p-6 text-[15px] text-ink-dark lg:mt-10">No events linked to this project yet. <a class="link-arrow ml-1" href="events.html">See all events ↗</a></div>'}
+  </div>
+</section>
+
 <section id="gallery" class="border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap">{sec_head('03 / Gallery', 'In <span class="sh-soft">pictures.</span>', 'Photos to come')}
+  <div class="wrap">{sec_head('04 / Gallery', 'In <span class="sh-soft">pictures.</span>', 'Photos to come')}
     <div class="pj-gallery mt-8 lg:mt-10">{''.join(ph(d['name'] + ' · gallery', ('pj-g1' if i == 0 else 'pj-gi') + ' w-full rounded-[24px]') for i in range(8))}
     </div>
   </div>
@@ -966,12 +973,12 @@ def news():
 # ---------------------------------------------------------------- Events
 # Sample events: clearly marked placeholders until AFCD supplies its real calendar (e.g. through Studio).
 EVENTS = [
-    dict(slug='leadership-workshop', day='12', mon='Dec', year='2026', iso='2026-12-12', kind='Workshop', pillar='youth-empowerment', title='Lorem ipsum leadership workshop', where='Ait Ourir', time='10:00 – 13:00', desc='Consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus posuere velit aliquet.', upcoming=True),
-    dict(slug='community-clean-up', day='20', mon='Jan', year='2027', iso='2027-01-20', kind='Community day', pillar='green-thumbs', title='Dolor sit amet community clean-up', where='Al Haouz', time='09:00 – 16:00', desc='Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.', upcoming=True),
-    dict(slug='training-of-trainers', day='08', mon='Feb', year='2027', iso='2027-02-08', kind='Training', pillar='women-empowerment', title='Amet consectetur training of trainers', where='Marrakech', time='14:00 – 18:00', desc='Maecenas faucibus mollis interdum. Nullam quis risus eget urna mollis ornare vel eu leo.', upcoming=True),
-    dict(slug='digital-skills-webinar', day='27', mon='Feb', year='2027', iso='2027-02-27', kind='Webinar', pillar='digital-empowerment', title='Adipiscing elit digital skills webinar', where='Online', time='18:00 – 19:30', desc='Aenean lacinia bibendum nulla sed consectetur. Curabitur blandit tempus porttitor.', upcoming=True),
-    dict(slug='bootcamp', day='18', mon='Oct', year='2026', iso='2026-10-18', kind='Bootcamp', pillar='youth-empowerment', title='Sed posuere bootcamp', where='Marrakech', time='3 days', desc='Etiam porta sem malesuada magna mollis euismod.', upcoming=False),
-    dict(slug='environmental-screening', day='05', mon='Jun', year='2026', iso='2026-06-05', kind='Festival', pillar='green-thumbs', title='Nulla vitae environmental screening', where='Al Haouz', time='Evening', desc='Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh.', upcoming=False),
+    dict(slug='leadership-workshop', project='project-leadership-lab.html', day='12', mon='Dec', year='2026', iso='2026-12-12', kind='Workshop', pillar='youth-empowerment', title='Lorem ipsum leadership workshop', where='Ait Ourir', time='10:00 – 13:00', desc='Consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus posuere velit aliquet.', upcoming=True),
+    dict(slug='community-clean-up', project='project-eco-citizen.html', day='20', mon='Jan', year='2027', iso='2027-01-20', kind='Community day', pillar='green-thumbs', title='Dolor sit amet community clean-up', where='Al Haouz', time='09:00 – 16:00', desc='Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.', upcoming=True),
+    dict(slug='training-of-trainers', project=None, day='08', mon='Feb', year='2027', iso='2027-02-08', kind='Training', pillar='women-empowerment', title='Amet consectetur training of trainers', where='Marrakech', time='14:00 – 18:00', desc='Maecenas faucibus mollis interdum. Nullam quis risus eget urna mollis ornare vel eu leo.', upcoming=True),
+    dict(slug='digital-skills-webinar', project=None, day='27', mon='Feb', year='2027', iso='2027-02-27', kind='Webinar', pillar='digital-empowerment', title='Adipiscing elit digital skills webinar', where='Online', time='18:00 – 19:30', desc='Aenean lacinia bibendum nulla sed consectetur. Curabitur blandit tempus porttitor.', upcoming=True),
+    dict(slug='bootcamp', project='project-leadership-lab.html', day='18', mon='Oct', year='2026', iso='2026-10-18', kind='Bootcamp', pillar='youth-empowerment', title='Sed posuere bootcamp', where='Marrakech', time='3 days', desc='Etiam porta sem malesuada magna mollis euismod.', upcoming=False),
+    dict(slug='environmental-screening', project='project-youth-green-generation.html', day='05', mon='Jun', year='2026', iso='2026-06-05', kind='Festival', pillar='green-thumbs', title='Nulla vitae environmental screening', where='Al Haouz', time='Evening', desc='Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh.', upcoming=False),
 ]
 EV_ICON = {
     'pin': '<path d="M10 17s5-4.6 5-9a5 5 0 0 0-10 0c0 4.4 5 9 5 9Z"/><circle cx="10" cy="8" r="1.8"/>',
@@ -998,6 +1005,7 @@ def event_row(e, compact=False):
         <time class="ev-date" datetime="{e['iso']}"><span class="ev-day">{e['day']}</span><span class="ev-mon">{e['mon']} {e['year']}</span></time>
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">{e['kind']}</span><span class="ev-pillar"><span class="pj-dot" style="--c:#111"></span>{pname}</span><span class="ev-sample">Sample event</span></div>
+          {f'<p class="ev-proj mt-2">Part of <a href="{e["project"]}">{DETAILS[e["project"]]["name"]}</a></p>' if e.get('project') in DETAILS else ''}
           <p class="mt-3 text-[19px] font-semibold leading-snug tracking-[-0.02em] md:text-[21px]"><a href="{event_file(e)}" class="ev-link">{e['title']}</a></p>
           {'' if compact else f'<p class="mt-1.5 max-w-[62ch] text-[14.5px] leading-relaxed text-ink-dark">{e["desc"]}</p>'}
           <p class="ev-meta mt-3"><span>{ev_ico('pin')}{e['where']}</span><span>{ev_ico('clock')}{e['time']}</span></p>
@@ -1071,7 +1079,9 @@ def events():
     for i, e in enumerate(EVENTS):
         pname = next(p[2] for p in PILLARS if p[0] == e['pillar'])
         others = [x for x in EVENTS if x is not e and x['upcoming']][:3]
-        facts = [('Date', f"{e['day']} {e['mon']} {e['year']}"), ('Time', e['time']), ('Location', e['where']), ('Format', e['kind']), ('Pillar', pname), ('Registration', 'Free, places limited' if e['upcoming'] else 'Closed')]
+        facts = [('Date', f"{e['day']} {e['mon']} {e['year']}"), ('Time', e['time']), ('Location', e['where']), ('Format', e['kind']), ('Pillar', pname)]
+        if e.get('project') and e['project'] in DETAILS:
+            facts.insert(4, ('Project', f'<a class="underline underline-offset-2" href="{e["project"]}">{DETAILS[e["project"]]["name"]}</a>'))
         fhtml = ''.join(f'<div class="evd-fact"><dt>{a}</dt><dd>{b}</dd></div>' for a, b in facts)
         agenda = [('Arrival', 'Welcome and introductions. Lorem ipsum dolor sit amet.'), ('Session 1', 'Consectetur adipiscing elit, sed do eiusmod tempor.'),
                   ('Break', 'Networking and refreshments.'), ('Session 2', 'Ut enim ad minim veniam, quis nostrud exercitation.'), ('Close', 'Next steps and how to stay involved.')]

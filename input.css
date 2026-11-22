@@ -1208,3 +1208,7 @@ a.ev-act:hover { background: #000; color: #fff; border-color: #000; }
 .ev-row .ev-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: 1; }
 .ev-row .ev-act { position: relative; z-index: 2; }
 .ev-row:hover .ev-link { background-size: 100% 1.5px; }
+/* Event ↔ project link */
+.ev-proj { position: relative; z-index: 2; font-size: 13px; color: var(--mid); }
+.ev-proj a { color: var(--deep); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.ev-proj a:hover { color: #000; }

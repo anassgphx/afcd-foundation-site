@@ -184,6 +184,34 @@ def points_html(points):
     return ('<ul class="sh-points">' + ''.join(f'<li>{p}</li>' for p in points) + '</ul>') if points else ''
 
 
+
+# Social sharing: static links to the production page (scripts swap in the current language's canonical URL).
+_SHARE_ICO = {
+    'facebook': '<path d="M11.2 18v-6.2h2.1l.3-2.4h-2.4V7.9c0-.7.2-1.2 1.2-1.2h1.3V4.6a17 17 0 0 0-1.9-.1c-1.9 0-3.2 1.2-3.2 3.3v1.8H6.5v2.4h2.1V18h2.6Z" fill="currentColor"/>',
+    'linkedin': '<path d="M5.2 7.6h2.6V16H5.2V7.6Zm1.3-4.1a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM9.4 7.6h2.5v1.2c.4-.7 1.2-1.4 2.6-1.4 2.7 0 3.2 1.8 3.2 4.1V16h-2.6v-4c0-1 0-2.2-1.3-2.2-1.4 0-1.6 1-1.6 2.1V16H9.4V7.6Z" fill="currentColor"/>',
+    'x': '<path d="M13.9 4h2.3l-5 5.7L17 16h-4.6l-3.6-4.7L4.7 16H2.4l5.3-6.1L2.2 4h4.7l3.3 4.3L13.9 4Zm-.8 10.7h1.3L6.2 5.3H4.8l8.3 9.4Z" fill="currentColor"/>',
+    'whatsapp': '<path d="M10 2.5a7.4 7.4 0 0 0-6.4 11.2l-1 3.8 3.9-1A7.4 7.4 0 1 0 10 2.5Zm0 13.5c-1.1 0-2.2-.3-3.2-.9l-.2-.1-2.3.6.6-2.2-.2-.2A6.1 6.1 0 1 1 10 16Zm3.4-4.6c-.2-.1-1.1-.5-1.2-.6-.2-.1-.3-.1-.4.1l-.6.7c-.1.1-.2.1-.4 0-.2-.1-.8-.3-1.5-.9-.5-.5-.9-1.1-1-1.2-.1-.2 0-.3.1-.4l.3-.3.2-.3v-.3l-.6-1.3c-.1-.3-.3-.3-.4-.3h-.3c-.1 0-.3 0-.5.2s-.6.6-.6 1.5.6 1.7.7 1.8c.1.1 1.2 1.9 3 2.6 1.5.6 1.8.5 2.1.4.3 0 1.1-.4 1.2-.9.2-.4.2-.8.1-.9l-.3-.2Z" fill="currentColor"/>',
+    'link': '<path d="M8.5 11.5a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5l-.8.8M11.5 8.5a3.5 3.5 0 0 0-5 0L4 11a3.5 3.5 0 0 0 5 5l.8-.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+    'more': '<path d="M10 3v9M6.5 6.5 10 3l3.5 3.5M4.5 10.5v4A1.5 1.5 0 0 0 6 16h8a1.5 1.5 0 0 0 1.5-1.5v-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+}
+
+
+def share_bar(file, title, label='Share', extra=''):
+    from urllib.parse import quote
+    import html as _h
+    t = _h.unescape(re.sub(r'<[^>]+>', '', title))
+    u = quote('https://afcdfoundation.org/' + file, safe='')
+    tt = quote(t, safe='')
+    nets = [('facebook', 'Facebook', f'https://www.facebook.com/sharer/sharer.php?u={u}'),
+            ('linkedin', 'LinkedIn', f'https://www.linkedin.com/sharing/share-offsite/?url={u}'),
+            ('x', 'X', f'https://twitter.com/intent/tweet?url={u}&amp;text={tt}'),
+            ('whatsapp', 'WhatsApp', f'https://wa.me/?text={tt}%20{u}')]
+    ico = lambda k: f'<svg viewBox="0 0 20 20" aria-hidden="true">{_SHARE_ICO[k]}</svg>'
+    links = ''.join(f'<a class="shr-b" data-net="{k}" href="{href}" target="_blank" rel="noopener" aria-label="Share on {name}" title="{name}">{ico(k)}</a>' for k, name, href in nets)
+    return (f'<div class="shr{(" " + extra) if extra else ""}" data-shr><span class="shr-k">{label}</span><span class="shr-row">{links}'
+            f'<button type="button" class="shr-b" data-copy-link aria-label="Copy link" title="Copy link">{ico("link")}</button>'
+            f'<button type="button" class="shr-b" data-share hidden data-shr-native aria-label="More ways to share" title="More">{ico("more")}</button></span></div>')
+
 def sec_head(label, title, right='', dark=False, desc='', stack=False):
     """label like '01 / Our Story'. right: plain text (meta) or (text, href) for a pill link."""
     num, _, name = label.partition(' / ')
@@ -644,6 +672,7 @@ def pillars():
           <a href="#projects" class="btn-dark btn-cta min-h-[46px] px-6 text-[14px]">See projects <span class="arr" aria-hidden="true">↓</span></a>
           <a href="#objectives" class="link-arrow">Strategic objectives <span class="arr" aria-hidden="true">↓</span></a>
         </div>
+        {share_bar(PILLAR_FILE[slug], t, 'Share this pillar', 'mt-6')}
       </div>
       <div class="pl-hero-photo">{photo}</div>
     </div>
@@ -1085,7 +1114,7 @@ def news_articles():
       </dl>
       <div class="na-tags">{pillar_html}{tags}</div>
       <div class="na-share">
-        <button type="button" class="na-copy" data-copy-link><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 11.5a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5l-.8.8M11.5 8.5a3.5 3.5 0 0 0-5 0L4 11a3.5 3.5 0 0 0 5 5l.8-.8"/></svg><span>Copy link</span></button>
+        {share_bar(it['file'], it['title'], 'Share this story')}
         <a class="na-back" href="news.html">← All stories</a>
       </div>
     </aside>
@@ -1345,7 +1374,7 @@ def events():
         count = '<span class="evd-count">Date to be announced</span>' if e.get('tba') else f'<span class="evd-count" data-countdown="{e["iso"]}" hidden></span>' if e['upcoming'] else '<span class="evd-count is-past">Past event</span>'
         cal = (f'<button type="button" class="evd-tool" data-ics data-uid="afcd-{e["slug"]}" data-start="{e["iso"]}" data-time="{e["time"]}" '
                f'data-title="{e["title"]}" data-where="{e["where"]}">{evd_ico("cal")}Add to calendar</button>') if e['upcoming'] and not e.get('tba') else ''
-        tools = f'<div class="evd-tools{" is-one" if not cal else ""}">{cal}<button type="button" class="evd-tool" data-share>{evd_ico("share")}Share</button></div>'
+        tools = f'<div class="evd-tools{" is-one" if not cal else ""}">{cal}<button type="button" class="evd-tool" data-share>{evd_ico("share")}Share</button></div>' + share_bar(event_file(e), e['title'], 'Share this event', 'is-card')
         card = f'''<aside class="evd-side" aria-label="Event details and registration">
       <div class="evd-card" id="register">
         <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">{e['kind']}</span>{ev_badge(e)}{count}</div>

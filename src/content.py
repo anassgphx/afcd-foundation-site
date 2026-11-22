@@ -1395,10 +1395,10 @@ def events():
 </section>
 ''' + cta_band('Questions about this event?', 'Our team can help with registration, access or anything else before the day.',
                    ('Contact us', 'contact.html?topic=General+question#message'), ('All events', 'events.html')) + bar
-        page(event_file(e), f"{e.get('seoTitle') or e['title']} · Events · AFCD Foundation", (e.get('seoDescription') or f"{e['kind']} on {e['day']} {e['mon']} {e['year']} in {e['where']}: {e['desc']}")[:160], 'none', dbody, parent=('Events', 'events.html'))
+        page(event_file(e), f"{e.get('seoTitle') or e['title']} · Events · AFCD Foundation", (e.get('seoDescription') or f"{e['kind']} on {e['day']} {e['mon']} {e['year']} in {e['where']}: {e['desc']}")[:160], 'events', dbody, parent=('Events', 'events.html'))
 
     page('events.html', 'Events · AFCD Foundation',
-         'AFCD Foundation events: workshops, trainings, community days and online sessions across Morocco.', 'none', body)
+         'AFCD Foundation events: workshops, trainings, community days and online sessions across Morocco.', 'events', body)
 
 
 # ---------------------------------------------------------------- Partners

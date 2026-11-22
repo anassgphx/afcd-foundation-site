@@ -14,3 +14,52 @@
 
 /* Translations inside a section card: no extra frame inside the card body */
 .ed-col .ed-sec .rt { grid-column: 1 / -1; }
+
+/* List editor (ListEditor in Editor.tsx) */
+.ed-items ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ed-items li { display: flex; align-items: center; gap: 8px; }
+.ed-items-b { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: var(--line-strong); }
+.ed-items li:focus-within .ed-items-b { background: var(--ink); }
+.ed-items .input { flex: 1; min-width: 0; height: 36px; }
+.ed-items-acts { display: flex; gap: 0; opacity: 0; transition: opacity .15s ease; }
+.ed-items li:hover .ed-items-acts, .ed-items li:focus-within .ed-items-acts { opacity: 1; }
+.ed-items-acts .btn:disabled { opacity: .3; }
+.ed-items-f { display: flex; align-items: center; gap: 12px; margin-top: 8px; font-size: 12px; }
+.ed-items-f .ed-add { margin-top: 0; }
+
+/* Opportunity editor */
+.op-cap { display: block; margin-bottom: 8px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--faint); }
+.op-card-wrap { padding: 14px; border-radius: 12px; background: var(--canvas); }
+.op-card { max-width: 420px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+.op-card-top { display: flex; align-items: center; gap: 6px; }
+.op-pill, .op-state { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.op-pill { background: var(--canvas); color: var(--ink-2); }
+.op-state.op-open { background: #dcfce7; color: #166534; } .op-state.op-soon { background: #e0f2fe; color: #075985; } .op-state.op-closed { background: #f5f5f4; color: #78716c; }
+.op-card h3 { margin: 12px 0 6px; font-size: 18px; line-height: 1.3; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.op-card p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.op-card-meta { display: flex; flex-wrap: wrap; gap: 4px 0; margin-top: 12px; font-size: 12px; color: var(--muted); }
+.op-card-meta span + span::before { content: '·'; margin: 0 7px; color: var(--faint); }
+.op-card-link { display: inline-block; margin-top: 12px; font-size: 12.5px; font-weight: 600; }
+
+.op-window { display: grid; gap: 12px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--sunken); }
+.op-window-h { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.op-window-h svg { flex-shrink: 0; color: var(--muted); }
+.op-w-open { border-color: #bbf7d0; background: #f0fdf4; } .op-w-open svg { color: #16a34a; }
+.op-w-urgent { border-color: #fde68a; background: #fffbeb; } .op-w-urgent svg { color: #d97706; }
+.op-w-soon { border-color: #bae6fd; background: #f0f9ff; } .op-w-soon svg { color: #0284c7; }
+.op-w-closed { border-color: var(--line); background: var(--canvas); }
+.op-line { position: relative; height: 52px; }
+.op-line-track { position: absolute; left: 4%; right: 4%; top: 20px; height: 4px; border-radius: 2px; background: rgba(0,0,0,.08); }
+.op-line-fill { position: absolute; top: 20px; height: 4px; border-radius: 2px; background: var(--ink); }
+.op-line-today { position: absolute; top: 14px; width: 2px; height: 16px; margin-left: -1px; border-radius: 1px; background: #dc2626; }
+.op-line-today i { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 10.5px; font-weight: 600; color: #dc2626; white-space: nowrap; }
+.op-line-l, .op-line-r { position: absolute; bottom: 0; font-size: 11.5px; color: var(--muted); }
+.op-line-l { left: 4%; } .op-line-r { right: 4%; }
+.op-quick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+
+.op-apply { padding: 14px 16px; border-radius: 12px; background: var(--canvas); }
+.op-apply-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.op-cta { display: inline-flex; align-items: center; height: 40px; padding: 0 18px; border-radius: 999px; background: #000; color: #fff; font-size: 13.5px; font-weight: 600; }
+.op-cta.off { background: #d6d3d1; color: #57534e; }
+.op-dest { min-width: 0; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); overflow-wrap: anywhere; }
+.op-warn { display: block; margin-top: 8px; font-size: 12px; color: #b45309; font-weight: 500; }

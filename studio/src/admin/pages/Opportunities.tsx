@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
-import { EditorHeader, Field, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
+import { EditorHeader, Field, ListEditor, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
 import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
@@ -14,6 +14,19 @@ const typeLabel = (t: string) => OPP_TYPES.find((x) => x[0] === t)?.[1] ?? t;
 const slugify = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[’']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
 const todayMa = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const dateLabel = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const DAY = 86400000;
+const dayDiff = (a: string, b: string) => Math.round((Date.parse(`${a}T12:00:00Z`) - Date.parse(`${b}T12:00:00Z`)) / DAY);
+const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
+const longDate = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const inDays = (n: number) => (n === 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n} days`);
+/** The application window in words, as the website will treat it (Morocco time). */
+function windowText(o: { opensOn: string | null; deadline: string | null }) {
+  const t = todayMa();
+  if (o.opensOn && o.opensOn > t) return { tone: 'soon', text: `Opens ${inDays(dayDiff(o.opensOn, t))} (${longDate(o.opensOn)})${o.deadline ? `, closes ${longDate(o.deadline)}` : ', no deadline'}.` };
+  if (o.deadline && o.deadline < t) return { tone: 'closed', text: `Closed ${-dayDiff(o.deadline, t)} day${-dayDiff(o.deadline, t) === 1 ? '' : 's'} ago. It is listed under Closed on the website.` };
+  if (o.deadline) { const d = dayDiff(o.deadline, t); return { tone: d <= 7 ? 'urgent' : 'open', text: `Open now · closes ${inDays(d)} (${longDate(o.deadline)}).` }; }
+  return { tone: 'open', text: 'Open now · rolling applications, no deadline.' };
+}
 const stateOf = (o: { opensOn: string | null; deadline: string | null }) => { const t = todayMa(); return o.deadline && o.deadline < t ? 'Closed' : o.opensOn && o.opensOn > t ? 'Opening soon' : 'Open'; };
 
 type Row = { id: string; slug: string; title: string; type: string; deadline: string | null; opensOn: string | null; location: string; status: string; publishedRevisionId: string | null; updatedAt: string; pillarName: string | null };
@@ -63,11 +76,6 @@ const KEYS: (keyof Form)[] = ['title', 'slug', 'type', 'summary', 'body', 'eligi
 type Loaded = Form & { id: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; media: MediaItem[]; problems: string[];
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] } };
 
-function Lines({ value, onChange, label, max }: { value: string[]; onChange: (v: string[]) => void; label: string; max: number }) {
-  const [text, setText] = useState(value.join('\n'));
-  useEffect(() => { if (text.split('\n').map((s) => s.trim()).filter(Boolean).join('\n') !== value.join('\n')) setText(value.join('\n')); }, [value]);
-  return <textarea className="textarea" aria-label={label} value={text} onChange={(e) => { setText(e.target.value); onChange(e.target.value.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, max)); }} />;
-}
 
 export function OpportunityEditor({ id }: { id: string }) {
   const can = useCan(); const me = useMe(); const toast = useToast();
@@ -118,6 +126,17 @@ export function OpportunityEditor({ id }: { id: string }) {
   }
   const file = `opportunity-${f.slug}.html`;
   const state = stateOf(f);
+  const win = windowText(f);
+  const words = f.body.trim().split(/\s+/).filter(Boolean).length;
+  const applyIssue = f.applyMethod === 'external' ? (!f.applyUrl ? 'Add the link to your application form.' : !/^https:\/\/\S+\.\S+/.test(f.applyUrl) ? 'Use a full secure address starting with https://' : '')
+    : f.applyMethod === 'email' ? (!f.applyEmail ? 'Add the email address applications go to.' : !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(f.applyEmail) ? 'This does not look like an email address.' : '') : '';
+  // timeline: opening → deadline with today, padded so both ends and today fit
+  const span = (() => {
+    const t = todayMa(); const a = f.opensOn ?? t; const b = f.deadline ?? addDays(a, 30);
+    const lo = [a, t].sort()[0], hi = [b, t].sort()[1]; const total = Math.max(1, dayDiff(hi, lo));
+    const pos = (d: string) => 4 + (dayDiff(d, lo) / total) * 92;
+    return { a: pos(a), b: pos(b), t: pos(t) };
+  })();
 
   return <>
     <EditorHeader back={{ to: '/studio/opportunities', label: 'Opportunities' }} title={f.title} file={live ? file : undefined} status={status} live={live} dirty={dirty}
@@ -147,17 +166,39 @@ export function OpportunityEditor({ id }: { id: string }) {
           <Field label="Short summary" span={3} count={[f.summary.length, 320]}><textarea className="textarea" rows={3} maxLength={320} value={f.summary} onChange={(x) => set('summary', x.target.value.replace(/\n/g, ' '))} aria-label="Short summary" /></Field>
           <Field label="Type"><select className="select" value={f.type} onChange={(x) => set('type', x.target.value)} aria-label="Type">{OPP_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
           <Field label="Pillar" span={2} hint="Optional."><select className="select" value={f.pillarKey ?? ''} onChange={(x) => set('pillarKey', x.target.value || null)} aria-label="Pillar"><option value="">None</option>{pillars.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}</select></Field>
+          <div className="op-card-wrap s3" aria-label="Preview of the card in the list of opportunities">
+            <span className="op-cap">How it appears in the list</span>
+            <article className="op-card">
+              <div className="op-card-top"><span className="op-pill">{typeLabel(f.type)}</span><span className={`op-state op-${state === 'Open' ? 'open' : state === 'Closed' ? 'closed' : 'soon'}`}>{state}</span></div>
+              <h3>{f.title || 'Opportunity title'}</h3>
+              <p>{f.summary || 'The short summary appears here: who it is for and what they will do.'}</p>
+              <div className="op-card-meta">{f.deadline ? <span>Deadline {longDate(f.deadline)}</span> : <span>Rolling applications</span>}{f.location && <span>{f.location}</span>}{f.commitment && <span>{f.commitment}</span>}</div>
+              <span className="op-card-link">{state === 'Closed' ? 'View details' : 'See how to apply'} ↗</span>
+            </article>
+          </div>
         </Section>
         <Section id="description" title="Description" desc="What it is, what people will do, and how selection works.">
-          <Field label="Description" span={3} hint="Blank line = new paragraph · ## Subheading · **bold** · [link](https://…)"><textarea className="textarea" style={{ minHeight: 170 }} maxLength={20000} value={f.body} onChange={(x) => set('body', x.target.value)} aria-label="Description" /></Field>
-          <Field label="Who can apply" span={2} hint="One per line, up to 12. Required."><Lines label="Who can apply" value={f.eligibility} max={12} onChange={(v) => set('eligibility', v)} /></Field>
-          <Field label="What you get" hint="Optional, one per line."><Lines label="What you get" value={f.benefits} max={12} onChange={(v) => set('benefits', v)} /></Field>
+          <Field label="Description" span={3} hint={<>{words} word{words === 1 ? '' : 's'}{words < 80 ? ' · aim for 80 or more: what it is, what people will do, how selection works' : ''} · Blank line = new paragraph · ## Subheading · **bold** · [link](https://…)</>}><textarea className="textarea" style={{ minHeight: 170 }} maxLength={20000} value={f.body} onChange={(x) => set('body', x.target.value)} aria-label="Description" /></Field>
+          <Field label="Who can apply" span={3} hint="Required. One condition per line: age, place, background, language…"><ListEditor label="Who can apply" value={f.eligibility} max={12} placeholder="e.g. Young people aged 18–30 living in Al Haouz" disabled={!editable} onChange={(v) => set('eligibility', v)} /></Field>
+          <Field label="What you get" span={3} hint="Optional. Training, mentoring, certificate, costs covered…"><ListEditor label="What you get" value={f.benefits} max={12} placeholder="e.g. Six months of mentoring" disabled={!editable} onChange={(v) => set('benefits', v)} /></Field>
         </Section>
         <Section id="dates" title="Dates & place" desc="It opens and closes on the website by these dates (Morocco time).">
           <Field label="Opens" hint="Empty = open now."><input className="input" type="date" value={f.opensOn ?? ''} onChange={(x) => set('opensOn', x.target.value || null)} aria-label="Opens" /></Field>
           <Field label="Deadline" hint="Empty = rolling applications."><input className="input" type="date" value={f.deadline ?? ''} min={f.opensOn ?? undefined} onChange={(x) => set('deadline', x.target.value || null)} aria-label="Deadline" /></Field>
           <Field label="Commitment"><input className="input" maxLength={80} placeholder="e.g. 3 months, part-time" value={f.commitment} onChange={(x) => set('commitment', x.target.value)} aria-label="Commitment" /></Field>
           <Field label="Location" span={3}><input className="input" maxLength={120} placeholder="e.g. Marrakech, or Remote" value={f.location} onChange={(x) => set('location', x.target.value)} aria-label="Location" /></Field>
+          <div className={`op-window s3 op-w-${win.tone}`} role="status">
+            <div className="op-window-h"><Icon n="clock" width={16} height={16} /><b>{win.text}</b></div>
+            {f.opensOn || f.deadline ? <div className="op-line" aria-hidden="true">
+              <span className="op-line-track" />
+              {span && <span className="op-line-fill" style={{ left: `${span.a}%`, width: `${Math.max(1, span.b - span.a)}%` }} />}
+              {span && <span className="op-line-today" style={{ left: `${span.t}%` }}><i>Today</i></span>}
+              <span className="op-line-l">{f.opensOn ? longDate(f.opensOn) : 'Open now'}</span><span className="op-line-r">{f.deadline ? longDate(f.deadline) : 'No deadline'}</span>
+            </div> : null}
+            {editable && <div className="op-quick"><span className="muted">Deadline:</span>
+              {([['+2 weeks', 14], ['+1 month', 30], ['+3 months', 91]] as const).map(([l, n]) => <button key={l} type="button" className="btn btn-sm" onClick={() => set('deadline', addDays(f.opensOn && f.opensOn > todayMa() ? f.opensOn : todayMa(), n))}>{l}</button>)}
+              <button type="button" className="btn btn-sm btn-ghost" disabled={!f.deadline} onClick={() => set('deadline', null)}>No deadline</button></div>}
+          </div>
         </Section>
         <Section id="apply" title="How to apply">
           <Field label="Application method" span={3}><div className="ed-choice">
@@ -165,6 +206,15 @@ export function OpportunityEditor({ id }: { id: string }) {
               <label key={v} className={f.applyMethod === v ? 'on' : ''}><input type="radio" name="apply" checked={f.applyMethod === v} onChange={() => set('applyMethod', v)} /><b>{l}</b><small>{d}</small></label>)}</div></Field>
           {f.applyMethod === 'external' && <Field label="Application link" span={3}><input className="input mono" maxLength={500} placeholder="https://…" value={f.applyUrl} onChange={(x) => set('applyUrl', x.target.value.trim())} aria-label="Application link" /></Field>}
           {f.applyMethod === 'email' && <Field label="Application email" span={3} hint="Shown publicly on the page."><input className="input mono" maxLength={160} placeholder="name@afcdteam.com" value={f.applyEmail} onChange={(x) => set('applyEmail', x.target.value.trim())} aria-label="Application email" /></Field>}
+          <div className="op-apply s3">
+            <span className="op-cap">On the opportunity page</span>
+            <div className="op-apply-row">
+              <span className={`op-cta${applyIssue ? ' off' : ''}`}>{state === 'Closed' ? 'Applications closed' : f.applyMethod === 'external' ? 'Apply online ↗' : f.applyMethod === 'email' ? 'Apply by email ↗' : 'Ask us about it ↗'}</span>
+              <span className="op-dest">{f.applyMethod === 'external' ? (f.applyUrl || 'No link yet') : f.applyMethod === 'email' ? (f.applyEmail || 'No email yet') : 'Opens the contact form with this opportunity as the topic'}</span>
+              {f.applyMethod === 'external' && /^https:\/\/\S+$/.test(f.applyUrl) && <a className="btn btn-sm" href={f.applyUrl} target="_blank" rel="noopener noreferrer"><Icon n="ext" />Open link</a>}
+            </div>
+            {applyIssue && <span className="op-warn" role="alert">{applyIssue}</span>}
+          </div>
         </Section>
         <Section id="links" title="Links & image" desc="Optional.">
           <Field label="Project" hint="Live projects only."><select className="select" value={f.projectSlug ?? ''} onChange={(x) => set('projectSlug', x.target.value || null)} aria-label="Project"><option value="">None</option>{projects.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select></Field>

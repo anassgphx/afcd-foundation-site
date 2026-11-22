@@ -88,3 +88,35 @@ export function useDirtyGuard(dirty: boolean) {
   const ref = useRef(dirty); ref.current = dirty;
   useEffect(() => { const k = (e: BeforeUnloadEvent) => { if (ref.current) e.preventDefault(); }; window.addEventListener('beforeunload', k); return () => window.removeEventListener('beforeunload', k); }, []);
 }
+
+/** One input per item (who can apply, benefits…): Enter adds the next item, Backspace on an empty item removes it,
+ *  and items can be moved or removed. Empty items are dropped from the saved value. */
+export function ListEditor({ value, onChange, label, max, placeholder, disabled }: { value: string[]; onChange: (v: string[]) => void; label: string; max: number; placeholder: string; disabled?: boolean }) {
+  const [rows, setRows] = useState<string[]>(value.length ? value : ['']);
+  const refs = useRef<(HTMLInputElement | null)[]>([]);
+  const focusAt = useRef<number | null>(null);
+  useEffect(() => { if (rows.filter((r) => r.trim()).join('\n') !== value.join('\n')) setRows(value.length ? value : ['']); }, [value.join('\n')]);
+  useEffect(() => { if (focusAt.current !== null) { refs.current[focusAt.current]?.focus(); focusAt.current = null; } });
+  const commit = (next: string[]) => { setRows(next.length ? next : ['']); onChange(next.map((r) => r.trim()).filter(Boolean).slice(0, max)); };
+  const filled = rows.filter((r) => r.trim()).length;
+  return <div className="ed-items" role="group" aria-label={label}>
+    <ol>{rows.map((r, i) => <li key={i}>
+      <span className="ed-items-b" aria-hidden="true" />
+      <input ref={(el) => { refs.current[i] = el; }} className="input" value={r} disabled={disabled} maxLength={200} placeholder={i === 0 ? placeholder : 'Another item'} aria-label={`${label}, item ${i + 1}`}
+        onChange={(e) => commit(rows.map((x, j) => (j === i ? e.target.value : x)))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); if (rows.length < max) { focusAt.current = i + 1; commit([...rows.slice(0, i + 1), '', ...rows.slice(i + 1)]); } }
+          else if (e.key === 'Backspace' && !r && rows.length > 1) { e.preventDefault(); focusAt.current = Math.max(0, i - 1); commit(rows.filter((_, j) => j !== i)); }
+        }} />
+      {!disabled && <span className="ed-items-acts">
+        <button type="button" className="btn btn-ghost icon-btn btn-sm" aria-label={`Move item ${i + 1} up`} disabled={i === 0} onClick={() => { const n = [...rows]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; commit(n); }}><Icon n="chev" width={13} height={13} style={{ transform: 'rotate(-90deg)' }} /></button>
+        <button type="button" className="btn btn-ghost icon-btn btn-sm" aria-label={`Move item ${i + 1} down`} disabled={i === rows.length - 1} onClick={() => { const n = [...rows]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; commit(n); }}><Icon n="chev" width={13} height={13} style={{ transform: 'rotate(90deg)' }} /></button>
+        <button type="button" className="btn btn-ghost icon-btn btn-sm" aria-label={`Remove item ${i + 1}`} onClick={() => commit(rows.filter((_, j) => j !== i))}><Icon n="x" width={13} height={13} /></button>
+      </span>}
+    </li>)}</ol>
+    <div className="ed-items-f">
+      {!disabled && rows.length < max && <button type="button" className="btn btn-sm ed-add" onClick={() => { focusAt.current = rows.length; commit([...rows, '']); }}><Icon n="plus" />Add item</button>}
+      <span className="muted">{filled} of {max} · Enter adds a line</span>
+    </div>
+  </div>;
+}

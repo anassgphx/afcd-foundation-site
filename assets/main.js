@@ -618,6 +618,38 @@
     });
   });
 
+  /* ---------- Count-up numbers ([data-countup]) and gentle parallax ([data-par]) ---------- */
+  (function () {
+    var nums = $$('[data-countup]');
+    if (nums.length && !reduce && 'IntersectionObserver' in window) {
+      nums = nums.filter(function (n) { n.dataset.full = n.textContent.trim(); return /\d/.test(n.dataset.full); });
+      nums.forEach(function (n) { n.textContent = n.dataset.full.replace(/\d+/, '0'); });
+      var io = new IntersectionObserver(function (es) {
+        es.forEach(function (e) {
+          if (!e.isIntersecting) return; io.unobserve(e.target);
+          var el = e.target, m = el.dataset.full.match(/^(\D*)(\d+)(.*)$/), t0 = performance.now(), D = 1400;
+          if (!m) { el.textContent = el.dataset.full; return; }
+          (function step(now) { var p = Math.min(1, (now - t0) / D), k = 1 - Math.pow(1 - p, 3); el.textContent = m[1] + Math.round(+m[2] * k) + m[3]; if (p < 1) requestAnimationFrame(step); })(t0);
+        });
+      }, { threshold: .6 });
+      nums.forEach(function (n) { io.observe(n); });
+    }
+    var tiles = $$('[data-par]');
+    if (reduce || !tiles.length) return;
+    var ticking = false;
+    function upd() {
+      ticking = false;
+      tiles.forEach(function (t) {
+        var box = t.parentElement.getBoundingClientRect(), vh = innerHeight;
+        if (box.bottom < 0 || box.top > vh) return;
+        var p = (box.top + box.height / 2 - vh / 2) / vh;
+        t.style.transform = 'translate3d(0,' + (p * +t.dataset.par).toFixed(1) + 'px,0)';
+      });
+    }
+    addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(upd); } }, { passive: true });
+    upd();
+  })();
+
   /* ---------- Event details: countdown, add to calendar, share, phone registration bar ---------- */
   $$('[data-countdown]').forEach(function (el) {
     var p = el.dataset.countdown.split('-'), t = new Date(+p[0], +p[1] - 1, +p[2]), n = new Date(); n.setHours(0, 0, 0, 0);

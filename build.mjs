@@ -106,6 +106,57 @@ function applySeo(file, meta) {
   return meta;
 }
 
+// Studio page fields (owned by AFCD Studio): elements marked data-sf="key" (optionally data-sf-type) in a page source can be
+// edited in Studio. src/data/page-fields.json (or env PAGE_FIELDS_JSON) holds the edited values as plain text; they are
+// escaped here. The data-sf attributes are always removed from the output, so an unedited page builds exactly as written.
+const FIELDS_FILE = process.env.PAGE_FIELDS_JSON || join(SRC, 'data', 'page-fields.json');
+const FIELDS = existsSync(FIELDS_FILE) ? JSON.parse(readFileSync(FIELDS_FILE, 'utf8')).pages ?? {} : {};
+const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const SAFE_HREF = /^(https:\/\/[^\s"'<>]+|mailto:[^\s"'<>]+|tel:\+?[0-9 ]+|#[a-z0-9-]+|[a-z0-9-]+\.html(#[a-z0-9-]+)?)$/i;
+function closeIndex(html, tag, from) {   // index of the matching </tag>, counting nested tags of the same name
+  const re = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'gi'); re.lastIndex = from; let depth = 1, m;
+  while ((m = re.exec(html))) { depth += m[1] ? -1 : 1; if (!depth) return m.index; }
+  throw new Error(`unclosed <${tag}> for a Studio field`);
+}
+function fieldValue(type, v, inner, open) {
+  const softCls = (inner.match(/<span class="([^"]+)"/) || [])[1];
+  switch (type) {
+    case 'split': return { inner: escHtml(v.main) + (v.soft ? ` <span class="${softCls || 'sh-soft'}">${escHtml(v.soft)}</span>` : '') };
+    case 'plain': return { inner: escHtml(typeof v === 'object' ? [v.main, v.soft].filter(Boolean).join(' ') : v) };
+    case 'rich': return { inner: escHtml(v).replace(/\*\*(.+?)\*\*/g, `<span class="${softCls || 'font-semibold'}">$1</span>`) };
+    case 'tail': { const i = inner.lastIndexOf('</span>'); return { inner: (i >= 0 ? inner.slice(0, i + 7) : '') + escHtml(v) }; }
+    case 'link': {
+      const rest = inner.search(/\s*<span/); const tailHtml = rest >= 0 ? inner.slice(rest) : '';
+      return { inner: escHtml(v.label) + tailHtml, open: v.href && SAFE_HREF.test(v.href) ? open.replace(/\shref="[^"]*"/, ` href="${escHtml(v.href)}"`) : open };
+    }
+    default: return { inner: escHtml(v) };
+  }
+}
+function imageTag(open, v) {
+  let t = open.replace(/\s(src|srcset|sizes|alt|width|height)="[^"]*"/g, '');
+  const style = `object-position:${Number(v.fx) || 50}% ${Number(v.fy) || 50}%`;
+  t = /\sstyle="/.test(t) ? t.replace(/\sstyle="[^"]*"/, ` style="${style}"`) : t.replace(/\/?>$/, ` style="${style}">`);
+  return t.replace(/^<img\b/, `<img src="${escHtml(v.src)}"${v.srcset ? ` srcset="${escHtml(v.srcset)}" sizes="100vw"` : ''} alt="${escHtml(v.alt)}" width="${Number(v.w)}" height="${Number(v.h)}"`);
+}
+function applyFields(file, body) {
+  const vals = FIELDS[file]?.fields ?? {};
+  const re = /<([a-z][a-z0-9]*)\b[^>]*\sdata-sf="([^"]+)"[^>]*>/gi;
+  let out = '', last = 0, m;
+  while ((m = re.exec(body))) {
+    const [raw, tag, key] = m;
+    const type = (raw.match(/\sdata-sf-type="([^"]+)"/) || [])[1] || 'text';
+    const open = raw.replace(/\sdata-sf(?:-type)?="[^"]*"/g, '');
+    const v = vals[key];
+    out += body.slice(last, m.index);
+    if (tag.toLowerCase() === 'img') { out += v !== undefined && type === 'image' && v.src ? imageTag(open, v) : open; last = m.index + raw.length; continue; }
+    const start = m.index + raw.length, end = closeIndex(body, tag, start), inner = body.slice(start, end);
+    if (v === undefined || v === null || v === '') { out += open + inner; }
+    else { const r = fieldValue(type, v, inner, open); out += (r.open ?? open) + r.inner; }
+    last = end; re.lastIndex = end;
+  }
+  return out + body.slice(last);
+}
+
 function seoTags(file, meta) {
   const noindex = !PRODUCTION || meta.noindex === 'true';
   const title = escapeAttr(meta.title), desc = escapeAttr(meta.description);
@@ -123,6 +174,7 @@ function seoTags(file, meta) {
     `<meta property="og:image:height" content="${meta.ogImage ? meta.ogImage.h : 630}">`,
     `<meta property="og:image:alt" content="${meta.ogImage ? escapeAttr(escapeText(meta.ogImage.alt)) : 'AFCD Leadership Lab panel discussion'}">`,
     ...(meta.seoRevision ? [`<meta name="studio-seo-rev" content="${meta.seoRevision}">`] : []),
+    ...(FIELDS[file]?.revision ? [`<meta name="studio-fields-rev" content="${FIELDS[file].revision}">`] : []),
     `<meta name="twitter:card" content="summary_large_image">`,
   ];
   // Website forms → AFCD Studio: only when FORMS_ENDPOINT is set (e.g. http://localhost:4400/forms/v1).
@@ -166,7 +218,7 @@ for (const file of pages) {
     markActive(header, meta.active).trimEnd(),
     '',
     `<main id="main" data-page="${meta.active}">`,
-    body.trim(),
+    applyFields(file, body.trim()),
     '</main>',
     '',
     markActive(footer, meta.active).trimEnd(),

@@ -10,6 +10,11 @@ import { Loading } from './Dashboard.tsx';
 
 const SCOPES: [string, string][] = [['international', 'International'], ['national', 'National'], ['local', 'Local']];
 const scopeLabel = (s: string) => SCOPES.find((x) => x[0] === s)?.[1] ?? s;
+/** Initials as the Partners page shows them when there is no logo (same rule as the site generator). */
+const initials = (name: string) => name.replace(/[()]/g, '').split(/\s+/).filter((x) => /^\p{L}/u.test(x) && !['of', 'in', 'for', 'the', 'and'].includes(x.toLowerCase())).slice(0, 2).map((x) => x[0]).join('').toUpperCase();
+const nameKey = (n: string) => n.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const SCOPE_INFO: Record<string, string> = { international: 'Embassies, international NGOs, foundations and networks.', national: 'Moroccan institutions, associations and companies.', local: 'Communes and local groups in Al Haouz and Marrakech.' };
+const thisYear = new Date().getFullYear();
 const slugify = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
 
 type Row = { id: string; slug: string; name: string; scope: string; category: string; current: boolean; status: string; sort: number; logoMediaId: string | null; websiteUrl: string; publishedRevisionId: string | null; updatedAt: string; projects: number };
@@ -79,9 +84,11 @@ export function PartnerEditor({ id }: { id: string }) {
   const [dirty, setDirty] = useState(false); const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
   const [dialog, setDialog] = useState<null | 'logo' | 'preview' | 'publish' | 'unpublish' | 'changes'>(null);
   const [url, setUrl] = useState(''); const [comment, setComment] = useState('');
+  const [others, setOthers] = useState<{ id: string; name: string }[]>([]); const [pq, setPq] = useState('');
 
   const load = useCallback(async () => {
-    const [d, pr] = await Promise.all([api<Loaded>(`/partners/${id}`), api('/projects')]);
+    const [d, pr, all] = await Promise.all([api<Loaded>(`/partners/${id}`), api('/projects'), api<{ id: string; name: string }[]>('/partners')]);
+    setOthers(all.filter((x) => x.id !== id));
     setP(d); setF(Object.fromEntries(KEYS.map((k) => [k, (d as any)[k]])) as Form); setLogo(d.media[0] ?? null);
     setProjects(pr.filter((x: any) => x.publishedRevisionId)); setDirty(false);
   }, [id]);
@@ -94,6 +101,13 @@ export function PartnerEditor({ id }: { id: string }) {
   const editable = can('partner.update') && !['in_review', 'archived'].includes(status);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => { setF((x) => ({ ...x!, [k]: v })); setDirty(true); };
   function showErr(e: unknown) { setErrs(e instanceof ApiError && e.details?.length ? e.details.map((d) => (d.path ? `${d.path}: ` : '') + d.message) : [e instanceof Error ? e.message : 'Something went wrong.']); }
+  const key = nameKey(f.name);
+  const dupe = key.length > 2 ? others.find((o) => nameKey(o.name) === key) : undefined;
+  const similar = !dupe && key.length > 4 ? others.find((o) => { const k = nameKey(o.name); return k.length > 4 && (k.includes(key) || key.includes(k)); }) : undefined;
+  const site = (() => { try { const u = new URL(f.websiteUrl); return u.protocol === 'https:' || u.protocol === 'http:' ? u : null; } catch { return null; } })();
+  const siteIssue = !f.websiteUrl ? '' : !site ? 'Use a full address starting with https://' : site.protocol === 'http:' ? 'Prefer the secure https:// address if the site has one.' : '';
+  const years = f.sinceYear && f.sinceYear <= thisYear ? thisYear - f.sinceYear : null;
+  const shownProjects = projects.filter((x) => !pq || x.name.toLowerCase().includes(pq.toLowerCase())).sort((a, b) => Number(f.projectSlugs.includes(b.slug)) - Number(f.projectSlugs.includes(a.slug)));
   async function save(): Promise<boolean> {
     setBusy('save'); setErrs([]);
     try { await put(`/partners/${id}`, f); await load(); toast(live ? 'Draft saved. The live listing is unchanged until you publish.' : 'Draft saved'); return true; }
@@ -140,15 +154,35 @@ export function PartnerEditor({ id }: { id: string }) {
       <div className="ed-col">
       <fieldset className="ed-main" disabled={!editable}>
         <Section id="basics" title="Organisation" desc="One record per organisation. Use its official name.">
-          <Field label="Organisation name" span={3} count={[f.name.length, 140]}><input className="input input-lg" maxLength={140} value={f.name} onChange={(x) => set('name', x.target.value)} aria-label="Organisation name" /></Field>
-          <Field label="Scope" hint="Groups the partner on the website."><select className="select" value={f.scope} onChange={(x) => set('scope', x.target.value)} aria-label="Scope">{SCOPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-          <Field label="Type of organisation" hint="e.g. Embassy, Foundation, Association"><input className="input" maxLength={60} value={f.category} onChange={(x) => set('category', x.target.value)} aria-label="Type of organisation" /></Field>
-          <Field label="Status"><label className="ed-toggle"><input type="checkbox" checked={f.current} onChange={(x) => set('current', x.target.checked)} /><span>Current partnership</span></label></Field>
+          <div className="pt-top s3">
+            <div className="pt-name">
+              <Field label="Organisation name" count={[f.name.length, 140]} hint="Its official name, as the organisation writes it."><input className="input input-lg" maxLength={140} value={f.name} onChange={(x) => set('name', x.target.value)} aria-label="Organisation name" /></Field>
+              {dupe && <p className="pt-warn" role="alert"><Icon n="alert" width={14} height={14} /><span>Another partner already has this name: <Link to={`/studio/partners/${dupe.id}`}>{dupe.name}</Link>. Keep one record per organisation.</span></p>}
+              {similar && <p className="pt-note"><Icon n="alert" width={14} height={14} /><span>Similar name already listed: <Link to={`/studio/partners/${similar.id}`}>{similar.name}</Link>. Is it the same organisation?</span></p>}
+            </div>
+            <div className="pt-prev" aria-label="Preview on the Partners page">
+              <span className="op-cap">On the Partners page</span>
+              <div className="pt-tile">
+                <span className="pt-logo">{f.logoMediaId && logo ? <img src={logo.url} alt="" /> : <span>{initials(f.name) || '?'}</span>}</span>
+                <b>{f.name || 'Organisation name'}</b>
+                <span className="pt-scope">{scopeLabel(f.scope)}{f.category ? ` · ${f.category}` : ''}</span>
+              </div>
+            </div>
+          </div>
+          <Field label="Scope" span={3} hint="Groups the partner on the website."><div className="ed-choice">
+            {SCOPES.map(([v, l]) => <label key={v} className={f.scope === v ? 'on' : ''}><input type="radio" name="scope" checked={f.scope === v} onChange={() => set('scope', v)} /><b>{l}</b><small>{SCOPE_INFO[v]}</small></label>)}</div></Field>
+          <Field label="Type of organisation" span={2} hint="e.g. Embassy, Foundation, Association, Commune"><input className="input" maxLength={60} value={f.category} onChange={(x) => set('category', x.target.value)} aria-label="Type of organisation" /></Field>
+          <Field label="Partnership"><div className="seg pt-seg" role="radiogroup" aria-label="Partnership">
+            <button type="button" role="radio" aria-checked={f.current} className={f.current ? 'on' : ''} onClick={() => set('current', true)}>Current</button>
+            <button type="button" role="radio" aria-checked={!f.current} className={!f.current ? 'on' : ''} onClick={() => set('current', false)}>Past</button></div></Field>
         </Section>
         <Section id="about" title="About the partnership" desc="Only facts AFCD can confirm.">
           <Field label="What we do together" span={3} count={[f.description.length, 400]}><textarea className="textarea" rows={3} maxLength={400} value={f.description} onChange={(x) => set('description', x.target.value)} aria-label="What we do together" /></Field>
-          <Field label="Website" span={2}><input className="input mono" maxLength={300} placeholder="https://…" value={f.websiteUrl} onChange={(x) => set('websiteUrl', x.target.value.trim())} aria-label="Website" /></Field>
-          <Field label="Partner since"><input className="input" type="number" min={2000} max={2100} placeholder="Year" value={f.sinceYear ?? ''} onChange={(x) => set('sinceYear', x.target.value ? Number(x.target.value) : null)} aria-label="Partner since" /></Field>
+          <Field label="Website" span={2} hint={siteIssue ? <span className="pt-hint-warn">{siteIssue}</span> : site ? <>Links to <b>{site.hostname.replace(/^www\./, '')}</b></> : 'Their official site, if they have one.'}>
+            <div className="pt-url"><input className="input mono" maxLength={300} placeholder="https://…" value={f.websiteUrl} onChange={(x) => set('websiteUrl', x.target.value.trim())} aria-label="Website" aria-invalid={!!siteIssue && !site} />
+              {site && <a className="btn btn-sm" href={site.href} target="_blank" rel="noopener noreferrer"><Icon n="ext" />Open</a>}</div></Field>
+          <Field label="Partner since" hint={f.sinceYear && f.sinceYear > thisYear ? <span className="pt-hint-warn">That year is in the future.</span> : years !== null ? (years === 0 ? 'Since this year' : `${years} year${years === 1 ? '' : 's'} of partnership`) : 'Year the partnership started.'}>
+            <input className="input" type="number" min={2000} max={thisYear} placeholder="Year" value={f.sinceYear ?? ''} onChange={(x) => set('sinceYear', x.target.value ? Number(x.target.value) : null)} aria-label="Partner since" /></Field>
         </Section>
         <Section id="logo" title="Logo" desc="Only with the partner’s permission; confirm the rights in the Media Library. Without a logo the site shows initials.">
           <div className="ed-media s3">
@@ -158,7 +192,10 @@ export function PartnerEditor({ id }: { id: string }) {
           </div>
         </Section>
         <Section id="projects" title="Projects with this partner" desc="Live projects only.">
-          <div className="ed-checks s3">{projects.map((x) => <label key={x.slug} className={f.projectSlugs.includes(x.slug) ? 'on' : ''}><input type="checkbox" checked={f.projectSlugs.includes(x.slug)} onChange={(e) => set('projectSlugs', e.target.checked ? [...f.projectSlugs, x.slug] : f.projectSlugs.filter((s) => s !== x.slug))} /><span>{x.name}</span></label>)}</div>
+          {projects.length > 6 && <div className="pt-pbar s3"><label className="search"><Icon n="search" /><span className="sr-only">Search projects</span><input className="input" placeholder="Search projects" value={pq} onChange={(e) => setPq(e.target.value)} /></label><span className="muted">{f.projectSlugs.length} selected</span></div>}
+          {projects.length === 0 && <p className="muted s3" style={{ margin: 0 }}>No live projects yet. Projects appear here once they are published.</p>}
+          {projects.length > 0 && projects.length <= 6 && <span className="muted s3" style={{ fontSize: 12 }}>{f.projectSlugs.length} selected</span>}
+          <div className="ed-checks s3">{shownProjects.map((x) => <label key={x.slug} className={f.projectSlugs.includes(x.slug) ? 'on' : ''}><input type="checkbox" checked={f.projectSlugs.includes(x.slug)} onChange={(e) => set('projectSlugs', e.target.checked ? [...f.projectSlugs, x.slug] : f.projectSlugs.filter((s) => s !== x.slug))} /><span>{x.name}</span></label>)}</div>
         </Section>
         <Section id="internal" title="Internal" desc="Not shown on the website.">
           <Field label="Source" span={2} hint="Where these details come from."><input className="input" maxLength={300} value={f.provenance} onChange={(x) => set('provenance', x.target.value)} aria-label="Source" /></Field>

@@ -782,7 +782,8 @@ def contact():
         <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Main office</dt><dd>Marrakech, Morocco<br><span class="text-ink-mid">Full street address to be confirmed before publication</span></dd></div>
         <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Roots</dt><dd>Ait Ourir, Al Haouz</dd></div>
         <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Phone</dt><dd class="tabular-nums"><a class="hover:underline" href="tel:+212663618536">+212 663 618 536</a></dd></div>
-        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Email</dt><dd><a class="hover:underline" href="mailto:contact@afcdteam.com">contact@afcdteam.com</a></dd></div>
+        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Executive team</dt><dd><a class="hover:underline" href="mailto:contact@afcdteam.com">contact@afcdteam.com</a></dd></div>
+        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Board leadership</dt><dd><a class="hover:underline" href="mailto:akaya@afcdteam.com">akaya@afcdteam.com</a></dd></div>
         <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Follow</dt><dd class="flex flex-wrap gap-2">{''.join(f'<a class="sh-link" href="{u}" target="_blank" rel="noopener">{n} {ARR}</a>' for n, u in SOCIALS)}</dd></div>
       </dl>
       {ph('Map · Marrakech main office', 'mt-8 aspect-[4/3] w-full rounded-3xl', '#E5E5E5')}

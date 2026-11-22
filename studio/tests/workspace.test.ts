@@ -33,3 +33,19 @@ describe('top bar search and notifications', () => {
     expect((await rev.get('/notifications')).body.find((n: any) => n.kind === 'forms')).toBeUndefined();
   });
 });
+
+describe('dashboard overview', () => {
+  it('summarises every module the user can read, in plain words', async () => {
+    h = await makeApp();
+    await addUser(h.db, 'admin@afcd.test', 'website_admin'); await addUser(h.db, 'media@afcd.test', 'media_manager');
+    const admin = await client(h.app, 'admin@afcd.test'), mm = await client(h.app, 'media@afcd.test');
+    const { status, body } = await admin.get('/overview');
+    expect(status).toBe(200);
+    expect(body.modules.map((m: any) => m.key)).toEqual(['projects', 'news', 'events', 'opportunities', 'partners', 'pages']);
+    expect(body.modules.find((m: any) => m.key === 'projects').live).toBe(1);
+    expect(body.health.map((x: any) => x.key)).toEqual(['delivery', 'seo', 'media', 'forms']);
+    expect(body.recent[0]).toMatchObject({ kind: 'Project', title: 'Eco Citizen' });
+    const limited = (await mm.get('/overview')).body;
+    expect(limited.health.map((x: any) => x.key)).not.toContain('forms');   // messages are personal data
+  });
+});

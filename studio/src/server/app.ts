@@ -26,6 +26,7 @@ import * as FM from './modules/forms/service.ts';
 import * as SEO from './modules/seo/service.ts';
 import * as HM from './modules/home/service.ts';
 import * as WS from './modules/workspace/service.ts';
+import { overview as dashboardOverview } from './modules/workspace/overview.ts';
 import { readFields, SECTION_LABEL, siteSections } from './modules/home/fields.ts';
 import { currentLayout, validateLayout, HOME_BLOCKS } from './modules/home/layout.ts';
 import { homeCanvas } from './modules/home/render.ts';
@@ -393,6 +394,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
 
   // ---------------------------------------------------------------- Top bar: search and notifications (permission-filtered)
   api.get('/search', async (c) => { const u = requireUser(c); return c.json(await WS.search(db, u.role, c.req.query('q') ?? '')); });
+  api.get('/overview', perm('dashboard.read'), async (c) => c.json(await dashboardOverview(db, requireUser(c))));
   api.get('/notifications', async (c) => { const u = requireUser(c); return c.json(await WS.notifications(db, u)); });
 
   // ---------------------------------------------------------------- Homepage editing

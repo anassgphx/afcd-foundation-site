@@ -1127,6 +1127,19 @@ def ev_poster(e, cls, sizes='(min-width:1024px) 400px, 100vw', label='Event post
     return ph(label, cls, tone)
 
 
+def ev_reg_target(e):
+    """(href, label, external) for an upcoming event's registration, or None."""
+    if not e['upcoming']:
+        return None
+    reg = {'mode': 'contact', 'label': 'Register interest'} if ev_sample(e) else (e.get('registration') or {'mode': 'none'})
+    mode, label = reg.get('mode'), reg.get('label') or 'Register'
+    if mode == 'external' and reg.get('url'):
+        return (reg['url'], label, True)
+    if mode == 'contact':
+        return ('contact.html?topic=General+question#message', label, False)
+    return None
+
+
 def ev_register(e, block=False):
     """Registration action for an event: contact form, external link or nothing (Studio events); contact for samples."""
     size = 'mt-5 min-h-[50px] w-full justify-center px-6' if block else 'min-h-[50px] px-7'
@@ -1135,14 +1148,14 @@ def ev_register(e, block=False):
         if rc and rc.get('url'):
             return f'<a href="{rc["url"]}" class="btn-dark btn-cta {size}">Read the recap {ARR}</a>'
         return '<p class="mt-5 rounded-2xl bg-[#F6F6F6] px-4 py-3 text-[14px] text-ink-dark">This event has ended. See upcoming events below.</p>' if block else ''
-    reg = {'mode': 'contact', 'label': 'Register interest'} if ev_sample(e) else (e.get('registration') or {'mode': 'none'})
-    mode, label = reg.get('mode'), reg.get('label') or 'Register'
-    if mode == 'external' and reg.get('url'):
-        return f'<a href="{reg["url"]}" target="_blank" rel="noopener" class="btn-dark btn-cta {size}">{label} {ARR}</a>'
-    if mode == 'contact':
-        note = '<p class="mt-3 text-[12.5px] leading-relaxed text-ink-mid">Registration isn’t online yet: this sends us a message and we confirm your place.</p>' if block else ''
-        return f'<a href="contact.html?topic=General+question#message" class="btn-dark btn-cta {size}">{label} {ARR}</a>{note}'
-    return ''
+    tgt = ev_reg_target(e)
+    if not tgt:
+        return ''
+    href, label, ext = tgt
+    if ext:
+        return f'<a href="{href}" target="_blank" rel="noopener" class="btn-dark btn-cta {size}">{label} {ARR}</a>'
+    note = '<p class="mt-3 text-[12.5px] leading-relaxed text-ink-mid">Registration isn’t online yet: this sends us a message and we confirm your place.</p>' if block else ''
+    return f'<a href="{href}" class="btn-dark btn-cta {size}">{label} {ARR}</a>{note}'
 
 
 def event_row(e, compact=False):
@@ -1229,139 +1242,168 @@ def events():
 ''' + cta_band('See you at the next one.', 'Volunteer at an event, join a programme or partner with us on a community day.',
                ('Get Involved', 'get-involved.html'), ('Contact us', 'contact.html'))
     # ---- one details page per event
+    # Layout: main column (about tabs, programme, speakers, location, FAQ) + one sticky card holding every
+    # practical fact once (date, time, place, format, project, pillar, registration, calendar, share).
+    from datetime import date as _date
+    import html as _html
+    from urllib.parse import quote_plus as _qp
+    EVD_I = {
+        'cal': '<rect x="3" y="4.5" width="14" height="12.5" rx="2"/><path d="M3 8.5h14M7 2.5v4M13 2.5v4"/>',
+        'share': '<path d="M10 12.5V3M6.5 6.5 10 3l3.5 3.5"/><path d="M4.5 10.5v5A1.5 1.5 0 0 0 6 17h8a1.5 1.5 0 0 0 1.5-1.5v-5"/>',
+        'plus': '<path d="M10 4.5v11M4.5 10h11"/>',
+        'map': '<path d="m2.5 5 5-2 5 2 5-2v12l-5 2-5-2-5 2V5Z"/><path d="M7.5 3v12M12.5 5v12"/>',
+        'online': '<rect x="2.5" y="4" width="15" height="10" rx="1.5"/><path d="M7 17h6M10 14v3"/>',
+    }
+
+    def evd_ico(k, cls=''):
+        return f'<svg class="{cls}" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{EVD_I[k]}</svg>'
+
+    CHECK = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10.5 3.2 3L15 6.5"/></svg>'
+    HI = {'learn': '<path d="M2.5 7 10 4l7.5 3L10 10 2.5 7Z"/><path d="M5.5 8.3v3.7c0 1.1 2 2 4.5 2s4.5-.9 4.5-2V8.3"/>',
+          'connect': '<circle cx="7" cy="7" r="2.5"/><circle cx="13.5" cy="8.5" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M12 13c1.9-.4 3.8.8 4.5 3"/>',
+          'act': '<path d="M10 2.5v3M4.7 4.7l2.1 2.1M15.3 4.7l-2.1 2.1"/><circle cx="10" cy="11.5" r="4"/><path d="M8.5 17.5h3"/>'}
+
+    def tabs_html(tabs):
+        btns = ''.join(f'<button type="button" role="tab" id="evt-t{k}" aria-controls="evt-p{k}" aria-selected="{"true" if k == 1 else "false"}">{t}</button>' for k, (t, _) in enumerate(tabs, 1))
+        panels = ''.join(f'<div id="evt-p{k}" class="evt-panel" role="tabpanel" aria-labelledby="evt-t{k}">{h}</div>' for k, (_, h) in enumerate(tabs, 1))
+        bar = f'<div class="evt-tabs mt-8" role="tablist" aria-label="About this event">{btns}</div>' if len(tabs) > 1 else ''
+        return bar + panels
+
+    def initials(name):
+        w = [x for x in _html.unescape(name).split() if x[:1].isalpha()]
+        return ''.join(x[0] for x in w[:2]).upper() or '?'
+
     for i, e in enumerate(EVENTS):
         pname = next(p[2] for p in PILLARS if p[0] == e['pillar'])
         others = [x for x in EVENTS if x is not e and x['upcoming']][:3]
-        facts = [('Date', f"{e['day']} {e['mon']} {e['year']}"), ('Time', e['time']), ('Location', e['where']), ('Format', e['kind']), ('Pillar', pname)]
-        if e.get('project') and e['project'] in DETAILS:
-            facts.insert(4, ('Project', f'<a class="underline underline-offset-2" href="{e["project"]}">{DETAILS[e["project"]]["name"]}</a>'))
-        fhtml = ''.join(f'<div class="evd-fact"><dt>{a}</dt><dd>{b}</dd></div>' for a, b in facts)
-        agenda = [('Arrival', 'Welcome and introductions. Lorem ipsum dolor sit amet.'), ('Session 1', 'Consectetur adipiscing elit, sed do eiusmod tempor.'),
-                  ('Break', 'Networking and refreshments.'), ('Session 2', 'Ut enim ad minim veniam, quis nostrud exercitation.'), ('Close', 'Next steps and how to stay involved.')]
-        ahtml = ''.join(f'<li class="evd-ag"><span class="evd-ag-n">{j:02d}</span><span><span class="block text-[16px] font-semibold tracking-[-0.015em]">{t}</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">{d}</span></span></li>' for j, (t, d) in enumerate(agenda, 1))
-        who = ['Lorem ipsum: young people and students', 'Dolor sit: community volunteers', 'Amet: local associations and partners']
-        whtml = ''.join(f'<li class="gi-check"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10.5 3.2 3L15 6.5"/></svg><span>{w}</span></li>' for w in who)
-        reg = ev_register(e, block=True)
         sample = ev_sample(e)
-        highlights = [('learn', 'Learn', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do.'),
-                      ('connect', 'Connect', 'Vestibulum id ligula porta felis euismod semper cras mattis.'),
-                      ('act', 'Act', 'Aenean lacinia bibendum nulla sed consectetur curabitur blandit.')]
-        HI = {'learn': '<path d="M2.5 7 10 4l7.5 3L10 10 2.5 7Z"/><path d="M5.5 8.3v3.7c0 1.1 2 2 4.5 2s4.5-.9 4.5-2V8.3"/>',
-              'connect': '<circle cx="7" cy="7" r="2.5"/><circle cx="13.5" cy="8.5" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M12 13c1.9-.4 3.8.8 4.5 3"/>',
-              'act': '<path d="M10 2.5v3M4.7 4.7l2.1 2.1M15.3 4.7l-2.1 2.1"/><circle cx="10" cy="11.5" r="4"/><path d="M8.5 17.5h3"/>'}
-        hhtml = ''.join(f'<li class="wd-card" style="--c:#F3F3F3"><span class="flex items-start justify-between"><span class="wd-ico"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{HI[k]}</svg></span><span class="wd-n">{j:02d}</span></span><span class="mt-8 block text-[19px] font-semibold tracking-[-0.02em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for j, (k, t, d) in enumerate(highlights, 1))
-        outcomes = ['Lorem ipsum dolor sit amet, consectetur adipiscing elit.', 'Vestibulum id ligula porta felis euismod semper.',
-                    'Cras mattis consectetur purus sit amet fermentum.', 'Aenean lacinia bibendum nulla sed consectetur.']
-        ohtml = ''.join(f'<li class="evt-out"><span class="evt-out-n">{j:02d}</span><span class="block text-[16px] font-medium leading-snug">{o}</span></li>' for j, o in enumerate(outcomes, 1))
+        online = bool(e.get('online')) or _html.unescape(e['where']).strip().lower() == 'online'
+        try:
+            weekday = _date.fromisoformat(e['iso']).strftime('%A')
+        except ValueError:
+            weekday = ''
 
+        # -- the sticky card: each practical fact appears here and nowhere else
+        facts = [('Time', e['time']), ('Location', f'<a class="evd-fact-link" href="#where">{e["where"]}</a>'), ('Format', e['kind'])]
+        if e.get('project') and e['project'] in DETAILS:
+            facts.append(('Project', f'<a class="evd-fact-link" href="{e["project"]}">{DETAILS[e["project"]]["name"]}</a>'))
+        facts.append(('Pillar', f'<span class="inline-flex items-center gap-1.5"><span class="pj-dot" style="--c:#111"></span>{pname}</span>'))
+        fhtml = ''.join(f'<div class="evd-fact"><dt>{a}</dt><dd>{b}</dd></div>' for a, b in facts)
+        count = f'<span class="evd-count" data-countdown="{e["iso"]}" hidden></span>' if e['upcoming'] else '<span class="evd-count is-past">Past event</span>'
+        cal = (f'<button type="button" class="evd-tool" data-ics data-uid="afcd-{e["slug"]}" data-start="{e["iso"]}" data-time="{e["time"]}" '
+               f'data-title="{e["title"]}" data-where="{e["where"]}">{evd_ico("cal")}Add to calendar</button>') if e['upcoming'] else ''
+        tools = f'<div class="evd-tools{" is-one" if not cal else ""}">{cal}<button type="button" class="evd-tool" data-share>{evd_ico("share")}Share</button></div>'
+        card = f'''<aside class="evd-side" aria-label="Event details and registration">
+      <div class="evd-card" id="register">
+        <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">{e['kind']}</span>{ev_badge(e)}{count}</div>
+        <div class="evd-when mt-5"><time class="evd-day" datetime="{e['iso']}">{e['day']}</time><span><span class="block text-[18px] font-semibold tracking-[-0.02em]">{e['mon']} {e['year']}</span><span class="block text-[14px] text-ink-mid">{weekday}</span></span></div>
+        <dl class="evd-facts mt-4">{fhtml}</dl>
+        {ev_register(e, block=True)}
+        {tools}
+      </div>
+    </aside>'''
+
+        # -- main column blocks, numbered in order
+        blocks = []
+        poster = f'<div class="evd-ov-poster">{ev_poster(e, "aspect-square w-full rounded-[24px]", "(min-width:1024px) 280px, 100vw")}</div>'
         if sample:
-            about_html = f'''<section id="about" class="py-14 lg:py-16">
-  <div class="wrap" data-tabs>{sec_head('01 / About This Event', 'What to <span class="sh-soft">expect.</span>', 'Sample text')}
-    <div class="evt-tabs mt-8" role="tablist" aria-label="About this event">
-      <button type="button" role="tab" id="evt-t1" aria-controls="evt-p1" aria-selected="true">Overview</button>
-      <button type="button" role="tab" id="evt-t2" aria-controls="evt-p2" aria-selected="false">Outcomes</button>
-      <button type="button" role="tab" id="evt-t3" aria-controls="evt-p3" aria-selected="false">Highlights</button>
-      <button type="button" role="tab" id="evt-t4" aria-controls="evt-p4" aria-selected="false">Who should attend</button>
-    </div>
-
-    <div id="evt-p1" class="evt-panel" role="tabpanel" aria-labelledby="evt-t1">
-      <div class="grid gap-4 lg:grid-cols-12">
-        <div class="grid content-start gap-4 text-[16px] leading-[1.75] text-ink-dark lg:col-span-8">
-          <p class="text-[20px] leading-[1.5] tracking-[-0.01em] text-ink-pure">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus, posuere velit aliquet.</p>
-          <p>Sed posuere consectetur est at lobortis. Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.</p>
-          <p>Aenean lacinia bibendum nulla sed consectetur. Curabitur blandit tempus porttitor. Nulla vitae elit libero, a pharetra augue.</p>
-        </div>
-        <dl class="evt-at lg:col-span-4">
-          <div><dt>Format</dt><dd>{e['kind']}</dd></div>
-          <div><dt>Duration</dt><dd>{e['time']}</dd></div>
-          <div><dt>Location</dt><dd>{e['where']}</dd></div>
-          <div><dt>Pillar</dt><dd><span class="pj-dot" style="--c:#111"></span>{pname}</dd></div>
-        </dl>
-      </div>
-    </div>
-
-    <div id="evt-p2" class="evt-panel" role="tabpanel" aria-labelledby="evt-t2">
-      <ul class="evt-outcomes">{ohtml}</ul>
-    </div>
-
-    <div id="evt-p3" class="evt-panel" role="tabpanel" aria-labelledby="evt-t3">
-      <ul class="grid gap-3 md:grid-cols-3">{hhtml}</ul>
-    </div>
-
-    <div id="evt-p4" class="evt-panel" role="tabpanel" aria-labelledby="evt-t4">
-      <div class="grid gap-4 lg:grid-cols-12">
-        <div class="os-band on-dark text-white lg:col-span-7" style="padding:28px">
-          <p class="label text-white/55">Who should attend</p>
-          <ul class="evd-who mt-5 grid gap-3">{whtml}</ul>
-        </div>
-        <div class="rounded-[28px] border border-ink-light p-6 md:p-7 lg:col-span-5">
-          <p class="text-[18px] font-semibold tracking-[-0.02em]">Not sure it’s for you?</p>
-          <p class="mt-2 text-[14.5px] leading-relaxed text-ink-dark">Send us a short message and we’ll tell you whether this event fits what you’re looking for.</p>
-          <a href="contact.html?topic=General+question#message" class="link-arrow mt-5">Ask a question {ARR}</a>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>'''
+            outcomes = ['Lorem ipsum dolor sit amet, consectetur adipiscing elit.', 'Vestibulum id ligula porta felis euismod semper.',
+                        'Cras mattis consectetur purus sit amet fermentum.', 'Aenean lacinia bibendum nulla sed consectetur.']
+            ohtml = ''.join(f'<li class="evt-out"><span class="evt-out-n">{j:02d}</span><span class="block text-[16px] font-medium leading-snug">{o}</span></li>' for j, o in enumerate(outcomes, 1))
+            highlights = [('learn', 'Learn', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do.'),
+                          ('connect', 'Connect', 'Vestibulum id ligula porta felis euismod semper cras mattis.'),
+                          ('act', 'Act', 'Aenean lacinia bibendum nulla sed consectetur curabitur blandit.')]
+            hhtml = ''.join(f'<li class="wd-card" style="--c:#F3F3F3"><span class="flex items-start justify-between"><span class="wd-ico"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{HI[k]}</svg></span><span class="wd-n">{j:02d}</span></span><span class="mt-8 block text-[19px] font-semibold tracking-[-0.02em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for j, (k, t, d) in enumerate(highlights, 1))
+            who = ['Lorem ipsum: young people and students', 'Dolor sit: community volunteers', 'Amet: local associations and partners']
+            whtml = ''.join(f'<li class="gi-check">{CHECK}<span>{w}</span></li>' for w in who)
+            tabs = [
+                ('Overview', f'''<div class="evd-ov"><div class="grid content-start gap-4 text-[16px] leading-[1.75] text-ink-dark">
+            <p class="text-[20px] leading-[1.5] tracking-[-0.01em] text-ink-pure">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus, posuere velit aliquet.</p>
+            <p>Sed posuere consectetur est at lobortis. Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.</p>
+            <p>Aenean lacinia bibendum nulla sed consectetur. Curabitur blandit tempus porttitor. Nulla vitae elit libero, a pharetra augue.</p></div>{poster}</div>'''),
+                ('Outcomes', f'<ul class="evt-outcomes">{ohtml}</ul>'),
+                ('Highlights', f'<ul class="grid gap-3 md:grid-cols-3">{hhtml}</ul>'),
+                ('Who should attend', f'''<div class="grid gap-4 md:grid-cols-12">
+            <div class="os-band on-dark text-white md:col-span-7" style="padding:28px"><p class="label text-white/55">Who should attend</p><ul class="evd-who mt-5 grid gap-3">{whtml}</ul></div>
+            <div class="rounded-[28px] border border-ink-light p-6 md:col-span-5"><p class="text-[18px] font-semibold tracking-[-0.02em]">Not sure it’s for you?</p><p class="mt-2 text-[14.5px] leading-relaxed text-ink-dark">Send us a short message and we’ll tell you whether this event fits what you’re looking for.</p><a href="contact.html?topic=General+question#message" class="link-arrow mt-5">Ask a question {ARR}</a></div></div>'''),
+            ]
+            agenda = [dict(time='10:00', title='Arrival and welcome', text='Introductions. Lorem ipsum dolor sit amet.'),
+                      dict(time='10:30', title='Session 1', text='Consectetur adipiscing elit, sed do eiusmod tempor.'),
+                      dict(time='11:30', title='Break', text='Networking and refreshments.'),
+                      dict(time='11:45', title='Session 2', text='Ut enim ad minim veniam, quis nostrud exercitation.'),
+                      dict(time='12:45', title='Close', text='Next steps and how to stay involved.')]
+            speakers = [dict(name='Speaker Name', role='Facilitator · Lorem ipsum'), dict(name='Host Name', role='AFCD team · Dolor sit'),
+                        dict(name='Guest Name', role='Partner organisation · Amet')]
+            faq = [dict(q='Is the event free?', a='Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sample answer until AFCD confirms the details.'),
+                   dict(q='Do I need to bring anything?', a='Vestibulum id ligula porta felis euismod semper. Sample answer.'),
+                   dict(q='Will I receive a certificate?', a='Cras mattis consectetur purus sit amet fermentum. Sample answer.'),
+                   dict(q='Is the venue accessible?', a='Aenean lacinia bibendum nulla sed consectetur. Sample answer.')]
         else:
-            tabs = []
-            overview = (e.get('bodyHtml') or '').strip()
-            facts_tiles = f'''<dl class="evt-at lg:col-span-4"><div><dt>Format</dt><dd>{e['kind']}</dd></div><div><dt>Duration</dt><dd>{e['time']}</dd></div><div><dt>Location</dt><dd>{e['where']}</dd></div><div><dt>Pillar</dt><dd><span class="pj-dot" style="--c:#111"></span>{pname}</dd></div></dl>'''
-            tabs.append(('Overview', f'''<div class="grid gap-4 lg:grid-cols-12"><div class="na-prose lg:col-span-8" style="margin-top:0">{overview or f'<p>{e["desc"]}</p>'}</div>{facts_tiles}</div>'''))
-            if e.get('agenda'):
-                ag = ''.join(f'<li class="evd-ag"><span class="evd-ag-n">{j:02d}</span><span><span class="block text-[16px] font-semibold tracking-[-0.015em]">{x.get("title", "")}</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">{x.get("text", "")}</span></span></li>' for j, x in enumerate(e['agenda'], 1))
-                tabs.append(('Programme', f'<div class="rounded-[28px] border border-ink-light p-6 md:p-7"><ol class="grid gap-3">{ag}</ol></div>'))
+            body_html = (e.get('bodyHtml') or '').strip()
+            ov = (f'<div class="evd-ov"><div class="na-prose" style="margin-top:0">{body_html}</div>{poster}</div>' if body_html
+                  else f'<div class="evd-ov is-solo">{poster}</div>')
+            tabs = [('Overview', ov)]
             if e.get('audience'):
-                au = ''.join(f'<li class="gi-check"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10.5 3.2 3L15 6.5"/></svg><span>{w}</span></li>' for w in e['audience'])
+                au = ''.join(f'<li class="gi-check">{CHECK}<span>{w}</span></li>' for w in e['audience'])
                 tabs.append(('Who should attend', f'<div class="os-band on-dark text-white" style="padding:28px"><p class="label text-white/55">Who should attend</p><ul class="evd-who mt-5 grid gap-3">{au}</ul></div>'))
-            tab_btns = ''.join(f'<button type="button" role="tab" id="evt-t{k}" aria-controls="evt-p{k}" aria-selected="{"true" if k == 1 else "false"}">{t}</button>' for k, (t, _) in enumerate(tabs, 1))
-            tab_panels = ''.join(f'<div id="evt-p{k}" class="evt-panel" role="tabpanel" aria-labelledby="evt-t{k}">{h}</div>' for k, (_, h) in enumerate(tabs, 1))
-            about_html = f'''<section id="about" class="py-14 lg:py-16">
-  <div class="wrap"{' data-tabs' if len(tabs) > 1 else ''}>{sec_head('01 / About This Event', 'What to <span class="sh-soft">expect.</span>')}
-    {f'<div class="evt-tabs mt-8" role="tablist" aria-label="About this event">{tab_btns}</div>' if len(tabs) > 1 else ''}
-    {tab_panels}
-  </div>
-</section>'''
+            agenda = e.get('agenda') or []
+            speakers = e.get('speakers') or []
+            faq = e.get('faq') or []
+
+        blocks.append(('About This Event', 'What to <span class="sh-soft">expect.</span>', tabs_html(tabs), 'about', len(tabs) > 1))
+        if agenda:
+            tl = ''.join(f'''<li><span class="evd-tl-time">{x.get('time', '')}</span><span class="evd-tl-rail" aria-hidden="true"></span><div class="evd-tl-body"><p class="text-[16px] font-semibold tracking-[-0.015em]">{x.get('title', '')}</p>{f'<p class="mt-1 text-[14px] leading-relaxed text-ink-dark">{x["text"]}</p>' if x.get('text') else ''}</div></li>''' for x in agenda)
+            blocks.append(('Programme', 'How the <span class="sh-soft">day runs.</span>', f'<ol class="evd-tl mt-8">{tl}</ol>', 'programme', False))
+        if speakers:
+            sp = ''.join(f'''<li class="evd-sp-card">{media_img(s['photo'], 'evd-av', '88px') if s.get('photo') else f'<span class="evd-av" aria-hidden="true">{initials(s["name"])}</span>'}<p class="mt-4 text-[16px] font-semibold tracking-[-0.015em]">{s['name']}</p><p class="mt-1 text-[13.5px] leading-snug text-ink-mid">{s.get('role', '')}</p></li>''' for s in speakers)
+            blocks.append(('Speakers & Hosts', 'Who you’ll <span class="sh-soft">meet.</span>', f'<ul class="evd-sp mt-8">{sp}</ul>', 'speakers', False))
+        if online:
+            loc = f'''<div class="evd-loc mt-8"><span class="evd-loc-ico">{evd_ico('online')}</span><span class="min-w-0"><span class="block text-[18px] font-semibold tracking-[-0.02em]">Online event</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">The joining link is sent to registered participants before the session.</span></span></div>'''
+        else:
+            maps = 'https://www.google.com/maps/search/?api=1&amp;query=' + _qp(_html.unescape(e['where']) + ', Morocco')
+            loc = f'''<div class="evd-where mt-8">
+          <div class="evd-loc"><span class="evd-loc-ico">{ev_ico('pin')}</span><span class="min-w-0"><span class="block text-[18px] font-semibold tracking-[-0.02em]">{e['where']}, Morocco</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">The exact venue is shared with registered participants.</span>
+            <a href="{maps}" target="_blank" rel="noopener" class="evd-maps">{evd_ico('map')}Open in Maps <span aria-hidden="true">↗</span></a></span></div>
+          <div class="evd-map" role="img" aria-label="Map preview: {e['where']}"><span class="evd-map-road r1"></span><span class="evd-map-road r2"></span><span class="evd-map-road r3"></span><span class="evd-map-pin">{ev_ico('pin')}</span><span class="evd-map-tag">{e['where']}</span></div>
+        </div>'''
+        blocks.append(('Location', 'Where <span class="sh-soft">we meet.</span>', loc, 'where', False))
+        if faq:
+            fq = ''.join(f'''<details class="evd-q"><summary>{x['q']}<span class="evd-q-ico">{evd_ico('plus')}</span></summary><p>{x['a']}</p></details>''' for x in faq)
+            blocks.append(('Questions', 'Good <span class="sh-soft">to know.</span>', f'<div class="evd-faq mt-8">{fq}</div>', 'faq', False))
+
+        main = ''.join(f'''
+      <section id="{bid}" class="evd-block"{' data-tabs' if tabbed else ''} aria-labelledby="{bid}-h">{sec_head(f'{k:02d} / {lab}', f'<span id="{bid}-h">{title}</span>', 'Sample text' if sample and k == 1 else '')}
+        {content}
+      </section>''' for k, (lab, title, content, bid, tabbed) in enumerate(blocks, 1))
+
         orows = ''.join(event_row(x, compact=True) for x in others)
         if not orows:
             orows = '<li class="rounded-[24px] border border-dashed border-ink-light p-6 text-[15px] text-ink-dark">No other upcoming events right now. <a class="link-arrow ml-1" href="events.html">See all events ↗</a></li>'
+        bar = ''
+        tgt = ev_reg_target(e)
+        if tgt:
+            href, label, ext = tgt
+            bar = f'''
+<div class="evd-bar" data-evd-bar hidden><span class="min-w-0"><span class="block text-[11px] uppercase tracking-[.14em] text-white/55">{e['kind']}</span><span class="block truncate text-[14px] font-semibold">{e['day']} {e['mon']} · {e['time']}</span></span><a href="{href}"{' target="_blank" rel="noopener"' if ext else ''}>{label} <span aria-hidden="true">↗</span></a></div>'''
         dbody = page_header([('Events', 'events.html'), (e['title'], event_file(e))], f"{e['kind']} · {'Upcoming' if e['upcoming'] else 'Past'}", e['title'], e['desc']) + f'''
 
-<section id="event" class="pt-8 lg:pt-10" data-studio-event-rev="{e.get('revision', '')}">
-  <div class="wrap evd-top">
-    <div class="evd-poster">{ev_poster(e, 'aspect-square w-full rounded-[28px]', '(min-width:1024px) 460px, 100vw')}</div>
-    <aside class="evd-card">
-      <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">{e['kind']}</span>{ev_badge(e)}</div>
-      <div class="evd-when mt-5"><span class="evd-day">{e['day']}</span><span><span class="block text-[18px] font-semibold tracking-[-0.02em]">{e['mon']} {e['year']}</span><span class="block text-[14px] text-ink-mid">{e['time']}</span></span></div>
-      <dl class="evd-facts mt-5">{fhtml}</dl>
-      {reg}
-    </aside>
-  </div>
-</section>
-
-{about_html}
-
-<section id="where" class="border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap grid gap-4 lg:grid-cols-12">
-    <div class="lg:col-span-4">{sec_head('02 / Location', 'Where <span class="sh-soft">we meet.</span>', stack=True)}
-      <div class="evd-loc mt-6">
-        <span class="evd-loc-ico">{ev_ico('pin')}</span>
-        <span class="min-w-0"><span class="block text-[18px] font-semibold tracking-[-0.02em]">{e['where']}</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">The exact venue is shared with registered participants.</span></span>
-      </div>
+<div id="event" class="py-10 lg:py-14" data-studio-event-rev="{e.get('revision', '')}">
+  <div class="wrap evd-layout">
+    <div class="evd-main min-w-0">{main}
+      {placeholder_note('Sample event (lorem ipsum) to show the layout. Real event details will replace it.') if sample else ''}
     </div>
-    <div class="lg:col-span-8">{ph('Map · ' + e['where'], 'aspect-[16/8] w-full rounded-[28px]', '#E8E8E8')}</div>
+    {card}
   </div>
-</section>
+</div>
 
 <section id="more" class="border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap">{sec_head('03 / More Events', 'Other upcoming <span class="sh-soft">events.</span>', ('All events', 'events.html'))}
+  <div class="wrap">{sec_head('More Events', 'Other upcoming <span class="sh-soft">events.</span>', ('All events', 'events.html'))}
     <ul class="ev-list mt-8 lg:mt-10">{orows}
     </ul>
-    {placeholder_note('Sample event (lorem ipsum) to show the layout. Real event details will replace it.') if sample else ''}
   </div>
 </section>
-''' + cta_band('See you at the next one.', 'Volunteer at an event, join a programme or partner with us on a community day.',
-                   ('Get Involved', 'get-involved.html'), ('All events', 'events.html'))
+''' + cta_band('Questions about this event?', 'Our team can help with registration, access or anything else before the day.',
+                   ('Contact us', 'contact.html?topic=General+question#message'), ('All events', 'events.html')) + bar
         page(event_file(e), f"{e.get('seoTitle') or e['title']} · Events · AFCD Foundation", (e.get('seoDescription') or f"{e['kind']} on {e['day']} {e['mon']} {e['year']} in {e['where']}: {e['desc']}")[:160], 'none', dbody, parent=('Events', 'events.html'))
 
     page('events.html', 'Events · AFCD Foundation',

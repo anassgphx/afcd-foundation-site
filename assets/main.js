@@ -569,6 +569,47 @@
     });
   });
 
+  /* ---------- Event details: countdown, add to calendar, share, phone registration bar ---------- */
+  $$('[data-countdown]').forEach(function (el) {
+    var p = el.dataset.countdown.split('-'), t = new Date(+p[0], +p[1] - 1, +p[2]), n = new Date(); n.setHours(0, 0, 0, 0);
+    var d = Math.round((t - n) / 864e5); if (isNaN(d) || d < 0) return;
+    el.textContent = d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : 'In ' + d + ' days'; el.hidden = false;
+  });
+  $$('[data-ics]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var d = b.dataset, day = d.start.replace(/-/g, ''), two = function (n) { return ('0' + n).slice(-2); };
+      var m = (d.time || '').match(/(\d{1,2}):(\d{2})\s*[–-]\s*(\d{1,2}):(\d{2})/), s, e;
+      if (m) { s = 'DTSTART;TZID=Africa/Casablanca:' + day + 'T' + two(m[1]) + m[2] + '00'; e = 'DTEND;TZID=Africa/Casablanca:' + day + 'T' + two(m[3]) + m[4] + '00'; }
+      else { var nx = new Date(d.start + 'T00:00:00Z'); nx.setUTCDate(nx.getUTCDate() + 1); s = 'DTSTART;VALUE=DATE:' + day; e = 'DTEND;VALUE=DATE:' + nx.toISOString().slice(0, 10).replace(/-/g, ''); }
+      var esc = function (t) { return String(t || '').replace(/([,;\\])/g, '\\$1'); };
+      var ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//AFCD Foundation//Events//EN', 'BEGIN:VEVENT', 'UID:' + d.uid + '@afcdfoundation.org',
+        'DTSTAMP:' + new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z', s, e, 'SUMMARY:' + esc(d.title), 'LOCATION:' + esc(d.where),
+        'URL:' + location.href.split('#')[0], 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+      var link = document.createElement('a'), url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+      link.href = url; link.download = d.uid + '.ics';
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      toast('Calendar file ready: open it to add the event.');
+    });
+  });
+  $$('[data-share]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var url = location.href.split('#')[0];
+      if (navigator.share) { navigator.share({ title: document.title, url: url }).catch(function () {}); return; }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(function () { toast('Link copied.'); }, function () { toast(url); });
+      else toast(url);
+    });
+  });
+  (function () {
+    var bar = $('[data-evd-bar]'), card = $('#register');
+    if (!bar || !card || !('IntersectionObserver' in window)) return;
+    bar.hidden = false;
+    new IntersectionObserver(function (es) {
+      var en = es[0], on = !en.isIntersecting && en.boundingClientRect.top < 0;
+      bar.classList.toggle('is-on', on); bar.setAttribute('aria-hidden', on ? 'false' : 'true');
+    }).observe(card);
+  })();
+
   /* Tabs inside a section ([data-tabs]): all panels stay visible if scripts don't run */
   $$('[data-tabs]').forEach(function (root) {
     var tabs = $$('[role="tab"]', root), panels = $$('[role="tabpanel"]', root);

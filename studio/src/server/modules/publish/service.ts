@@ -18,7 +18,7 @@ import { loadArticle, toArticleSnapshot } from '../news/service.ts';
 import { partners, partnerRevisions, events, eventRevisions, opportunities, opportunityRevisions, seoOverrides, seoRevisions } from '../../db/schema.ts';
 import type { OverrideSnapshot } from '../seo/service.ts';
 import { pageContents, pageContentRevisions } from '../../db/schema.ts';
-import { HOME } from '../home/service.ts';
+import { HOME, TEXT_PAGES } from '../home/service.ts';
 import { exportLayout } from '../home/render.ts';
 import { currentLayout, layoutBlocks, type LayoutEntry } from '../home/layout.ts';
 import { publicRef } from '../media/service.ts';
@@ -257,24 +257,31 @@ export class Publisher {
     return [out, ids];
   }
 
-  /** page-fields.json (read by build.mjs) exists only while edited homepage text is live. */
-  private async writeFields(override?: { revisionId: string | null }, ctxOpts: Parameters<typeof exportLayout>[2] = {}) {
-    const [c] = await this.db.select().from(pageContents).where(eq(pageContents.file, HOME));
-    const revId = override ? override.revisionId : c?.publishedRevisionId ?? null;
-    if (!revId) { if (existsSync(this.fieldsFile)) rmSync(this.fieldsFile); return [] as string[]; }
-    const [rev] = await this.db.select().from(pageContentRevisions).where(eq(pageContentRevisions.id, revId));
-    const snap = rev.snapshot as { values: Record<string, unknown>; layout?: unknown };
-    const [values, fieldIds] = await this.resolveFields(snap.values);
-    const layout = snap.layout ? currentLayout(this.cfg.siteRoot, HOME, snap.layout) : null;
-    const exported = await exportLayout(this.db, layout, ctxOpts);
-    const ids = [...fieldIds, ...(layout ? docMediaIds({ blocks: layoutBlocks(layout) }) : [])];
+  /** page-fields.json (read by build.mjs) exists only while edited text of a Studio-edited page (TEXT_PAGES) is live.
+   *  `override` replaces one page's live revision (null = that page back to its own text). */
+  private async writeFields(override?: { file?: string; revisionId: string | null }, ctxOpts: Parameters<typeof exportLayout>[2] = {}) {
+    const rows = await this.db.select().from(pageContents);
+    const pagesOut: Record<string, unknown> = {}; const ids: string[] = [];
+    for (const file of Object.keys(TEXT_PAGES)) {
+      const c = rows.find((r) => r.file === file);
+      const revId = override && (override.file ?? HOME) === file ? override.revisionId : c?.publishedRevisionId ?? null;
+      if (!revId) continue;
+      const [rev] = await this.db.select().from(pageContentRevisions).where(eq(pageContentRevisions.id, revId));
+      const snap = rev.snapshot as { values: Record<string, unknown>; layout?: unknown };
+      const [values, fieldIds] = await this.resolveFields(snap.values);
+      const layout = snap.layout && TEXT_PAGES[file].layout ? currentLayout(this.cfg.siteRoot, file, snap.layout) : null;
+      const exported = await exportLayout(this.db, layout, ctxOpts);
+      ids.push(...fieldIds, ...(layout ? docMediaIds({ blocks: layoutBlocks(layout) }) : []));
+      pagesOut[file] = { revision: revId, fields: values, ...(exported ? { layout: exported } : {}) };
+    }
+    if (!Object.keys(pagesOut).length) { if (existsSync(this.fieldsFile)) rmSync(this.fieldsFile); return [] as string[]; }
     const tmp = `${this.fieldsFile}.${randomBytes(4).toString('hex')}.tmp`;
     mkdirSync(resolve(this.fieldsFile, '..'), { recursive: true });
-    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), pages: { [HOME]: { revision: revId, fields: values, ...(exported ? { layout: exported } : {}) } } }, null, 2) + '\n'); renameSync(tmp, this.fieldsFile);
+    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), pages: pagesOut }, null, 2) + '\n'); renameSync(tmp, this.fieldsFile);
     return ids;
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string } } = {}) {
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { file?: string; revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string } } = {}) {
     const entries = await this.liveEntries(o.project);
     await this.writeRedirects(o.redirects === 'pending');
     this.writeData(this.dataFile, entries);
@@ -925,71 +932,75 @@ export class Publisher {
   }
 
   // ---------------------------------------------------------------- Homepage fields
-  private verifyHome(revisionId: string, removed: boolean) {
-    const html = readFileSync(resolve(this.cfg.siteRoot, HOME), 'utf8');
+  private verifyHome(revisionId: string, removed: boolean, file = HOME) {
+    const html = readFileSync(resolve(this.cfg.siteRoot, file), 'utf8');
     const has = html.includes(`<meta name="studio-fields-rev" content="${revisionId}">`);
-    if (!removed && !has) throw new Error('index.html does not carry the published homepage changes (build.mjs must apply src/data/page-fields.json).');
-    if (removed && has) throw new Error('index.html still carries the removed homepage changes.');
-    if (html.includes('data-sf=')) throw new Error('index.html still contains editing markers.');
+    if (!removed && !has) throw new Error(`${file} does not carry the published changes (build.mjs must apply src/data/page-fields.json).`);
+    if (removed && has) throw new Error(`${file} still carries the removed changes.`);
+    if (html.includes('data-sf=')) throw new Error(`${file} still contains editing markers.`);
+    // a page generator (src/content.py) that rewrites the source without its markers would make the edits vanish silently
+    if (!removed && !readFileSync(resolve(this.cfg.siteRoot, 'src/pages', file), 'utf8').includes('data-sf=')) throw new Error(`src/pages/${file} lost its Studio field markers, so the edits were not applied.`);
   }
 
-  async publishHome(actor: NonNullable<Actor>) {
+  async publishHome(actor: NonNullable<Actor>, file = HOME) {
+    const page = TEXT_PAGES[file];
     return this.locked(async () => {
-      const [c] = await this.db.select().from(pageContents).where(eq(pageContents.file, HOME));
-      if (!c || c.status !== 'approved' || !c.approvedRevisionId) throw new AppError(409, 'Only approved homepage changes can be published.');
+      const [c] = await this.db.select().from(pageContents).where(eq(pageContents.file, file));
+      if (!c || c.status !== 'approved' || !c.approvedRevisionId) throw new AppError(409, `Only approved ${page.noun} changes can be published.`);
       const [rev] = await this.db.select().from(pageContentRevisions).where(eq(pageContentRevisions.id, c.approvedRevisionId));
       const { job, log } = await this.deliver('publish_home', actor, c.id, rev.id, async (log) => {
-        await this.writeSite({ home: { revisionId: rev.id } });
+        await this.writeSite({ home: { file, revisionId: rev.id } });
         log.push(await this.runner(this.cfg, { kind: 'live' }));
-        this.verifyHome(rev.id, false);
-      }, 'Publishing the homepage failed');
+        this.verifyHome(rev.id, false, file);
+      }, `Publishing the ${page.noun} failed`);
       await this.db.transaction(async (tx) => {
         await tx.update(pageContents).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, updatedAt: new Date() }).where(eq(pageContents.id, c.id));
         await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
-        await audit(tx, actor, 'home.publish', { type: 'page_content', id: c.id }, `Published homepage changes (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+        await audit(tx, actor, 'home.publish', { type: 'page_content', id: c.id }, `Published ${page.noun} changes (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
       });
-      return { jobId: job.id, revisionId: rev.id, file: HOME };
+      return { jobId: job.id, revisionId: rev.id, file };
     });
   }
 
   /** Puts the homepage back to the text written in the page. The edits stay in Studio as a draft. */
-  async unpublishHome(actor: NonNullable<Actor>) {
+  async unpublishHome(actor: NonNullable<Actor>, file = HOME) {
+    const page = TEXT_PAGES[file];
     return this.locked(async () => {
-      const [c] = await this.db.select().from(pageContents).where(eq(pageContents.file, HOME));
-      if (!c?.publishedRevisionId) throw new AppError(409, 'No homepage changes are live.');
+      const [c] = await this.db.select().from(pageContents).where(eq(pageContents.file, file));
+      if (!c?.publishedRevisionId) throw new AppError(409, `No ${page.noun} changes are live.`);
       const rev = c.publishedRevisionId;
       const { job, log } = await this.deliver('unpublish_home', actor, c.id, rev, async (log) => {
-        await this.writeSite({ home: { revisionId: null } });
+        await this.writeSite({ home: { file, revisionId: null } });
         log.push(await this.runner(this.cfg, { kind: 'live' }));
-        this.verifyHome(rev, true);
-      }, 'Restoring the original homepage failed');
+        this.verifyHome(rev, true, file);
+      }, `Restoring the original ${page.noun} failed`);
       await this.db.transaction(async (tx) => {
         await tx.update(pageContents).set({ status: 'draft', publishedRevisionId: null, publishedAt: null, updatedAt: new Date() }).where(eq(pageContents.id, c.id));
         await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
-        await audit(tx, actor, 'home.unpublish', { type: 'page_content', id: c.id }, 'Restored the homepage’s original text', { jobId: job.id });
+        await audit(tx, actor, 'home.unpublish', { type: 'page_content', id: c.id }, `Restored the ${page.noun}’s original text`, { jobId: job.id });
       });
       return { jobId: job.id };
     });
   }
 
   /** Builds the homepage with the saved working copy into an isolated folder. */
-  async previewHome() {
+  async previewHome(file = HOME) {
     return this.locked(async () => {
-      const [c] = await this.db.select().from(pageContents).where(eq(pageContents.file, HOME));
+      const [c] = await this.db.select().from(pageContents).where(eq(pageContents.file, file));
       this.cleanupPreviews();
       const token = randomBytes(16).toString('hex');
       const dir = resolve(this.cfg.previewDir, token);
       const pagesDir = resolve(dir, 'pages'), outDir = resolve(dir, 'site'), dataFile = resolve(dir, 'projects.json'), fieldsFile = resolve(dir, 'page-fields.json');
       mkdirSync(pagesDir, { recursive: true }); mkdirSync(outDir, { recursive: true });
       this.writeData(dataFile, await this.liveEntries());
-      copyFileSync(resolve(this.cfg.siteRoot, 'src/pages', HOME), resolve(pagesDir, HOME));
+      copyFileSync(resolve(this.cfg.siteRoot, 'src/pages', file), resolve(pagesDir, file));
       const [values] = await this.resolveFields(c?.values ?? {});
-      const layout = c?.layout ? currentLayout(this.cfg.siteRoot, HOME, c.layout) : null;
+      const layout = c?.layout && TEXT_PAGES[file]?.layout ? currentLayout(this.cfg.siteRoot, file, c.layout) : null;
       const exported = await exportLayout(this.db, layout);
-      writeFileSync(fieldsFile, JSON.stringify({ version: 1, source: 'AFCD Studio (preview)', pages: { [HOME]: { revision: 'preview', fields: values, ...(exported ? { layout: exported } : {}) } } }, null, 2));
+      writeFileSync(fieldsFile, JSON.stringify({ version: 1, source: 'AFCD Studio (preview)', pages: { [file]: { revision: 'preview', fields: values, ...(exported ? { layout: exported } : {}) } } }, null, 2));
       await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, only: 'pages', fieldsFile });
-      if (!existsSync(resolve(outDir, HOME))) throw new AppError(409, 'The preview could not be generated.');
-      return { token, file: HOME };
+      if (!existsSync(resolve(outDir, file))) throw new AppError(409, 'The preview could not be generated.');
+      return { token, file };
     });
   }
 

@@ -3,6 +3,7 @@ import { and, count, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } f
 import type { DB } from '../../db/client.ts';
 import { articles, events, formSubmissions, media, opportunities, pageContents, pages, partners, projects, publishJobs, seoAudits } from '../../db/schema.ts';
 import { can, type Role } from '../../rbac.ts';
+import { TEXT_PAGES } from '../home/service.ts';
 import { todayMorocco } from '../events/render.ts';
 import { notifications } from './service.ts';
 
@@ -55,7 +56,7 @@ export async function overview(db: DB, user: { id: string; role: Role }) {
   if (can(role, 'partner.read')) await take('Partner', (id) => `/studio/partners/${id}`, q(partners as never, partners.name as never));
   if (can(role, 'page.read')) {
     await take('Page', (id) => `/studio/pages/${id}`, q(pages as never, pages.title as never));
-    for (const c of await db.select().from(pageContents)) if (c.publishedRevisionId || Object.keys(c.values ?? {}).length || c.layout) recent.push({ kind: 'Homepage', title: 'Homepage', status: c.status, live: !!c.publishedRevisionId, href: '/studio/home', at: c.updatedAt.toISOString() });
+    for (const c of await db.select().from(pageContents)) if (c.publishedRevisionId || Object.keys(c.values ?? {}).length || c.layout) { const p = TEXT_PAGES[c.file]; if (p) recent.push({ kind: p.label, title: p.label, status: c.status, live: !!c.publishedRevisionId, href: p.href, at: c.updatedAt.toISOString() }); }
   }
   recent.sort((a, b) => b.at.localeCompare(a.at));
 

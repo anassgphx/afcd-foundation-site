@@ -49,12 +49,15 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
     const pagesDir = mode.kind === 'live' ? join(cfg.siteRoot, 'src/pages') : mode.pagesDir;
     const files = existsSync(pagesDir) ? readdirSync(pagesDir).filter((f) => f.endsWith('.html')) : [];
     for (const f of files) writeFileSync(join(out, f), readFileSync(join(pagesDir, f), 'utf8').replace(/^---[\s\S]*?---\n/, ''));
-    // Stand-in for build.mjs's page fields (src/data/page-fields.json): revision marker on index.html, markers removed.
+    // Stand-in for build.mjs's page fields (src/data/page-fields.json): revision marker on each page it lists, markers removed.
     const fieldsFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/page-fields.json') : mode.fieldsFile;
-    if (existsSync(join(out, 'index.html'))) {
-      let html = readFileSync(join(out, 'index.html'), 'utf8').replace(/\sdata-sf(?:-type)?="[^"]*"/g, '');
-      if (fieldsFile && existsSync(fieldsFile)) { const f = JSON.parse(readFileSync(fieldsFile, 'utf8')).pages['index.html']; if (f) html = `<meta name="studio-fields-rev" content="${f.revision}">` + html.replace('>Old title<', `>${f.fields['hero.1.kicker'] ?? 'Old title'}<`); }
-      writeFileSync(join(out, 'index.html'), html);
+    const fieldPages = fieldsFile && existsSync(fieldsFile) ? JSON.parse(readFileSync(fieldsFile, 'utf8')).pages ?? {} : {};
+    for (const file of ['index.html', 'contact.html']) {
+      if (!existsSync(join(out, file))) continue;
+      let html = readFileSync(join(out, file), 'utf8').replace(/\sdata-sf(?:-type)?="[^"]*"/g, '');
+      const f = fieldPages[file];
+      if (f) html = `<meta name="studio-fields-rev" content="${f.revision}">` + (file === 'index.html' ? html.replace('>Old title<', `>${f.fields['hero.1.kicker'] ?? 'Old title'}<`) : html);
+      writeFileSync(join(out, file), html);
     }
     // Stand-in for build.mjs's SEO overrides (src/data/seo.json): title and revision marker.
     const seoFile = join(cfg.siteRoot, 'src/data/seo.json');

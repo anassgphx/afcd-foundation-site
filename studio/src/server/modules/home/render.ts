@@ -4,13 +4,13 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
-import { applyFields, composeSections, type LayoutItem } from '../../../../../lib/page-fields.mjs';
+import { applyFields, composeSections, splitSections, type LayoutItem } from '../../../../../lib/page-fields.mjs';
 import { esc, renderBlocks } from '../pages/blocks.ts';
 import { buildCtx, siteUrls } from '../pages/render.ts';
 import { inArray } from 'drizzle-orm';
 import { media } from '../../db/schema.ts';
 import { publicRef } from '../media/service.ts';
-import { pageBody } from './fields.ts';
+import { pageBody, partId } from './fields.ts';
 import { layoutBlocks, type LayoutEntry } from './layout.ts';
 
 /** Layout as build.mjs reads it: sections by id, blocks as HTML from the registry (hidden blocks left out). */
@@ -65,20 +65,29 @@ export async function resolveFieldValues(db: DB, values: Record<string, unknown>
   return out;
 }
 
-/** The whole homepage, with the working copy applied, marked for selection. No scripts run in the canvas. */
-export async function homeCanvas(db: DB, cfg: Config, file: string, values: Record<string, unknown>, layout: LayoutEntry[]) {
+/** The whole page (the homepage, or a page edited as text only when `layout` is null), with the working copy applied,
+ *  marked for selection. No scripts run in the canvas. */
+export async function homeCanvas(db: DB, cfg: Config, file: string, values: Record<string, unknown>, layout: LayoutEntry[] | null) {
   const part = (n: string) => readFileSync(resolve(cfg.siteRoot, 'src/partials', `${n}.html`), 'utf8');
-  const mark = (h: string) => h.replace(/\{\{cur:([a-z]+)\}\}/g, (_m, k) => (k === 'home' ? 'is-current' : '')).replace(/\{\{aria:([a-z]+)\}\}/g, (_m, k) => (k === 'home' ? ' aria-current="page"' : ''));
-  const head = part('head').replace('{{title}}', 'Homepage · AFCD Studio').replace('{{description}}', '')
+  const active = readFileSync(resolve(cfg.siteRoot, 'src/pages', file), 'utf8').match(/^---\n[\s\S]*?\nactive:\s*([a-z]+)/)?.[1] ?? 'home';
+  const mark = (h: string) => h.replace(/\{\{cur:([a-z]+)\}\}/g, (_m, k) => (k === active ? 'is-current' : '')).replace(/\{\{aria:([a-z]+)\}\}/g, (_m, k) => (k === active ? ' aria-current="page"' : ''));
+  const head = part('head').replace('{{title}}', `${file === 'index.html' ? 'Homepage' : file} · AFCD Studio`).replace('{{description}}', '')
     .replace('<head>', '<head>\n<base href="/studio/site/">').replace('</head>', `${CANVAS_CSS}\n</head>`);
+  const marked = applyFields(pageBody(cfg.siteRoot, file), await resolveFieldValues(db, values), { mark: true });
+  const wrapOne = (id: string, html: string, kind = 'section') => `<div data-block-id="${esc(id)}"${kind.startsWith('hidden') ? ' data-hidden="1"' : ''}>${html}</div>`;
+  let body: string;
+  if (!layout) { const { parts, tail } = splitSections(marked); body = parts.map((p, i) => wrapOne(partId(p, i), p.html)).join('') + tail; }
+  else body = await composeLayout(db, marked, layout, wrapOne);
+  // every image loads at once: lazy loading inside a scaled, scrolled iframe can leave sections empty
+  return [head.trimEnd(), '<body class="font-sans">', mark(part('header')).trimEnd(), `<main id="main" data-page="${esc(active)}">${body}</main>`, mark(part('footer')).trimEnd(), '</body></html>'].join('\n')
+    .replace(/\sloading="lazy"/g, ' loading="eager"').replace(/^[\s\S]*$/, siteUrls);
+}
+
+async function composeLayout(db: DB, marked: string, layout: LayoutEntry[], wrapOne: (id: string, html: string, kind: string) => string) {
   const blocks = layoutBlocks(layout);
   const ctx = await buildCtx(db, [{ blocks }], { editor: true });
   const blockHtml = new Map(blocks.map((b) => [b.id, renderBlocks({ version: 1, blocks: [{ ...b, hidden: false }] }, { ...ctx, pageTitle: 'Home', editor: true })
     .replace(/^<div data-block-id="[^"]+"(?: data-hidden="1")?>|<\/div>$/g, '')]));
   const items: LayoutItem[] = layout.map((e) => (e.kind === 'section' ? { section: e.id, hidden: e.hidden } : { block: e.id, html: blockHtml.get(e.id) ?? '', hidden: e.hidden }));
-  const body = composeSections(applyFields(pageBody(cfg.siteRoot, file), await resolveFieldValues(db, values), { mark: true }), items,
-    (id, html, kind) => `<div data-block-id="${esc(id)}"${kind.startsWith('hidden') ? ' data-hidden="1"' : ''}>${html}</div>`);
-  // every image loads at once: lazy loading inside a scaled, scrolled iframe can leave sections empty
-  return [head.trimEnd(), '<body class="font-sans">', mark(part('header')).trimEnd(), `<main id="main" data-page="home">${body}</main>`, mark(part('footer')).trimEnd(), '</body></html>'].join('\n')
-    .replace(/\sloading="lazy"/g, ' loading="eager"').replace(/^[\s\S]*$/, siteUrls);
+  return composeSections(marked, items, wrapOne);
 }

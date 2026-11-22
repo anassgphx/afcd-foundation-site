@@ -1710,7 +1710,49 @@ def contact():
   </div>
 </section>'''
     page('contact.html', 'Contact · AFCD Foundation',
-         'Contact AFCD Foundation: main office in Marrakech, Morocco. Email contact@afcdteam.com or call +212 663 618 536.', 'contact', body)
+         'Contact AFCD Foundation: main office in Marrakech, Morocco. Email contact@afcdteam.com or call +212 663 618 536.', 'contact', studio_contact_fields(body))
+
+
+def studio_contact_fields(s):
+    """AFCD Studio edits the contact page's text: data-sf markers (see lib/page-fields.mjs and Studio's Contact page editor).
+    build.mjs always removes them, so the built page is unchanged until an edit is reviewed and published. Each marker
+    is placed on text written above; a missing one stops the run, so a wording change here cannot silently drop a field."""
+    def r(old, new):
+        nonlocal s
+        if s.count(old) != 1:
+            raise SystemExit(f'contact.html: Studio field anchor not found once: {old[:70]}')
+        s = s.replace(old, new)
+    r('<h1 class="sh-title sh-xl phd-title">', '<h1 class="sh-title sh-xl phd-title" data-sf="head.title" data-sf-type="split">')
+    r('<p class="phd-lead">', '<p class="phd-lead" data-sf="head.lead">')
+    lab = '<span class="mt-6 block text-[12px] font-medium uppercase tracking-[0.16em] text-ink-mid">'
+    val = '<span class="mt-2 block break-words text-[19px] font-semibold tracking-[-0.02em]">'
+    lab_k = lambda k: lab.replace('">', f'" data-sf="{k}">')
+    val_k = lambda k: val.replace('">', f'" data-sf="{k}">')
+    for href, key, kind, title in (('tel:+212663618536', 'reach.phone', 'tel', 'Call us'), ('mailto:contact@afcdteam.com', 'reach.email1', 'mailto', 'Executive team'),
+                                   ('mailto:akaya@afcdteam.com', 'reach.email2', 'mailto', 'Board leadership')):
+        r(f'<a href="{href}" class="ct-q group">', f'<a href="{href}" class="ct-q group" data-sf="{key}" data-sf-type="{kind}">')
+        r(lab + title + '</span>' + val, lab_k(key + '.label') + title + '</span>' + val_k(key))
+    r(lab + 'Main office</span>' + val, lab_k('reach.office.label') + 'Main office</span>' + val_k('reach.office'))
+    r('<span class="sh-num">01</span><span class="sh-label">Send a message</span>', '<span class="sh-num" data-sf="message.head.num">01</span><span class="sh-label" data-sf="message.head.label">Send a message</span>')
+    r('md:text-[32px]">How can', 'md:text-[32px]" data-sf="message.title" data-sf-type="split">How can')
+    r('tracking-[-0.04em]">Marrakech,', 'tracking-[-0.04em]" data-sf="message.office.title" data-sf-type="split">Marrakech,')
+    r('text-white/65">Roots', 'text-white/65" data-sf="message.office.text">Roots')
+    for i, (topic, email) in enumerate((('Volunteering, programmes &amp; alumni', 'contact@afcdteam.com'), ('Partnerships &amp; press', 'contact@afcdteam.com'), ('Board &amp; governance', 'akaya@afcdteam.com')), 1):
+        r(f'<span class="text-[14.5px] text-white/80">{topic}</span><a class="text-[14px] font-medium hover:underline" href="mailto:{email}">',
+          f'<span class="text-[14.5px] text-white/80" data-sf="message.to{i}.label">{topic}</span><a class="text-[14px] font-medium hover:underline" href="mailto:{email}" data-sf="message.to{i}.email" data-sf-type="email">')
+    r('<span class="sh-num">02</span><span class="sh-label">Questions</span>', '<span class="sh-num" data-sf="faq.head.num">02</span><span class="sh-label" data-sf="faq.head.label">Questions</span>')
+    r('<h2 class="sh-title reveal">Before you', '<h2 class="sh-title reveal" data-sf="faq.title" data-sf-type="split">Before you')
+    n = [0]
+    def faq(m):
+        n[0] += 1; i = n[0]; x = m.group(0)
+        x = x.replace('<summary><span>', f'<summary><span data-sf="faq.q{i}">', 1)
+        x = x.replace('<div class="ct-faq-a"><p>', f'<div class="ct-faq-a"><p data-sf="faq.a{i}">', 1)
+        return x.replace('<a class="link-arrow mt-4"', f'<a class="link-arrow mt-4" data-sf="faq.link{i}" data-sf-type="link"', 1)
+    s = re.sub(r'<details class="ct-faq".*?</details>', faq, s, flags=re.S)
+    if n[0] != 4:
+        raise SystemExit('contact.html: expected 4 questions for Studio fields')
+    r('text-ink-dark">We aim', 'text-ink-dark" data-sf="policy.access">We aim')
+    return s
 
 
 if __name__ == '__main__':

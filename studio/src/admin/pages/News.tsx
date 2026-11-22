@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 
@@ -13,33 +14,38 @@ const today = () => new Date().toISOString().slice(0, 10);
 type Row = { id: string; slug: string; title: string; type: string; status: string; publishDate: string; featured: boolean; externalUrl: string; scheduledAt: string | null; publishedRevisionId: string | null; updatedAt: string; pillars: { name: string; colour: string }[] };
 
 export function NewsList() {
-  const can = useCan();
-  const [rows, setRows] = useState<Row[] | null>(null); const [q, setQ] = useState(''); const [f, setF] = useState('all');
-  useEffect(() => { api<Row[]>('/news').then(setRows).catch(() => setRows([])); }, []);
+  const can = useCan(); const toast = useToast();
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [st, set] = useUrlState({ status: 'all', type: 'all', q: '' });
+  const load = () => api<Row[]>('/news').then(setRows).catch(() => setRows([]));
+  useEffect(() => { load(); }, []);
   async function create() {
-    const title = 'Untitled story';
-    const r = await post<{ id: string }>('/news', { title, slug: `story-${Date.now().toString(36)}`, publishDate: today() });
+    const r = await post<{ id: string }>('/news', { title: 'Untitled story', slug: `story-${Date.now().toString(36)}`, publishDate: today() });
     navigate(`/studio/news/${r.id}`);
   }
-  const shown = (rows ?? []).filter((r) => (f === 'all' ? r.status !== 'archived' : f === 'live' ? !!r.publishedRevisionId : r.status === f) && (!q || r.title.toLowerCase().includes(q.toLowerCase())));
+  const is = (k: string, r: Row) => (k === 'all' ? r.status !== 'archived' : k === 'live' ? !!r.publishedRevisionId : k === 'draft' ? ['draft', 'changes_requested'].includes(r.status) : r.status === k);
+  const base = (rows ?? []).filter((r) => (st.type === 'all' || r.type === st.type) && (!st.q || `${r.title} ${r.slug}`.toLowerCase().includes(st.q.toLowerCase())));
+  const shown = base.filter((r) => is(st.status, r));
+  const tabs: [string, string, number][] = [['all', 'All'], ['live', 'Live'], ['draft', 'Drafts'], ['in_review', 'In review'], ['scheduled', 'Scheduled'], ['archived', 'Archived']].map(([k, l]) => [k, l, base.filter((r) => is(k, r)).length]);
+  const columns: Column<Row>[] = [
+    { key: 'title', header: 'Story', sort: (r) => r.title, csv: (r) => r.title, render: (r) => <div className="dt-main"><span className="dt-thumb"><Icon n="log" /></span><span className="min-w-0">
+      <Link className="title" to={`/studio/news/${r.id}`}>{r.title}</Link><span className="sub">{[r.pillars.map((p) => p.name).join(' · ') || 'No pillar yet', r.featured && 'Featured', r.externalUrl && 'Old blog link'].filter(Boolean).join(' · ')}</span></span></div> },
+    { key: 'type', header: 'Type', sort: (r) => typeLabel(r.type), csv: (r) => typeLabel(r.type), hideBelow: 900, render: (r) => <span className="pill">{typeLabel(r.type)}</span> },
+    { key: 'date', header: 'Date', sort: (r) => r.publishDate, csv: (r) => r.publishDate, render: (r) => <span className="sub" style={{ whiteSpace: 'nowrap' }}>{r.publishDate}</span> },
+    { key: 'status', header: 'Status', sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} label={r.status === 'scheduled' && r.scheduledAt ? `Scheduled · ${fmtDate(r.scheduledAt)}` : undefined} /></div> },
+    { key: 'updated', header: 'Updated', align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
+  ];
   return <>
     <div className="page-h"><div><h1>News & Stories</h1><p>Programme news, participant stories, calls for applications and event recaps.</p></div>
       {can('news.create') && <button className="btn btn-primary" onClick={create}><Icon n="plus" />New story</button>}</div>
     <section className="card">
-      <div className="card-h">
-        <div className="seg" role="group" aria-label="Status">{[['all', 'All'], ['live', 'Live'], ['draft', 'Drafts'], ['in_review', 'In review'], ['scheduled', 'Scheduled'], ['archived', 'Archived']].map(([k, l]) => <button key={k} className={f === k ? 'on' : ''} onClick={() => setF(k)}>{l}</button>)}</div>
-        <label className="search"><Icon n="search" /><span className="sr-only">Search stories</span><input className="input" placeholder="Search stories" value={q} onChange={(e) => setQ(e.target.value)} /></label>
-      </div>
-      {!rows ? <Loading /> : <div className="scroll-x"><table className="table">
-        <thead><tr><th>Story</th><th>Type</th><th>Date</th><th>Status</th><th>Updated</th></tr></thead>
-        <tbody>{shown.length === 0 && <tr><td colSpan={5} className="empty">No stories here.</td></tr>}
-          {shown.map((r) => <tr key={r.id}>
-            <td><Link className="title" to={`/studio/news/${r.id}`}>{r.title}</Link><div className="sub">{r.pillars.map((p) => p.name).join(' · ') || 'No pillar yet'}{r.featured ? ' · Featured' : ''}{r.externalUrl ? ' · Old blog link' : ''}</div></td>
-            <td><span className="pill">{typeLabel(r.type)}</span></td>
-            <td className="sub" style={{ whiteSpace: 'nowrap' }}>{r.publishDate}</td>
-            <td><div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} label={r.status === 'scheduled' && r.scheduledAt ? `Scheduled · ${fmtDate(r.scheduledAt)}` : undefined} /></div></td>
-            <td className="sub">{ago(r.updatedAt)}</td></tr>)}</tbody>
-      </table></div>}
+      <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search stories">
+        <select className="select" value={st.type} onChange={(e) => set('type', e.target.value)} aria-label="Type"><option value="all">All types</option>{TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+      </ListToolbar>
+      {!rows ? <Loading /> : <DataTable id="news" rows={shown} total={base.filter((r) => is('all', r)).length} rowKey={(r) => r.id} columns={columns} csvName="afcd-stories" initialSort={{ key: 'date', dir: 'desc' }}
+        actions={workflowActions<Row>({ base: '/news', noun: ['story', 'stories'], name: (r) => r.title, canUpdate: can('news.update'), reload: load, post, toast })}
+        onOpen={(r) => navigate(`/studio/news/${r.id}`)}
+        empty={<EmptyState icon="log" text="No stories match these filters" onClear={st.q || st.type !== 'all' || st.status !== 'all' ? () => { set('q', ''); set('type', 'all'); set('status', 'all'); } : undefined} />} />}
     </section>
   </>;
 }

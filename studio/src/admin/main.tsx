@@ -1,5 +1,5 @@
 // AFCD Studio admin app: session gate, shell (sidebar + top bar) and routes.
-import React, { StrictMode, useEffect, useState, type FormEvent } from 'react';
+import React, { StrictMode, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import './studio.css';
 import { api, post, setCsrf, ApiError } from './api.ts';
@@ -132,20 +132,33 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   useEffect(() => { setMobile(false); }, [path]);
   useEffect(() => { if (can('project.read')) api('/projects').then((p: any[]) => setQueue(p.filter((x) => x.status === 'in_review' || x.status === 'approved').length)).catch(() => {}); }, [path]);
   const isOn = (i: NavItem) => (i.match ? i.match.test(path) : path.startsWith(i.to));
+  // the active-page highlight glides to the selected item (measured after every navigation and resize)
+  const navRef = useRef<HTMLElement>(null);
+  const [ind, setInd] = useState<{ top: number; h: number } | null>(null);
+  useLayoutEffect(() => {
+    const measure = () => { const nav = navRef.current; const el = nav?.querySelector<HTMLElement>('a.on'); if (!nav || !el) { setInd(null); return; } const a = el.getBoundingClientRect(), n = nav.getBoundingClientRect(); setInd({ top: a.top - n.top, h: a.height }); };
+    measure();
+    // the layout settles after fonts load, the menu fades in, or the sidebar collapses: measure again whenever it changes size
+    const ro = new ResizeObserver(measure); if (navRef.current) ro.observe(navRef.current);
+    const t = setTimeout(measure, 400);
+    document.fonts?.ready.then(measure).catch(() => {});
+    return () => { clearTimeout(t); ro.disconnect(); };
+  }, [path, collapsed, queue]);
   const links: NavLink[] = NAV.flatMap((g) => g.items.filter((i) => can(i.perm)).map((i) => ({ to: i.to, label: i.label, icon: i.icon, perm: i.perm, group: g.group })));
   useRecent(path, links);
   const page = route(path);
   return (
     <div className={`shell${collapsed ? ' collapsed' : ''}${mobile ? ' mobile-open' : ''}`}>
       <aside className="side" aria-label="Studio navigation">
-        <Link to="/studio/" className="brand" aria-label="AFCD Studio, dashboard"><img className="brand-logo" src="/studio/brand/afcd-logo.png" alt="AFCD Foundation" width="640" height="133" /><img className="brand-sym" src="/studio/brand/afcd-mark.png" alt="AFCD" width="28" height="28" /><span className="brand-tag">Studio</span></Link>
-        <nav className="nav">
+        <Link to="/studio/" className="brand" aria-label="AFCD Studio, dashboard"><img className="brand-logo" src="/studio/brand/afcd-logo.png" alt="AFCD Foundation" width="640" height="133" /><img className="brand-sym" src="/studio/brand/afcd-mark.png" alt="AFCD" width="30" height="30" /><span className="brand-tag"><i aria-hidden="true" />Studio · Website management</span></Link>
+        <nav className="nav" ref={navRef}>
+          <span className="nav-ind" aria-hidden="true" style={ind ? { transform: `translateY(${ind.top}px)`, height: ind.h, opacity: 1 } : { opacity: 0 }} />
           {NAV.map((g) => {
             const items = g.items.filter((i) => can(i.perm));
             if (!items.length) return null;
-            return <div className="nav-group" key={g.group}><span>{g.group}</span>
+            return <div className="nav-group" key={g.group}><span className="nav-label">{g.group}</span>
               {items.map((i) => <Link key={i.to} to={i.to} className={isOn(i) ? 'on' : ''} aria-current={isOn(i) ? 'page' : undefined} title={i.label}>
-                <Icon n={i.icon} /><span>{i.label}</span>{i.to.endsWith('approvals') && queue > 0 && <em className="count">{queue}</em>}
+                <Icon n={i.icon} /><span className="nav-text">{i.label}</span>{i.to.endsWith('approvals') && queue > 0 && <em className="count">{queue}</em>}
               </Link>)}
             </div>;
           })}

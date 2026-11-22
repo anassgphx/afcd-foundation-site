@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 
@@ -12,38 +13,40 @@ const dateLabel = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateStri
 type Row = { id: string; slug: string; title: string; kind: string; startDate: string; endDate: string | null; location: string; online: boolean; status: string; publishedRevisionId: string | null; updatedAt: string; pillarName: string | null; pillarColour: string | null };
 
 export function EventsList() {
-  const can = useCan();
-  const [rows, setRows] = useState<Row[] | null>(null); const [q, setQ] = useState(''); const [f, setF] = useState('upcoming');
-  useEffect(() => { api<Row[]>('/events').then(setRows).catch(() => setRows([])); }, []);
+  const can = useCan(); const toast = useToast();
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [st, set] = useUrlState({ status: 'upcoming', q: '' });
+  const load = () => api<Row[]>('/events').then(setRows).catch(() => setRows([]));
+  useEffect(() => { load(); }, []);
   const today = todayMa();
   const up = (r: Row) => (r.endDate ?? r.startDate) >= today;
   async function create() {
     const r = await post<{ id: string }>('/events', { title: 'Untitled event', slug: `event-${Date.now().toString(36)}`, startDate: today, registration: 'contact' });
     navigate(`/studio/events/${r.id}`);
   }
-  const shown = (rows ?? []).filter((r) => (f === 'upcoming' ? up(r) && r.status !== 'archived' : f === 'past' ? !up(r) && r.status !== 'archived' : f === 'live' ? !!r.publishedRevisionId : r.status === f)
-    && (!q || r.title.toLowerCase().includes(q.toLowerCase())))
-    .sort((a, b) => (f === 'upcoming' ? a.startDate.localeCompare(b.startDate) : b.startDate.localeCompare(a.startDate)));
+  const is = (k: string, r: Row) => (k === 'upcoming' ? up(r) && r.status !== 'archived' : k === 'past' ? !up(r) && r.status !== 'archived' : k === 'live' ? !!r.publishedRevisionId : k === 'draft' ? ['draft', 'changes_requested'].includes(r.status) : r.status === k);
+  const base = (rows ?? []).filter((r) => !st.q || `${r.title} ${r.location}`.toLowerCase().includes(st.q.toLowerCase()));
+  const shown = base.filter((r) => is(st.status, r));
+  const tabs: [string, string, number][] = [['upcoming', 'Upcoming'], ['past', 'Past'], ['live', 'Live'], ['draft', 'Drafts'], ['in_review', 'In review'], ['archived', 'Archived']].map(([k, l]) => [k, l, base.filter((r) => is(k, r)).length]);
+  const columns: Column<Row>[] = [
+    { key: 'date', header: 'Date', sort: (r) => r.startDate, csv: (r) => r.startDate + (r.endDate ? ` – ${r.endDate}` : ''), render: (r) => { const d = new Date(`${r.startDate}T12:00:00Z`); return <span className="dt-date"><b>{d.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'UTC' })}</b><small>{d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })}</small></span>; }, width: '84px' },
+    { key: 'title', header: 'Event', sort: (r) => r.title, csv: (r) => r.title, render: (r) => <div className="min-w-0"><Link className="title" to={`/studio/events/${r.id}`}>{r.title}</Link><div className="sub">{[r.pillarName, r.online ? (r.location ? `${r.location} · Online` : 'Online') : r.location, r.endDate && r.endDate !== r.startDate ? `until ${dateLabel(r.endDate)}` : ''].filter(Boolean).join(' · ') || 'No pillar or place yet'}</div></div> },
+    { key: 'kind', header: 'Type', sort: (r) => r.kind, csv: (r) => r.kind, hideBelow: 900, render: (r) => <span className="pill">{r.kind}</span> },
+    { key: 'status', header: 'Status', sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} />{!up(r) && <span className="pill">Past</span>}</div> },
+    { key: 'updated', header: 'Updated', align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
+  ];
   const live = (rows ?? []).filter((r) => r.publishedRevisionId).length;
   return <>
     <div className="page-h"><div><h1>Events</h1><p>Workshops, trainings, community days and online sessions. Events move from Upcoming to Past on their own after the last day.</p></div>
       {can('event.create') && <button className="btn btn-primary" onClick={create}><Icon n="plus" />New event</button>}</div>
     {rows && live === 0 && <div className="notice n-info"><div>The Events page currently shows <b>sample events</b>. They are replaced by your real calendar as soon as the first event is published here.</div></div>}
     <section className="card">
-      <div className="card-h">
-        <div className="seg" role="group" aria-label="Filter">{[['upcoming', 'Upcoming'], ['past', 'Past'], ['live', 'Live'], ['in_review', 'In review'], ['draft', 'Drafts'], ['archived', 'Archived']].map(([k, l]) => <button key={k} className={f === k ? 'on' : ''} onClick={() => setF(k)}>{l}</button>)}</div>
-        <label className="search"><Icon n="search" /><span className="sr-only">Search events</span><input className="input" placeholder="Search events" value={q} onChange={(e) => setQ(e.target.value)} /></label>
-      </div>
-      {!rows ? <Loading /> : <div className="scroll-x"><table className="table">
-        <thead><tr><th>Date</th><th>Event</th><th>Type</th><th>Status</th><th>Updated</th></tr></thead>
-        <tbody>{shown.length === 0 && <tr><td colSpan={5} className="empty">No events here.</td></tr>}
-          {shown.map((r) => <tr key={r.id}>
-            <td className="sub" style={{ whiteSpace: 'nowrap' }}>{dateLabel(r.startDate)}{r.endDate && r.endDate !== r.startDate ? ` – ${dateLabel(r.endDate)}` : ''}</td>
-            <td><Link className="title" to={`/studio/events/${r.id}`}>{r.title}</Link><div className="sub">{[r.pillarName, r.online ? (r.location ? `${r.location} · Online` : 'Online') : r.location].filter(Boolean).join(' · ') || 'No pillar or place yet'}</div></td>
-            <td><span className="pill">{r.kind}</span></td>
-            <td><div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div></td>
-            <td className="sub">{ago(r.updatedAt)}</td></tr>)}</tbody>
-      </table></div>}
+      <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search events or places" />
+      {!rows ? <Loading /> : <DataTable id="events" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-events"
+        initialSort={{ key: 'date', dir: st.status === 'upcoming' ? 'asc' : 'desc' }}
+        actions={workflowActions<Row>({ base: '/events', noun: ['event', 'events'], name: (r) => r.title, canUpdate: can('event.update'), reload: load, post, toast })}
+        onOpen={(r) => navigate(`/studio/events/${r.id}`)}
+        empty={<EmptyState icon="calendar" text={st.status === 'upcoming' ? 'No upcoming events' : 'No events match these filters'} onClear={st.q ? () => set('q', '') : undefined} />} />}
     </section>
   </>;
 }

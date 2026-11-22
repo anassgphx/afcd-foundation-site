@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 
@@ -13,7 +14,7 @@ type Row = { id: string; slug: string; name: string; scope: string; category: st
 
 export function PartnersList() {
   const can = useCan(); const toast = useToast();
-  const [rows, setRows] = useState<Row[] | null>(null); const [q, setQ] = useState(''); const [f, setF] = useState('all'); const [busy, setBusy] = useState(false);
+  const [rows, setRows] = useState<Row[] | null>(null); const [st, set] = useUrlState({ status: 'all', q: '' }); const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false); const [name, setName] = useState(''); const [scope, setScope] = useState('national'); const [err, setErr] = useState('');
   const load = () => api<Row[]>('/partners').then(setRows).catch(() => setRows([]));
   useEffect(() => { load(); }, []);
@@ -27,8 +28,19 @@ export function PartnersList() {
     try { const r = await post<{ imported: number; skipped: number }>('/partners/import'); toast(`Imported ${r.imported} partners from the current website`); await load(); }
     catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
   }
-  const shown = (rows ?? []).filter((r) => (f === 'all' ? r.status !== 'archived' : f === 'live' ? !!r.publishedRevisionId : ['international', 'national', 'local'].includes(f) ? r.scope === f && r.status !== 'archived' : r.status === f)
-    && (!q || r.name.toLowerCase().includes(q.toLowerCase())));
+  const is = (k: string, r: Row) => (k === 'all' ? r.status !== 'archived' : k === 'live' ? !!r.publishedRevisionId : ['international', 'national', 'local'].includes(k) ? r.scope === k && r.status !== 'archived' : k === 'draft' ? ['draft', 'changes_requested'].includes(r.status) : r.status === k);
+  const base = (rows ?? []).filter((r) => !st.q || `${r.name} ${r.category}`.toLowerCase().includes(st.q.toLowerCase()));
+  const shown = base.filter((r) => is(st.status, r));
+  const tabs: [string, string, number][] = [['all', 'All'], ['international', 'International'], ['national', 'National'], ['local', 'Local'], ['in_review', 'In review'], ['draft', 'Drafts'], ['archived', 'Archived']].map(([k, l]) => [k, l, base.filter((r) => is(k, r)).length]);
+  const initials = (n: string) => n.replace(/[()]/g, '').split(/\s+/).filter((w) => /^[A-Za-zÀ-ÿ]/.test(w) && !['of', 'in', 'for', 'the', 'and'].includes(w.toLowerCase())).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  const columns: Column<Row>[] = [
+    { key: 'name', header: 'Organisation', sort: (r) => r.name, csv: (r) => r.name, render: (r) => <div className="dt-main"><span className="dt-thumb dt-initials">{initials(r.name)}</span><span className="min-w-0">
+      <Link className="title" to={`/studio/partners/${r.id}`}>{r.name}</Link><span className="sub">{[r.category, r.current ? '' : 'Past partner', r.logoMediaId ? 'Logo' : 'No logo', r.websiteUrl ? 'Website' : ''].filter(Boolean).join(' · ')}</span></span></div> },
+    { key: 'scope', header: 'Scope', sort: (r) => r.scope, csv: (r) => scopeLabel(r.scope), render: (r) => <span className="pill">{scopeLabel(r.scope)}</span> },
+    { key: 'projects', header: 'Projects', sort: (r) => -r.projects, csv: (r) => String(r.projects), align: 'right', hideBelow: 900, render: (r) => <span className="sub">{r.projects || '—'}</span> },
+    { key: 'status', header: 'Status', sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div> },
+    { key: 'updated', header: 'Updated', align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
+  ];
   const missingLogo = (rows ?? []).filter((r) => r.publishedRevisionId && !r.logoMediaId).length;
   return <>
     <div className="page-h"><div><h1>Partners</h1><p>One record per organisation. Changes reach the Our Partners page only after review and publishing.</p></div>
@@ -37,20 +49,11 @@ export function PartnersList() {
       {can('partner.publish') && <button className="btn btn-primary btn-sm" disabled={busy} onClick={importList}>{busy ? 'Importing…' : 'Import current list'}</button>}</div>}
     {missingLogo > 0 && <div className="notice n-info"><div>{missingLogo} live partners show initials instead of a logo. Add a logo only with the partner’s permission.</div></div>}
     <section className="card">
-      <div className="card-h">
-        <div className="seg" role="group" aria-label="Filter">{[['all', 'All'], ['international', 'International'], ['national', 'National'], ['local', 'Local'], ['in_review', 'In review'], ['draft', 'Drafts'], ['archived', 'Archived']].map(([k, l]) => <button key={k} className={f === k ? 'on' : ''} onClick={() => setF(k)}>{l}</button>)}</div>
-        <label className="search"><Icon n="search" /><span className="sr-only">Search partners</span><input className="input" placeholder="Search partners" value={q} onChange={(e) => setQ(e.target.value)} /></label>
-      </div>
-      {!rows ? <Loading /> : <div className="scroll-x"><table className="table">
-        <thead><tr><th>Organisation</th><th>Scope</th><th>Projects</th><th>Status</th><th>Updated</th></tr></thead>
-        <tbody>{shown.length === 0 && <tr><td colSpan={5} className="empty">No partners here.</td></tr>}
-          {shown.map((r) => <tr key={r.id}>
-            <td><Link className="title" to={`/studio/partners/${r.id}`}>{r.name}</Link><div className="sub">{[r.category, r.current ? '' : 'Past partner', r.logoMediaId ? 'Logo' : 'No logo', r.websiteUrl ? 'Website' : ''].filter(Boolean).join(' · ')}</div></td>
-            <td><span className="pill">{scopeLabel(r.scope)}</span></td>
-            <td className="sub">{r.projects || '—'}</td>
-            <td><div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div></td>
-            <td className="sub">{ago(r.updatedAt)}</td></tr>)}</tbody>
-      </table></div>}
+      <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search partners" />
+      {!rows ? <Loading /> : <DataTable id="partners" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-partners"
+        actions={workflowActions<Row>({ base: '/partners', noun: ['partner', 'partners'], name: (r) => r.name, canUpdate: can('partner.update'), reload: load, post, toast })}
+        onOpen={(r) => navigate(`/studio/partners/${r.id}`)}
+        empty={<EmptyState icon="partner" text="No partners match these filters" onClear={st.q || st.status !== 'all' ? () => { set('q', ''); set('status', 'all'); } : undefined} />} />}
     </section>
     {adding && <Modal size="sm" title="Add a partner" onClose={() => setAdding(false)} footer={<><button className="btn" onClick={() => setAdding(false)}>Cancel</button><button className="btn btn-primary" disabled={name.trim().length < 2} onClick={create}>Add</button></>}>
       <div className="modal-b stack">

@@ -1,26 +1,41 @@
 // Pages list + "New page" with templates.
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, post, ApiError } from '../api.ts';
-import { Badge, Icon, Link, LiveBadge, Modal, ago, navigate, useCan } from '../ui.tsx';
+import { Badge, Icon, Link, LiveBadge, Modal, ago, navigate, useCan, useToast } from '../ui.tsx';
+import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { Loading } from './Dashboard.tsx';
 
 type Row = { id: string; slug: string; title: string; status: string; publishedRevisionId: string | null; updatedAt: string };
 const slugify = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[’']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
 
 export function PagesList() {
-  const can = useCan();
+  const can = useCan(); const toast = useToast();
   const [rows, setRows] = useState<Row[] | null>(null); const [creating, setCreating] = useState(false);
-  useEffect(() => { api<Row[]>('/pages').then(setRows).catch(() => setRows([])); }, []);
+  const [st, set] = useUrlState({ status: 'all', q: '' });
+  const load = () => api<Row[]>('/pages').then(setRows).catch(() => setRows([]));
+  useEffect(() => { load(); }, []);
+  const is = (k: string, r: Row) => (k === 'all' ? r.status !== 'archived' : k === 'live' ? !!r.publishedRevisionId : k === 'draft' ? ['draft', 'changes_requested'].includes(r.status) : r.status === k);
+  const base = (rows ?? []).filter((r) => !st.q || `${r.title} ${r.slug}`.toLowerCase().includes(st.q.toLowerCase()));
+  const shown = base.filter((r) => is(st.status, r));
+  const tabs: [string, string, number][] = [['all', 'All'], ['live', 'Live'], ['draft', 'Drafts'], ['in_review', 'In review'], ['approved', 'Approved'], ['archived', 'Archived']].map(([k, l]) => [k, l, base.filter((r) => is(k, r)).length]);
+  const columns: Column<Row>[] = [
+    { key: 'title', header: 'Page', sort: (r) => r.title, csv: (r) => r.title, render: (r) => <div className="dt-main"><span className="dt-thumb"><Icon n="layers" /></span><span className="min-w-0"><Link className="title" to={`/studio/pages/${r.id}`}>{r.title}</Link><span className="sub">Built with the page builder</span></span></div> },
+    { key: 'slug', header: 'Address', sort: (r) => r.slug, csv: (r) => `${r.slug}.html`, hideBelow: 800, render: (r) => <span className={r.publishedRevisionId ? 'dt-page' : 'sub'}>{r.publishedRevisionId && <Icon n="globe" width={13} height={13} />}<span className="mono">{r.slug}.html</span></span> },
+    { key: 'status', header: 'Status', sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div> },
+    { key: 'updated', header: 'Updated', align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
+  ];
   return <>
     <div className="page-h">
       <div><h1>Pages</h1><p>Pages built with the visual builder from AFCD’s approved blocks. Existing site pages stay managed by their templates.</p></div>
       {can('page.create') && <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon n="plus" />New page</button>}
     </div>
-    <section className="card">{!rows ? <Loading /> : rows.length === 0 ? <div className="empty">No builder pages yet. Create one from a template.</div> :
-      <div className="scroll-x"><table className="table"><thead><tr><th>Page</th><th>Address</th><th>Status</th><th>Updated</th></tr></thead><tbody>
-        {rows.map((r) => <tr key={r.id}><td><Link className="title" to={`/studio/pages/${r.id}`}>{r.title}</Link></td><td className="mono sub">{r.slug}.html</td>
-          <td><div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div></td><td className="sub">{ago(r.updatedAt)}</td></tr>)}
-      </tbody></table></div>}</section>
+    <section className="card">
+      <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search pages" />
+      {!rows ? <Loading /> : <DataTable id="pages" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-pages"
+        actions={workflowActions<Row>({ base: '/pages', noun: ['page', 'pages'], name: (r) => r.title, canUpdate: can('page.update'), reload: load, post, toast })}
+        onOpen={(r) => navigate(`/studio/pages/${r.id}`)}
+        empty={rows.length === 0 ? <EmptyState icon="layers" text="No builder pages yet. Create one from a template." /> : <EmptyState icon="layers" text="No pages match these filters" onClear={() => { set('q', ''); set('status', 'all'); }} />} />}
+    </section>
     {creating && <NewPage onClose={() => setCreating(false)} />}
   </>;
 }

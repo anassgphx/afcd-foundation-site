@@ -24,50 +24,101 @@ active: news
   <div class="phd-hr" aria-hidden="true"></div>
 </section>
 
-<section class="py-14 lg:py-16">
+<section id="featured" class="pt-8 lg:pt-10">
   <div class="wrap">
-    <a href="https://afcdfoundation.org/blog/" class="group grid gap-8 lg:grid-cols-12 lg:items-center lg:gap-16">
-      <div class="lg:col-span-7"><div class="ph aspect-[16/10] w-full rounded-3xl" style="--ph:#D4D4D4"><span class="ph-cap"><b>Photo</b> · call-for-application</span></div></div>
-      <div class="lg:col-span-5">
-        <p class="label text-ink-mid">Latest story</p>
-        <div class="mt-5 flex flex-wrap items-center gap-3 text-xs"><span class="label inline-flex rounded-full border border-ink-light px-3 py-1.5">Youth Empowerment</span><time class="text-ink-mid" datetime="2023-11-02">November 2, 2023</time></div>
-        <h2 class="mt-5 text-[32px] font-semibold leading-[1.08] tracking-[-0.035em] group-hover:underline md:text-[44px]">Solutions to Climate Change: The Youth Green Generation Project 2024</h2>
-        <p class="body mt-5 text-ink-dark">AFCD has spent recent years on projects that address climate change locally and nationally. This post introduces the Youth Green Generation project and its call for young applicants.</p>
-        <span class="link-arrow mt-6">Read on the current site <span class="arr" aria-hidden="true">↗</span></span>
+    <a href="https://afcdfoundation.org/blog/" class="nw-feat group">
+      <div class="relative lg:col-span-7"><div class="ph aspect-[16/10] w-full rounded-[24px] lg:aspect-auto lg:h-full lg:min-h-[420px]" style="--ph:#D4D4D4"><span class="ph-cap"><b>Photo</b> · call-for-application</span></div><span class="nw-type">Featured · Call for applications</span></div>
+      <div class="flex flex-col p-2 lg:col-span-5 lg:p-6">
+        <span class="flex flex-wrap items-center gap-x-3 text-[13px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:#FFB2B9"></span>Youth Empowerment</span><span aria-hidden="true">·</span><time datetime="2023-11-02">November 2, 2023</time></span>
+        <h2 class="mt-5 text-[30px] font-semibold leading-[1.06] tracking-[-0.04em] md:text-[42px]">Solutions to Climate Change: The Youth Green Generation Project 2024</h2>
+        <p class="mt-5 text-[16px] leading-relaxed text-ink-dark">AFCD has spent recent years on projects that address climate change locally and nationally. This post introduces the Youth Green Generation project and its call for young applicants.</p>
+        <span class="btn-dark btn-cta mt-8 min-h-[48px] self-start px-6 text-[14px] lg:mt-auto">Read the story <span class="arr" aria-hidden="true">↗</span></span>
       </div>
     </a>
-    <div class="mt-20">
+  </div>
+</section>
+
+<section id="stories" class="py-14 lg:py-16">
+  <div class="wrap">
     <header class="sh">
-      <div class="sh-top"><span class="sh-label">More stories</span><span class="sh-rule" aria-hidden="true"></span><a href="https://afcdfoundation.org/blog/" class="sh-link">Current blog <span class="arr" aria-hidden="true">↗</span></a></div>
+      <div class="sh-top"><span class="sh-num">01</span><span class="sh-label">All Stories</span><span class="sh-rule" aria-hidden="true"></span><a href="https://afcdfoundation.org/blog/" class="sh-link">Current blog <span class="arr" aria-hidden="true">↗</span></a></div>
       <div class="sh-body">
-        <h2 class="sh-title reveal">From <span class="sh-soft">the archive.</span></h2>
+        <h2 class="sh-title reveal">Latest from <span class="sh-soft">AFCD.</span></h2>
       </div>
     </header>
-      <ul class="mt-10 border-b border-ink-light">
-      <li>
-        <a href="https://afcdfoundation.org/blog/" class="group grid gap-5 border-t border-ink-light py-8 sm:grid-cols-[220px_1fr] sm:gap-8">
-          <div class="ph aspect-[4/3] w-full" style="--ph:#D4D4D4"><span class="ph-cap"><b>Photo</b> · DSC04067</span></div>
-          <span class="min-w-0">
-            <span class="flex flex-wrap items-center gap-3 text-xs"><span class="label">Youth Empowerment</span><time class="text-ink-mid" datetime="2023-10-01">October 1, 2023</time></span>
-            <span class="mt-3 block text-2xl font-semibold leading-[1.2] tracking-[-0.025em] group-hover:underline">A Journey of a Thousand Miles Begins with a Single Step</span>
-            <span class="mt-2 block text-[15px] leading-relaxed text-ink-dark">A participant’s account of joining a one-year AFCD program on the last day of registration.</span>
-            <span class="link-arrow mt-4">Read on the current site <span class="arr" aria-hidden="true">↗</span></span>
-          </span>
+    <div class="nw-chips mt-8" role="group" aria-label="Filter stories"><button type="button" class="nw-chip" data-news-filter="all" aria-pressed="true">All stories</button><button type="button" class="nw-chip" data-news-filter="Participant story" aria-pressed="false">Participant story</button><button type="button" class="nw-chip" data-news-filter="Programme news" aria-pressed="false">Programme news</button></div>
+    <ul class="nw-grid mt-6" id="news-grid">
+      <li class="nw-item" data-type="Participant story">
+        <a href="https://afcdfoundation.org/blog/" class="nw-card group">
+          <div class="relative"><div class="ph aspect-[16/10] w-full rounded-[20px]" style="--ph:#D4D4D4"><span class="ph-cap"><b>Photo</b> · DSC04067</span></div><span class="nw-type">Participant story</span></div>
+          <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:#FFB2B9"></span>Youth Empowerment</span><span aria-hidden="true">·</span><time datetime="2023-10-01">October 1, 2023</time></span>
+          <span class="mt-3 block text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">A Journey of a Thousand Miles Begins with a Single Step</span>
+          <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">A participant’s account of joining a one-year AFCD program on the last day of registration.</span>
+          <span class="nw-read">Read the story <span aria-hidden="true">↗</span></span>
         </a>
       </li>
-      <li>
-        <a href="https://afcdfoundation.org/blog/" class="group grid gap-5 border-t border-ink-light py-8 sm:grid-cols-[220px_1fr] sm:gap-8">
-          <div class="ph aspect-[4/3] w-full" style="--ph:#D4D4D4"><span class="ph-cap"><b>Photo</b> · DSC03718</span></div>
-          <span class="min-w-0">
-            <span class="flex flex-wrap items-center gap-3 text-xs"><span class="label">Women’s Empowerment</span><time class="text-ink-mid" datetime="2023-10-01">October 1, 2023</time></span>
-            <span class="mt-3 block text-2xl font-semibold leading-[1.2] tracking-[-0.025em] group-hover:underline">Journey with the AFCD Family</span>
-            <span class="mt-2 block text-[15px] leading-relaxed text-ink-dark">A Leadership Lab participant on a year of networking, capacity building and social entrepreneurship.</span>
-            <span class="link-arrow mt-4">Read on the current site <span class="arr" aria-hidden="true">↗</span></span>
-          </span>
+      <li class="nw-item" data-type="Participant story">
+        <a href="https://afcdfoundation.org/blog/" class="nw-card group">
+          <div class="relative"><div class="ph aspect-[16/10] w-full rounded-[20px]" style="--ph:#D4D4D4"><span class="ph-cap"><b>Photo</b> · DSC03718</span></div><span class="nw-type">Participant story</span></div>
+          <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:#A8DDFB"></span>Women’s Empowerment</span><span aria-hidden="true">·</span><time datetime="2023-10-01">October 1, 2023</time></span>
+          <span class="mt-3 block text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">Journey with the AFCD Family</span>
+          <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">A Leadership Lab participant on a year of networking, capacity building and social entrepreneurship.</span>
+          <span class="nw-read">Read the story <span aria-hidden="true">↗</span></span>
         </a>
       </li>
-      </ul>
-      <p class="mt-8 inline-flex items-center gap-2 rounded-full border border-dashed border-ink-light text-ink-mid px-4 py-2 text-[12px]">Stories open on the current afcdfoundation.org blog until the news feed is connected.</p>
+      <li class="nw-item" data-type="Programme news">
+        <a href="#" class="nw-card group is-ph" aria-disabled="true" tabindex="-1">
+          <div class="relative"><div class="ph aspect-[16/10] w-full rounded-[20px]" style="--ph:#D4D4D4"><span class="ph-cap"><b>Photo</b> · Story photo</span></div><span class="nw-type">Programme news</span></div>
+          <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:#82E591"></span>Environment and Climate</span><span aria-hidden="true">·</span><span>Placeholder</span></span>
+          <span class="mt-3 block text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">Lorem ipsum dolor sit amet, consectetur adipiscing</span>
+          <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">Integer posuere erat a ante venenatis dapibus posuere velit aliquet. Donec ullamcorper nulla non metus.</span>
+          <span class="nw-read">Coming soon <span aria-hidden="true">↗</span></span>
+        </a>
+      </li>
+      <li class="nw-item" data-type="Programme news">
+        <a href="#" class="nw-card group is-ph" aria-disabled="true" tabindex="-1">
+          <div class="relative"><div class="ph aspect-[16/10] w-full rounded-[20px]" style="--ph:#D4D4D4"><span class="ph-cap"><b>Photo</b> · Story photo</span></div><span class="nw-type">Programme news</span></div>
+          <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:#FBE38A"></span>Digital Inclusion and Innovation</span><span aria-hidden="true">·</span><span>Placeholder</span></span>
+          <span class="mt-3 block text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">Vestibulum id ligula porta felis euismod semper</span>
+          <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">Cras mattis consectetur purus sit amet fermentum. Maecenas faucibus mollis interdum.</span>
+          <span class="nw-read">Coming soon <span aria-hidden="true">↗</span></span>
+        </a>
+      </li>
+      <li class="nw-item" data-type="Participant story">
+        <a href="#" class="nw-card group is-ph" aria-disabled="true" tabindex="-1">
+          <div class="relative"><div class="ph aspect-[16/10] w-full rounded-[20px]" style="--ph:#D4D4D4"><span class="ph-cap"><b>Photo</b> · Story photo</span></div><span class="nw-type">Participant story</span></div>
+          <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:#A8DDFB"></span>Women’s Empowerment</span><span aria-hidden="true">·</span><span>Placeholder</span></span>
+          <span class="mt-3 block text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">Aenean lacinia bibendum nulla sed consectetur</span>
+          <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">Curabitur blandit tempus porttitor. Etiam porta sem malesuada magna mollis euismod.</span>
+          <span class="nw-read">Coming soon <span aria-hidden="true">↗</span></span>
+        </a>
+      </li>
+      <li class="nw-item" data-type="Programme news">
+        <a href="#" class="nw-card group is-ph" aria-disabled="true" tabindex="-1">
+          <div class="relative"><div class="ph aspect-[16/10] w-full rounded-[20px]" style="--ph:#D4D4D4"><span class="ph-cap"><b>Photo</b> · Story photo</span></div><span class="nw-type">Programme news</span></div>
+          <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:#FFB2B9"></span>Youth Empowerment</span><span aria-hidden="true">·</span><span>Placeholder</span></span>
+          <span class="mt-3 block text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">Nulla vitae elit libero, a pharetra augue</span>
+          <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh, ut fermentum massa.</span>
+          <span class="nw-read">Coming soon <span aria-hidden="true">↗</span></span>
+        </a>
+      </li>
+    </ul>
+    <p class="nw-empty mt-6 hidden text-[15px] text-ink-mid" role="status">No stories in this category yet.</p>
+    <p class="mt-8 inline-flex items-center gap-2 rounded-full border border-dashed border-ink-light text-ink-mid px-4 py-2 text-[12px]">Real stories open on the current afcdfoundation.org blog. Lorem ipsum cards are placeholders until the news feed is connected.</p>
+  </div>
+</section>
+
+<section id="topics" class="pb-6 lg:pb-8">
+  <div class="wrap grid gap-4 lg:grid-cols-12">
+    <div class="rounded-[28px] border border-ink-light p-6 md:p-8 lg:col-span-5">
+      <p class="label text-ink-mid">Browse by pillar</p>
+      <ul class="mt-5 grid gap-2"><li><a class="os-area" href="pillars.html#youth-empowerment"><span class="os-area-dot" style="--c:#FFB2B9" aria-hidden="true"></span><span class="flex-1">Youth Empowerment</span><span class="os-area-arr" aria-hidden="true">↗</span></a></li><li><a class="os-area" href="pillars.html#women-empowerment"><span class="os-area-dot" style="--c:#A8DDFB" aria-hidden="true"></span><span class="flex-1">Women’s Empowerment</span><span class="os-area-arr" aria-hidden="true">↗</span></a></li><li><a class="os-area" href="pillars.html#green-thumbs"><span class="os-area-dot" style="--c:#82E591" aria-hidden="true"></span><span class="flex-1">Environment and Climate</span><span class="os-area-arr" aria-hidden="true">↗</span></a></li><li><a class="os-area" href="pillars.html#digital-empowerment"><span class="os-area-dot" style="--c:#FBE38A" aria-hidden="true"></span><span class="flex-1">Digital Inclusion and Innovation</span><span class="os-area-arr" aria-hidden="true">↗</span></a></li></ul>
+    </div>
+    <div class="os-band on-dark text-white lg:col-span-7">
+      <span class="cta-kicker" style="background:#fff;color:#000"><span class="tb-dot" aria-hidden="true"></span>Newsletter</span>
+      <p class="mt-6 text-[32px] font-semibold leading-[1.04] tracking-[-0.04em] md:text-[44px]">Never miss <span class="text-white/45">a call for applications.</span></p>
+      <p class="mt-4 max-w-[46ch] text-[15.5px] leading-relaxed text-white/65">Programme news, open calls and stories from Ait Ourir and across Morocco, a few times a year.</p>
+      <a href="#ft-news-title" class="btn-light btn-cta mt-8 min-h-[48px] px-6 text-[14px]">Subscribe <span class="arr" aria-hidden="true">↓</span></a>
     </div>
   </div>
 </section>

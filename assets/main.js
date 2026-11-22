@@ -156,6 +156,24 @@
     });
   });
 
+  /* ---------- News: filter stories by type ---------- */
+  (function () {
+    var btns = $$('[data-news-filter]');
+    if (!btns.length) return;
+    var items = $$('#news-grid .nw-item'), empty = $('.nw-empty');
+    btns.forEach(function (b) {
+      b.addEventListener('click', function () {
+        var f = b.dataset.newsFilter, shown = 0;
+        btns.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+        items.forEach(function (li) {
+          var on = f === 'all' || li.dataset.type === f;
+          li.hidden = !on; if (on) shown++;
+        });
+        if (empty) empty.classList.toggle('hidden', shown > 0);
+      });
+    });
+  })();
+
   /* ---------- Hero slider ---------- */
   (function () {
     if (!$('#hero')) return;

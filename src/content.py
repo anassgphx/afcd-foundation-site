@@ -722,40 +722,83 @@ NEWS = [
 ]
 
 
+NEWS_PILLAR = {'Youth Empowerment': '#FFB2B9', 'Women’s Empowerment': '#A8DDFB', 'Environment and Climate': '#82E591', 'Digital Inclusion and Innovation': '#FBE38A'}
+NEWS_TYPES = {0: 'Call for applications', 1: 'Participant story', 2: 'Participant story'}
+# Clearly marked placeholder posts (lorem ipsum) to show the layout until the news feed is connected.
+NEWS_PLACEHOLDERS = [
+    ('Environment and Climate', 'Programme news', 'Lorem ipsum dolor sit amet, consectetur adipiscing', 'Integer posuere erat a ante venenatis dapibus posuere velit aliquet. Donec ullamcorper nulla non metus.'),
+    ('Digital Inclusion and Innovation', 'Programme news', 'Vestibulum id ligula porta felis euismod semper', 'Cras mattis consectetur purus sit amet fermentum. Maecenas faucibus mollis interdum.'),
+    ('Women’s Empowerment', 'Participant story', 'Aenean lacinia bibendum nulla sed consectetur', 'Curabitur blandit tempus porttitor. Etiam porta sem malesuada magna mollis euismod.'),
+    ('Youth Empowerment', 'Programme news', 'Nulla vitae elit libero, a pharetra augue', 'Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh, ut fermentum massa.'),
+]
+
+
 def news():
     lead = NEWS[0]
-    rest = ''.join(f'''
-      <li>
-        <a href="https://afcdfoundation.org/blog/" class="group grid gap-5 border-t border-ink-light py-8 sm:grid-cols-[220px_1fr] sm:gap-8">
-          {ph(n[5], 'aspect-[4/3] w-full')}
-          <span class="min-w-0">
-            <span class="flex flex-wrap items-center gap-3 text-xs"><span class="label">{n[0]}</span><time class="text-ink-mid" datetime="{n[1]}">{n[2]}</time></span>
-            <span class="mt-3 block text-2xl font-semibold leading-[1.2] tracking-[-0.025em] group-hover:underline">{n[3]}</span>
-            <span class="mt-2 block text-[15px] leading-relaxed text-ink-dark">{n[4]}</span>
-            <span class="link-arrow mt-4">Read on the current site {ARR}</span>
-          </span>
+    blog = 'https://afcdfoundation.org/blog/'
+
+    def card(pillar, typ, title, excerpt, photo, date=None, iso=None, placeholder=False):
+        meta = f'<time datetime="{iso}">{date}</time>' if date else '<span>Placeholder</span>'
+        href = '#' if placeholder else blog
+        attrs = ' aria-disabled="true" tabindex="-1"' if placeholder else ''
+        return f'''
+      <li class="nw-item" data-type="{typ}">
+        <a href="{href}" class="nw-card group{' is-ph' if placeholder else ''}"{attrs}>
+          <div class="relative">{ph(photo, 'aspect-[16/10] w-full rounded-[20px]')}<span class="nw-type">{typ}</span></div>
+          <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{NEWS_PILLAR[pillar]}"></span>{pillar}</span><span aria-hidden="true">·</span>{meta}</span>
+          <span class="mt-3 block text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">{title}</span>
+          <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{excerpt}</span>
+          <span class="nw-read">{'Coming soon' if placeholder else 'Read the story'} <span aria-hidden="true">↗</span></span>
         </a>
-      </li>''' for n in NEWS[1:])
+      </li>'''
+
+    cards = ''.join(card(n[0], NEWS_TYPES[i], n[3], n[4], n[5], n[2], n[1]) for i, n in enumerate(NEWS) if i > 0)
+    cards += ''.join(card(p[0], p[1], p[2], p[3], 'Story photo', placeholder=True) for p in NEWS_PLACEHOLDERS)
+    present = [NEWS_TYPES[i] for i in range(1, len(NEWS))] + [p[1] for p in NEWS_PLACEHOLDERS]
+    types = ['All stories'] + [t for t in ['Call for applications', 'Participant story', 'Programme news'] if t in present]
+    chips = ''.join(f'<button type="button" class="nw-chip" data-news-filter="{"all" if i == 0 else t}" aria-pressed="{"true" if i == 0 else "false"}">{t}</button>' for i, t in enumerate(types))
+    topics = ''.join(f'<li><a class="os-area" href="pillars.html#{sl}"><span class="os-area-dot" style="--c:{NEWS_PILLAR[n]}" aria-hidden="true"></span><span class="flex-1">{n}</span><span class="os-area-arr" aria-hidden="true">↗</span></a></li>'
+                     for n, sl in [('Youth Empowerment', 'youth-empowerment'), ('Women’s Empowerment', 'women-empowerment'), ('Environment and Climate', 'green-thumbs'), ('Digital Inclusion and Innovation', 'digital-empowerment')])
+
     body = page_header([('News &amp; Stories', 'news.html')], 'News &amp; Stories',
                        'Stories from <span class="text-ink-mid">our communities.</span>',
-                       'News, calls for applications and participant stories from AFCD’s programmes.', points=('Programme news', 'Calls for applications', 'Stories')) + f'''
+                       'News, calls for applications and participant stories from AFCD’s programmes.') + f'''
 
-<section class="py-14 lg:py-16">
+<section id="featured" class="pt-8 lg:pt-10">
   <div class="wrap">
-    <a href="https://afcdfoundation.org/blog/" class="group grid gap-8 lg:grid-cols-12 lg:items-center lg:gap-16">
-      <div class="lg:col-span-7">{ph(lead[5], 'aspect-[16/10] w-full rounded-3xl')}</div>
-      <div class="lg:col-span-5">
-        <p class="label text-ink-mid">Latest story</p>
-        <div class="mt-5 flex flex-wrap items-center gap-3 text-xs">{tag(lead[0])}<time class="text-ink-mid" datetime="{lead[1]}">{lead[2]}</time></div>
-        <h2 class="mt-5 text-[32px] font-semibold leading-[1.08] tracking-[-0.035em] group-hover:underline md:text-[44px]">{lead[3]}</h2>
-        <p class="body mt-5 text-ink-dark">{lead[4]}</p>
-        <span class="link-arrow mt-6">Read on the current site {ARR}</span>
+    <a href="{blog}" class="nw-feat group">
+      <div class="relative lg:col-span-7">{ph(lead[5], 'aspect-[16/10] w-full rounded-[24px] lg:aspect-auto lg:h-full lg:min-h-[420px]')}<span class="nw-type">Featured · {NEWS_TYPES[0]}</span></div>
+      <div class="flex flex-col p-2 lg:col-span-5 lg:p-6">
+        <span class="flex flex-wrap items-center gap-x-3 text-[13px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{NEWS_PILLAR[lead[0]]}"></span>{lead[0]}</span><span aria-hidden="true">·</span><time datetime="{lead[1]}">{lead[2]}</time></span>
+        <h2 class="mt-5 text-[30px] font-semibold leading-[1.06] tracking-[-0.04em] md:text-[42px]">{lead[3]}</h2>
+        <p class="mt-5 text-[16px] leading-relaxed text-ink-dark">{lead[4]}</p>
+        <span class="btn-dark btn-cta mt-8 min-h-[48px] self-start px-6 text-[14px] lg:mt-auto">Read the story <span class="arr" aria-hidden="true">↗</span></span>
       </div>
     </a>
-    <div class="mt-20">{sec_head('More stories', 'From <span class="sh-soft">the archive.</span>', ('Current blog', 'https://afcdfoundation.org/blog/'))}
-      <ul class="mt-10 border-b border-ink-light">{rest}
-      </ul>
-      {placeholder_note('Stories open on the current afcdfoundation.org blog until the news feed is connected.')}
+  </div>
+</section>
+
+<section id="stories" class="py-14 lg:py-16">
+  <div class="wrap">{sec_head('01 / All Stories', 'Latest from <span class="sh-soft">AFCD.</span>', ('Current blog', blog))}
+    <div class="nw-chips mt-8" role="group" aria-label="Filter stories">{chips}</div>
+    <ul class="nw-grid mt-6" id="news-grid">{cards}
+    </ul>
+    <p class="nw-empty mt-6 hidden text-[15px] text-ink-mid" role="status">No stories in this category yet.</p>
+    {placeholder_note('Real stories open on the current afcdfoundation.org blog. Lorem ipsum cards are placeholders until the news feed is connected.')}
+  </div>
+</section>
+
+<section id="topics" class="pb-6 lg:pb-8">
+  <div class="wrap grid gap-4 lg:grid-cols-12">
+    <div class="rounded-[28px] border border-ink-light p-6 md:p-8 lg:col-span-5">
+      <p class="label text-ink-mid">Browse by pillar</p>
+      <ul class="mt-5 grid gap-2">{topics}</ul>
+    </div>
+    <div class="os-band on-dark text-white lg:col-span-7">
+      <span class="cta-kicker" style="background:#fff;color:#000"><span class="tb-dot" aria-hidden="true"></span>Newsletter</span>
+      <p class="mt-6 text-[32px] font-semibold leading-[1.04] tracking-[-0.04em] md:text-[44px]">Never miss <span class="text-white/45">a call for applications.</span></p>
+      <p class="mt-4 max-w-[46ch] text-[15.5px] leading-relaxed text-white/65">Programme news, open calls and stories from Ait Ourir and across Morocco, a few times a year.</p>
+      <a href="#ft-news-title" class="btn-light btn-cta mt-8 min-h-[48px] px-6 text-[14px]">Subscribe <span class="arr" aria-hidden="true">↓</span></a>
     </div>
   </div>
 </section>
@@ -831,53 +874,94 @@ def involved():
 
 
 # ---------------------------------------------------------------- Contact
+SOCIAL_ICO = {'Facebook': '<path d="M9.2 14.5V8.6h2l.3-2.3H9.2V4.8c0-.7.2-1.1 1.1-1.1h1.2V1.6a16 16 0 0 0-1.8-.1c-1.8 0-3 1.1-3 3.1v1.7h-2v2.3h2v5.9h2.5Z" fill="currentColor"/>', 'Instagram': '<rect x="2" y="2" width="12" height="12" rx="3.5" stroke="currentColor" stroke-width="1.4" fill="none"/><circle cx="8" cy="8" r="2.8" stroke="currentColor" stroke-width="1.4" fill="none"/><circle cx="11.6" cy="4.4" r=".8" fill="currentColor"/>', 'LinkedIn': '<path d="M3.6 6h2.3v7.5H3.6zM4.7 2.4a1.3 1.3 0 1 1 0 2.7 1.3 1.3 0 0 1 0-2.7ZM7.4 6h2.2v1c.3-.6 1.1-1.2 2.3-1.2 2.4 0 2.9 1.6 2.9 3.7v4H12.5V10c0-.9 0-2-1.2-2s-1.4.9-1.4 1.9v3.6H7.4z" fill="currentColor"/>'}
+CT_ICON = {'phone': '<path d="M3.2 1.8h2.4l1.2 3-1.6 1a8 8 0 0 0 5 5l1-1.6 3 1.2v2.4a1.4 1.4 0 0 1-1.5 1.4C6.7 13.8 2.2 9.3 1.8 3.3a1.4 1.4 0 0 1 1.4-1.5Z"/>', 'mail': '<rect x="1.8" y="3.2" width="12.4" height="9.6" rx="1.6"/><path d="m2.5 4.5 5.5 4 5.5-4"/>', 'board': '<path d="M8 1.8 2 4.6v1.2h12V4.6L8 1.8Z"/><path d="M3.5 6.5v5M6.5 6.5v5M9.5 6.5v5M12.5 6.5v5M2 13.6h12"/>', 'pin': '<path d="M8 14.5s4.5-4.2 4.5-8a4.5 4.5 0 0 0-9 0c0 3.8 4.5 8 4.5 8Z"/><circle cx="8" cy="6.5" r="1.6"/>'}
+
+
 def contact():
+    def ico(k):
+        return f'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{CT_ICON[k]}</svg>'
+    quick = [
+        ('phone', 'Call us', '+212 663 618 536', 'tel:+212663618536', 'Call now'),
+        ('mail', 'Executive team', 'contact@afcdteam.com', 'mailto:contact@afcdteam.com', 'Write an email'),
+        ('board', 'Board leadership', 'akaya@afcdteam.com', 'mailto:akaya@afcdteam.com', 'Write an email'),
+        ('pin', 'Main office', 'Marrakech, Morocco', '#office', 'See details'),
+    ]
+    qcards = ''.join(f'''
+      <li><a href="{h}" class="ct-q group"><span class="ct-ico">{ico(k)}</span><span class="mt-6 block text-[12px] font-medium uppercase tracking-[0.16em] text-ink-mid">{l}</span><span class="mt-2 block break-words text-[19px] font-semibold tracking-[-0.02em]">{v}</span><span class="ct-q-act">{a} <span aria-hidden="true">↗</span></span></a></li>''' for k, l, v, h, a in quick)
+    topics = ['General question', 'Volunteering', 'Joining a programme', 'Partnership', 'Alumni club', 'Press', 'Board &amp; governance']
+    tchips = ''.join(f'<label class="ct-topic"><input type="radio" name="topic" value="{t}"{" checked" if i == 0 else ""}><span>{t}</span></label>' for i, t in enumerate(topics))
+    routes = [('Volunteering, programmes &amp; alumni', 'contact@afcdteam.com'), ('Partnerships &amp; press', 'contact@afcdteam.com'), ('Board &amp; governance', 'akaya@afcdteam.com')]
+    rhtml = ''.join(f'<li class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-white/10 py-3.5"><span class="text-[14.5px] text-white/80">{t}</span><a class="text-[14px] font-medium hover:underline" href="mailto:{e}">{e}</a></li>' for t, e in routes)
+    socials = ''.join(f'<a class="ft-social" href="{u}" target="_blank" rel="noopener" aria-label="AFCD on {n}"><svg viewBox="0 0 16 16" aria-hidden="true">{SOCIAL_ICO[n]}</svg></a>' for n, u in SOCIALS)
+    faqs = [
+        ('How do I volunteer with AFCD?', 'Volunteering opportunities are listed on the Get Involved page. You can also send us a message with the topic “Volunteering” and tell us where you are based.', ('Get Involved', 'get-involved.html#volunteer')),
+        ('When do calls for applications open?', 'Calls for youth and women’s programmes are announced on News &amp; Stories and in our newsletter. Each call explains who can apply and how.', ('News &amp; Stories', 'news.html')),
+        ('How can my organisation partner with AFCD?', 'We co-design and fund community initiatives with international, national and local partners. Choose “Partnership” in the form and tell us about your organisation.', ('Partner with us', 'get-involved.html#partner')),
+        ('Where does AFCD work?', 'Our main office is in Marrakech, with roots in Ait Ourir and Al Haouz. Programmes run in selected cities and rural communities across Morocco.', ('Who we work with', 'strategy.html#who-we-serve')),
+    ]
+    fhtml = ''.join(f'''
+      <details class="ct-faq"{" open" if i == 0 else ""}><summary><span>{q}</span><span class="ct-faq-ic" aria-hidden="true">+</span></summary><div class="ct-faq-a"><p>{a}</p><a class="link-arrow mt-4" href="{l[1]}">{l[0]} {ARR}</a></div></details>''' for i, (q, a, l) in enumerate(faqs))
+
     body = page_header([('Contact', 'contact.html')], 'Contact',
                        'Let’s <span class="text-ink-mid">talk.</span>',
-                       'Questions, partnerships, volunteering or press: we’d like to hear from you.', points=('Marrakech', 'contact@afcdteam.com')) + f'''
+                       'Questions, partnerships, volunteering or press: we’d like to hear from you.') + f'''
 
-<section class="py-14 lg:py-16">
-  <div class="wrap grid gap-12 lg:grid-cols-12 lg:gap-16">
-    <div class="lg:col-span-5">
-      <p class="label">Visit or call</p>
-      <dl class="mt-5 border-b border-ink-light text-[15px]">
-        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Main office</dt><dd>Marrakech, Morocco<br><span class="text-ink-mid">Full street address to be confirmed before publication</span></dd></div>
-        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Roots</dt><dd>Ait Ourir, Al Haouz</dd></div>
-        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Phone</dt><dd class="tabular-nums"><a class="hover:underline" href="tel:+212663618536">+212 663 618 536</a></dd></div>
-        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Executive team</dt><dd><a class="hover:underline" href="mailto:contact@afcdteam.com">contact@afcdteam.com</a></dd></div>
-        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Board leadership</dt><dd><a class="hover:underline" href="mailto:akaya@afcdteam.com">akaya@afcdteam.com</a></dd></div>
-        <div class="grid grid-cols-[110px_1fr] gap-4 border-t border-ink-light py-4"><dt class="label pt-0.5 text-ink-mid">Follow</dt><dd class="flex flex-wrap gap-2">{''.join(f'<a class="sh-link" href="{u}" target="_blank" rel="noopener">{n} {ARR}</a>' for n, u in SOCIALS)}</dd></div>
-      </dl>
-      {ph('Map · Marrakech main office', 'mt-8 aspect-[4/3] w-full rounded-3xl', '#E5E5E5')}
-    </div>
+<section id="reach" class="pt-8 lg:pt-10">
+  <div class="wrap">
+    <ul class="ct-quick">{qcards}
+    </ul>
+  </div>
+</section>
 
-    <div class="lg:col-span-6 lg:col-start-7">
-      <form id="contact-form" class="aura-a rounded-3xl border border-ink-light p-6 md:p-8" novalidate>
-        <p class="label">Send a message</p>
-        <div class="mt-6 grid gap-5 sm:grid-cols-2">
-          <label class="field"><span>Full name</span><input name="name" type="text" autocomplete="name" required></label>
-          <label class="field"><span>Email</span><input name="email" type="email" autocomplete="email" required></label>
-        </div>
-        <label class="field mt-5"><span>I’m interested in</span>
-          <select name="topic">
-            <option>General question</option><option>Volunteering</option><option>Joining a programme</option><option>Partnership</option><option>Alumni club</option><option>Press</option>
-          </select>
-        </label>
-        <label class="field mt-5"><span>Message</span><textarea name="message" rows="6" required></textarea></label>
-        <p class="form-error mt-4 hidden text-sm text-[#B42318]" role="alert">Please fill in your name, a valid email and a message.</p>
-        <div class="mt-6 flex flex-wrap items-center justify-between gap-4">
-          <p class="text-[12px] text-ink-mid">This form isn’t connected yet. Nothing is sent.</p>
-          <button type="submit" class="btn-dark btn-cta min-h-[50px] px-7">Send message {ARR}</button>
-        </div>
-      </form>
+<section id="message" class="py-12 lg:py-16">
+  <div class="wrap grid gap-4 lg:grid-cols-12">
+    <form id="contact-form" class="ct-form lg:col-span-7" novalidate>
+      <div class="sh-top"><span class="sh-num">01</span><span class="sh-label">Send a message</span><span class="sh-rule" aria-hidden="true"></span></div>
+      <h2 class="mt-6 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[40px]">How can <span class="text-ink-mid">we help?</span></h2>
+      <fieldset class="mt-7">
+        <legend class="label text-ink-mid">I’m interested in</legend>
+        <div class="mt-3 flex flex-wrap gap-2">{tchips}</div>
+      </fieldset>
+      <div class="mt-6 grid gap-5 sm:grid-cols-2">
+        <label class="field"><span>Full name</span><input name="name" type="text" autocomplete="name" required></label>
+        <label class="field"><span>Email</span><input name="email" type="email" autocomplete="email" required></label>
+      </div>
+      <label class="field mt-5"><span>Organisation <span class="normal-case tracking-normal text-ink-mid">(optional)</span></span><input name="org" type="text" autocomplete="organization"></label>
+      <label class="field mt-5"><span>Message</span><textarea name="message" rows="6" required></textarea></label>
+      <p class="form-error mt-4 hidden text-sm text-[#B42318]" role="alert">Please fill in your name, a valid email and a message.</p>
+      <div class="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-ink-light pt-6">
+        <p class="max-w-[38ch] text-[12.5px] leading-relaxed text-ink-mid">This form isn’t connected yet. Nothing is sent. Please email us directly for now.</p>
+        <button type="submit" class="btn-dark btn-cta min-h-[50px] px-7">Send message {ARR}</button>
+      </div>
+    </form>
+
+    <div class="grid content-start gap-4 lg:col-span-5">
+      <div id="office" class="os-band on-dark scroll-mt-32 text-white">
+        <p class="label text-white/60">Main office</p>
+        <p class="mt-4 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em]">Marrakech, <span class="text-white/45">Morocco.</span></p>
+        <p class="mt-3 text-[14.5px] leading-relaxed text-white/65">Roots in Ait Ourir and Al Haouz. Full street address to be confirmed before publication.</p>
+        <p class="label mt-8 text-white/60">Who to contact</p>
+        <ul class="mt-3 border-b border-white/10">{rhtml}</ul>
+        <div class="mt-7 flex items-center gap-2">{socials}</div>
+      </div>
+      {ph('Map · Marrakech main office', 'aspect-[16/10] w-full rounded-[28px]', '#E5E5E5')}
     </div>
   </div>
 </section>
 
-<section class="border-t border-ink-light py-16 lg:py-20">
-  <div class="wrap grid gap-10 md:grid-cols-2">
-    <div id="privacy" class="scroll-mt-28"><p class="label">Privacy Policy</p><p class="mt-4 text-[15px] leading-relaxed text-ink-dark">AFCD Foundation’s privacy policy will be published here.</p>{placeholder_note('Text to be supplied by AFCD.')}</div>
-    <div id="accessibility" class="scroll-mt-28"><p class="label">Accessibility</p><p class="mt-4 text-[15px] leading-relaxed text-ink-dark">We aim for this website to meet WCAG 2.2 AA. If something doesn’t work for you, please tell us by phone or using the form above.</p></div>
+<section id="faq" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap grid gap-10 lg:grid-cols-12 lg:gap-16">
+    <div class="lg:col-span-4">{sec_head('02 / Questions', 'Before you <span class="sh-soft">write.</span>', stack=True)}</div>
+    <div class="grid gap-2 lg:col-span-8">{fhtml}
+    </div>
+  </div>
+</section>
+
+<section class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap grid gap-4 md:grid-cols-2">
+    <div id="privacy" class="scroll-mt-28 rounded-[28px] border border-ink-light p-6 md:p-8"><p class="label text-ink-mid">Privacy Policy</p><p class="mt-4 text-[15px] leading-relaxed text-ink-dark">AFCD Foundation’s privacy policy will be published here.</p>{placeholder_note('Text to be supplied by AFCD.')}</div>
+    <div id="accessibility" class="scroll-mt-28 rounded-[28px] border border-ink-light p-6 md:p-8"><p class="label text-ink-mid">Accessibility</p><p class="mt-4 text-[15px] leading-relaxed text-ink-dark">We aim for this website to meet WCAG 2.2 AA. If something doesn’t work for you, please tell us by phone or using the form above.</p></div>
   </div>
 </section>'''
     page('contact.html', 'Contact · AFCD Foundation',

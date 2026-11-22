@@ -14,7 +14,8 @@ Built with plain HTML, Tailwind CSS 3.4.17 and vanilla JavaScript. Content is pl
 | Mission & Vision (mission, vision, values) | `mission-vision.html` |
 | Strategy & Objectives (six objectives, who we serve) | `strategy.html` |
 | Our Team | `team.html` |
-| Our Pillars (one section per pillar) | `pillars.html` |
+| Our Pillars (overview cards) | `pillars.html` |
+| Pillar pages | `youth-empowerment.html`, `womens-empowerment.html`, `environment-climate.html`, `digital-inclusion.html` |
 | Projects (featured + filter by pillar) | `projects.html` |
 | Project pages | `project-leadership-lab.html`, `project-eco-citizen.html`, `project-youth-green-generation.html` |
 | News & Stories | `news.html` |

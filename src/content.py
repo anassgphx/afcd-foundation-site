@@ -115,7 +115,13 @@ PROJECTS = [
 ]
 
 
+PILLAR_FILE = {'youth-empowerment': 'youth-empowerment.html', 'women-empowerment': 'womens-empowerment.html',
+               'green-thumbs': 'environment-climate.html', 'digital-empowerment': 'digital-inclusion.html'}
+
+
 def page(name, title, description, active, body, parent=None):
+    for slug, f in PILLAR_FILE.items():
+        body = body.replace(f'pillars.html#{slug}', f)
     extra = f'parent: {parent[0]}|{parent[1]}\n' if parent else ''
     (OUT / name).write_text(
         f'---\ntitle: {title}\ndescription: {description}\nactive: {active}\n{extra}---\n<span id="top"></span>\n{body.strip()}\n'
@@ -505,35 +511,146 @@ def about_more(current):
 
 
 # ---------------------------------------------------------------- Pillars
+PILLAR_INTRO = {
+    'youth-empowerment': 'Young people building leadership, civic skills and initiatives that respond to local needs.',
+    'women-empowerment': 'Women gaining the confidence, learning and opportunities to take part in community life and decisions.',
+    'green-thumbs': 'Communities learning, acting and taking part in dialogue on Morocco’s climate priorities.',
+    'digital-empowerment': 'Young people and communities exploring digital skills, AI, science and emerging technologies.',
+}
+PILLAR_ACTS = {'youth-empowerment': [1, 2, 3, 4], 'women-empowerment': [0, 1, 2, 6],
+              'green-thumbs': [3, 4, 2, 0], 'digital-empowerment': [5, 0, 1, 7]}
+PILLAR_GROUPS = {'youth-empowerment': [0, 3, 4], 'women-empowerment': [1, 3, 5],
+                 'green-thumbs': [0, 5, 6, 4], 'digital-empowerment': [0, 1, 2, 5]}
+PILLAR_STEPS = [('Learn', 'Non-formal education and practical training build knowledge and skills.'),
+                ('Practise', 'Workshops, mentoring and hands-on activities turn skills into action.'),
+                ('Lead', 'Participants design and run their own initiatives in their communities.'),
+                ('Share', 'Results, stories and recommendations are shared with partners and decision-makers.')]
+PILLAR_SHORT = {'youth-empowerment': 'Youth', 'women-empowerment': 'Women', 'green-thumbs': 'Environment', 'digital-empowerment': 'Digital'}
+
+
 def pillars():
-    jump = ''.join(
-        f'<li><a href="#{slug}" class="inline-flex min-h-[40px] items-center gap-2 rounded-full border border-ink-light bg-white px-4 text-[13px] font-medium hover:border-ink-pure"><span class="text-[10px] tabular-nums text-ink-mid">{n}</span>{t}</a></li>'
-        for slug, n, t, _, _ in PILLARS)
-    sections = ''
+    # ---- one page per pillar
     for i, (slug, n, t, d, rel) in enumerate(PILLARS):
-        flip = i % 2 == 1
-        rel_items = ''.join(f'<li class="flex items-center justify-between gap-4 border-t border-ink-light py-3.5 text-[15px]"><span>{r}</span><span class="text-ink-mid" aria-hidden="true">↗</span></li>' for r in rel)
-        sections += f'''
-<section id="{slug}" class="scroll-mt-28 py-14 lg:py-16">
-  <div class="wrap grid gap-12 lg:grid-cols-12 lg:items-center lg:gap-16">
-    <div class="lg:col-span-6 {'lg:order-2 lg:col-start-7' if flip else ''}">{ph(t + ' · programme photo', 'aspect-[5/4] w-full rounded-3xl')}</div>
-    <div class="lg:col-span-5 {'lg:order-1' if flip else 'lg:col-start-8'}">
-      <p class="label text-ink-mid">Pillar {n} / 04</p>
-      <h2 class="mt-5 text-[40px] font-semibold leading-[1.02] tracking-tightest md:text-[56px]">{t}</h2>
-      <p class="body mt-6 text-ink-dark">{d}</p>{'<p class="mt-3 text-[13px] text-ink-mid">Programme brand: Green Thumbs</p>' if slug == 'green-thumbs' else ''}
-      <p class="label mt-10 text-ink-mid">Related projects</p>
-      <ul class="mt-3 border-b border-ink-light">{rel_items}</ul>
-      <a href="projects.html?pillar={slug}#by-pillar" class="btn-dark btn-cta mt-8">See {t} projects {ARR}</a>
+        tone = PILLAR_TONE[slug]
+        objs = [(ref, text, desc) for ref, text, desc, links in OBJECTIVES if any(sl == slug for _n, sl in links)]
+        projs = [p for p in PROJECTS if p[1] == slug]
+        obj_html = ''.join(f'''
+        <li><a href="strategy.html#{ref.lower()}" class="so-card group h-full"><span class="flex items-center justify-between gap-3"><span class="so-ref">{ref}</span><span class="so-n" aria-hidden="true">{ref[-2:]}</span></span><span class="mt-6 block text-[20px] font-semibold leading-[1.2] tracking-[-0.02em]">{text}</span><span class="mt-3 block text-[14.5px] leading-relaxed text-ink-dark">{desc}</span><span class="nw-read">View in strategy <span aria-hidden="true">↗</span></span></a></li>''' for ref, text, desc in objs)
+        def pcard(pr):
+            name, _sl, _pn, cat, href, summ = pr
+            inner = f'''{ph(name, 'aspect-[16/10] w-full rounded-[20px]')}<span class="nw-type">{cat}</span>'''
+            body_ = f'''<span class="mt-5 block px-2.5 text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">{name}</span><span class="mt-2 block px-2.5 text-[14.5px] leading-relaxed text-ink-dark">{summ or 'Project details coming soon.'}</span><span class="nw-read px-2.5">{'Explore project' if href else 'Details coming soon'} <span aria-hidden="true">↗</span></span>'''
+            if href:
+                return f'<li><a href="{href}" class="nw-card group"><div class="relative">{inner}</div>{body_}</a></li>'
+            return f'<li><div class="nw-card is-ph"><div class="relative">{inner}</div>{body_}</div></li>'
+        proj_html = ''.join(pcard(p) for p in projs)
+        for k in range(max(0, 3 - len(projs))):
+            proj_html += f'''<li><div class="nw-card is-ph"><div class="relative">{ph('Upcoming project', 'aspect-[16/10] w-full rounded-[20px]', '#E6E6E6')}<span class="nw-type">Placeholder</span></div><span class="mt-5 block px-2.5 text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">Lorem ipsum dolor sit amet</span><span class="mt-2 block px-2.5 text-[14.5px] leading-relaxed text-ink-dark">Consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus.</span><span class="nw-read px-2.5">Coming soon <span aria-hidden="true">↗</span></span></div></li>'''
+        acts = ''.join(f'<li class="os-act"><span class="os-act-n">{j:02d}</span><span>{ACTIVITIES[a]}</span></li>' for j, a in enumerate(PILLAR_ACTS[slug], 1))
+        groups = ''.join(f'<li class="inline-flex min-h-[38px] items-center gap-2 rounded-full bg-white px-4 text-[14px] font-medium"><span class="pj-dot" style="--c:{tone}"></span>{BENEFICIARIES[g]}</li>' for g in PILLAR_GROUPS[slug])
+        steps = ''.join(f'<li class="os-ap"><span class="os-ap-n">{j:02d}</span><span><span class="block text-[18px] font-semibold tracking-[-0.02em]">{a}</span><span class="mt-1 block text-[14px] leading-relaxed text-white/65">{b}</span></span></li>' for j, (a, b) in enumerate(PILLAR_STEPS, 1))
+        others = ''.join(f'''<li><a href="{PILLAR_FILE[s2]}" class="pl-other group" style="--c:{PILLAR_TONE[s2]}"><span class="pl-other-n">{n2}</span><span class="mt-8 block text-[22px] font-semibold leading-[1.1] tracking-[-0.03em]">{t2}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a></li>'''
+                         for s2, n2, t2, _d2, _r2 in PILLARS if s2 != slug)
+        brand = '<p class="mt-4 text-[13px] text-black/60">Programme brand: Green Thumbs</p>' if slug == 'green-thumbs' else ''
+        body = page_header([('Our Pillars', 'pillars.html'), (t, PILLAR_FILE[slug])], f'Pillar {n} / 04', t, PILLAR_INTRO[slug]) + f'''
+
+<section id="overview" class="pt-8 lg:pt-10">
+  <div class="wrap">
+    <div class="pl-hero" style="--c:{tone}">
+      <div class="grid gap-8 lg:grid-cols-12 lg:items-end lg:gap-12">
+        <div class="lg:col-span-7">
+          <span class="pl-hero-n">{n}<span class="text-black/40"> / 04</span></span>
+          <p class="mt-8 text-[38px] font-semibold leading-[1] tracking-[-0.045em] md:text-[64px]">{t}</p>
+          <p class="mt-6 max-w-[56ch] text-[17px] leading-relaxed text-black/75 md:text-[19px]">{d}</p>{brand}
+        </div>
+        <dl class="grid grid-cols-2 gap-3 lg:col-span-5">
+          <div class="pl-stat"><dt>Projects</dt><dd>{len(projs)}</dd></div>
+          <div class="pl-stat"><dt>Strategic objectives</dt><dd>{len(objs)}</dd></div>
+          <div class="pl-stat col-span-2"><dt>Programme focus</dt><dd class="!text-[17px] !font-medium !tracking-normal leading-snug">{AREAS[i]}</dd></div>
+        </dl>
+      </div>
+      <div class="mt-8 lg:mt-10">{ph(t + ' · programme photo', 'aspect-[16/9] w-full rounded-[24px] md:aspect-[21/8]', '#FFFFFF')}</div>
     </div>
   </div>
-</section>'''
+</section>
+
+<section id="objectives" class="py-14 lg:py-16">
+  <div class="wrap">{sec_head('01 / Strategic Objectives', 'What we aim <span class="sh-soft">to achieve.</span>', f'{len(objs)} linked', desc='The institutional objectives this pillar contributes to.')}
+    <ul class="mt-8 grid gap-3 md:grid-cols-2 lg:mt-10">{obj_html}
+    </ul>
+  </div>
+</section>
+
+<section id="what-we-do" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('02 / What We Do', 'How this pillar <span class="sh-soft">comes to life.</span>', 'Activities · Participants', desc='The kinds of activities AFCD runs under this pillar, and the people they involve.')}
+    <div class="mt-8 grid gap-4 lg:mt-10 lg:grid-cols-12">
+      <div class="rounded-[28px] bg-[#F6F6F6] p-6 md:p-8 lg:col-span-7">
+        <p class="label text-ink-mid">Core activities</p>
+        <ol class="mt-4 grid gap-2 sm:grid-cols-2">{acts}</ol>
+      </div>
+      <div class="pl-hero lg:col-span-5" style="--c:{tone};padding:28px">
+        <p class="label text-black/60">Who we work with</p>
+        <ul class="mt-4 flex flex-wrap gap-2">{groups}</ul>
+        <p class="mt-6 text-[14px] leading-relaxed text-black/65">Participants and criteria vary by programme.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="approach" class="py-6 lg:py-8">
+  <div class="wrap">
+    <div class="os-band on-dark text-white">
+      <div class="grid gap-10 lg:grid-cols-12 lg:gap-16">
+        <div class="lg:col-span-5">
+          <div class="sh-top"><span class="sh-num">03</span><span class="sh-label">Our Approach</span></div>
+          <p class="mt-8 text-[34px] font-semibold leading-[1.04] tracking-[-0.045em] md:text-[48px]">From learning <span class="text-white/45">to leading.</span></p>
+          <blockquote class="mt-8 rounded-[22px] border border-white/10 bg-white/5 p-6">
+            <p class="text-[18px] leading-snug">“Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.”</p>
+            <footer class="mt-4 text-[13px] text-white/55">Participant voice · placeholder until a real quote is approved</footer>
+          </blockquote>
+        </div>
+        <ol class="grid content-end gap-3 lg:col-span-7">{steps}</ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="projects" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('04 / Projects', f'Projects in <span class="sh-soft">{PILLAR_SHORT[slug].lower()}.</span>', ('All projects', f'projects.html?pillar={slug}#by-pillar'), desc=f'Programmes AFCD has run under the {t} pillar.')}
+    <ul class="nw-grid mt-8 lg:mt-10">{proj_html}
+    </ul>
+  </div>
+</section>
+
+<nav id="other-pillars" class="border-t border-ink-light py-14 lg:py-16" aria-label="Other pillars">
+  <div class="wrap">{sec_head('05 / Other Pillars', 'Four pillars, <span class="sh-soft">one shared future.</span>', ('All pillars', 'pillars.html'))}
+    <ul class="mt-8 grid gap-3 md:grid-cols-3 lg:mt-10">{others}</ul>
+  </div>
+</nav>
+''' + cta_band('Find your place in our work.', 'Volunteer, join a programme when calls open, or partner with us on this pillar.',
+                  ('Get Involved', 'get-involved.html'), ('Partner with us', 'get-involved.html#partner'))
+        page(PILLAR_FILE[slug], f'{t} · AFCD Foundation', f'{t}: {d}', 'pillars', body, parent=('Our Pillars', 'pillars.html'))
+
+    # ---- hub
+    cards = ''.join(f'''
+      <li id="{slug}" class="scroll-mt-32"><a href="{PILLAR_FILE[slug]}" class="pl-card group" style="--c:{PILLAR_TONE[slug]}">
+        <span class="flex items-start justify-between"><span class="pl-hero-n">{n}</span><span class="pj-nav-arr" style="position:static" aria-hidden="true">↗</span></span>
+        <span class="mt-10 block text-[30px] font-semibold leading-[1.02] tracking-[-0.04em] md:text-[38px]">{t}</span>
+        <span class="mt-4 block text-[15px] leading-relaxed text-black/70">{d}</span>
+        <span class="mt-6 flex flex-wrap gap-2">{''.join(f'<span class="pg-tag">{r}</span>' for r in rel)}</span>
+      </a></li>''' for slug, n, t, d, rel in PILLARS)
     body = page_header([('Our Pillars', 'pillars.html')], 'Our Pillars',
                        'Four pillars. <span class="text-ink-mid">One shared future.</span>',
-                       'Four areas of action shape every AFCD programme, from leadership to the environment and digital inclusion.',
-                       f'\n    <ul class="mt-10 flex flex-wrap gap-2" aria-label="Jump to a pillar">{jump}</ul>',
-                       points=('Youth', 'Women', 'Environment', 'Digital')) + sections + cta_band(
-        'Find your place in our work.', 'Volunteer, join a programme when calls open, or partner with us on a pillar.',
-        ('Get Involved', 'get-involved.html'), ('All projects', 'projects.html'))
+                       'Four areas of action shape every AFCD programme, from leadership to the environment and digital inclusion.') + f'''
+
+<section class="py-10 lg:py-14">
+  <div class="wrap">
+    <ul class="grid gap-3 md:grid-cols-2">{cards}
+    </ul>
+  </div>
+</section>
+''' + cta_band('Find your place in our work.', 'Volunteer, join a programme when calls open, or partner with us on a pillar.',
+                  ('Get Involved', 'get-involved.html'), ('All projects', 'projects.html'))
     page('pillars.html', 'Our Pillars · AFCD Foundation',
          'Youth Empowerment, Women’s Empowerment, Environment and Climate and Digital Inclusion and Innovation: the four pillars of AFCD Foundation’s work.',
          'pillars', body)

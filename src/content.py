@@ -534,8 +534,12 @@ def pillars():
         tone = PILLAR_TONE[slug]
         objs = [(ref, text, desc) for ref, text, desc, links in OBJECTIVES if any(sl == slug for _n, sl in links)]
         projs = [p for p in PROJECTS if p[1] == slug]
+        linked = [o[0] for o in objs]
+        cross = [(r, t, d_) for r, t, d_, l in OBJECTIVES if not l]
+        rest = [(r, t, d_) for r, t, d_, l in OBJECTIVES if l and r not in linked]
+        four = ([(o, 'Core objective', True) for o in objs] + [(o, 'Cross-cutting', False) for o in cross] + [(o, 'Other AFCD objective', False) for o in rest])[:4]
         obj_html = ''.join(f'''
-        <li><a href="strategy.html#{ref.lower()}" class="so-card group h-full"><span class="flex items-center justify-between gap-3"><span class="so-ref">{ref}</span><span class="so-n" aria-hidden="true">{ref[-2:]}</span></span><span class="mt-6 block text-[20px] font-semibold leading-[1.2] tracking-[-0.02em]">{text}</span><span class="mt-3 block text-[14.5px] leading-relaxed text-ink-dark">{desc}</span><span class="nw-read">View in strategy <span aria-hidden="true">↗</span></span></a></li>''' for ref, text, desc in objs)
+        <li><a href="strategy.html#{ref.lower()}" class="so-card so-mini group h-full{' is-core' if core else ''}" style="--c:{tone}"><span class="flex items-center justify-between gap-3"><span class="so-ref">{ref}</span><span class="so-kind">{kind}</span></span><span class="mt-6 block text-[18px] font-semibold leading-[1.25] tracking-[-0.02em]">{text}</span><span class="mt-3 block text-[14px] leading-relaxed text-ink-dark">{desc}</span><span class="nw-read">View in strategy <span aria-hidden="true">↗</span></span></a></li>''' for (ref, text, desc), kind, core in four)
         def pcard(pr):
             name, _sl, _pn, cat, href, summ = pr
             inner = f'''{ph(name, 'aspect-[16/10] w-full rounded-[20px]')}<span class="nw-type">{cat}</span>'''
@@ -575,8 +579,8 @@ def pillars():
 </section>
 
 <section id="objectives" class="py-14 lg:py-16">
-  <div class="wrap">{sec_head('01 / Strategic Objectives', 'What we aim <span class="sh-soft">to achieve.</span>', f'{len(objs)} linked', desc='The institutional objectives this pillar contributes to.')}
-    <ul class="mt-8 grid gap-3 md:grid-cols-2 lg:mt-10">{obj_html}
+  <div class="wrap">{sec_head('01 / Strategic Objectives', 'What we aim <span class="sh-soft">to achieve.</span>', f'{len(objs)} core · 6 in total', desc='The objectives at the core of this pillar, alongside AFCD’s wider strategy.')}
+    <ul class="mt-8 grid gap-3 sm:grid-cols-2 lg:mt-10 lg:grid-cols-4">{obj_html}
     </ul>
   </div>
 </section>

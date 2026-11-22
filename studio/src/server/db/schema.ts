@@ -20,6 +20,8 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   role: roleEnum('role').notNull().default('read_only'),
   active: boolean('active').notNull().default(true),
+  // Set only by `npm run user:password -- --local-only`: a short password that works only while Studio runs on localhost.
+  localOnlyPassword: boolean('local_only_password').notNull().default(false),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -487,3 +489,28 @@ export const seoAudits = pgTable('seo_audits', {
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: createdAt(),
 });
+
+// ---------------------------------------------------------------- Page fields (editable texts/links/images marked data-sf in hand-written pages, e.g. the homepage)
+export const pageContents = pgTable('page_contents', {
+  id: id(),
+  file: text('file').notNull(),                                    // e.g. 'index.html'
+  values: jsonb('values').$type<Record<string, unknown>>().notNull().default({}),   // only edited fields; others keep the page's own text
+  status: workflowEnum('status').notNull().default('draft'),
+  publishedRevisionId: uuid('published_revision_id'),
+  approvedRevisionId: uuid('approved_revision_id'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('page_contents_file_uq').on(t.file)]);
+
+export const pageContentRevisions = pgTable('page_content_revisions', {
+  id: id(),
+  contentId: uuid('content_id').notNull().references(() => pageContents.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('page_content_revisions_num_uq').on(t.contentId, t.number)]);

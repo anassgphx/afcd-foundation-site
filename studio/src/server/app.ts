@@ -12,7 +12,7 @@ import type { DB } from './db/client.ts';
 import type { Config } from './config.ts';
 import * as t from './db/schema.ts';
 import { AppError, clientIp, csrfGuard, loadSession, perm, requirePerm, requireUser, securityHeaders, type Env } from './http.ts';
-import { SESSION_COOKIE, createSession, deleteSession, hashPassword, recordAttempt, tooManyAttempts, validatePasswordStrength, verifyPassword } from './auth/session.ts';
+import { SESSION_COOKIE, createSession, deleteSession, hashPassword, recordAttempt, tooManyAttempts, validatePasswordStrength, verifyPassword, isLocalOrigin } from './auth/session.ts';
 import { ROLE_LABELS, ROLE_PERMISSIONS, ROLES, type Role } from './rbac.ts';
 import { audit } from './audit.ts';
 import * as P from './modules/projects/service.ts';
@@ -24,6 +24,8 @@ import * as EV from './modules/events/service.ts';
 import * as OP from './modules/opportunities/service.ts';
 import * as FM from './modules/forms/service.ts';
 import * as SEO from './modules/seo/service.ts';
+import * as HM from './modules/home/service.ts';
+import { readFields, SECTION_LABEL } from './modules/home/fields.ts';
 import { importPartners } from './modules/partners/import.ts';
 import { blockCatalog } from './modules/pages/blocks.ts';
 import { Publisher, type BuildRunner } from './modules/publish/service.ts';
@@ -93,6 +95,11 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
     if (!u || !ok || !u.active) {
       await audit(db, null, 'auth.login_failed', { type: 'user', id: u?.id }, email, undefined, ip);
       throw new HTTPException(401, { message: 'Email or password is incorrect.' });
+    }
+    // A local-only (short) password never works once Studio runs on a real address.
+    if (u.localOnlyPassword && !isLocalOrigin(cfg.origin)) {
+      await audit(db, null, 'auth.login_refused_local_password', { type: 'user', id: u.id }, email, undefined, ip);
+      throw new HTTPException(403, { message: 'This account has a local-only password. An administrator must set a strong password (12+ characters) before it can sign in here.' });
     }
     const s = await createSession(db, u.id, ip, c.req.header('user-agent') ?? null);
     setCookie(c, SESSION_COOKIE, s.token, { httpOnly: true, sameSite: 'Strict', secure: cfg.secureCookies, path: '/studio', maxAge: s.maxAge });
@@ -379,6 +386,27 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
   api.post('/seo/overrides/:id/discard', perm('seo.update'), async (c) => { await SEO.discardOverride(db, actor(c), c.req.param('id')); return c.json({ ok: true }); });
   api.post('/seo/overrides/:id/publish', perm('seo.publish'), async (c) => c.json(await publisher.publishSeo(actor(c), c.req.param('id'))));
   api.post('/seo/overrides/:id/unpublish', perm('seo.publish'), async (c) => c.json(await publisher.unpublishSeo(actor(c), c.req.param('id'))));
+
+  // ---------------------------------------------------------------- Homepage editing
+  api.get('/home', perm('page.read'), async (c) => {
+    const fields = readFields(cfg.siteRoot, HM.HOME);
+    const content = await HM.loadContent(db);
+    const ids = Object.values(content?.values ?? {}).flatMap((v) => (v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId] : []));
+    const mediaRows = ids.length ? await db.select().from(t.media).where(inArray(t.media.id, ids)) : [];
+    return c.json({ fields, sections: SECTION_LABEL, content, media: mediaRows.map(withUrl),
+      problems: content ? await HM.contentProblems(db, cfg, content.values) : [], history: content ? await HM.contentHistory(db, content.id) : { revisions: [], comments: [] } });
+  });
+  api.put('/home', perm('page.update'), async (c) => c.json(await HM.saveContent(db, cfg, actor(c), await c.req.json())));
+  api.post('/home/transition', async (c) => {
+    const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
+    if (!body.success || !HM.homeTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, HM.homeTransitionPerm(body.data.action)!);
+    return c.json(await HM.transitionContent(db, cfg, actor(c), u.role, body.data.action, { comment: body.data.comment }));
+  });
+  api.post('/home/publish', perm('page.publish'), async (c) => c.json(await publisher.publishHome(actor(c))));
+  api.post('/home/unpublish', perm('page.publish'), async (c) => c.json(await publisher.unpublishHome(actor(c))));
+  api.post('/home/preview', perm('page.read'), async (c) => { const r = await publisher.previewHome(); return c.json({ url: `/studio/preview/${r.token}/${r.file}` }); });
+  api.post('/home/revisions/:rev/restore', perm('page.update'), async (c) => { await HM.restoreContentRevision(db, cfg, actor(c), c.req.param('rev')); return c.json({ ok: true }); });
 
   // ---------------------------------------------------------------- Publishing jobs, audit, users
   api.get('/publish-jobs', perm('dashboard.read'), async (c) => c.json(await publisher.recentJobs(30)));

@@ -16,7 +16,8 @@
     "db:seed": "tsx src/server/cli/seed.ts",
     "user:create": "tsx src/server/cli/create-user.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "user:password": "tsx src/server/cli/set-password.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.17",

@@ -15,6 +15,7 @@ import { EventsList, EventEditor } from './pages/Events.tsx';
 import { OpportunitiesList, OpportunityEditor } from './pages/Opportunities.tsx';
 import { FormsPage } from './pages/Forms.tsx';
 import { SeoPage } from './pages/Seo.tsx';
+import { HomeEditor } from './pages/Home.tsx';
 import { MediaLibrary } from './pages/Media.tsx';
 import { ApprovalQueue, Publishing, ActivityLog, Users } from './pages/Admin.tsx';
 
@@ -101,7 +102,7 @@ function Login({ onDone }: { onDone: () => void }) {
 type NavItem = { to: string; label: string; icon: string; perm: string; match?: RegExp };
 const NAV: { group: string; items: NavItem[] }[] = [
   { group: 'Overview', items: [{ to: '/studio/', label: 'Dashboard', icon: 'dash', perm: 'dashboard.read', match: /^\/studio\/?$/ }] },
-  { group: 'Website', items: [{ to: '/studio/pages', label: 'Pages', icon: 'layers', perm: 'page.read', match: /^\/studio\/pages/ },
+  { group: 'Website', items: [{ to: '/studio/home', label: 'Homepage', icon: 'home', perm: 'page.read', match: /^\/studio\/home/ }, { to: '/studio/pages', label: 'Pages', icon: 'layers', perm: 'page.read', match: /^\/studio\/pages/ },
     { to: '/studio/seo', label: 'SEO', icon: 'search', perm: 'seo.read', match: /^\/studio\/seo/ }] },
   { group: 'Content', items: [
     { to: '/studio/projects', label: 'Projects', icon: 'folder', perm: 'project.read', match: /^\/studio\/projects/ },
@@ -170,6 +171,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 }
 
 function route(path: string): { title: string; el: React.ReactElement; full?: boolean } {
+  if (path.startsWith('/studio/home')) return { title: 'Homepage', el: <HomeEditor /> };
   if (path.startsWith('/studio/seo')) return { title: 'SEO', el: <SeoPage key={path} /> };
   if (path.startsWith('/studio/forms')) return { title: 'Forms', el: <FormsPage /> };
   const op = path.match(/^\/studio\/opportunities\/([0-9a-f-]{36})$/);

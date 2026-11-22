@@ -15,6 +15,9 @@ const ARGON = { memoryCost: 19456, timeCost: 2, parallelism: 1 };
 export const hashPassword = (pw: string) => hash(pw, ARGON);
 export const verifyPassword = (h: string, pw: string) => verify(h, pw).catch(() => false);
 
+/** True when Studio runs on this computer only (http://localhost, 127.0.0.1 or [::1]). */
+export const isLocalOrigin = (origin: string) => { try { return ['localhost', '127.0.0.1', '[::1]'].includes(new URL(origin).hostname); } catch { return false; } };
+
 export function validatePasswordStrength(pw: string): string | null {
   if (pw.length < 12) return 'Use at least 12 characters.';
   if (pw.length > 256) return 'Use at most 256 characters.';

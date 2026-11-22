@@ -671,6 +671,23 @@
     setPaused(paused); show(0); raf = requestAnimationFrame(tick);
   });
 
+  /* ---------- Pillar pages: highlight the current section in the sticky bar ([data-pl-tabs]) ---------- */
+  (function () {
+    var bar = $('[data-pl-tabs]'); if (!bar || !('IntersectionObserver' in window)) return;
+    var tabs = $$('.pl-tab', bar), map = {};
+    tabs.forEach(function (t) { var id = t.getAttribute('href').slice(1), sec = document.getElementById(id); if (sec) map[id] = t; });
+    var seen = {};
+    function pick() {
+      var best = null;
+      Object.keys(map).forEach(function (id) { var r = document.getElementById(id).getBoundingClientRect(); if (r.top < innerHeight * .45 && r.bottom > 140 && (!best || r.top > best.top)) best = { id: id, top: r.top }; });
+      tabs.forEach(function (t) { t.classList.remove('is-on'); t.removeAttribute('aria-current'); });
+      if (best) { var t = map[best.id]; t.classList.add('is-on'); t.setAttribute('aria-current', 'true'); var box = t.parentNode; if (box.scrollWidth > box.clientWidth) box.scrollTo({ left: t.offsetLeft - 16, behavior: reduce ? 'auto' : 'smooth' }); }
+    }
+    var io = new IntersectionObserver(pick, { threshold: [0, .25, .5, 1] });
+    Object.keys(map).forEach(function (id) { io.observe(document.getElementById(id)); });
+    pick();
+  })();
+
   /* ---------- Count-up numbers ([data-countup]) and gentle parallax ([data-par]) ---------- */
   (function () {
     var nums = $$('[data-countup]');

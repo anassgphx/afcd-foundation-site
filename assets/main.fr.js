@@ -567,12 +567,22 @@
     ['National', ['High Atlas Foundation', 'Heinrich Böll Stiftung Rabat', 'Moroccan Institute for Policy Analysis', 'Dar America Casablanca', 'Anoual Association', 'International Youth Council Morocco', 'Student Voice', 'Y-PEER PETRI Morocco']],
     ['Local', ['Commune of Ait Ourir']]
   ];
+  (function () {   /* names come from the page's <template id="partner-data"> so each language version shows its own */
+    var t = document.getElementById('partner-data'); if (!t || !t.content) return;
+    var g = Array.prototype.map.call(t.content.querySelectorAll('ul[data-g]'), function (u) { return [u.dataset.g, Array.prototype.map.call(u.children, function (li) { return li.textContent.trim(); })]; });
+    if (g.length) PARTNER_GROUPS = g;
+  })();
 
   /* Homepage: compact strip with filters */
   (function () {
     var strip = $('#partner-strip'); if (!strip) return;
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function label(key) {   /* the filter button's own (translated) text, without its count */
+      var b = $('.pt-filter[data-g="' + key + '"]'); if (!b) return key;
+      var n = b.firstChild; return (n && n.nodeType === 3 ? n.textContent : b.textContent).trim() || key;
+    }
     function tile(name, group) {
-      return '<li class="pt-tile"><span class="pt-logo">Logo</span><span class="pt-name">' + name + '</span><span class="pt-tag">' + group + '</span></li>';
+      return '<li class="pt-tile"><span class="pt-logo">Logo</span><span class="pt-name">' + esc(name) + '</span><span class="pt-tag">' + esc(label(group)) + '</span></li>';
     }
     function list(groups) {
       var out = [];

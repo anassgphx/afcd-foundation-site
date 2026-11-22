@@ -551,25 +551,25 @@ def pillars():
         steps = ''.join(f'<li class="os-ap"><span class="os-ap-n">{j:02d}</span><span><span class="block text-[18px] font-semibold tracking-[-0.02em]">{a}</span><span class="mt-1 block text-[14px] leading-relaxed text-white/65">{b}</span></span></li>' for j, (a, b) in enumerate(PILLAR_STEPS, 1))
         others = ''.join(f'''<li><a href="{PILLAR_FILE[s2]}" class="pl-other group" style="--c:{PILLAR_TONE[s2]}"><span class="pl-other-n">{n2}</span><span class="mt-8 block text-[22px] font-semibold leading-[1.1] tracking-[-0.03em]">{t2}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a></li>'''
                          for s2, n2, t2, _d2, _r2 in PILLARS if s2 != slug)
-        brand = '<p class="mt-4 text-[13px] text-black/60">Programme brand: Green Thumbs</p>' if slug == 'green-thumbs' else ''
+        brand = '<span class="pg-tag">Programme brand: Green Thumbs</span>' if slug == 'green-thumbs' else ''
         body = page_header([('Our Pillars', 'pillars.html'), (t, PILLAR_FILE[slug])], f'Pillar {n} / 04', t, PILLAR_INTRO[slug]) + f'''
 
 <section id="overview" class="pt-8 lg:pt-10">
   <div class="wrap">
-    <div class="pl-hero" style="--c:{tone}">
-      <div class="grid gap-8 lg:grid-cols-12 lg:items-end lg:gap-12">
-        <div class="lg:col-span-7">
-          <span class="pl-hero-n">{n}<span class="text-black/40"> / 04</span></span>
-          <p class="mt-8 text-[38px] font-semibold leading-[1] tracking-[-0.045em] md:text-[64px]">{t}</p>
-          <p class="mt-6 max-w-[56ch] text-[17px] leading-relaxed text-black/75 md:text-[19px]">{d}</p>{brand}
-        </div>
-        <dl class="grid grid-cols-2 gap-3 lg:col-span-5">
+    <div class="pl-hero pl-hero-2" style="--c:{tone}">
+      <div class="flex flex-col">
+        <div class="flex flex-wrap items-center gap-2"><span class="pl-hero-n">Pillar {n}<span class="text-black/40"> / 04</span></span>{brand}</div>
+        <p class="mt-5 text-[18px] font-medium leading-[1.4] tracking-[-0.015em] md:text-[24px] md:leading-[1.3]">{d}</p>
+        <dl class="pl-stats mt-7">
           <div class="pl-stat"><dt>Projects</dt><dd>{len(projs)}</dd></div>
-          <div class="pl-stat"><dt>Strategic objectives</dt><dd>{len(objs)}</dd></div>
-          <div class="pl-stat col-span-2"><dt>Programme focus</dt><dd class="!text-[17px] !font-medium !tracking-normal leading-snug">{AREAS[i]}</dd></div>
+          <div class="pl-stat"><dt>Objectives</dt><dd class="pl-stat-refs">{''.join(f'<span class="so-ref">{r}</span>' for r, _t, _d in objs)}</dd></div>
         </dl>
+        <div class="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3 lg:mt-auto lg:pt-8">
+          <a href="#projects" class="btn-dark btn-cta min-h-[46px] px-6 text-[14px]">See projects <span class="arr" aria-hidden="true">↓</span></a>
+          <a href="#objectives" class="link-arrow">Strategic objectives <span class="arr" aria-hidden="true">↓</span></a>
+        </div>
       </div>
-      <div class="mt-8 lg:mt-10">{ph(t + ' · programme photo', 'aspect-[16/9] w-full rounded-[24px] md:aspect-[21/8]', '#FFFFFF')}</div>
+      <div class="pl-hero-photo">{ph(t + ' · programme photo', 'h-full w-full rounded-[22px]', '#FFFFFF')}</div>
     </div>
   </div>
 </section>

@@ -562,3 +562,101 @@ export const seoSettings = pgTable('seo_settings', {
   updatedAt: updatedAt(),
   publishedAt: timestamp('published_at', { withTimezone: true }),
 });
+
+// ---------------------------------------------------------------- Google connections (SEO Pro). One row per provider.
+// Tokens are stored encrypted (AES-256-GCM, key from STUDIO_ENCRYPTION_KEY); they never leave the server.
+export const googleConnections = pgTable('google_connections', {
+  id: id(),
+  provider: text('provider').notNull(),                         // 'gsc' (Search Console); 'ga4' later
+  status: text('status').notNull().default('connected'),        // connected | error (needs reconnect)
+  accountEmail: text('account_email'),
+  scopes: text('scopes').notNull().default(''),
+  property: text('property'),                                    // e.g. 'sc-domain:afcdfoundation.org' (chosen by an admin)
+  permissionLevel: text('permission_level'),
+  refreshTokenEnc: text('refresh_token_enc').notNull(),
+  accessTokenEnc: text('access_token_enc'),
+  accessExpiresAt: timestamp('access_expires_at', { withTimezone: true }),
+  connectedBy: uuid('connected_by').references(() => users.id, { onDelete: 'set null' }),
+  connectedAt: timestamp('connected_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSyncAt: timestamp('last_sync_at', { withTimezone: true }),
+  lastSyncedDate: text('last_synced_date'),                      // last complete GSC day stored (YYYY-MM-DD)
+  lastError: text('last_error'),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('google_connections_provider_uq').on(t.provider)]);
+
+// OAuth authorization requests in flight: single use, 10 minutes, bound to the Studio user who started them.
+export const oauthStates = pgTable('oauth_states', {
+  state: text('state').primaryKey(),
+  provider: text('provider').notNull(),
+  codeVerifierEnc: text('code_verifier_enc').notNull(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: createdAt(),
+});
+
+// Search Console Search Analytics rows, one per property × day × dimension set × dimension values. Re-syncing a day
+// replaces its rows (unique key), so there are no duplicates. Fields not in the dimension set are ''.
+export const gscMetrics = pgTable('gsc_metrics', {
+  id: id(),
+  property: text('property').notNull(),
+  searchType: text('search_type').notNull().default('web'),
+  dims: text('dims').notNull(),                                  // 'date' | 'query' | 'page' | 'query,page' | 'country' | 'device'
+  date: text('date').notNull(),                                  // YYYY-MM-DD (Google's Pacific-time day)
+  query: text('query').notNull().default(''),
+  page: text('page').notNull().default(''),
+  country: text('country').notNull().default(''),
+  device: text('device').notNull().default(''),
+  clicks: integer('clicks').notNull(),
+  impressions: integer('impressions').notNull(),
+  ctr: text('ctr').notNull(),                                    // as returned (0–1), kept as text to avoid float drift
+  position: text('position').notNull(),                          // Google's average position, not a live rank
+  dataState: text('data_state').notNull().default('final'),
+  importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('gsc_metrics_uq').on(t.property, t.searchType, t.dims, t.date, t.query, t.page, t.country, t.device),
+  index('gsc_metrics_lookup_idx').on(t.property, t.dims, t.date),
+]);
+
+// URL Inspection API results: Google's last known (indexed) version of a URL, not a live test.
+export const urlInspections = pgTable('url_inspections', {
+  id: id(),
+  property: text('property').notNull(),
+  url: text('url').notNull(),
+  verdict: text('verdict'),
+  coverageState: text('coverage_state'),
+  indexingState: text('indexing_state'),
+  robotsTxtState: text('robots_txt_state'),
+  pageFetchState: text('page_fetch_state'),
+  lastCrawlTime: text('last_crawl_time'),
+  googleCanonical: text('google_canonical'),
+  userCanonical: text('user_canonical'),
+  raw: jsonb('raw').$type<Record<string, unknown>>().notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [index('url_inspections_url_idx').on(t.property, t.url, t.createdAt)]);
+
+// Background jobs (SEO Pro): progress, retries with backoff, cancellation, failure details and history.
+export const seoJobs = pgTable('seo_jobs', {
+  id: id(),
+  kind: text('kind').notNull(),                                  // 'gsc_sync' | 'url_inspection' | ...
+  status: text('status').notNull().default('queued'),           // queued | running | succeeded | failed | cancelled
+  progress: integer('progress').notNull().default(0),            // 0–100
+  message: text('message').notNull().default(''),
+  attempts: integer('attempts').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(4),
+  runAfter: timestamp('run_after', { withTimezone: true }).notNull().defaultNow(),
+  params: jsonb('params').$type<Record<string, unknown>>().notNull().default({}),
+  result: jsonb('result').$type<Record<string, unknown>>(),
+  error: text('error'),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+}, (t) => [index('seo_jobs_status_idx').on(t.status, t.runAfter)]);
+
+// API calls per provider and day, to stay inside Google's quotas.
+export const apiUsage = pgTable('api_usage', {
+  provider: text('provider').notNull(),
+  endpoint: text('endpoint').notNull(),
+  day: text('day').notNull(),
+  calls: integer('calls').notNull().default(0),
+}, (t) => [primaryKey({ columns: [t.provider, t.endpoint, t.day] })]);

@@ -72,3 +72,19 @@ describe('issue tracking', () => {
     expect(audit.history.length).toBe(2);
   });
 });
+
+describe('audit false positives (SEO Pro phase 1)', () => {
+  beforeEach(() => { h = undefined as never; });   // no app in this block
+  it('does not flag short standard titles or short listing pages, but still flags empty titles and thin content', () => {
+    const dir = join(process.env.TMPDIR ?? '/tmp', `seo-fp-${Date.now()}`); site(dir, true);
+    writeFileSync(join(dir, 'contact.html'), page('contact.html', { title: 'Contact · AFCD Foundation', main: `<h1>Contact</h1><p>${words(60)}</p>` }));
+    writeFileSync(join(dir, 'about.html'), page('about.html', { title: 'About Us · AFCD Foundation', main: `<h1>About</h1><p>${words(200)}</p>` }));
+    writeFileSync(join(dir, 'c.html'), page('c.html', { title: 'Untitled · AFCD Foundation', main: `<h1>C</h1><p>${words(60)}</p>` }));
+    const r = runBuildAudit(dir);
+    const codes = (f: string) => r.findings.filter((x) => x.file === f).map((x) => x.code);
+    expect(codes('contact.html')).not.toContain('meta.title-vague');
+    expect(codes('contact.html')).not.toContain('content.thin');      // contact and listing pages are short by design
+    expect(codes('about.html')).not.toContain('meta.title-vague');
+    expect(codes('c.html')).toEqual(expect.arrayContaining(['meta.title-vague', 'content.thin']));
+  });
+});

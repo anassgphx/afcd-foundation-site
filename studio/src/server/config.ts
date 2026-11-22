@@ -26,6 +26,11 @@ export type Config = {
   maxUploadBytes: number;
   studioDir: string;
   publicSiteUrl: string;
+  // Google (SEO Pro). Empty = not configured: Studio shows how to set it up and never pretends to be connected.
+  googleClientId: string;
+  googleClientSecret: string;
+  googleRedirectUri: string;
+  encryptionKey: string;   // base64 of 32 random bytes; encrypts stored OAuth tokens
 };
 
 export function loadConfig(overrides: Partial<Config> = {}): Config {
@@ -44,6 +49,10 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     maxUploadBytes: Number(process.env.MAX_UPLOAD_MB || 15) * 1024 * 1024,
     studioDir: STUDIO_DIR,
     publicSiteUrl: process.env.PUBLIC_SITE_URL || 'http://localhost:4321/',
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    googleRedirectUri: process.env.GOOGLE_REDIRECT_URI || `${origin}/studio/api/seo/google/callback`,
+    encryptionKey: process.env.STUDIO_ENCRYPTION_KEY || '',
     ...overrides,
   };
 }

@@ -4,10 +4,12 @@ import { loadConfig } from './config.ts';
 import { openDb } from './db/client.ts';
 import { createApp } from './app.ts';
 import { purgeExpired } from './modules/forms/service.ts';
+import * as GSC from './modules/google/gsc.ts';
+import { enqueue } from './modules/jobs/service.ts';
 
 const cfg = loadConfig();
 const { db } = await openDb(cfg);
-const { app, publisher } = createApp(db, cfg);
+const { app, publisher, runJobs } = createApp(db, cfg);
 
 // Scheduled publishing: checks every minute. Each publish is verified like a manual one; failures return the story
 // to "approved" and are shown on the Publishing page.
@@ -27,6 +29,19 @@ const tick = async () => {
 };
 let lastEventCheck = 0;
 setInterval(tick, 60_000).unref();
+
+// SEO Pro background jobs (Search Console sync, ...): one job at a time, every 10 seconds when there is work.
+// Search Console is re-synced daily when it is connected and auto sync is on.
+let jobsBusy = false;
+const jobsTick = async () => {
+  if (jobsBusy) return; jobsBusy = true;
+  try {
+    const c = await GSC.connection(db);
+    if (c?.status === 'connected' && c.property && (await GSC.settings(db)).autoSync && (!c.lastSyncAt || Date.now() - c.lastSyncAt.getTime() > 20 * 3600_000)) await enqueue(db, 'gsc_sync');
+    for (let i = 0; i < 5; i++) { const j = await runJobs(); if (!j) break; console.log(`[jobs] ${j.kind} ${j.status}${j.error ? `: ${j.error}` : ''}`); }
+  } catch (e) { console.error('[jobs]', e); } finally { jobsBusy = false; }
+};
+setInterval(jobsTick, 10_000).unref();
 void tick();
 serve({ fetch: app.fetch, port: cfg.port }, (info) => {
   console.log(`AFCD Studio on ${cfg.origin}/studio/  (site root: ${cfg.siteRoot}, database: ${cfg.databaseUrl ? 'PostgreSQL server' : 'embedded PGlite'})`);

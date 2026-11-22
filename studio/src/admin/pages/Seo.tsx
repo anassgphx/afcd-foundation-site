@@ -6,13 +6,14 @@ import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, us
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 import { DataTable, EmptyState, FilterTabs, ListToolbar, type Column } from '../DataTable.tsx';
+import { Integrations, MasterOverview, SearchConsoleView } from './SeoPro.tsx';
 
 type Owner = { kind: string; id?: string; label: string };
 const EDIT: Record<string, (o: Owner) => string | null> = {
   project: (o) => o.id ? `/studio/projects/${o.id}` : null, story: (o) => o.id ? `/studio/news/${o.id}` : null, event: (o) => o.id ? `/studio/events/${o.id}` : null,
   opportunity: (o) => o.id ? `/studio/opportunities/${o.id}` : '/studio/opportunities', page: (o) => o.id ? `/studio/pages/${o.id}` : null,
 };
-const tone = (n: number) => (n >= 90 ? '#16a34a' : n >= 70 ? '#ca8a04' : '#dc2626');
+export const tone = (n: number) => (n >= 90 ? '#16a34a' : n >= 70 ? '#ca8a04' : '#dc2626');
 
 export function SeoPage() {
   const path = location.pathname;
@@ -23,17 +24,26 @@ export function SeoPage() {
 }
 
 // ---------------------------------------------------------------- SEO Intelligence workspace
-type Tab = 'overview' | 'audit' | 'issues' | 'indexability' | 'links' | 'schema' | 'redirects' | 'pages' | 'search-console';
-const TABS: [Tab, string][] = [['overview', 'Overview'], ['audit', 'Site audit'], ['issues', 'Issues'], ['indexability', 'Indexability'], ['links', 'Internal links'], ['schema', 'Structured data'], ['redirects', 'Redirects'], ['pages', 'Page settings'], ['search-console', 'Search Console']];
-type Sev = 'critical' | 'high' | 'medium' | 'low' | 'info';
+type Tab = 'overview' | 'audit' | 'issues' | 'indexability' | 'links' | 'schema' | 'redirects' | 'pages' | 'search-console' | 'integrations';
+// workspaces grouped by job: diagnose (Studio's checks), measure (Google), optimize (what Studio publishes), settings
+const GROUPS: [string, [Tab, string][]][] = [
+  ['', [['overview', 'Overview']]],
+  ['Diagnose', [['audit', 'Site audit'], ['issues', 'Issues'], ['indexability', 'Indexability'], ['links', 'Internal links']]],
+  ['Google', [['search-console', 'Search Console']]],
+  ['Optimize', [['schema', 'Structured data'], ['redirects', 'Redirects'], ['pages', 'Page settings']]],
+  ['Settings', [['integrations', 'Integrations']]],
+];
+const TABS: [Tab, string][] = GROUPS.flatMap(([, t]) => t);
+const NO_AUDIT: Tab[] = ['search-console', 'integrations', 'redirects'];
+export type Sev = 'critical' | 'high' | 'medium' | 'low' | 'info';
 type Rule = { code: string; severity: Sev; category: string; kind: 'standard' | 'heuristic'; title: string; why: string; fix: string };
-type Issue = { id: string; code: string; file: string; severity: Sev; category: string; evidence: string[]; status: 'open' | 'reviewed' | 'resolved'; firstSeen: string; lastSeen: string; resolvedAt: string | null; note: string; reviewer: string | null; rule: Rule | null; owner: Owner };
-type AuditPage = { file: string; url: string; title: string; description: string; words: number; inSitemap: boolean; robots: string; canonical: string; canonicalOk: boolean; lang: string; inbound: number; inboundFrom: string[]; linksOut: number; schema: string[]; schemaErrors: string[]; h1: string; owner: Owner; score: number };
-type AuditV2 = { id: string; kind?: string; at: string; production?: boolean; score: number; scores?: Record<string, number>; counts?: Record<Sev, number>; pages: AuditPage[]; redirects?: { file: string; to: string }[] };
-const SEV: Record<Sev, { label: string; c: string }> = { critical: { label: 'Critical', c: '#b91c1c' }, high: { label: 'High', c: '#dc2626' }, medium: { label: 'Medium', c: '#d97706' }, low: { label: 'Low', c: '#2563eb' }, info: { label: 'Info', c: '#78716c' } };
+export type Issue = { id: string; code: string; file: string; severity: Sev; category: string; evidence: string[]; status: 'open' | 'reviewed' | 'resolved'; firstSeen: string; lastSeen: string; resolvedAt: string | null; note: string; reviewer: string | null; rule: Rule | null; owner: Owner };
+export type AuditPage = { file: string; url: string; title: string; description: string; words: number; inSitemap: boolean; robots: string; canonical: string; canonicalOk: boolean; lang: string; inbound: number; inboundFrom: string[]; linksOut: number; schema: string[]; schemaErrors: string[]; h1: string; owner: Owner; score: number };
+export type AuditV2 = { id: string; kind?: string; at: string; production?: boolean; score: number; scores?: Record<string, number>; counts?: Record<Sev, number>; pages: AuditPage[]; redirects?: { file: string; to: string }[] };
+export const SEV: Record<Sev, { label: string; c: string }> = { critical: { label: 'Critical', c: '#b91c1c' }, high: { label: 'High', c: '#dc2626' }, medium: { label: 'Medium', c: '#d97706' }, low: { label: 'Low', c: '#2563eb' }, info: { label: 'Info', c: '#78716c' } };
 const CATS: [string, string][] = [['technical', 'Technical health'], ['metadata', 'Metadata'], ['content', 'Content checklist'], ['structured', 'Structured data'], ['linking', 'Internal linking'], ['performance', 'Performance (build)']];
-const editorFor = (o: Owner, file: string) => (o.kind === 'template' ? `/studio/seo/pages/${file}` : EDIT[o.kind]?.(o) ?? null);
-const SevBadge = ({ s }: { s: Sev }) => <span className="sev" style={{ ['--c' as string]: SEV[s].c }}>{SEV[s].label}</span>;
+export const editorFor = (o: Owner, file: string) => (o.kind === 'template' ? `/studio/seo/pages/${file}` : EDIT[o.kind]?.(o) ?? null);
+export const SevBadge = ({ s }: { s: Sev }) => <span className="sev" style={{ ['--c' as string]: SEV[s].c }}>{SEV[s].label}</span>;
 
 function SeoHome({ tab }: { tab: Tab }) {
   const toast = useToast(); const can = useCan();
@@ -45,55 +55,27 @@ function SeoHome({ tab }: { tab: Tab }) {
   async function run() { setBusy(true); try { await post('/seo/audit'); await load(); toast('Build audit finished'); } catch (e) { toast((e as Error).message, true); } finally { setBusy(false); } }
   const a = data?.last ?? null; const v2 = !!a?.scores;
   return <>
-    <div className="page-h"><div><h1>SEO Intelligence</h1><p>Monitor technical health, search performance and optimisation opportunities.</p></div>
-      <div className="pills">{can('seo.read') && <button className="btn btn-primary" disabled={busy} onClick={run}><Icon n="search" />{busy ? 'Auditing the build…' : 'Run build audit'}</button>}</div></div>
-    <nav className="seo-tabs" aria-label="SEO sections">{TABS.map(([k, l]) => <Link key={k} to={k === 'overview' ? '/studio/seo' : `/studio/seo/${k}`} className={tab === k ? 'on' : ''} aria-current={tab === k ? 'page' : undefined}>{l}</Link>)}</nav>
-    {a && <div className="seo-kind"><span className="seo-kind-tag">Build audit</span><span>Checked the pages the website build produced {ago(a.at)}{v2 && !a.production ? ' · preview build (every page is noindex on purpose)' : ''}. This is not Google’s view of the public site.</span></div>}
+    <div className="page-h"><div><h1>SEO Intelligence</h1><p>Technical health, Google performance and actionable optimization.</p></div>
+      <div className="pills"><Link to="/studio/seo/integrations" className="btn"><Icon n="globe" />Integrations</Link>{can('seo.read') && <button className="btn btn-primary" disabled={busy} onClick={run}><Icon n="search" />{busy ? 'Auditing the build…' : 'Run build audit'}</button>}</div></div>
+    <nav className="seo-tabs sp-nav" aria-label="SEO sections">{GROUPS.map(([g, tabs]) => <div key={g || 'top'} className="sp-navg">{g && <span>{g}</span>}
+      {tabs.map(([k, l]) => <Link key={k} to={k === 'overview' ? '/studio/seo' : `/studio/seo/${k}`} className={tab === k ? 'on' : ''} aria-current={tab === k ? 'page' : undefined}>{l}</Link>)}</div>)}</nav>
+    {a && !NO_AUDIT.includes(tab) && <div className="seo-kind"><span className="seo-kind-tag">Build audit</span><span>Checked the pages the website build produced {ago(a.at)}{v2 && !a.production ? ' · preview build (every page is noindex on purpose)' : ''}. This is not Google’s view of the public site.</span></div>}
     {tab === 'redirects' ? <Redirects />
+      : tab === 'search-console' ? <SearchConsoleView />
+      : tab === 'integrations' ? <Integrations />
       : !data || !issues ? <Loading /> : !a ? <section className="card"><div className="dt-empty"><Icon n="search" /><b>No audit yet</b><small>Run a build audit to check every page.</small></div></section>
       : !v2 ? <section className="card"><div className="dt-empty"><Icon n="search" /><b>Your last audit used the previous engine</b><small>Run a build audit to see the new detailed findings.</small></div></section>
-      : tab === 'overview' ? <Overview a={a} issues={issues} history={data.history} />
+      : tab === 'overview' ? <MasterOverview a={a} issues={issues} history={data.history} />
       : tab === 'audit' ? <SiteAudit a={a} issues={issues} />
       : tab === 'issues' ? <Issues issues={issues} onChange={load} />
       : tab === 'indexability' ? <Indexability a={a} />
       : tab === 'links' ? <InternalLinks a={a} />
       : tab === 'schema' ? <Schema a={a} />
-      : tab === 'pages' ? <PagesView />
-      : <SearchConsole />}
+      : <PagesView />}
   </>;
 }
 
-function Overview({ a, issues, history }: { a: AuditV2; issues: Issue[]; history: { at: string; scores: Record<string, number> | null }[] }) {
-  const open = issues.filter((i) => i.status !== 'resolved');
-  const groups = [...open.reduce((m, i) => m.set(i.code, [...(m.get(i.code) ?? []), i]), new Map<string, Issue[]>()).values()]
-    .sort((x, y) => SEV_ORDER.indexOf(x[0].severity) - SEV_ORDER.indexOf(y[0].severity) || y.length - x.length).filter((g) => g[0].severity !== 'info');
-  const indexable = a.pages.filter((p) => p.inSitemap && p.canonicalOk).length;
-  const trend = history.filter((h) => h.scores).slice(0, 12).reverse();
-  return <div className="stack" style={{ gap: 16 }}>
-    <div className="seo-scores">{CATS.map(([k, l]) => { const v = a.scores![k]; return <div key={k} className="seo-sc"><small>{l}</small><b style={{ color: tone(v) }}>{v}</b><span className="seo-bar"><i style={{ width: `${v}%`, background: tone(v) }} /></span></div>; })}</div>
-    <div className="seo-kpis">
-      <div><small>Pages checked</small><b>{a.pages.length}</b></div>
-      <div><small>Listed for indexing</small><b>{indexable}</b><span className="muted">in the sitemap, canonical OK</span></div>
-      {(['critical', 'high', 'medium', 'low'] as Sev[]).map((s) => <div key={s}><small>{SEV[s].label} issues</small><b style={{ color: (a.counts![s] ?? 0) ? SEV[s].c : undefined }}>{a.counts![s] ?? 0}</b></div>)}
-    </div>
-    <div className="db-grid">
-      <section className="card"><div className="card-h"><h2>Priority issues</h2><Link to="/studio/seo/issues" className="btn btn-sm btn-ghost">All issues</Link></div>
-        {groups.length === 0 ? <div className="db-clear"><Icon n="check" /><div><b>No open issues</b><small>Only informational notes remain.</small></div></div>
-          : <ul className="db-list">{groups.slice(0, 8).map((g) => <li key={g[0].code}><Link to={`/studio/seo/issues?code=${g[0].code}`} className="db-row"><SevBadge s={g[0].severity} />
-            <span className="min-w-0"><b>{g[0].rule?.title ?? g[0].code}</b><small>{g.length} page{g.length === 1 ? '' : 's'} · {g[0].rule?.kind === 'heuristic' ? 'Recommendation' : 'Standard check'}</small></span><Icon n="chev" width={14} height={14} /></Link></li>)}</ul>}
-        <p className="muted" style={{ fontSize: 12, padding: '0 16px 14px', margin: 0 }}>Ranked by severity, then by how many pages are affected. Fixing them improves the site’s technical quality; no tool can guarantee rankings.</p>
-      </section>
-      <div className="db-col">
-        <section className="card"><div className="card-h"><h2>Search performance</h2><Link to="/studio/seo/search-console" className="btn btn-sm btn-ghost">Details</Link></div>
-          <div className="seo-gsc-off"><Icon n="globe" /><div><b>Google Search Console is not connected</b><small>Clicks, impressions, click-through rate and average position appear here only once real data is connected. Nothing is estimated.</small></div></div></section>
-        {trend.length > 1 && <section className="card"><div className="card-h"><h2>Technical health over time</h2></div>
-          <div className="seo-trend">{trend.map((h, i) => <span key={i} title={`${fmtDate(h.at)}: ${h.scores!.technical}`} style={{ height: `${Math.max(6, h.scores!.technical)}%`, background: tone(h.scores!.technical) }} />)}</div>
-          <p className="muted" style={{ fontSize: 12, padding: '0 16px 14px', margin: 0 }}>Last {trend.length} build audits.</p></section>}
-      </div>
-    </div>
-  </div>;
-}
-const SEV_ORDER: Sev[] = ['critical', 'high', 'medium', 'low', 'info'];
+export const SEV_ORDER: Sev[] = ['critical', 'high', 'medium', 'low', 'info'];
 
 function SiteAudit({ a, issues }: { a: AuditV2; issues: Issue[] }) {
   const [f, setF] = useState('issues'); const [q, setQ] = useState('');
@@ -375,19 +357,6 @@ function RedirectDialog({ init, onClose, onSaved }: { init: { id?: string; form:
       {chk && !chk.errors.length && !chk.warnings.length && <div className="notice n-ok"><div>Checked: the new page exists and nothing conflicts.</div></div>}
     </div>
   </Modal>;
-}
-
-function SearchConsole() {
-  return <section className="card" style={{ padding: 24 }}>
-    <div className="seo-gsc-off" style={{ margin: 0 }}><Icon n="globe" /><div><b>Not connected</b><small>No Google data is shown anywhere until a real connection exists. Nothing is estimated.</small></div></div>
-    <h3 style={{ margin: '20px 0 8px', fontSize: 15 }}>What connecting needs</h3>
-    <ol className="seo-steps">
-      <li><b>Studio online at a fixed https address.</b> Google sends people back to Studio after they authorise it, which cannot work while Studio only runs on this computer.</li>
-      <li><b>A Google Cloud OAuth client</b> created by AFCD (client ID and secret), with the Search Console API enabled. The secret is stored on the server, never in the browser.</li>
-      <li><b>An administrator authorises read-only access</b> (scope: Search Console read-only), then chooses the verified afcdfoundation.org property.</li>
-    </ol>
-    <p className="muted" style={{ fontSize: 12.5 }}>Once connected, Studio will import clicks, impressions, click-through rate and average position by page, query, country and device within Google’s API limits. Search Console data is sampled and privacy-filtered, so it never covers every query. URL Inspection reports Google’s last known index status; it is not a live test.</p>
-  </section>;
 }
 
 type PageRow = { file: string; defaults: { title: string; description: string; noindex: boolean } | null; override: null | { id: string; status: string; title: string; description: string; noindex: boolean; publishedRevisionId: string | null; updatedAt: string }; orphan?: boolean };

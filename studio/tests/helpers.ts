@@ -76,7 +76,7 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
   };
 }
 
-export async function makeApp(opts: { runner?: BuildRunner; partners?: { scope: string; names: string[] }[] } = {}) {
+export async function makeApp(opts: { runner?: BuildRunner; partners?: { scope: string; names: string[] }[]; googleHttp?: typeof fetch; cfg?: Partial<Parameters<typeof loadConfig>[0]> } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'studio-test-'));
   const siteRoot = join(root, 'site');
   mkdirSync(join(siteRoot, 'src/data'), { recursive: true });
@@ -90,11 +90,12 @@ export async function makeApp(opts: { runner?: BuildRunner; partners?: { scope: 
     { slug: 'eco-citizen', file: 'project-eco-citizen.html', name: 'Eco Citizen', pillar: 'green-thumbs', category: 'Environment', summary: 'Awareness.',
       detail: { lede: 'Awareness.', facts: [['Pillar', 'Environment and Climate'], ['Location', 'Ait Ourir']], rows: [['Context', 'Waste.']], photo: 'Eco Citizen' } },
   ] }));
-  const cfg = loadConfig({ siteRoot, dataDir: join(root, 'data'), mediaDir: join(root, 'data/media'), previewDir: join(root, 'preview'), origin: ORIGIN, secureCookies: false });
+  const cfg = loadConfig({ siteRoot, dataDir: join(root, 'data'), mediaDir: join(root, 'data/media'), previewDir: join(root, 'preview'), origin: ORIGIN, secureCookies: false,
+    googleClientId: '', googleClientSecret: '', encryptionKey: '', ...opts.cfg });
   const { db, close } = await openDb(cfg, { memory: true });
   await seed(db, cfg, { strategy: STRATEGY, partners: opts.partners ?? [] });
-  const { app } = createApp(db, cfg, { runner: opts.runner ?? fakeRunner() });
-  return { app, db, cfg, close, siteRoot };
+  const { app, runJobs } = createApp(db, cfg, { runner: opts.runner ?? fakeRunner(), googleHttp: opts.googleHttp });
+  return { app, db, cfg, close, siteRoot, runJobs };
 }
 
 export async function addUser(db: Awaited<ReturnType<typeof makeApp>>['db'], email: string, role: Role) {

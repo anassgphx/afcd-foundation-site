@@ -38,7 +38,7 @@ const R: Record<string, Omit<Finding, 'file' | 'evidence'>> = {
   'meta.desc-missing': { code: 'meta.desc-missing', severity: 'medium', category: 'metadata', kind: 'standard', title: 'No meta description', why: 'Search engines may then pick a random snippet from the page.', fix: 'Write one or two sentences that say what the page offers.' },
   'meta.title-dup': { code: 'meta.title-dup', severity: 'medium', category: 'metadata', kind: 'heuristic', title: 'Same title as other pages', why: 'Identical titles make pages hard to tell apart in search results.', fix: 'Give each page a title that names its specific subject.' },
   'meta.desc-dup': { code: 'meta.desc-dup', severity: 'low', category: 'metadata', kind: 'heuristic', title: 'Same description as other pages', why: 'Repeated descriptions do not help people choose the right page.', fix: 'Describe what is unique about this page.' },
-  'meta.title-vague': { code: 'meta.title-vague', severity: 'low', category: 'metadata', kind: 'heuristic', title: 'Title may not describe the page clearly', why: 'Very short titles often leave out the subject people search for.', fix: 'Consider adding the specific project, pillar or topic, e.g. “Youth Empowerment · AFCD Foundation”.' },
+  'meta.title-vague': { code: 'meta.title-vague', severity: 'low', category: 'metadata', kind: 'heuristic', title: 'Title may not describe the page clearly', why: 'The title is empty of meaning (for example “Home” or “Untitled”), so it does not say what the page is about.', fix: 'Name the page’s subject, e.g. “Youth Empowerment · AFCD Foundation”.' },
   'meta.title-long': { code: 'meta.title-long', severity: 'low', category: 'metadata', kind: 'heuristic', title: 'Title may be shortened in results', why: 'Search engines show roughly the first 60 characters; the end may be cut off.', fix: 'Put the most important words first.' },
   'meta.desc-short': { code: 'meta.desc-short', severity: 'low', category: 'metadata', kind: 'heuristic', title: 'Description is very brief', why: 'A fuller description can explain why the page is worth visiting. Search engines may still write their own.', fix: 'Add a sentence about who the page is for or what it offers.' },
   'meta.desc-long': { code: 'meta.desc-long', severity: 'low', category: 'metadata', kind: 'heuristic', title: 'Description may be shortened in results', why: 'Long descriptions are usually cut at around 155–160 characters.', fix: 'Lead with the essential point.' },
@@ -53,7 +53,7 @@ const R: Record<string, Omit<Finding, 'file' | 'evidence'>> = {
   'perf.img-dimensions': { code: 'perf.img-dimensions', severity: 'low', category: 'performance', kind: 'standard', title: 'Images without width and height', why: 'Without dimensions the layout jumps while images load (layout shift).', fix: 'Studio images include dimensions; add width and height to hand-written images.' },
   'schema.invalid': { code: 'schema.invalid', severity: 'high', category: 'structured', kind: 'standard', title: 'Structured data cannot be read', why: 'Broken JSON-LD is ignored by search engines.', fix: 'Fix the JSON-LD block in the page template.' },
   'schema.org-missing': { code: 'schema.org-missing', severity: 'medium', category: 'structured', kind: 'heuristic', title: 'Homepage has no Organization data', why: 'It states AFCD’s official name, logo and profiles in a machine-readable way.', fix: 'The build adds it to index.html; rebuild the site.' },
-  'schema.article-suggest': { code: 'schema.article-suggest', severity: 'info', category: 'structured', kind: 'heuristic', title: 'Story page could describe itself as an article', why: 'Article data (headline, date, image) can help search engines present the story. It does not guarantee any special result.', fix: 'Planned in the Schema studio; nothing to do now.' },
+  'schema.article-suggest': { code: 'schema.article-suggest', severity: 'info', category: 'structured', kind: 'heuristic', title: 'Story page could describe itself as an article', why: 'Article data (headline, date, image) can help search engines present the story. It does not guarantee any special result.', fix: 'Switch on Article markup in SEO → Structured data and publish it; stories published through Studio then carry it.' },
   'link.orphan': { code: 'link.orphan', severity: 'medium', category: 'linking', kind: 'heuristic', title: 'No other page links here', why: 'Pages without internal links are hard for visitors and crawlers to find.', fix: 'Link to it from a related page (its pillar, project or listing).' },
   'site.preview-build': { code: 'site.preview-build', severity: 'info', category: 'technical', kind: 'standard', title: 'Preview build: every page is noindex', why: 'Preview builds are kept out of search on purpose. This audit cannot judge indexability for the public site.', fix: 'Production builds (npm run build:production) are indexable; audit the public site after deployment.' },
 };
@@ -61,6 +61,8 @@ R['link.via-redirect'] = { code: 'link.via-redirect', severity: 'low', category:
 export const RULES = R;
 const STUB_MARK = '<!-- studio-redirect -->';   // redirect pages written by Studio (see redirects.ts)
 export const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
+const GENERIC_TITLE = /^(home|page|untitled|new page|title|test|index|welcome|default)$/i;
+const LISTING = new Set(['contact.html', 'team.html', 'news.html', 'events.html', 'projects.html', 'partners.html', 'opportunities.html', 'pillars.html', 'get-involved.html']);
 const WEIGHT: Record<Severity, number> = { critical: 40, high: 20, medium: 8, low: 3, info: 0 };
 
 function scanPage(root: string, file: string) {
@@ -127,7 +129,8 @@ export function runBuildAudit(root: string, now = new Date()): BuildAudit {
     else if (p.description.length < 50) add('meta.desc-short', p.file, [`“${p.description}” (${p.description.length} characters)`]);
     else if (p.description.length > 170) add('meta.desc-long', p.file, [`${p.description.length} characters`]);
     const core = p.title.replace(/\s*·\s*AFCD Foundation$/i, '');
-    if (p.title && core.length < 12 && !is404) add('meta.title-vague', p.file, [`Title: “${p.title}”`]);
+    // short titles are fine for standard pages (About Us, Contact) and named projects; flag only titles that say nothing
+    if (p.title && !is404 && (core.length < 4 || GENERIC_TITLE.test(core) || /^afcd( foundation)?$/i.test(core) && p.file !== 'index.html')) add('meta.title-vague', p.file, [`Title: “${p.title}”`]);
     if (p.title.length > 70) add('meta.title-long', p.file, [`${p.title.length} characters: “${clip(p.title, 80)}”`]);
     const ogMissing = [!p.og.title && 'og:title', !p.og.description && 'og:description', !p.og.image && 'og:image'].filter(Boolean) as string[];
     if (ogMissing.length && !is404) add('meta.og-missing', p.file, ogMissing.map((x) => `Missing ${x}`));
@@ -138,7 +141,8 @@ export function runBuildAudit(root: string, now = new Date()): BuildAudit {
       if (skips.length) add('content.heading-skip', p.file, skips.slice(0, 4));
       const ph = text(scanned.find((x) => x.scan.file === p.file)!.main).match(/.{0,40}(lorem ipsum|consectetur adipiscing|sample event|placeholder).{0,40}/i);
       if (ph) add('content.placeholder', p.file, [`“…${ph[0].trim()}…”`]);
-      if (p.words < 150 && !/noindex/i.test(production ? p.robots : '')) add('content.thin', p.file, [`${p.words} words in the main content`]);
+      // listings, contact and people pages are short by design: their job is to lead elsewhere
+      if (p.words < 150 && !LISTING.has(p.file) && !/noindex/i.test(production ? p.robots : '')) add('content.thin', p.file, [`${p.words} words in the main content`]);
     }
     const noAlt = imgs.filter((t) => attr(t, 'alt') === null);
     if (noAlt.length) add('content.img-alt', p.file, noAlt.slice(0, 5).map((t) => `<img src="${attr(t, 'src') ?? '?'}">`));

@@ -26,6 +26,8 @@ import * as FM from './modules/forms/service.ts';
 import * as SEO from './modules/seo/service.ts';
 import * as RD from './modules/seo/redirects.ts';
 import * as SCH from './modules/seo/schema.ts';
+import * as GSC from './modules/google/gsc.ts';
+import * as JOBS from './modules/jobs/service.ts';
 import * as TR from './modules/translations/service.ts';
 import { registerMenuRoutes } from './modules/menus/routes.ts';
 import * as HM from './modules/home/service.ts';
@@ -47,7 +49,7 @@ const MIME: Record<string, string> = {
 // Argon2id hash of a random value, used only to equalize response timing for unknown emails.
 const dummyHash = hashPassword(randomBytes(24).toString('hex'));
 
-export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = {}) {
+export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; googleHttp?: typeof fetch } = {}) {
   const publisher = new Publisher(db, cfg, opts.runner);
   const app = new Hono<Env>();
 
@@ -428,6 +430,63 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
   api.post('/seo/schema/unpublish', perm('seo.publish'), async (c) => c.json(await publisher.unpublishSchema(actor(c))));
   registerMenuRoutes(api);   // website menus (modules/menus)
 
+  // ---------------------------------------------------------------- SEO Pro: Google Search Console + background jobs
+  // Admins (seo.publish) connect, choose the property, change sync settings and disconnect; SEO editors (seo.update)
+  // start syncs and URL inspections; everyone with seo.read sees the stored Google data.
+  const http = opts.googleHttp ?? fetch;
+  api.get('/seo/google/status', perm('seo.read'), async (c) => c.json({ ...(await GSC.status(db, cfg)), coverage: await GSC.coverage(db), jobs: await JOBS.listJobs(db, ['gsc_sync'], 8) }));
+  api.post('/seo/google/connect', perm('seo.publish'), async (c) => c.json(await GSC.startConnect(db, cfg, actor(c))));
+  api.get('/seo/google/callback', async (c) => {
+    // Google redirects the browser here (top-level GET, so the session cookie is sent). Errors are shown in Studio.
+    const back = (q: string) => c.redirect(`/studio/seo/integrations?${q}`);
+    if (!c.var.user) return back('gsc_error=' + encodeURIComponent('Please sign in to Studio, then connect again.'));
+    requirePerm(c, 'seo.publish');
+    try { await GSC.finishConnect(db, cfg, http, actor(c), { state: c.req.query('state'), code: c.req.query('code'), error: c.req.query('error') }); return back('gsc=connected'); }
+    catch (e) { return back('gsc_error=' + encodeURIComponent((e as Error).message.slice(0, 300))); }
+  });
+  api.get('/seo/google/properties', perm('seo.publish'), async (c) => c.json(await GSC.listProperties(db, cfg, http).catch((e) => { throw new AppError(409, (e as Error).message); })));
+  api.put('/seo/google/property', perm('seo.publish'), async (c) => {
+    const b = z.object({ siteUrl: z.string().min(3).max(300) }).safeParse(await c.req.json()); if (!b.success) throw new AppError(422, 'Choose a property.');
+    await GSC.chooseProperty(db, cfg, http, actor(c), b.data.siteUrl);
+    await JOBS.enqueue(db, 'gsc_sync', {}, { by: actor(c).id });
+    return c.json(await GSC.status(db, cfg));
+  });
+  api.put('/seo/google/settings', perm('seo.publish'), async (c) => {
+    const b = z.object({ backfillDays: z.number().int().min(7).max(486), retentionDays: z.number().int().min(30).max(486), autoSync: z.boolean() }).strict().safeParse(await c.req.json());
+    if (!b.success) throw new AppError(422, 'Use 7–486 days to import and 30–486 days to keep.');
+    if (b.data.retentionDays < b.data.backfillDays) throw new AppError(422, 'Keep data at least as long as the import window.');
+    await GSC.saveSettings(db, actor(c), b.data); return c.json(await GSC.status(db, cfg));
+  });
+  api.post('/seo/google/disconnect', perm('seo.publish'), async (c) => c.json(await GSC.disconnect(db, cfg, http, actor(c))));
+  api.post('/seo/google/sync', perm('seo.update'), async (c) => {
+    const conn = await GSC.connection(db); if (!conn?.property) throw new AppError(409, 'Connect Search Console and choose a property first.');
+    const r = await JOBS.enqueue(db, 'gsc_sync', {}, { by: actor(c).id }); return c.json(r, r.existing ? 200 : 201);
+  });
+  api.post('/seo/jobs/:id/cancel', perm('seo.update'), async (c) => c.json(await JOBS.cancelJob(db, c.req.param('id'))));
+  api.get('/seo/jobs', perm('seo.read'), async (c) => c.json(await JOBS.listJobs(db, undefined, 30)));
+  const range = (c: { req: { query: (k: string) => string | undefined } }): GSC.Range => {
+    const d = /^\d{4}-\d{2}-\d{2}$/; const from = c.req.query('from') ?? '', to = c.req.query('to') ?? '';
+    if (!d.test(from) || !d.test(to) || from > to) throw new AppError(422, 'Use a date range like from=2026-10-01&to=2026-10-28.');
+    const device = c.req.query('device'), country = c.req.query('country');
+    if (device && !['DESKTOP', 'MOBILE', 'TABLET'].includes(device)) throw new AppError(422, 'Unknown device.');
+    if (country && !/^[a-z]{3}$/.test(country)) throw new AppError(422, 'Use a three-letter country code (Search Console format, e.g. mar).');
+    if (device && country) throw new AppError(422, 'Search Console data here is stored per device or per country, not both at once. Choose one filter.');
+    return { from, to, ...(device ? { device } : {}), ...(country ? { country } : {}) };
+  };
+  api.get('/seo/gsc/overview', perm('seo.read'), async (c) => { const r = range(c); return c.json({ coverage: await GSC.coverage(db), current: await GSC.overview(db, r),
+    previous: c.req.query('compare') === '1' ? await GSC.overview(db, (() => { const len = (Date.parse(r.to) - Date.parse(r.from)) / 86_400_000 + 1; const f = new Date(Date.parse(r.from) - len * 86_400_000).toISOString().slice(0, 10); const t = new Date(Date.parse(r.from) - 86_400_000).toISOString().slice(0, 10); return { ...r, from: f, to: t }; })()) : null }); });
+  api.get('/seo/gsc/queries', perm('seo.read'), async (c) => c.json(await GSC.queries(db, range(c))));
+  api.get('/seo/gsc/pages', perm('seo.read'), async (c) => c.json(await GSC.pages(db, range(c))));
+  api.get('/seo/gsc/breakdown', perm('seo.read'), async (c) => { const r = range(c); return c.json({ countries: await GSC.countries(db, r), devices: await GSC.devices(db, r) }); });
+  api.get('/seo/gsc/page', perm('seo.read'), async (c) => { const p = c.req.query('url'); if (!p) throw new AppError(422, 'Which page?'); return c.json(await GSC.pageHistory(db, p, range(c))); });
+  api.get('/seo/gsc/movers', perm('seo.read'), async (c) => { const r = range(c); const min = Math.max(1, Math.min(10000, Number(c.req.query('min') ?? 20) || 20));
+    return c.json({ pages: await GSC.movers(db, 'page', r, min), queries: await GSC.movers(db, 'query', r, min) }); });
+  api.get('/seo/gsc/inspections', perm('seo.read'), async (c) => c.json(await GSC.inspections(db)));
+  api.post('/seo/gsc/inspect', perm('seo.update'), async (c) => {
+    const b = z.object({ url: z.string().url().max(2000) }).safeParse(await c.req.json()); if (!b.success) throw new AppError(422, 'Enter a full address, like https://afcdfoundation.org/about.html');
+    return c.json(await GSC.inspect(db, cfg, http, actor(c), b.data.url));
+  });
+
   // ---------------------------------------------------------------- Translations: edited (translation.update), reviewed by someone else (translation.approve), published (translation.publish)
   const langOf = (c: { req: { param: (k: string) => string } }) => { const l = c.req.param('lang'); if (!TR.isLang(l)) throw new AppError(404, 'Unknown language.'); return l; };
   api.get('/translations', perm('translation.read'), async (c) => c.json(await TR.overview(db, cfg)));
@@ -580,7 +639,10 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
   });
   app.get('/', (c) => c.redirect('/studio/'));
 
-  return { app, publisher };
+  // background jobs: the server calls runJobs() on a timer; tests call it directly
+  // `today` only changes which Search Console days count as final (tests use a fixed date); scheduling uses the clock
+  const runJobs = (today?: Date) => JOBS.runNext(db, { gsc_sync: (ctx) => GSC.syncJob(db, cfg, opts.googleHttp ?? fetch, ctx, today) });
+  return { app, publisher, runJobs };
 }
 
 function withUrl(m: M.MediaRow) { return { ...m, url: `/studio/media-file/${m.storageKey}-480.webp`, large: `/studio/media-file/${M.publicRef(m).src.split('/').pop()}` }; }

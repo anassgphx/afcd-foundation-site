@@ -99,6 +99,13 @@
       "when": 1795350117610,
       "tag": "0013_redirects_published",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795361280521,
+      "tag": "0014_google_search_console",
+      "breakpoints": true
     }
   ]
 }

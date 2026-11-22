@@ -1,6 +1,6 @@
 // Dashboard: the overview of the whole website. Everything comes from the database and respects permissions;
 // nothing is invented. Order of importance: today's priorities, what needs you, content health, activity, quick actions.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, post } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import '../dashboard.css';
@@ -17,6 +17,7 @@ type Data = {
   recent: { kind: string; title: string; status: string; live: boolean; href: string; at: string }[];
   delivery: { id: string; label: string; what: string; status: string; at: string; error: string | null }[];
 };
+type Cache = { d: Data; langs: Lang[] | null; unread: number | null; at: number };
 type Lang = { lang: string; name: string; native: string; dir: string; total: number; translated: number; status: string | null; live: boolean; publishedLive: boolean };
 
 const KIND_ICON: Record<string, string> = { Project: 'folder', Story: 'log', Event: 'calendar', Opportunity: 'spark', Partner: 'partner', Page: 'layers', Homepage: 'home', 'Contact page': 'mail' };
@@ -31,14 +32,39 @@ const nf = new Intl.NumberFormat('en-GB');
 
 export function Dashboard() {
   const me = useMe(); const can = useCan(); const toast = useToast();
-  const [d, setD] = useState<Data | null>(null); const [err, setErr] = useState('');
-  const [langs, setLangs] = useState<Lang[] | null>(null);
+  const canTr = can('translation.read'); const canInbox = can('forms.read');
+  // Instant view: the last numbers this user saw (this browser tab only, at most 30 minutes old) show at once,
+  // and fresh numbers replace them as soon as they arrive.
+  const cacheKey = `studio.dash.${me.user.id}`;
+  const [cached] = useState<Cache | null>(() => { try { const c = JSON.parse(sessionStorage.getItem(cacheKey) ?? 'null') as Cache | null; return c && Date.now() - c.at < 30 * 60_000 ? c : null; } catch { return null; } });
+  const [d, setD] = useState<Data | null>(cached?.d ?? null); const [err, setErr] = useState('');
+  const [langs, setLangs] = useState<Lang[] | null>(cached?.langs ?? null);
+  const [unread, setUnread] = useState<number | null>(cached?.unread ?? null);
+  const [at, setAt] = useState<number | null>(cached?.at ?? null); const atRef = useRef(at); atRef.current = at;
+  const [loading, setLoading] = useState(false); const [stale, setStale] = useState(!!cached);
   const [busy, setBusy] = useState('');
-  const canTr = can('translation.read');
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [o, l, u] = await Promise.all([
+        api<Data>('/overview'),
+        canTr ? api<Lang[]>('/translations').catch(() => [] as Lang[]) : Promise.resolve(null),
+        canInbox ? api<{ unread: number }>('/inbox/unread').then((r) => r.unread).catch(() => null) : Promise.resolve(null),
+      ]);
+      const now = Date.now();
+      setD(o); setLangs(l); setUnread(u); setAt(now); setErr(''); setStale(false);
+      try { sessionStorage.setItem(cacheKey, JSON.stringify({ d: o, langs: l, unread: u, at: now } satisfies Cache)); } catch { /* storage unavailable */ }
+    } catch (e) { setErr((e as Error).message); }
+    finally { setLoading(false); }
+  }, [canTr, canInbox, cacheKey]);
+  useEffect(() => { refresh(); }, [refresh]);
+  // fresh numbers when you come back to the tab (after 30 s) and every 2 minutes while it is visible
   useEffect(() => {
-    api<Data>('/overview').then(setD).catch((e) => setErr(e.message));
-    if (canTr) api<Lang[]>('/translations').then(setLangs).catch(() => setLangs([]));
-  }, [canTr]);
+    const vis = () => { if (document.visibilityState === 'visible' && Date.now() - (atRef.current ?? 0) > 30_000) refresh(); };
+    const t = setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 120_000);
+    document.addEventListener('visibilitychange', vis);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', vis); };
+  }, [refresh]);
 
   const any = (suffix: string) => me.permissions.some((p) => p.endsWith(suffix));
   // counts per kind: from the server when it sends them, otherwise from the (capped) list
@@ -70,18 +96,21 @@ export function Dashboard() {
   const hour = new Date().getHours();
   const first = me.user.name.split(' ')[0];
   const date = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const summary = !d ? 'Loading your overview…' : pending === 0 ? 'You’re all caught up. Nothing is waiting for you.'
-    : `${plural(pending, 'item')} need${pending === 1 ? 's' : ''} you: ${[counts.review && `${counts.review} to review`, counts.publish && `${counts.publish} ready to publish`, counts.changes && `${counts.changes} with changes requested`, counts.failed && plural(counts.failed, 'failed publish', 'failed publishes')].filter(Boolean).join(', ')}.`;
+  const inboxNote = unread ? ` ${plural(unread, 'unread message')} in the Inbox.` : '';
+  const summary = !d ? 'Loading your overview…'
+    : pending === 0 ? (unread ? `Nothing to review or publish.${inboxNote}` : 'You’re all caught up. Nothing is waiting for you.')
+    : `${plural(pending, 'item')} need${pending === 1 ? 's' : ''} you: ${[counts.review && `${counts.review} to review`, counts.publish && `${counts.publish} ready to publish`, counts.changes && `${counts.changes} with changes requested`, counts.failed && plural(counts.failed, 'failed publish', 'failed publishes')].filter(Boolean).join(', ')}.${inboxNote}`;
 
   const tiles = [
     any('.approve') && { key: 'review', label: 'To review', n: counts.review, href: '/studio/approvals', icon: 'inbox', empty: 'Nothing submitted', tone: 'info' },
     any('.publish') && { key: 'publish', label: 'Ready to publish', n: counts.publish, href: '/studio/approvals', icon: 'rocket', empty: 'Nothing approved', tone: 'ok' },
     (any('.update') || any('.create')) && { key: 'changes', label: 'Changes requested', n: counts.changes, href: '/studio/approvals', icon: 'undo', empty: 'None on your work', tone: 'warn' },
     can('news.read') && { key: 'scheduled', label: 'Scheduled stories', n: scheduled, href: '/studio/news?status=scheduled', icon: 'clock', empty: 'None scheduled', tone: 'neutral' },
+    canInbox && { key: 'inbox', label: 'Unread messages', n: unread ?? 0, href: '/studio/inbox', icon: 'mail', empty: 'Inbox is clear', tone: 'info' },
     can('dashboard.read') && { key: 'failed', label: 'Failed publishes', n: counts.failed, href: '/studio/publishing', icon: 'alert', empty: 'None in 3 days', tone: 'bad' },
   ].filter(Boolean) as { key: string; label: string; n: number; href: string; icon: string; empty: string; tone: string }[];
 
-  if (err) return <div className="notice n-bad" role="alert">{err}</div>;
+  if (err && !d) return <div className="notice n-bad" role="alert">{err} <button className="btn btn-sm" onClick={refresh}>Try again</button></div>;
 
   return <div className="dsh">
     {/* 1 · greeting and today's priorities */}
@@ -90,6 +119,12 @@ export function Dashboard() {
         <p className="dsh-eyebrow">{date}<span aria-hidden="true"> · </span>{me.user.roleLabel}</p>
         <h1>Good {hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}, {first}</h1>
         <p className="dsh-sub" aria-live="polite">{summary}</p>
+        <p className="dsh-updated">
+          {loading ? <><span className="dsh-spin" aria-hidden="true" />{stale ? 'Showing your last view · updating…' : 'Updating…'}</>
+            : err ? <span className="dsh-upd-bad">Couldn’t refresh: {err}</span>
+            : at ? <>Updated {ago(new Date(at))}</> : null}
+          {!loading && <button type="button" className="dsh-refresh" onClick={refresh} aria-label="Refresh the dashboard">Refresh</button>}
+        </p>
       </div>
       <div className="dsh-head-actions">
         {me.siteUrl && <a className="btn" href={me.siteUrl} target="_blank" rel="noreferrer"><Icon n="ext" />View website</a>}

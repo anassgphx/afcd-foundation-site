@@ -243,8 +243,8 @@ describe('pillar pages through the real generator', () => {
     for (const f of PILLAR_PAGES) for (const l of ['', 'fr/', 'ar/']) expect(files).toContain(l + f);
     const changed = files.filter((f) => !readFileSync(join(before, f)).equals(readFileSync(join(same, f))));
     expect(changed).toEqual([]);                                                               // every page, byte for byte
-    // and the committed pillar sources are what the generator makes today
-    for (const f of PILLAR_PAGES) expect(readFileSync(join(root, 'imported/pages', f), 'utf8')).toBe(readFileSync(join(REPO, 'src/pages', f), 'utf8'));
+    // the page sources too (compared with the generator's own text, not the checkout: Studio may have published edits there)
+    for (const f of PILLAR_PAGES) expect(readFileSync(join(root, 'imported/pages', f), 'utf8')).toBe(readFileSync(join(root, 'without/pages', f), 'utf8'));
 
     // an edit reaches the pillar page, the hub and the pages that name the pillar, and nothing else
     const edited = live.map((x) => (x.snap.key === 'digital-empowerment' ? { ...x, snap: { ...x.snap, name: 'Digital & AI', intro: 'Edited intro.' } } : x));

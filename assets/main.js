@@ -606,7 +606,23 @@
     var local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
     var url = STUDIO_URL || (local ? 'http://localhost:4400/studio/' : '');
     if (!url) return;
-    $$('[data-studio-login]').forEach(function (a) { a.href = url; a.hidden = false; });
+    $$('[data-studio-login]').forEach(function (a) {
+      a.href = url; a.hidden = false;
+      a.addEventListener('click', function () { try { localStorage.setItem('afcd.staff', '1'); } catch (e) { /* storage off */ } });
+    });
+    /* Edit this page: once "Staff login" has been used in this browser, every page shows a small button that opens the
+       Studio editor for that page (Studio still asks to sign in). The x hides it until "Staff login" is used again. */
+    var staff = false; try { staff = localStorage.getItem('afcd.staff') === '1'; } catch (e) { /* storage off */ }
+    if (!staff) return;
+    var file = location.pathname.split('/').pop() || 'index.html';
+    if (!/^[a-z0-9-]+\.html$/i.test(file)) return;
+    var box = document.createElement('div');
+    box.className = 'studio-edit';
+    box.innerHTML = '<a href="' + url + 'open?page=' + encodeURIComponent(file) + '" target="_blank" rel="noopener">'
+      + '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 2.5l3 3L6 13H3v-3z"/><path d="M9 4l3 3"/></svg>'
+      + '<span>Edit this page</span></a><button type="button" aria-label="Hide the edit button">&times;</button>';
+    box.querySelector('button').addEventListener('click', function () { try { localStorage.setItem('afcd.staff', '0'); } catch (e) { /* storage off */ } box.parentNode.removeChild(box); });
+    document.body.appendChild(box);
   })();
 
   /* Article pages: copy the page link */

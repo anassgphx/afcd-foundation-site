@@ -1,29 +1,41 @@
 // AFCD Studio admin app: session gate, shell (sidebar + top bar) and routes.
-import React, { StrictMode, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import React, { StrictMode, Suspense, lazy, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import './studio.css';
 import { api, post, setCsrf, ApiError } from './api.ts';
 import { Icon, Link, MeCtx, ToastHost, initials, navigate, useCan, useMe, usePath, type Me } from './ui.tsx';
-import { Dashboard } from './pages/Dashboard.tsx';
-import { ProjectsList } from './pages/Projects.tsx';
-import { ProjectEditor } from './pages/ProjectEditor.tsx';
-import { PagesList } from './pages/PagesList.tsx';
-import { Builder } from './pages/Builder.tsx';
-import { NewsList, ArticleEditor } from './pages/News.tsx';
-import { PartnersList, PartnerEditor } from './pages/Partners.tsx';
-import { PillarsScreen } from './pages/Pillars.tsx';
-import { EventsList, EventEditor } from './pages/Events.tsx';
-import { OpportunitiesList, OpportunityEditor } from './pages/Opportunities.tsx';
-import { InboxPage } from './pages/Inbox.tsx';
-import { SeoPage } from './pages/Seo.tsx';
-import { TranslationsPage } from './pages/Translations.tsx';
-import { MenusPage } from './pages/Menus.tsx';
-import { HomeEditor } from './pages/Home.tsx';
+import { Dashboard, Loading } from './pages/Dashboard.tsx';
 import { Breadcrumbs, Notifications, SearchButton, UserMenu, useRecent, type NavLink } from './Topbar.tsx';
 import { NAV, Sidebar } from './Sidebar.tsx';
-import { MediaLibrary } from './pages/Media.tsx';
-import { Publishing, ActivityLog, Users } from './pages/Admin.tsx';
-import { ApprovalsPage } from './pages/Approvals.tsx';
+
+// Screens load on demand: the first visit downloads the shell and the dashboard only. Each screen is its own file,
+// fetched the first time it is opened, and all of them are fetched in the background once Studio is idle.
+const SCREENS = {
+  projects: () => import('./pages/Projects.tsx'), projectEditor: () => import('./pages/ProjectEditor.tsx'), pagesList: () => import('./pages/PagesList.tsx'),
+  builder: () => import('./pages/Builder.tsx'), news: () => import('./pages/News.tsx'), partners: () => import('./pages/Partners.tsx'), pillars: () => import('./pages/Pillars.tsx'),
+  events: () => import('./pages/Events.tsx'), opportunities: () => import('./pages/Opportunities.tsx'), inbox: () => import('./pages/Inbox.tsx'), seo: () => import('./pages/Seo.tsx'),
+  translations: () => import('./pages/Translations.tsx'), menus: () => import('./pages/Menus.tsx'), home: () => import('./pages/Home.tsx'), media: () => import('./pages/Media.tsx'),
+  admin: () => import('./pages/Admin.tsx'), approvals: () => import('./pages/Approvals.tsx'),
+  open: () => import('./pages/OpenPage.tsx'),
+};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const screen = <K extends keyof typeof SCREENS>(k: K, name: string) => lazy(() => SCREENS[k]().then((m) => ({ default: (m as any)[name] as React.ComponentType<any> })));
+const ProjectsList = screen('projects', 'ProjectsList'), ProjectEditor = screen('projectEditor', 'ProjectEditor'), PagesList = screen('pagesList', 'PagesList');
+const Builder = screen('builder', 'Builder'), NewsList = screen('news', 'NewsList'), ArticleEditor = screen('news', 'ArticleEditor');
+const PartnersList = screen('partners', 'PartnersList'), PartnerEditor = screen('partners', 'PartnerEditor'), PillarsScreen = screen('pillars', 'PillarsScreen');
+const EventsList = screen('events', 'EventsList'), EventEditor = screen('events', 'EventEditor'), OpportunitiesList = screen('opportunities', 'OpportunitiesList');
+const OpportunityEditor = screen('opportunities', 'OpportunityEditor'), InboxPage = screen('inbox', 'InboxPage'), SeoPage = screen('seo', 'SeoPage');
+const TranslationsPage = screen('translations', 'TranslationsPage'), MenusPage = screen('menus', 'MenusPage'), HomeEditor = screen('home', 'HomeEditor');
+const MediaLibrary = screen('media', 'MediaLibrary'), Publishing = screen('admin', 'Publishing'), ActivityLog = screen('admin', 'ActivityLog'), Users = screen('admin', 'Users');
+const ApprovalsPage = screen('approvals', 'ApprovalsPage');
+const OpenPage = screen('open', 'OpenPage');
+let warmed = false;
+function warmScreens() {   // fetch every screen in the background after the first render, so later navigation is instant
+  if (warmed) return; warmed = true;
+  const go = () => Object.values(SCREENS).forEach((f) => { f().catch(() => {}); });
+  const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+  if (w.requestIdleCallback) w.requestIdleCallback(go, { timeout: 4000 }); else setTimeout(go, 1500);
+}
 
 function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
@@ -110,6 +122,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   const [collapsed, setCollapsed] = useState(() => localStorageGet('studio.side') === '1');
   const [mobile, setMobile] = useState(false);
   useEffect(() => { setMobile(false); }, [path]);
+  useEffect(() => { warmScreens(); }, []);
   // Inbox unread badge: on navigation, when the Inbox changes something, and every 2 minutes while Studio is open
   const [unread, setUnread] = useState(0);
   useEffect(() => {
@@ -135,7 +148,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             <UserMenu onLogout={onLogout} />
           </div>
         </header>
-        <main className={`content${page.full ? ' content-full' : ''}`} id="main">{page.el}</main>
+        <main className={`content${page.full ? ' content-full' : ''}`} id="main"><Suspense fallback={<Loading />}>{page.el}</Suspense></main>
       </div>
       {mobile && <div className="overlay" style={{ zIndex: 30, background: 'rgba(0,0,0,.25)' }} onClick={() => setMobile(false)} />}
     </div>
@@ -143,6 +156,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 }
 
 function route(path: string): { title: string; el: React.ReactElement; full?: boolean } {
+  if (path.startsWith('/studio/open')) return { title: 'Opening the editor', el: <OpenPage key={location.search} /> };
   if (path.startsWith('/studio/home')) return { title: 'Homepage', el: <HomeEditor key="home" />, full: true };
   if (path.startsWith('/studio/contact')) return { title: 'Contact page', el: <HomeEditor key="contact" path="/page-text/contact.html" />, full: true };
   if (path.startsWith('/studio/seo')) return { title: 'SEO', el: <SeoPage key={path} /> };

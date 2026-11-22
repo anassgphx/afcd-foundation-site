@@ -8,7 +8,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { renderPage } from './lib/page-fields.mjs';
+import { renderPage, closeIndex } from './lib/page-fields.mjs';
 import { activeLangs, decorateEnglish, buildLanguages } from './lib/i18n.mjs';
 import { renderMenus } from './lib/menu.mjs';
 import { execSync } from 'node:child_process';
@@ -28,13 +28,56 @@ const head = partial('head').replace('href="assets/styles.css"', `href="assets/s
 const MENU_FILE = process.env.MENU_JSON || join(SRC, 'data', 'menu.json');
 const MENU = existsSync(MENU_FILE) ? JSON.parse(readFileSync(MENU_FILE, 'utf8')) : null;
 const menus = MENU ? renderMenus(partial('header'), partial('footer'), MENU) : null;
-const header = menus ? menus.header : partial('header');
+const headerBase = menus ? menus.header : partial('header');
 const footer = menus ? menus.footer : partial('footer');
+
+// Projects menu: a "Projects by pillar" row in the Projects dropdown and a "By pillar" list in its phone panel, from the
+// published data (src/data/pillars.json and src/data/projects.json, written by AFCD Studio). It is added after the Studio
+// menu (if any) is applied, so it follows pillar and project changes. Without the data files the header is used as written.
+function withPillarProjects(html) {
+  const pf = join(SRC, 'data', 'pillars.json'), jf = join(SRC, 'data', 'projects.json');
+  if (!existsSync(pf) || !existsSync(jf)) return html;
+  const pillars = [...(JSON.parse(readFileSync(pf, 'utf8')).pillars ?? [])].sort((a, b) => String(a.number).localeCompare(String(b.number)));
+  const projects = JSON.parse(readFileSync(jf, 'utf8')).projects ?? [];
+  if (!pillars.length) return html;
+  const e = (s) => escapeAttr(escapeText(String(s ?? '')));
+  const colour = (c) => (/^#[0-9a-f]{3,8}$/i.test(c ?? '') ? c : '#E5E5E5');
+  const listOf = (key) => `projects.html?pillar=${encodeURIComponent(key)}#proj-grid`;
+  const safeFile = (f) => (/^[a-z0-9-]+\.html$/.test(f ?? '') ? f : null);
+  const MAX = 4;
+  const cols = pillars.map((p) => {
+    const mine = projects.filter((x) => x.pillar === p.key);
+    const items = mine.slice(0, MAX).map((x) => `<li><a href="${e(safeFile(x.file) ?? listOf(p.key))}">${e(x.name)}</a></li>`).join('');
+    const more = mine.length > MAX ? `<li><a class="mm-pp-more" href="${e(listOf(p.key))}">+${mine.length - MAX} more</a></li>` : '';
+    return `<div class="mm-pp-col" style="--c:${colour(p.colour)}"><a class="mm-pp-head" href="${e(safeFile(p.file) ?? listOf(p.key))}"><span class="mm-dot" aria-hidden="true"></span><span class="mm-pp-name">${e(p.name)}</span><span class="mm-pp-n" title="${mine.length} project${mine.length === 1 ? '' : 's'}">${mine.length}</span></a>`
+      + `<ul class="mm-pp-list">${items || '<li class="mm-pp-none">No projects yet</li>'}${more}</ul></div>`;
+  }).join('');
+  const block = `<div class="wrap mm-pp" aria-label="Projects by pillar"><p class="mm-pp-h">Projects by pillar</p><div class="mm-pp-grid">${cols}</div></div>\n            `;
+  let out = html;
+  const at = out.indexOf('id="dd-projects"');
+  if (at >= 0) {   // desktop: just above the prompt bar at the bottom of the Projects dropdown
+    const openEnd = out.indexOf('>', at) + 1, end = closeIndex(out, 'div', openEnd);
+    const bar = out.indexOf('<div class="border-t border-ink-light bg-ink-off">', openEnd);
+    const pos = bar > 0 && bar < end ? bar : end;
+    out = out.slice(0, pos) + block + out.slice(pos);
+  }
+  const acc = out.search(/<button class="m-acc[^"]*"[^>]*>Projects\s*<span/);
+  if (acc >= 0) {  // phone: the end of the Projects panel
+    const pStart = out.indexOf('<div class="m-panel', acc);
+    if (pStart > 0) {
+      const openEnd = out.indexOf('>', pStart) + 1, end = closeIndex(out, 'div', openEnd);
+      const phone = `<p class="m-pp-h">By pillar</p>` + pillars.map((p) => `<a class="m-link m-pp" href="${e(listOf(p.key))}" style="--c:${colour(p.colour)}"><span class="mm-dot" aria-hidden="true"></span><span>${e(p.name)}</span><span class="m-pp-n">${projects.filter((x) => x.pillar === p.key).length}</span></a>`).join('');
+      out = out.slice(0, end) + phone + out.slice(end);
+    }
+  }
+  return out;
+}
 
 const NAV = ['home', 'about', 'pillars', 'projects', 'news', 'partners', 'contact', 'involved', 'events', 'none'];
 // Escapes for attributes without double-escaping entities already in the text (front matter titles may contain &amp;).
 const escapeAttr = (s) => s.replace(/&(?!(?:[a-z][a-z0-9]*|#\d+|#x[0-9a-f]+);)/gi, '&amp;').replace(/"/g, '&quot;');
 const escapeText = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const header = withPillarProjects(headerBase);
 
 function parse(file) {
   const raw = readFileSync(join(PAGES_DIR, file), 'utf8');

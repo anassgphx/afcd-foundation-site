@@ -2,7 +2,7 @@
 // Sections are the homepage's own sections (move, hide, edit their marked fields) and blocks from the section library
 // (add, duplicate, move, hide, remove, edit). The canvas is composed by the same code as the published build.
 // Undo/redo cover every change; autosave keeps drafts; review and publishing are unchanged.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, LiveBadge, Modal, fmtDate, useCan, useMe, useToast } from '../ui.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
@@ -33,14 +33,17 @@ export function HomeEditor() {
   const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
   const [media, setMedia] = useState<Record<string, MediaItem>>({});
   const [links, setLinks] = useState<string[]>([]);
-  const [dialog, setDialog] = useState<null | { kind: 'image'; key: string } | { kind: 'library' | 'preview' | 'publish' | 'unpublish' | 'changes' | 'history' }>(null);
+  const [dialog, setDialog] = useState<null | { kind: 'image'; key: string } | { kind: 'library'; at?: number } | { kind: 'preview' | 'publish' | 'unpublish' | 'changes' | 'history' }>(null);
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);   // ⋯ actions menu of a section
   const [url, setUrl] = useState(''); const [comment, setComment] = useState('');
   const [html, setHtml] = useState('');
   const base = useRef<string | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const [focusKey, setFocusKey] = useState<{ key: string; n: number } | null>(null);   // field clicked in the canvas
   const scrollY = useRef(0);
-  const fromCanvas = useRef(false);   // canvas scroll, kept across reloads so typing never jumps the page back to the top
+  const fromCanvas = useRef(false);
+  const actionsRef = useRef<(id: string) => Act[]>(() => []); const runActRef = useRef<(id: string, a: string) => void>(() => {});
+  const labelRef = useRef<(id: string) => string>((id) => id); const scaleRef = useRef(1);   // canvas scroll, kept across reloads so typing never jumps the page back to the top
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 900, h: 700 });
   useEffect(() => { const el = box.current; if (!el) return; const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height })); ro.observe(el); return () => ro.disconnect(); });
@@ -65,12 +68,32 @@ export function HomeEditor() {
   const move = (from: number, to: number) => { if (to < 0 || to >= st.layout.length || from === to) return; const l = [...st.layout]; const [x] = l.splice(from, 1); l.splice(to, 0, x); setLayout(l); };
   const toggle = (id: string) => setLayout(st.layout.map((e) => (e.id === id ? { ...e, hidden: !e.hidden } : e)));
   const duplicate = (id: string) => { const i = st.layout.findIndex((e) => e.id === id); const e = st.layout[i]; if (e.kind !== 'block') return; const copy = { ...structuredClone(e), id: rid() }; const l = [...st.layout]; l.splice(i + 1, 0, copy); setLayout(l); setSel(copy.id); };
-  const remove = (id: string) => { setLayout(st.layout.filter((e) => e.id !== id)); if (sel === id) setSel(null); toast('Section removed. Undo brings it back; older versions stay in History.'); };
-  const addBlock = (type: string) => {
+  const remove = (id: string) => { setLayout(st.layout.filter((e) => e.id !== id)); if (sel === id) setSel(null); toast('Section deleted from the draft. ⌘Z brings it back.'); };
+  const addBlock = (type: string, at?: number) => {
     const def = defs.get(type)!; const nb: Entry = { kind: 'block', id: rid(), type, v: def.version, hidden: false, props: structuredClone(def.defaults) };
-    const i = sel ? st.layout.findIndex((e) => e.id === sel) : -1; const l = [...st.layout]; l.splice(i >= 0 ? i + 1 : l.length, 0, nb);
+    const i = sel ? st.layout.findIndex((e) => e.id === sel) : -1; const l = [...st.layout]; l.splice(at ?? (i >= 0 ? i + 1 : l.length), 0, nb);
     setLayout(l); setSel(nb.id); setDialog(null);
   };
+  /** Every action a section offers, in one place: the ⋯ menu, the canvas toolbar and the keyboard use the same list.
+   *  Site sections come from the page code: they can be hidden and restored, not deleted or copied. Nothing here
+   *  publishes; every action edits the draft. */
+  const actionsFor = (id: string): Act[] => {
+    const i = st.layout.findIndex((e) => e.id === id); const e = st.layout[i]; if (!e) return [];
+    const site = e.kind === 'section'; const off = !editable ? 'Read-only: this version is in review or you cannot edit the homepage.' : undefined;
+    return [
+      { id: 'edit', label: 'Edit', icon: 'edit', kbd: '↵', run: () => { setSel(id); setTimeout(() => document.querySelector<HTMLElement>('.b-right input, .b-right textarea, .b-right select')?.focus(), 80); } },
+      { id: 'above', label: 'Add section above', icon: 'plus', off, run: () => setDialog({ kind: 'library', at: i }) },
+      { id: 'below', label: 'Add section below', icon: 'plus', off, run: () => setDialog({ kind: 'library', at: i + 1 }) },
+      { id: 'dup', label: 'Duplicate', icon: 'copy', kbd: '⌘D', off: off ?? (site ? 'Site sections are built from the page code and cannot be copied. Add a section from the library instead.' : undefined), run: () => duplicate(id) },
+      { id: 'up', label: 'Move up', icon: 'up', kbd: '⌥↑', off: off ?? (i === 0 ? 'Already first.' : undefined), run: () => move(i, i - 1) },
+      { id: 'down', label: 'Move down', icon: 'down', kbd: '⌥↓', off: off ?? (i === st.layout.length - 1 ? 'Already last.' : undefined), run: () => move(i, i + 1) },
+      { id: 'hide', label: e.hidden ? (site ? 'Restore on the homepage' : 'Show on the homepage') : 'Hide from the homepage', icon: e.hidden ? 'eye' : 'eyeoff', kbd: 'H', off, run: () => { toggle(id); toast(e.hidden ? `${label(e)} is back on the homepage draft` : `${label(e)} hidden in the draft. ⌘Z undoes it.`); } },
+      site
+        ? { id: 'del', label: e.hidden ? 'Already hidden' : 'Delete (hides it)', icon: 'trash', kbd: '⌫', danger: true, off: off ?? (e.hidden ? 'Site sections cannot be deleted; this one is already hidden. Use Restore to bring it back.' : undefined), run: () => { toggle(id); toast(`Site sections cannot be deleted, so ${label(e)} is hidden instead. Restore brings it back.`); } }
+        : { id: 'del', label: 'Delete', icon: 'trash', kbd: '⌫', danger: true, off, run: () => remove(id) },
+    ];
+  };
+  const runAct = (id: string, act: string) => { const a = actionsFor(id).find((x) => x.id === act); if (a && !a.off) a.run(); else if (a?.off) toast(a.off, true); };
   const setField = (f: FieldDef, v: any) => { const n = { ...st.values }; if (v === null || same(v, f.default)) delete n[f.key]; else n[f.key] = v; change({ ...st, values: n }); };
   const setProps = (id: string, props: Record<string, any>) => setLayout(st.layout.map((e) => (e.id === id && e.kind === 'block' ? { ...e, props } : e)));
 
@@ -92,9 +115,24 @@ export function HomeEditor() {
         if (f && el.contains(f)) setFocusKey((x) => ({ key: f.dataset.sf!, n: (x?.n ?? 0) + 1 }));
       };
     });
+    // toolbar on the selected section in the canvas (same actions as the ⋯ menu)
+    doc.querySelectorAll('.sx-bar').forEach((x) => x.remove());
+    const host = sel ? doc.querySelector<HTMLElement>(`[data-block-id="${sel}"]`) : null;
+    if (host) {
+      const bar = doc.createElement('div'); bar.className = 'sx-bar'; bar.style.zoom = String(1 / scaleRef.current);
+      const name = doc.createElement('span'); name.className = 'sx-name'; name.textContent = labelRef.current(sel!); bar.append(name);
+      for (const a of actionsRef.current(sel!).filter((x) => x.id !== 'edit')) {
+        const b = doc.createElement('button'); b.type = 'button'; b.className = `sx-btn${a.danger ? ' sx-danger' : ''}`; b.textContent = SX_GLYPH[a.id] ?? '•';
+        b.title = a.off ?? `${a.label}${a.kbd ? ` (${a.kbd})` : ''}`; b.setAttribute('aria-label', a.label); if (a.off) b.setAttribute('aria-disabled', 'true');
+        b.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); runActRef.current(sel!, a.id); };
+        bar.append(b);
+      }
+      host.append(bar);
+    }
+    doc.onkeydown = (ev) => keysRef.current(ev, /INPUT|TEXTAREA|SELECT/.test((ev.target as HTMLElement)?.tagName ?? ''));
     doc.querySelectorAll<HTMLElement>('[data-sf]').forEach((el) => el.classList.toggle('sf-on', el.dataset.sf === focusKey?.key && !!el.closest(`[data-block-id="${sel}"]`)));
     const win = frame.current?.contentWindow; if (win) win.onscroll = () => { scrollY.current = win.scrollY; };
-  }, [sel, focusKey]);
+  }, [sel, focusKey, st.layout, editable]);
   const pending = useRef(false);   // a section picked before the canvas finished loading
   const reveal = useCallback(() => {
     const el = frame.current?.contentDocument?.querySelector<HTMLElement>(`[data-block-id="${sel}"]`); const win = frame.current?.contentWindow;
@@ -139,11 +177,20 @@ export function HomeEditor() {
     const t = setTimeout(() => { doSave(true); }, 3000);
     return () => clearTimeout(t);
   }, [st, save, editable, status, doSave]);
+  // section shortcuts (also inside the canvas): ⌥↑ ⌥↓ move, ⌘D duplicate, H hide, ⌫ delete, ↵ edit
+  const sectionKeys = (e: KeyboardEvent, typing: boolean) => {
+    if (typing || !sel || dialog) return; const mod = e.metaKey || e.ctrlKey; const k = e.key;
+    const act = e.altKey && k === 'ArrowUp' ? 'up' : e.altKey && k === 'ArrowDown' ? 'down' : mod && k.toLowerCase() === 'd' ? 'dup'
+      : !mod && !e.altKey && k.toLowerCase() === 'h' ? 'hide' : !mod && (k === 'Delete' || k === 'Backspace') ? 'del' : null;
+    if (act) { e.preventDefault(); runAct(sel, act); }
+  };
+  const keysRef = useRef(sectionKeys); keysRef.current = sectionKeys;
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey; const typing = /INPUT|TEXTAREA|SELECT/.test((e.target as HTMLElement)?.tagName ?? '');
       if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); if (save !== 'saved' && editable) doSave(); }
       if (mod && e.key.toLowerCase() === 'z' && !typing && editable) { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+      sectionKeys(e, typing);
     };
     window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
   });
@@ -161,8 +208,9 @@ export function HomeEditor() {
   }
   async function preview() { if (save !== 'saved' && !(await doSave(true))) return; setBusy('preview'); try { const r = await post<{ url: string }>('/home/preview'); setUrl(r.url); setDialog({ kind: 'preview' }); } catch (e) { showErr(e); } finally { setBusy(''); } }
 
+  actionsRef.current = actionsFor; runActRef.current = runAct; labelRef.current = (id) => { const e = st.layout.find((x) => x.id === id); return e ? label(e) : id; };
   if (!d) return <Loading />;
-  const scale = Math.min(1, Math.max(0.1, (size.w - 8) / device)); const canvasH = Math.max(400, size.h - 28);
+  const scale = Math.min(1, Math.max(0.1, (size.w - 8) / device)); const canvasH = Math.max(400, size.h - 28); scaleRef.current = scale;
   const selEntry = st.layout.find((e) => e.id === sel) ?? null;
   const nChanges = Object.keys(st.values).length + (same(st.layout, d.siteSections.map((s) => ({ kind: 'section', id: s.id, hidden: false }))) ? 0 : 1);
   const saveLabel = { saved: 'All changes saved', saving: 'Saving…', unsaved: 'Unsaved changes', failed: 'Save failed' }[save];
@@ -197,19 +245,16 @@ export function HomeEditor() {
             onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', String(i)); ev.dataTransfer.effectAllowed = 'move'; }}
             onDragOver={(ev) => { if (editable) { ev.preventDefault(); ev.currentTarget.classList.add('drop'); } }} onDragLeave={(ev) => ev.currentTarget.classList.remove('drop')}
             onDrop={(ev) => { ev.preventDefault(); ev.currentTarget.classList.remove('drop'); move(Number(ev.dataTransfer.getData('text/plain')), i); }}>
-            <button className="b-layer-main" title={label(e)} onClick={() => { if (sel === e.id) reveal(); else setSel(e.id); }} aria-current={sel === e.id}>
+            <button className="b-layer-main" data-tip={label(e)} onClick={() => { if (sel === e.id) reveal(); else setSel(e.id); }} aria-current={sel === e.id}>
               <span className="b-grip" aria-hidden="true">⋮⋮</span>
               <span className="hp-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
               <Icon n={e.kind === 'section' ? SECTION_ICON[e.id] ?? 'layers' : 'plus'} width={15} height={15} />
               <span className="min-w-0"><b>{label(e)}</b><small>{e.kind === 'section' ? 'Homepage section' : 'Added section'}{e.hidden ? ' · hidden' : ''}{e.kind === 'section' && d.fields.some((f) => f.sectionId === e.id && f.key in st.values) ? ' · edited' : ''}</small></span>
             </button>
-            {editable && <span className="b-layer-act">
-              <button onClick={() => move(i, i - 1)} disabled={i === 0} aria-label={`Move ${label(e)} up`} title="Move up">↑</button>
-              <button onClick={() => move(i, i + 1)} disabled={i === st.layout.length - 1} aria-label={`Move ${label(e)} down`} title="Move down">↓</button>
-              {e.kind === 'block' && <button onClick={() => duplicate(e.id)} aria-label={`Duplicate ${label(e)}`} title="Duplicate">⧉</button>}
-              <button onClick={() => toggle(e.id)} aria-label={e.hidden ? `Show ${label(e)}` : `Hide ${label(e)}`} title={e.hidden ? 'Show on the homepage' : 'Hide from the homepage'}>{e.hidden ? '◌' : '◉'}</button>
-              {e.kind === 'block' && <button onClick={() => remove(e.id)} aria-label={`Remove ${label(e)}`} title="Remove">×</button>}
-            </span>}
+            <span className="b-layer-act">
+              <button className="b-more" aria-label={`More actions for ${label(e)}`} aria-haspopup="menu" aria-expanded={menu?.id === e.id}
+                onClick={(ev) => { const r = ev.currentTarget.getBoundingClientRect(); setMenu(menu?.id === e.id ? null : { id: e.id, x: r.right, y: r.bottom + 4 }); }}>⋯</button>
+            </span>
           </li>))}
         </ol>
       </aside>
@@ -239,7 +284,8 @@ export function HomeEditor() {
       </aside>
     </div>
 
-    {dialog?.kind === 'library' && <SectionLibrary catalog={d.catalog} onPick={addBlock} onClose={() => setDialog(null)} />}
+    {dialog?.kind === 'library' && <SectionLibrary catalog={d.catalog} onPick={(t) => addBlock(t, dialog.at)} onClose={() => setDialog(null)} />}
+    {menu && <ActionMenu x={menu.x} y={menu.y} acts={actionsFor(menu.id)} onRun={(a) => { setMenu(null); runAct(menu.id, a); }} onClose={() => setMenu(null)} />}
     {dialog?.kind === 'image' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { const f = d.fields.find((x) => x.key === dialog.key)!; if (m[0]) { setMedia((x) => ({ ...x, [m[0].id]: m[0] })); setField(f, { mediaId: m[0].id }); } setDialog(null); }} />}
     {dialog?.kind === 'preview' && <Modal wide title="Preview · built by the real website build" onClose={() => setDialog(null)}><div className="preview-wrap"><iframe title="Homepage preview" src={url} style={{ width: Math.min(device, window.innerWidth - 80) }} /></div></Modal>}
     {dialog?.kind === 'history' && <Modal title="Homepage history" onClose={() => setDialog(null)}><div className="modal-b">
@@ -271,6 +317,34 @@ function SectionFields({ fields, values, media, editable, onChange, onPickImage 
       {f.type === 'rich' && <small>**Double stars** highlight words, as on the page.</small>}
       {changed && editable && <button type="button" className="btn btn-ghost btn-sm" style={{ padding: 0, height: 'auto', justifySelf: 'start' }} onClick={() => onChange(f, null)}>Reset to the original</button>}</div>;
   })}</>;
+}
+
+type Act = { id: string; label: string; icon: string; kbd?: string; danger?: boolean; off?: string; run: () => void };
+const SX_GLYPH: Record<string, string> = { above: '+↑', below: '+↓', dup: '⧉', up: '↑', down: '↓', hide: '◉', del: '🗑' };
+
+/** The ⋯ menu of a section: every action, its shortcut, and why an action is unavailable. */
+function ActionMenu({ x, y, acts, onRun, onClose }: { x: number; y: number; acts: Act[]; onRun: (id: string) => void; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>('button:not([aria-disabled])')?.focus();
+    const out = (e: MouseEvent) => { const t = e.target as Element; if (!ref.current?.contains(t) && !t.closest?.('.b-more')) onClose(); };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const b = [...ref.current!.querySelectorAll<HTMLElement>('button')]; const i = b.indexOf(document.activeElement as HTMLElement); b[(i + (e.key === 'ArrowDown' ? 1 : b.length - 1)) % b.length]?.focus(); }
+    };
+    setTimeout(() => document.addEventListener('mousedown', out)); document.addEventListener('keydown', key, true);
+    return () => { document.removeEventListener('mousedown', out); document.removeEventListener('keydown', key, true); };
+  }, []);
+  const top = Math.min(y, window.innerHeight - 340), left = Math.max(8, x - 240);
+  return <div ref={ref} className="b-menu" role="menu" style={{ top, left }}>
+    {acts.map((a, i) => <Fragment key={a.id}>
+      {(a.id === 'above' || a.id === 'dup' || a.id === 'hide') && i > 0 && <hr />}
+      <button role="menuitem" className={a.danger ? 'danger' : ''} aria-disabled={a.off ? true : undefined} title={a.off} onClick={() => (a.off ? undefined : onRun(a.id))}>
+        <span>{a.label}</span>{a.kbd && <kbd>{a.kbd}</kbd>}
+      </button>
+      {a.off && (a.id === 'dup' || a.id === 'del') && <small className="b-menu-why">{a.off}</small>}
+    </Fragment>)}
+  </div>;
 }
 
 function SectionLibrary({ catalog, onPick, onClose }: { catalog: BlockDef[]; onPick: (type: string) => void; onClose: () => void }) {

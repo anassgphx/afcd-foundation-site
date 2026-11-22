@@ -40,6 +40,13 @@ html{scroll-behavior:auto!important}
 [data-sf]{cursor:text;border-radius:4px}
 img[data-sf],[data-sf] img{cursor:pointer}
 [data-sf]:hover{outline:1.5px solid rgba(37,99,235,.7);outline-offset:3px}
+.sx-bar{position:absolute;z-index:60;top:10px;right:10px;display:flex;align-items:center;gap:2px;padding:4px;border-radius:10px;background:#111;box-shadow:0 8px 24px -8px rgba(0,0,0,.45);font:500 12px/1 system-ui,sans-serif;color:#fff;cursor:default}
+.sx-name{padding:0 8px 0 6px;white-space:nowrap;opacity:.85}
+[data-block-id] .sx-bar .sx-btn{pointer-events:auto!important;min-width:28px;height:28px;padding:0 6px;border:0;border-radius:7px;background:transparent;color:#fff;font:600 13px/1 system-ui,sans-serif;cursor:pointer}
+.sx-btn:hover{background:rgba(255,255,255,.16)}
+.sx-btn.sx-danger:hover{background:#b91c1c}
+.sx-btn[aria-disabled]{opacity:.35;cursor:not-allowed}
+.sx-btn[aria-disabled]:hover{background:transparent}
 [data-sf].sf-on{outline:2px solid #2563EB;outline-offset:3px;background-color:rgba(37,99,235,.06)}
 </style>`;
 

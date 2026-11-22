@@ -5,6 +5,7 @@ It (re)writes the page sources; build.mjs then wraps them in the shared layout.
 Text comes from the homepage and the current afcdfoundation.org site.
 Anything AFCD still has to supply is shown as a visible placeholder, never invented.
 """
+import os, re
 from pathlib import Path
 
 OUT = Path(__file__).parent / 'pages'
@@ -163,9 +164,9 @@ def about():
     stats = ''.join(
         f'<div class="border-t border-white/20 py-6 pr-4"><dd class="text-5xl font-semibold tracking-tightest tabular-nums md:text-6xl">{n}</dd><dt class="mt-3 text-sm text-white/65">{t}</dt></div>'
         for n, t in impact)
-    values = ''.join(
-        f'<li class="rounded-2xl border border-ink-light bg-white p-6"><span class="text-[11px] tabular-nums text-ink-mid">{r}</span><span class="mt-6 block text-2xl font-semibold tracking-[-0.03em]">{v}</span><span class="mt-2 block text-[14px] leading-relaxed text-ink-dark">{d}</span></li>'
-        for r, v, d in VALUES)
+    # Same coloured value cards as the homepage (single source: src/pages/index.html)
+    home = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pages', 'index.html'), encoding='utf-8').read()
+    values = re.search(r'<ul class="vl-row[^"]*">(.*?)</ul>', home, re.S).group(1).strip()
     def obj_links(links):
         if not links:
             return '<span class="text-[13px] text-ink-mid">Cross-cutting, all pillars</span>'
@@ -216,7 +217,7 @@ def about():
         <p class="text-2xl leading-[1.2] tracking-[-0.025em] md:col-span-9 md:text-[32px]">A society free from exploitation and discrimination, where everyone has equal opportunities to grow, contribute, and realise their full potential.</p>
       </div>
       <p class="label mt-14 text-ink-mid">Our Values</p>
-      <ul class="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">{values}</ul>
+      <ul class="vl-row mt-6 grid grid-cols-2 gap-3 lg:flex lg:gap-4">{values}</ul>
     </div>
   </div>
 </section>

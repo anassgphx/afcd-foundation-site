@@ -6,7 +6,7 @@ import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
 import { applyFields, composeSections, type LayoutItem } from '../../../../../lib/page-fields.mjs';
 import { esc, renderBlocks } from '../pages/blocks.ts';
-import { buildCtx } from '../pages/render.ts';
+import { buildCtx, siteUrls } from '../pages/render.ts';
 import { inArray } from 'drizzle-orm';
 import { media } from '../../db/schema.ts';
 import { publicRef } from '../media/service.ts';
@@ -80,5 +80,5 @@ export async function homeCanvas(db: DB, cfg: Config, file: string, values: Reco
     (id, html, kind) => `<div data-block-id="${esc(id)}"${kind.startsWith('hidden') ? ' data-hidden="1"' : ''}>${html}</div>`);
   // every image loads at once: lazy loading inside a scaled, scrolled iframe can leave sections empty
   return [head.trimEnd(), '<body class="font-sans">', mark(part('header')).trimEnd(), `<main id="main" data-page="home">${body}</main>`, mark(part('footer')).trimEnd(), '</body></html>'].join('\n')
-    .replace(/\sloading="lazy"/g, ' loading="eager"');
+    .replace(/\sloading="lazy"/g, ' loading="eager"').replace(/^[\s\S]*$/, siteUrls);
 }

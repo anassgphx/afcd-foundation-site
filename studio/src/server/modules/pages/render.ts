@@ -52,6 +52,13 @@ export function pageSource(s: PageSnapshot, ctx: Omit<RenderCtx, 'pageTitle'>, r
 
 const NAV = ['home', 'about', 'pillars', 'projects', 'news', 'partners', 'contact', 'involved', 'none'];
 
+/** Canvas HTML is an iframe srcdoc. <base> makes it render right, but Chrome's preloader fetches early resources
+ *  against the parent page (/studio/…) before it sees <base>; absolute site paths avoid those 404s. */
+export const siteUrls = (html: string) => html
+  .replace(/(\s(?:src|href|poster)=["'])assets\//g, '$1/studio/site/assets/')
+  .replace(/(\ssrcset=")([^"]*)"/g, (_m, a: string, v: string) => `${a}${v.replace(/(^|,\s*)assets\//g, '$1/studio/site/assets/')}"`)
+  .replace(/url\((['"]?)assets\//g, 'url($1/studio/site/assets/');
+
 /** Live canvas for the builder: the real partials and CSS around the editor-mode render. Served as iframe srcdoc. */
 export function canvasHtml(cfg: Config, s: PageSnapshot, ctx: Omit<RenderCtx, 'pageTitle'>) {
   const part = (n: string) => readFileSync(resolve(cfg.siteRoot, 'src/partials', `${n}.html`), 'utf8');
@@ -70,5 +77,5 @@ export function canvasHtml(cfg: Config, s: PageSnapshot, ctx: Omit<RenderCtx, 'p
   const body = renderBlocks(validateDoc(s.doc).doc, { ...ctx, pageTitle: s.title, editor: true });
   return [head.trimEnd(), '<body class="font-sans">', mark(part('header')).trimEnd(),
     `<main id="main" data-page="${active}">${body || '<div class="wrap py-24 text-center text-ink-mid">Add a block from the library to start this page.</div>'}</main>`,
-    mark(part('footer')).trimEnd(), '</body></html>'].join('\n');
+    mark(part('footer')).trimEnd(), '</body></html>'].join('\n').replace(/^[\s\S]*$/, siteUrls);
 }

@@ -679,11 +679,11 @@ body.show-notes .note { display: block; }
 .phd-body { margin-top: 18px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .phd-body > * { min-width: 0; }
 .phd-title.sh-title { font-size: clamp(32px, 3.4vw, 54px); line-height: 1.02; }
-.phd-lead { max-width: 56ch; font-size: 15.5px; line-height: 1.6; color: var(--charcoal); }
+.phd-lead { max-width: 62ch; font-size: 16px; line-height: 1.6; color: var(--charcoal); }
 .phd-aside .sh-points { margin-top: 12px; }
 .phd-aside .sh-points li { min-height: 28px; padding: 0 11px; font-size: 12px; }
 .phd-aside .sh-points li { background: rgba(255,255,255,.85); border: 1px solid #EAEAEA; }
 @media (min-width: 640px) { .phd-label { display: inline-flex; } }
 @media (min-width: 1024px) {
-  .phd-body { margin-top: 24px; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 48px; align-items: end; }
+  .phd-body { margin-top: 24px; gap: 14px; }
 }

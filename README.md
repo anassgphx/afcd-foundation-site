@@ -9,7 +9,11 @@ Built with plain HTML, Tailwind CSS 3.4.17 and vanilla JavaScript. Content is pl
 | Page | File |
 |---|---|
 | Home | `index.html` |
-| About Us (story, mission & vision, approach, team, impact) | `about.html` |
+| About Us (overview, links to the About pages, impact) | `about.html` |
+| Our Story (story + approach) | `our-story.html` |
+| Mission & Vision (mission, vision, values) | `mission-vision.html` |
+| Strategy & Objectives (six objectives, who we serve) | `strategy.html` |
+| Our Team | `team.html` |
 | Our Pillars (one section per pillar) | `pillars.html` |
 | Projects (featured + filter by pillar) | `projects.html` |
 | Project pages | `project-leadership-lab.html`, `project-eco-citizen.html`, `project-youth-green-generation.html` |

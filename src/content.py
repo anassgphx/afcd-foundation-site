@@ -73,9 +73,10 @@ PROJECTS = [
 ]
 
 
-def page(name, title, description, active, body):
+def page(name, title, description, active, body, parent=None):
+    extra = f'parent: {parent[0]}|{parent[1]}\n' if parent else ''
     (OUT / name).write_text(
-        f'---\ntitle: {title}\ndescription: {description}\nactive: {active}\n---\n<span id="top"></span>\n{body.strip()}\n'
+        f'---\ntitle: {title}\ndescription: {description}\nactive: {active}\n{extra}---\n<span id="top"></span>\n{body.strip()}\n'
     )
 
 
@@ -190,10 +191,7 @@ def about():
           <p class="mt-4 text-lg font-medium tracking-[-0.015em]">Team member</p>
           <p class="text-sm text-ink-mid">Role</p>
         </li>''' for _ in range(4))
-    body = page_header([('About Us', 'about.html')], 'About Us',
-                       'Local roots. <span class="text-ink-mid">Shared purpose.</span> Lasting impact.',
-                       'A Moroccan nonprofit association founded in 2007 by young volunteers in Ait Ourir, Al Haouz, with its main office in Marrakech.', points=('Since <b>2007</b>', 'Marrakech', '<b>4</b> Pillars', '<b>6</b> Objectives')) + f'''
-
+    sections = f'''
 <section id="story" class="py-14 lg:py-16">
   <div class="wrap">{sec_head('01 / Our Story', 'It started with young volunteers <span class="sh-soft">in Ait Ourir.</span>', 'Since 2007', desc='From a group of committed young volunteers in 2007 to programmes across Morocco.')}
     <div class="mt-12 grid gap-12 lg:mt-16 lg:grid-cols-12 lg:gap-16">
@@ -275,11 +273,86 @@ def about():
     <dl class="mt-12 grid grid-cols-2 gap-x-6 lg:mt-16 lg:grid-cols-4">{stats}</dl>
   </div>
 </section>
-''' + cta_band('Let’s create change together.', 'Join our community, explore opportunities or collaborate with AFCD Foundation.',
-               ('Get Involved', 'get-involved.html'), ('Partner With Us', 'get-involved.html#partner'))
+'''
+
+    parts = {m.group(1): m.group(0) for m in re.finditer(r'<section id="([a-z-]+)".*?</section>', sections, re.S)}
+
+    def renum_all(html):
+        # number every section heading on a page in order (sh-num pills and the dark "NN / Label" kicker)
+        n = iter(range(1, 20))
+        return re.sub(r'(<span class="sh-num">)\d\d(</span>)|(<p class="label text-white/60">)\d\d( / )',
+                      lambda m: (f'{m.group(1)}{next(n):02d}{m.group(2)}' if m.group(1) else f'{m.group(3)}{next(n):02d}{m.group(4)}'), html)
+
+    cta = cta_band('Let’s create change together.', 'Join our community, explore opportunities or collaborate with AFCD Foundation.',
+                   ('Get Involved', 'get-involved.html'), ('Partner With Us', 'get-involved.html#partner'))
+    ABOUT = ('About Us', 'about.html')
+
+    def sub(file, crumb, label, title, lead, keys, meta_title, meta_desc):
+        first = re.sub(r'\s*<header class="sh">.*?</header>', '', parts[keys[0]], count=1, flags=re.S)  # page header already titles it
+        first = first.replace('mt-12 grid', 'grid', 1).replace('<div class="mt-8 lg:mt-10">', '<div>', 1).replace('mt-8 grid', 'grid', 1).replace('mt-12 grid', 'grid', 1)
+        body = page_header([ABOUT, (crumb, file)], label, title, lead) + renum_all('\n'.join([first] + [parts[k] for k in keys[1:]])) + cta + about_more(file)
+        page(file, meta_title, meta_desc, 'about', body, parent=ABOUT)
+
+    sub('our-story.html', 'Our Story', 'About · Our Story',
+        'It started with young volunteers <span class="text-ink-mid">in Ait Ourir.</span>',
+        'Founded in 2007 by committed young volunteers, AFCD Foundation grew from Ait Ourir into programmes across Morocco.',
+        ['story', 'approach'], 'Our Story · AFCD Foundation',
+        'How young volunteers founded AFCD Foundation in Ait Ourir in 2007, and how we work with communities.')
+    sub('mission-vision.html', 'Mission &amp; Vision', 'About · Mission &amp; Vision',
+        'What guides <span class="text-ink-mid">our work.</span>',
+        'A mission we act on every day, a vision we work toward, and four values that shape how we work.',
+        ['mission'], 'Mission, Vision &amp; Values · AFCD Foundation',
+        'AFCD Foundation’s mission, vision and values: integrity, inclusiveness, transparency and effectiveness.')
+    sub('strategy.html', 'Strategy &amp; Objectives', 'About · Strategy',
+        'Six strategic <span class="text-ink-mid">objectives.</span>',
+        'The institutional objectives behind our programmes and reporting, and the people and places we serve.',
+        ['strategy', 'who-we-serve'], 'Strategy &amp; Objectives · AFCD Foundation',
+        'AFCD Foundation’s six strategic objectives, linked to its four pillars, and who it works with across Morocco.')
+    sub('team.html', 'Our Team', 'About · Our Team',
+        'The people who carry <span class="text-ink-mid">our work forward.</span>',
+        'The team, volunteers and alumni who run AFCD programmes in Marrakech, Al Haouz and across Morocco.',
+        ['team'], 'Our Team · AFCD Foundation',
+        'Meet the team behind AFCD Foundation’s programmes in Marrakech, Al Haouz and across Morocco.')
+
+    # About hub: overview cards to each sub-page, then impact
+    hub = ''.join(f'''
+        <li><a href="{f}" class="gi-tile group">
+          <span class="flex items-center justify-between"><span class="text-[12px] tabular-nums text-ink-mid">{i:02d}</span><span class="gi-arr" aria-hidden="true">↗</span></span>
+          <span class="mt-3 block text-[20px] font-semibold leading-[1.1] tracking-[-0.03em] sm:mt-8 md:text-[24px]">{t}</span>
+          <span class="mt-2 block text-[14px] leading-relaxed text-ink-dark">{d}</span>
+        </a></li>''' for i, (f, t, d) in enumerate(ABOUT_PAGES, 1))
+    body = page_header([ABOUT], 'About Us',
+                       'Local roots. <span class="text-ink-mid">Shared purpose.</span> Lasting impact.',
+                       'A Moroccan nonprofit association founded in 2007 by young volunteers in Ait Ourir, Al Haouz, with its main office in Marrakech.') + f'''
+
+<section id="explore" class="py-14 lg:py-16">
+  <div class="wrap">{sec_head('01 / Explore', 'Get to know <span class="sh-soft">AFCD.</span>', 'Since 2007', desc='Our story, what guides us, our strategy and the people behind the work.')}
+    <ul class="mt-8 grid gap-3 sm:grid-cols-2 lg:mt-10 lg:grid-cols-4">{hub}
+    </ul>
+  </div>
+</section>
+''' + renum_all(parts['impact']).replace('<span class="sh-num">01</span>', '<span class="sh-num">02</span>') + cta
     page('about.html', 'About Us · AFCD Foundation',
-         'AFCD Foundation’s story, mission, vision, values and team. A Moroccan nonprofit founded in 2007 in Ait Ourir.',
+         'About AFCD Foundation: a Moroccan nonprofit founded in 2007 in Ait Ourir. Our story, mission and vision, strategy and team.',
          'about', body)
+
+
+ABOUT_PAGES = [
+    ('our-story.html', 'Our Story', 'How young volunteers started AFCD in 2007, and how we work with communities.'),
+    ('mission-vision.html', 'Mission &amp; Vision', 'What guides our work and the four values we hold.'),
+    ('strategy.html', 'Strategy &amp; Objectives', 'Six objectives behind our programmes, and who we serve.'),
+    ('team.html', 'Our Team', 'The people who carry AFCD’s work forward.'),
+]
+
+
+def about_more(current):
+    """'More about AFCD' strip at the end of each About sub-page: links to the sibling pages."""
+    links = ''.join(
+        f'<a href="{f}" class="sh-link">{t} {ARR}</a>' for f, t, _ in ABOUT_PAGES if f != current)
+    return f'''
+<nav class="border-t border-ink-light py-8" aria-label="More about AFCD">
+  <div class="wrap flex flex-wrap items-center gap-3"><span class="label mr-2 text-ink-mid">More about AFCD</span><a href="about.html" class="sh-link">About Us {ARR}</a>{links}</div>
+</nav>'''
 
 
 # ---------------------------------------------------------------- Pillars

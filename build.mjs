@@ -82,6 +82,7 @@ function breadcrumbs(file, meta) {
   if (file === 'index.html' || file === '404.html') return null;
   const items = [{ name: 'Home', url: SITE }];
   if (file.startsWith('project-')) items.push({ name: 'Projects', url: pageUrl('projects.html') });
+  if (meta.parent) { const [name, href] = meta.parent.split('|'); items.push({ name, url: pageUrl(href) }); }
   items.push({ name: meta.title.split(' · ')[0], url: pageUrl(file) });
   return { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: items.map((it, i) => ({ '@type': 'ListItem', position: i + 1, name: it.name, item: it.url })) };
 }

@@ -3,7 +3,7 @@
 // phone the list and the editor are separate steps. Adding, editing and removing all go through review.
 import { useCallback, useEffect, useState } from 'react';
 import { api, del, post, put, ApiError } from '../api.ts';
-import { Badge, Icon, Link, LiveBadge, Modal, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import { Icon, Link, Modal, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { EditorHeader, Field, ListEditor, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
@@ -12,6 +12,17 @@ import '../pillars.css';
 
 type Row = { id: string; key: string; number: string; name: string; draftName: string; short: string; summary: string; colour: string; draftColour: string; publicFile: string;
   status: string; imported: boolean; mediaId: string | null; publishedRevisionId: string | null; updatedAt: string; projects: number; sort: number; removeRequested: boolean };
+
+/** One compact status per row: where the pillar stands on the website, and whether a newer draft is waiting. */
+function StatusLine({ r }: { r: Row }) {
+  if (!r.imported) return <>Content not imported yet</>;
+  const live = !!r.publishedRevisionId;
+  const [tone, text] = r.removeRequested ? ['warn', r.status === 'approved' ? 'Removal approved' : 'Removal in review']
+    : !live ? ['new', { draft: 'New · draft', changes_requested: 'New · changes requested', in_review: 'New · in review', approved: 'New · approved' }[r.status] ?? 'New']
+    : r.status === 'published' ? ['live', 'Live']
+    : ['live', { draft: 'Live · edits in draft', changes_requested: 'Live · changes requested', in_review: 'Live · edits in review', approved: 'Live · edits approved' }[r.status] ?? 'Live'];
+  return <><span className={`pl-st pl-st-${tone}`} aria-hidden="true" />{text}</>;
+}
 
 const slugify = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[’']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
 const WIDE = '(min-width: 900px)';
@@ -54,7 +65,7 @@ export function PillarsScreen({ id }: { id?: string }) {
   const list = <aside className="pl-master card" aria-label="All pillars">
     <div className="pl-master-h">
       <div><h1>Pillars</h1><p className="muted">{rows ? `${liveCount} on the website${rows.length > liveCount ? ` · ${rows.length - liveCount} not yet` : ''}` : ' '}</p></div>
-      {can('pillar.create') && !order && missing === 0 && <button className="btn btn-primary btn-sm" onClick={() => { setName(''); setKey(''); setKeyEdited(false); setErr(''); setAdding(true); }}><Icon n="plus" />Add</button>}
+      {can('pillar.create') && !order && missing === 0 && <button className="btn btn-primary btn-sm" onClick={() => { setName(''); setKey(''); setKeyEdited(false); setErr(''); setAdding(true); }}><Icon n="plus" />New pillar</button>}
     </div>
     {rows && missing > 0 && <div className="notice n-info pl-master-note"><div><b>{missing === rows.length ? 'The pillar pages are still written in the site’s code.' : `${missing} pillar${missing === 1 ? ' is' : 's are'} not in Studio yet.`}</b> Import their current text to edit it here. The website stays exactly as it is until someone publishes a change.
       {can('pillar.publish') && <button className="btn btn-primary btn-sm" style={{ marginTop: 8 }} disabled={!!busy} onClick={importContent}>{busy === 'import' ? 'Importing…' : 'Import current content'}</button>}</div></div>}
@@ -63,8 +74,7 @@ export function PillarsScreen({ id }: { id?: string }) {
         const inner = <>
           <span className="pl-item-n" style={{ background: r.draftColour }}>{order ? String(i + 1).padStart(2, '0') : r.number}</span>
           <span className="pl-item-t"><b>{r.imported ? r.draftName : r.name}</b>
-            <span className="pl-item-s">{!r.imported ? 'Content not imported yet' : r.removeRequested ? 'Removal requested' : !r.publishedRevisionId ? `New · ${r.publicFile}` : r.short || r.publicFile}</span></span>
-          {!order && r.imported && <span className="pl-item-b">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></span>}
+            <span className="pl-item-s"><StatusLine r={r} /></span></span>
         </>;
         return <li key={r.id} className={r.id === id ? 'on' : ''}>
           {order ? <div className="pl-item">{inner}<span className="pl-item-mv">
@@ -87,7 +97,7 @@ export function PillarsScreen({ id }: { id?: string }) {
     {id ? <div className="pl-detail"><PillarEditor key={id} id={id} onChanged={load} /></div>
       : wide && rows && <div className="pl-detail pl-empty card"><Icon n="pillars" /><p>{missing ? 'Import the current pillar content to start.' : 'Choose a pillar.'}</p></div>}
 
-    {adding && <Modal size="sm" title="Add a pillar" onClose={() => setAdding(false)} footer={<><button className="btn" onClick={() => setAdding(false)}>Cancel</button><button className="btn btn-primary" disabled={name.trim().length < 2 || !key || busy === 'add'} onClick={create}>{busy === 'add' ? 'Adding…' : 'Add as draft'}</button></>}>
+    {adding && <Modal size="sm" title="New pillar" onClose={() => setAdding(false)} footer={<><button className="btn" onClick={() => setAdding(false)}>Cancel</button><button className="btn btn-primary" disabled={name.trim().length < 2 || !key || busy === 'add'} onClick={create}>{busy === 'add' ? 'Adding…' : 'Add as draft'}</button></>}>
       <div className="modal-b stack">
         <Field label="Name" hint="You can change it later."><input className="input" autoFocus maxLength={60} value={name} onChange={(e) => { setName(e.target.value); if (!keyEdited) setKey(slugify(e.target.value)); }} aria-label="Name" /></Field>
         <Field label="Page address" hint={<>The pillar’s page will be <span className="mono">{key || '…'}.html</span>. It cannot change once the pillar is added.</>}>
@@ -176,6 +186,7 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
         {editable && dirty && <button className="btn btn-primary" onClick={save} disabled={!!busy} title="Save (⌘S)"><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save draft'}</button>}
         {!dirty && ['draft', 'changes_requested'].includes(status) && can('pillar.update') && <button className="btn btn-primary" disabled={!!busy || p.problems.length > 0} onClick={() => act('submit')}><Icon n="send" />Submit for review</button>}
         {!dirty && status === 'approved' && can('pillar.publish') && <button className="btn btn-primary" disabled={!!busy} onClick={() => setDialog('publish')}><Icon n="rocket" />{p.removeRequested ? 'Remove from website…' : 'Publish…'}</button>}
+        {can('pillar.update') && !p.removeRequested && status !== 'in_review' && <button className="btn btn-ghost btn-danger" disabled={!!busy} onClick={() => setDialog(live ? 'remove' : 'delete')} title={live ? 'Take this pillar off the website (reviewed first)' : 'Delete this draft pillar'}><Icon n="x" />{live ? 'Remove…' : 'Delete…'}</button>}
       </>} />
     {errs.length > 0 && <div className="notice n-warn" role="alert"><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErrs([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
     {p.removeRequested && <div className="notice n-warn"><div><b>Removal from the website {status === 'approved' ? 'approved' : 'requested'}.</b> Publishing takes this pillar off Our Pillars, turns <span className="mono">{p.publicFile}</span> into a redirect to <span className="mono">pillars.html</span> and deletes it from Studio. Withdraw to keep it.</div></div>}
@@ -283,12 +294,12 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
     {dialog === 'preview' && <Modal wide title={`Preview · ${p.publicFile} with this draft`} onClose={() => setDialog(null)}><div className="preview-wrap"><iframe title="Pillar preview" src={url} style={{ width: Math.min(1280, window.innerWidth - 80) }} /></div></Modal>}
     {dialog === 'changes' && <Modal size="sm" title="Request changes" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={!comment.trim()} onClick={() => act('request_changes', { comment })}>Send to author</button></>}><div className="modal-b"><textarea className="textarea" autoFocus aria-label="What needs to change" value={comment} onChange={(e) => setComment(e.target.value)} /></div></Modal>}
     {dialog === 'remove' && <Modal size="sm" title="Remove this pillar from the website?" onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button>{p.usage.length === 0 && <button className="btn btn-primary" disabled={!!busy || dirty} onClick={() => act('request_removal')}>Send removal for review</button>}</>}>
-      <div className="modal-b stack">{p.usage.length ? <><p style={{ margin: 0 }}>Other content still uses this pillar. Link each to another pillar first:</p><ul className="pl-usage">{p.usage.map((u) => <li key={u}>{u}</li>)}</ul></>
-        : <p style={{ margin: 0 }}>A reviewer approves the removal, then publishing takes the pillar off Our Pillars, turns <span className="mono">{p.publicFile}</span> into a redirect to <span className="mono">pillars.html</span> and deletes it from Studio. Its revisions go with it.{dirty ? ' Save or discard your changes first.' : ''}</p>}</div></Modal>}
-    {dialog === 'delete' && <Modal size="sm" title="Delete this draft pillar?" onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button>{p.usage.length === 0 && <button className="btn btn-primary btn-danger" disabled={!!busy} onClick={deleteDraft}>{busy === 'delete' ? 'Deleting…' : 'Delete permanently'}</button>}</>}>
+      <div className="modal-b stack">{p.usage.length ? <><p style={{ margin: 0 }}>Studio won’t remove a pillar that other content still uses, so nothing is left pointing at a missing pillar. Open each one and choose another pillar for it, then come back:</p><ul className="pl-usage">{p.usage.map((u) => <li key={u}>{u}</li>)}</ul></>
+        : <p style={{ margin: 0 }}>No project, story, event or objective uses this pillar. A reviewer approves the removal, then publishing takes the pillar off Our Pillars, turns <span className="mono">{p.publicFile}</span> into a redirect to <span className="mono">pillars.html</span> and deletes it from Studio. Its revisions go with it.{dirty ? ' Save or discard your changes first.' : ''}</p>}</div></Modal>}
+    {dialog === 'delete' && <Modal size="sm" title="Delete this draft pillar?" onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button>{p.usage.length === 0 && <button className="btn pl-btn-danger" disabled={!!busy} onClick={deleteDraft}>{busy === 'delete' ? 'Deleting…' : 'Delete permanently'}</button>}</>}>
       <div className="modal-b">{p.usage.length ? <><p style={{ margin: 0 }}>Other content still uses this pillar:</p><ul className="pl-usage">{p.usage.map((u) => <li key={u}>{u}</li>)}</ul></>
-        : <p style={{ margin: 0 }}>It was never on the website. The draft and its history are deleted and cannot be restored.</p>}</div></Modal>}
-    {dialog === 'publish' && p.removeRequested && <Modal size="sm" title="Remove from the website now?" onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary btn-danger" disabled={!!busy} onClick={publish}>{busy ? 'Removing and checking…' : 'Remove'}</button></>}><div className="modal-b"><p style={{ margin: 0 }}>Rebuilds Our Pillars without it, turns <span className="mono">{p.publicFile}</span> into a redirect to <span className="mono">pillars.html</span>, checks the result, then deletes the pillar from Studio.</p></div></Modal>}
+        : <p style={{ margin: 0 }}>It was never on the website and nothing links to it. The draft and its history are deleted and cannot be restored.</p>}</div></Modal>}
+    {dialog === 'publish' && p.removeRequested && <Modal size="sm" title="Remove from the website now?" onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button><button className="btn pl-btn-danger" disabled={!!busy} onClick={publish}>{busy ? 'Removing and checking…' : 'Remove'}</button></>}><div className="modal-b"><p style={{ margin: 0 }}>Rebuilds Our Pillars without it, turns <span className="mono">{p.publicFile}</span> into a redirect to <span className="mono">pillars.html</span>, checks the result, then deletes the pillar from Studio.</p></div></Modal>}
     {dialog === 'publish' && !p.removeRequested && <Modal size="sm" title="Publish this pillar?" onClose={() => !busy && setDialog(null)} footer={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-ok" disabled={!!busy} onClick={publish}><Icon n="rocket" />{busy ? 'Publishing and checking…' : 'Publish'}</button></>}><div className="modal-b"><p style={{ margin: 0 }}>Rebuilds <span className="mono">{p.publicFile}</span>, <span className="mono">pillars.html</span> and the pages that name this pillar, then checks the result. Pushing to the hosted site is a separate, authorized step.</p></div></Modal>}
   </>;
 }

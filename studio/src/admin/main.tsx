@@ -15,6 +15,7 @@ import { EventsList, EventEditor } from './pages/Events.tsx';
 import { OpportunitiesList, OpportunityEditor } from './pages/Opportunities.tsx';
 import { FormsPage } from './pages/Forms.tsx';
 import { SeoPage } from './pages/Seo.tsx';
+import { TranslationsPage } from './pages/Translations.tsx';
 import { HomeEditor } from './pages/Home.tsx';
 import { Breadcrumbs, Notifications, SearchButton, UserMenu, useRecent, type NavLink } from './Topbar.tsx';
 import { MediaLibrary } from './pages/Media.tsx';
@@ -104,7 +105,8 @@ type NavItem = { to: string; label: string; icon: string; perm: string; match?: 
 const NAV: { group: string; items: NavItem[] }[] = [
   { group: 'Overview', items: [{ to: '/studio/', label: 'Dashboard', icon: 'dash', perm: 'dashboard.read', match: /^\/studio\/?$/ }] },
   { group: 'Website', items: [{ to: '/studio/home', label: 'Homepage', icon: 'home', perm: 'page.read', match: /^\/studio\/home/ }, { to: '/studio/pages', label: 'Pages', icon: 'layers', perm: 'page.read', match: /^\/studio\/pages/ },
-    { to: '/studio/seo', label: 'SEO', icon: 'search', perm: 'seo.read', match: /^\/studio\/seo/ }] },
+    { to: '/studio/seo', label: 'SEO', icon: 'search', perm: 'seo.read', match: /^\/studio\/seo/ },
+    { to: '/studio/translations', label: 'Translations', icon: 'globe', perm: 'translation.read', match: /^\/studio\/translations/ }] },
   { group: 'Content', items: [
     { to: '/studio/projects', label: 'Projects', icon: 'folder', perm: 'project.read', match: /^\/studio\/projects/ },
     { to: '/studio/news', label: 'News & Stories', icon: 'log', perm: 'news.read', match: /^\/studio\/news/ },
@@ -190,6 +192,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 function route(path: string): { title: string; el: React.ReactElement; full?: boolean } {
   if (path.startsWith('/studio/home')) return { title: 'Homepage', el: <HomeEditor />, full: true };
   if (path.startsWith('/studio/seo')) return { title: 'SEO', el: <SeoPage key={path} /> };
+  if (path.startsWith('/studio/translations')) return { title: 'Translations', el: <TranslationsPage /> };
   if (path.startsWith('/studio/forms')) return { title: 'Forms', el: <FormsPage /> };
   const op = path.match(/^\/studio\/opportunities\/([0-9a-f-]{36})$/);
   if (op) return { title: 'Opportunity', el: <OpportunityEditor key={op[1]} id={op[1]} /> };

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { EditorHeader, Field, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
+import { RecordTranslations } from '../RecordTranslations.tsx';
 import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
@@ -126,6 +127,7 @@ export function EventEditor({ id }: { id: string }) {
         { id: 'media', label: 'Poster', icon: 'image', optional: true, done: f.posterMediaId ? true : undefined },
         { id: 'join', label: 'Registration & links', icon: 'send', done: f.registration !== 'external' || !!f.registrationUrl },
         { id: 'seo', label: 'Search & address', icon: 'search', optional: true, done: f.seoTitle || f.seoDescription ? true : undefined },
+        { id: 'translations', label: 'Translations', icon: 'globe', optional: true },
       ]} />
       <fieldset className="ed-main" disabled={!editable}>
         <Section id="basics" title="Basics" desc="What people see first in the calendar and in search results.">
@@ -173,6 +175,9 @@ export function EventEditor({ id }: { id: string }) {
           <div className="serp s3"><div className="serp-url">afcdfoundation.org › {file}</div><div className="serp-title">{(f.seoTitle || f.title || 'Event title').slice(0, 65)} · Events · AFCD Foundation</div><div className="serp-desc">{(f.seoDescription || f.summary || 'Short description of the event.').slice(0, 160)}</div></div>
         </Section>
       </fieldset>
+      <Section id="translations" title="Translations" desc="French and Arabic of this event. Reviewed and published on the Translations screen.">
+        <RecordTranslations noun="event" dirty={status !== 'published'} files={f.slug ? [`event-${f.slug}.html`] : []} texts={[f.title, f.summary, f.body, f.location, f.timeLabel, ...f.agenda.flatMap((a) => [a.title, a.text]), ...f.audience]} />
+      </Section>
 
       <WorkflowPanel status={status} live={live} problems={e.problems}
         facts={[['Website', live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'], ...(e.publishedAt ? [['Published', fmtDate(e.publishedAt)] as [string, string]] : []), ['Calendar', past ? 'Past event' : 'Upcoming']]}>

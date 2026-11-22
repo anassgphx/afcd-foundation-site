@@ -37,6 +37,7 @@ import { checkRedirect, redirectsFile, stubHtml, STUB_MARK, REDIRECTS_HEADER } f
 import type { Role } from '../../rbac.ts';
 import { seoSettings } from '../../db/schema.ts';
 import { buildSchemaFile, KEY as SCHEMA_KEY, settingsSchema, type LiveForSchema, type SchemaSettings } from '../seo/schema.ts';
+import * as TR from '../translations/service.ts';
 
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
@@ -272,7 +273,7 @@ export class Publisher {
     return ids;
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null } = {}) {
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string } } = {}) {
     const entries = await this.liveEntries(o.project);
     await this.writeRedirects(o.redirects === 'pending');
     this.writeData(this.dataFile, entries);
@@ -280,6 +281,7 @@ export class Publisher {
     const eventMedia = await this.writeEvents(this.eventsFile, o.event, o.project);
     const seoMedia = await this.writeSeo(o.seo);
     await this.writeSchema(o.schema, o.article, o.event);
+    await this.writeTranslations(o.translations);
     const pending = { article: o.article, event: o.event, opportunity: o.opportunity, partner: o.partner };
     const homeMedia = await this.writeFields(o.home, { projectOverride: o.project, pending });
     const oppMedia = await this.writeOpportunities(resolve(this.cfg.siteRoot, 'src/pages'), [this.cfg.siteRoot], await this.liveOpportunities(o.opportunity), o.project);
@@ -1139,6 +1141,48 @@ export class Publisher {
         await audit(tx, actor, 'schema.unpublish', { type: 'seo_settings', id: SCHEMA_KEY }, 'Removed Studio structured data from the site', { jobId: job.id });
       });
       return { jobId: job.id };
+    });
+  }
+
+  // ---------------------------------------------------------------- Translations (src/i18n/<lang>.json, read by lib/i18n.mjs)
+  /** Writes each language Studio manages from its published copy (or the one being delivered). Others stay as they are. */
+  private async writeTranslations(override?: { lang: TR.Lang; data: TR.LangData; revision: string }) {
+    for (const { lang, content } of await TR.publishedFiles(this.db, this.cfg, override)) {
+      const file = resolve(this.cfg.siteRoot, 'src/i18n', `${lang}.json`);
+      if (existsSync(file) && readFileSync(file, 'utf8') === content) continue;
+      mkdirSync(resolve(file, '..'), { recursive: true });
+      const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
+      writeFileSync(tmp, content); renameSync(tmp, file);
+    }
+  }
+
+  /** Every page of the language carries the new revision, and its text came from the new file. */
+  private verifyTranslations(lang: TR.Lang, revision: string) {
+    const dir = resolve(this.cfg.siteRoot, lang);
+    const home = resolve(dir, 'index.html');
+    if (!existsSync(home)) throw new Error(`${lang}/index.html was not built (lib/i18n.mjs must build the ${lang} pages).`);
+    const pages = readdirSync(dir).filter((f) => f.endsWith('.html'));
+    const stale = pages.filter((f) => !readFileSync(resolve(dir, f), 'utf8').includes(`<meta name="studio-i18n-rev" content="${revision}">`));
+    if (stale.length) throw new Error(`${stale.length} ${lang} page${stale.length === 1 ? '' : 's'} do not carry the new translations (e.g. ${stale[0]}).`);
+  }
+
+  async publishTranslations(actor: NonNullable<Actor>, lang: TR.Lang) {
+    return this.locked(async () => {
+      const row = await TR.loadRow(this.db, lang);
+      if (!row || row.status !== 'approved' || !row.draft) throw new AppError(409, 'Only approved translations can be published.');
+      const data = structuredClone(row.draft as TR.LangData); const revision = randomUUID();
+      const { job, log } = await this.deliver('publish_translations', actor, null, null, async (log) => {
+        await this.writeSite({ translations: { lang, data, revision } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyTranslations(lang, revision);
+      }, `Publishing ${TR.LANG_INFO[lang].name} translations failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(seoSettings).set({ status: 'published', published: { ...data, _revision: revision }, publishedAt: new Date(), updatedAt: new Date() }).where(eq(seoSettings.key, TR.KEY_OF(lang)));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'translation.publish', { type: 'translation', id: lang }, `Published ${TR.LANG_INFO[lang].name} translations${data.live ? ' (public on the live site)' : ' (preview only)'}`, { jobId: job.id, revision, strings: Object.keys(data.strings).length });
+      });
+      TR.clearSegmentCache();
+      return { jobId: job.id, revision };
     });
   }
 

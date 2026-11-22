@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { EditorHeader, Field, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
+import { RecordTranslations } from '../RecordTranslations.tsx';
 import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
@@ -135,6 +136,7 @@ export function OpportunityEditor({ id }: { id: string }) {
         { id: 'apply', label: 'How to apply', icon: 'send', done: f.applyMethod === 'contact' || (f.applyMethod === 'external' ? !!f.applyUrl : !!f.applyEmail) },
         { id: 'links', label: 'Links & image', icon: 'image', optional: true, done: f.heroMediaId || f.projectSlug || f.pillarKey ? true : undefined },
         { id: 'seo', label: 'Search & address', icon: 'search', optional: true, done: f.seoTitle || f.seoDescription ? true : undefined },
+        { id: 'translations', label: 'Translations', icon: 'globe', optional: true },
       ]} />
       <fieldset className="ed-main" disabled={!editable}>
         <Section id="basics" title="Basics" desc="What people see in the list of opportunities and in search results.">
@@ -175,6 +177,9 @@ export function OpportunityEditor({ id }: { id: string }) {
           <Field label="Meta description" span={3} count={[f.seoDescription.length, 170]}><textarea className="textarea" rows={2} maxLength={170} value={f.seoDescription} onChange={(x) => set('seoDescription', x.target.value)} aria-label="Meta description" placeholder={f.summary} /></Field>
         </Section>
       </fieldset>
+      <Section id="translations" title="Translations" desc="French and Arabic of this opportunity. Reviewed and published on the Translations screen.">
+        <RecordTranslations noun="opportunity" dirty={status !== 'published'} files={f.slug ? [`opportunity-${f.slug}.html`] : []} texts={[f.title, f.summary, f.body, f.location, f.commitment, ...f.eligibility, ...f.benefits]} />
+      </Section>
       <WorkflowPanel status={status} live={live} problems={o.problems}
         facts={[['Website', live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'], ...(o.publishedAt ? [['Published', fmtDate(o.publishedAt)] as [string, string]] : []), ['Applications', `${state}${f.deadline ? ` · until ${dateLabel(f.deadline)}` : ' · rolling'}`]]}>
         {live && <a className="btn btn-sm" href={me.siteUrl + file} target="_blank" rel="noopener"><Icon n="ext" />Open live page</a>}

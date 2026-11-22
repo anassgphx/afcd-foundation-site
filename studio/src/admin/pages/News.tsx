@@ -5,6 +5,7 @@ import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, us
 import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
+import { RecordTranslations } from '../RecordTranslations.tsx';
 
 export const TYPES: [string, string][] = [['programme_news', 'Programme news'], ['participant_story', 'Participant story'], ['call_for_applications', 'Call for applications'], ['event_recap', 'Event recap']];
 const typeLabel = (t: string) => TYPES.find((x) => x[0] === t)?.[1] ?? t;
@@ -61,7 +62,8 @@ export function ArticleEditor({ id }: { id: string }) {
   const [media, setMedia] = useState<Record<string, MediaItem>>({});
   const [pillars, setPillars] = useState<{ key: string; name: string; colour: string }[]>([]);
   const [projects, setProjects] = useState<{ slug: string; name: string }[]>([]);
-  const [tab, setTab] = useState<'details' | 'links' | 'media' | 'seo' | 'publish'>('details');
+  const [tab, setTab] = useState<'details' | 'links' | 'media' | 'seo' | 'translations' | 'publish'>('details');
+  const [trOpen, setTrOpen] = useState(false);
   const [dirty, setDirty] = useState(false); const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
   const [dialog, setDialog] = useState<null | 'hero' | 'gallery' | 'preview' | 'publish' | 'unpublish' | 'changes' | 'schedule'>(null);
   const [url, setUrl] = useState(''); const [comment, setComment] = useState(''); const [when, setWhen] = useState('');
@@ -145,8 +147,8 @@ export function ArticleEditor({ id }: { id: string }) {
       </fieldset>
 
       <aside className="w-side">
-        <div className="seg w-tabs">{([['details', 'Details'], ['links', 'Links'], ['media', 'Media'], ['seo', 'SEO'], ['publish', 'Publish']] as const).map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
-        <fieldset className="b-insp stack" disabled={!editable && tab !== 'publish'}>
+        <div className="seg w-tabs">{([['details', 'Details'], ['links', 'Links'], ['media', 'Media'], ['seo', 'SEO'], ['translations', 'Languages'], ['publish', 'Publish']] as const).map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
+        <fieldset className="b-insp stack" disabled={!editable && tab !== 'publish' && tab !== 'translations'}>
           {tab === 'details' && <>
             <Fld label="Type"><select className="select" value={f.type} onChange={(e) => set('type', e.target.value)} aria-label="Type">{TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Fld>
             <Fld label="Date shown"><input className="input" type="date" value={f.publishDate} onChange={(e) => set('publishDate', e.target.value)} aria-label="Date shown" /></Fld>
@@ -174,6 +176,10 @@ export function ArticleEditor({ id }: { id: string }) {
             <Fld label="Meta description" hint={`${f.seoDescription.length} / 170 · empty = summary`}><textarea className="textarea" maxLength={170} value={f.seoDescription} onChange={(e) => set('seoDescription', e.target.value)} aria-label="Meta description" /></Fld>
             <div className="card" style={{ padding: 12, background: 'var(--sunken)' }}><small className="muted">Search result preview</small><div style={{ color: '#1a0dab', fontSize: 16 }}>{f.seoTitle || f.title} · AFCD Foundation</div><div style={{ color: '#006621', fontSize: 12 }}>afcdfoundation.org › {file ?? 'news.html'}</div><div style={{ fontSize: 12.5 }}>{(f.seoDescription || f.excerpt).slice(0, 160)}</div></div>
           </>}
+          {tab === 'translations' && <>
+            <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>French and Arabic of this story: its title, summary and text as the website shows them. Reviewed and published on the Translations screen.</p>
+            <button type="button" className="btn" onClick={() => setTrOpen(true)}><Icon n="globe" />Open translations</button>
+          </>}
           {tab === 'publish' && <>
             <dl className="kv"><dt>Website</dt><dd>{live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'}</dd>{a.publishedAt && <><dt>Published</dt><dd>{fmtDate(a.publishedAt)}</dd></>}{a.scheduledAt && <><dt>Scheduled</dt><dd>{fmtDate(a.scheduledAt)}</dd></>}</dl>
             {live && <a className="btn btn-sm" href={f.externalUrl || me.siteUrl + file} target="_blank" rel="noopener"><Icon n="ext" />Open live story</a>}
@@ -197,6 +203,9 @@ export function ArticleEditor({ id }: { id: string }) {
 
     {dialog === 'hero' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { if (m[0]) { setMedia((x) => ({ ...x, [m[0].id]: m[0] })); set('heroMediaId', m[0].id); } setDialog(null); }} />}
     {dialog === 'gallery' && <MediaPicker multiple onClose={() => setDialog(null)} onPick={(m) => { setMedia((x) => ({ ...x, ...Object.fromEntries(m.map((i) => [i.id, i])) })); set('galleryMediaIds', [...new Set([...f.galleryMediaIds, ...m.map((i) => i.id)])].slice(0, 12)); setDialog(null); }} />}
+    {trOpen && <Modal wide title={`Languages · ${f.title || 'Story'}`} onClose={() => setTrOpen(false)}><div className="modal-b" style={{ overflow: 'auto' }}>
+      <RecordTranslations noun="story" dirty={status !== 'published'} files={f.externalUrl || !f.slug ? [] : [`news-${f.slug}.html`]} texts={[f.title, f.excerpt, ...f.body.split(/\n{2,}/).map((x) => x.replace(/^[>#-]+\s*/, ''))]} />
+    </div></Modal>}
     {dialog === 'preview' && <Modal wide title="Preview · the real story page" onClose={() => setDialog(null)}><div className="preview-wrap"><iframe title="Story preview" src={url} style={{ width: Math.min(1280, window.innerWidth - 80) }} /></div></Modal>}
     {dialog === 'changes' && <Modal size="sm" title="Request changes" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={!comment.trim()} onClick={() => act('request_changes', { comment })}>Send to author</button></>}><div className="modal-b"><textarea className="textarea" autoFocus aria-label="What needs to change" value={comment} onChange={(e) => setComment(e.target.value)} /></div></Modal>}
     {dialog === 'schedule' && <Modal size="sm" title="Schedule publishing" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={!when || !!busy} onClick={() => act('schedule', { at: new Date(when).toISOString() })}>Schedule</button></>}>

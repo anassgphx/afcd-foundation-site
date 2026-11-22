@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { EditorHeader, Field, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
+import { RecordTranslations } from '../RecordTranslations.tsx';
 import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
@@ -132,6 +133,7 @@ export function PartnerEditor({ id }: { id: string }) {
         { id: 'logo', label: 'Logo', icon: 'image', optional: true, done: f.logoMediaId ? true : undefined },
         { id: 'projects', label: 'Projects', icon: 'folder', optional: true, done: f.projectSlugs.length ? true : undefined },
         { id: 'internal', label: 'Internal', icon: 'lock', optional: true },
+        { id: 'translations', label: 'Translations', icon: 'globe', optional: true },
       ]} />
       <fieldset className="ed-main" disabled={!editable}>
         <Section id="basics" title="Organisation" desc="One record per organisation. Use its official name.">
@@ -161,6 +163,9 @@ export function PartnerEditor({ id }: { id: string }) {
           <Field label="Record key" span={3} hint={live ? 'A live partner’s key cannot change.' : 'Used for links and to prevent duplicates.'}><input className="input mono" disabled={live} value={f.slug} onChange={(x) => set('slug', slugify(x.target.value))} aria-label="Record key" /></Field>
         </Section>
       </fieldset>
+      <Section id="translations" title="Translations" desc="French and Arabic of this partner. Reviewed and published on the Translations screen.">
+        <RecordTranslations noun="partner" dirty={status !== 'published'} files={[]} texts={[f.name, f.category, f.description]} />
+      </Section>
       <WorkflowPanel status={status} live={live} problems={p.problems}
         facts={[['Website', live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'], ...(p.publishedAt ? [['Published', fmtDate(p.publishedAt)] as [string, string]] : []), ...(p.verifiedAt ? [['Last approved', fmtDate(p.verifiedAt)] as [string, string]] : [])]}>
         {live && <a className="btn btn-sm" href={me.siteUrl + 'partners.html'} target="_blank" rel="noopener"><Icon n="ext" />Open Our Partners</a>}

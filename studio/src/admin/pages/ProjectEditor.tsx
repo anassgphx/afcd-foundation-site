@@ -4,6 +4,7 @@ import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
+import { RecordTranslations } from '../RecordTranslations.tsx';
 
 type Pillar = { key: string; name: string; colour: string; number: string };
 type Objective = { ref: string; title: string; pillarKeys: string[] };
@@ -23,13 +24,14 @@ const EMPTY: Form = {
   name: '', slug: '', reference: '', category: '', summary: '', location: '', years: '', extraFacts: [], context: '', approach: '', activities: '', results: '',
   hasDetailPage: true, photoCaption: '', heroMediaId: null, galleryMediaIds: [], pillarKeys: [], primaryPillarKey: '', objectiveRefs: [], seoTitle: '', seoDescription: '', sort: 100,
 };
-const TABS = ['Overview', 'Content', 'Relationships', 'Media', 'SEO'] as const;
+const TABS = ['Overview', 'Content', 'Relationships', 'Media', 'SEO', 'Translations'] as const;
 const TAB_FIELDS: Record<string, string[]> = {
   Overview: ['name', 'slug', 'reference', 'category', 'summary', 'location', 'years', 'extraFacts', 'sort'],
   Content: ['context', 'approach', 'activities', 'results'],
   Relationships: ['pillarKeys', 'primaryPillarKey', 'objectiveRefs'],
   Media: ['heroMediaId', 'galleryMediaIds', 'photoCaption'],
   SEO: ['seoTitle', 'seoDescription'],
+  Translations: [],
 };
 const slugify = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[’']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
 
@@ -238,6 +240,9 @@ export function ProjectEditor({ id }: { id: string }) {
                 {!ro && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('gallery')}><Icon n="plus" />Add photos</button>}
               </Field>
             </div>}
+
+            {tab === 'Translations' && <RecordTranslations noun="project" dirty={status !== 'published'} files={form.hasDetailPage && form.slug ? [`project-${form.slug}.html`] : []}
+              texts={[form.name, form.summary, form.category, form.location, form.years, ...form.extraFacts.flatMap((x) => [x.label, x.value]), form.context, form.approach, form.activities, form.results, form.photoCaption]} />}
 
             {tab === 'SEO' && <fieldset disabled={!editable} style={{ border: 0, margin: 0, padding: 0 }}><div className="form">
               <Field label="SEO title" optional hint="Leave empty to use the project name." count={[form.seoTitle.length, 70]} err={errors.seoTitle}><input className="input" value={form.seoTitle} onChange={(e) => set('seoTitle', e.target.value)} maxLength={70} /></Field>

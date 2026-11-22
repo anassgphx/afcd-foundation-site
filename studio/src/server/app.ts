@@ -26,6 +26,7 @@ import * as FM from './modules/forms/service.ts';
 import * as SEO from './modules/seo/service.ts';
 import * as RD from './modules/seo/redirects.ts';
 import * as SCH from './modules/seo/schema.ts';
+import * as TR from './modules/translations/service.ts';
 import * as HM from './modules/home/service.ts';
 import * as WS from './modules/workspace/service.ts';
 import { overview as dashboardOverview } from './modules/workspace/overview.ts';
@@ -424,6 +425,22 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
   });
   api.post('/seo/schema/publish', perm('seo.publish'), async (c) => c.json(await publisher.publishSchema(actor(c))));
   api.post('/seo/schema/unpublish', perm('seo.publish'), async (c) => c.json(await publisher.unpublishSchema(actor(c))));
+
+  // ---------------------------------------------------------------- Translations: edited (translation.update), reviewed by someone else (translation.approve), published (translation.publish)
+  const langOf = (c: { req: { param: (k: string) => string } }) => { const l = c.req.param('lang'); if (!TR.isLang(l)) throw new AppError(404, 'Unknown language.'); return l; };
+  api.get('/translations', perm('translation.read'), async (c) => c.json(await TR.overview(db, cfg)));
+  api.post('/translations/record', perm('translation.read'), async (c) => c.json(await TR.recordView(db, cfg, actor(c), await c.req.json())));
+  api.get('/translations/:lang', perm('translation.read'), async (c) => c.json(await TR.view(db, cfg, langOf(c), actor(c))));
+  api.patch('/translations/:lang', perm('translation.update'), async (c) => { const l = langOf(c); await TR.save(db, cfg, l, actor(c), await c.req.json()); return c.json(await TR.view(db, cfg, l, actor(c))); });
+  api.post('/translations/:lang/transition', async (c) => {
+    const l = langOf(c);
+    const body = z.object({ action: z.enum(['submit', 'withdraw', 'request_changes', 'approve']), comment: z.string().max(2000).optional() }).safeParse(await c.req.json());
+    if (!body.success) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, TR.TRANSLATION_ACTIONS[body.data.action]);
+    await TR.transition(db, l, actor(c), u.role, body.data.action, body.data.comment ?? '');
+    return c.json(await TR.view(db, cfg, l, actor(c)));
+  });
+  api.post('/translations/:lang/publish', perm('translation.publish'), async (c) => c.json(await publisher.publishTranslations(actor(c), langOf(c))));
 
   // ---------------------------------------------------------------- Top bar: search and notifications (permission-filtered)
   api.get('/search', async (c) => { const u = requireUser(c); return c.json(await WS.search(db, u.role, c.req.query('q') ?? '')); });

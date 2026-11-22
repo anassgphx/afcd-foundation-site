@@ -758,6 +758,7 @@ PILLAR_TONE = {'youth-empowerment': '#FFB2B9', 'women-empowerment': '#A8DDFB', '
 def project_details():
     files = list(DETAILS)
     for idx, (file, d) in enumerate(DETAILS.items()):
+        pevents = [x for x in EVENTS if x.get('project') == file]
         tone = PILLAR_TONE[d['slug']]
         pdesc = next(p[3] for p in PILLARS if p[0] == d['slug'])
         if d.get('objectives'):
@@ -836,12 +837,15 @@ def project_details():
   </div>
 </section>
 
+<section id="events" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('03 / Events', 'Project <span class="sh-soft">events.</span>', f'{len(pevents)} linked' if pevents else 'None yet', ('All events', 'events.html'))}
+    {f'<ul class="ev-list mt-8 lg:mt-10">{"".join(event_row(x, compact=True) for x in pevents)}</ul>' if pevents else '<div class="mt-8 rounded-[24px] border border-dashed border-ink-light p-6 text-[15px] text-ink-dark lg:mt-10">No events linked to this project yet. <a class="link-arrow ml-1" href="events.html">See all events ↗</a></div>'}
+  </div>
+</section>
+
 <section id="gallery" class="border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap">{sec_head('03 / Gallery', 'In <span class="sh-soft">pictures.</span>', 'Photos to come')}
-    <div class="pj-gallery mt-8 lg:mt-10">
-      {g(0, 'pj-g1')}
-      {g(1, 'pj-g2')}
-      {g(2, 'pj-g3')}
+  <div class="wrap">{sec_head('04 / Gallery', 'In <span class="sh-soft">pictures.</span>', f'{len(gal)} photos' if gal else 'Photos to come')}
+    <div class="pj-gallery mt-8 lg:mt-10">{''.join(g(i, 'pj-g1' if i == 0 else 'pj-gi') for i in range(max(8, len(gal))))}
     </div>
   </div>
 </section>
@@ -895,7 +899,8 @@ def news():
     blog = 'https://afcdfoundation.org/blog/'
 
     def link(x):
-        return f'href="{x["url"]}"' + (' target="_blank" rel="noopener"' if x.get('external') else '')
+        # every story has its own page; stories first published on the old blog link to the original from that page
+        return f'href="{x.get("file") or "news-" + x["slug"] + ".html"}"'
 
     def card(x=None, placeholder=None):
         if placeholder:
@@ -930,7 +935,7 @@ def news():
     chips = ''.join(f'<button type="button" class="nw-chip" data-news-filter="{"all" if i == 0 else t}" aria-pressed="{"true" if i == 0 else "false"}">{t}</button>' for i, t in enumerate(types))
     topics = ''.join(f'<li><a class="os-area" href="pillars.html#{sl}"><span class="os-area-dot" style="--c:{NEWS_PILLAR[n]}" aria-hidden="true"></span><span class="flex-1">{n}</span><span class="os-area-arr" aria-hidden="true">↗</span></a></li>'
                      for n, sl in [('Youth Empowerment', 'youth-empowerment'), ('Women’s Empowerment', 'women-empowerment'), ('Environment and Climate', 'green-thumbs'), ('Digital Inclusion and Innovation', 'digital-empowerment')])
-    note = ('Some stories still open on the current afcdfoundation.org blog. ' if any(x.get('external') for x in items) else '') + \
+    note = ('Some stories were first published on the afcdfoundation.org blog; their pages link to the original. ' if any(x.get('external') for x in items) else '') + \
            ('Lorem ipsum cards are placeholders until more stories are published.' if fill else '')
     feat = ''
     if lead:
@@ -984,63 +989,580 @@ def news():
          'News, calls for applications and participant stories from AFCD Foundation.', 'news', body)
 
 
+# ---------------------------------------------------------------- News article pages (template owned by the website session)
+def news_articles():
+    """One article page per Studio story (news-<slug>.html). External items link to the old blog and get no page.
+    Field values from news_items() are already HTML-escaped; bodyHtml is already safe HTML."""
+    all_items = news_items()
+    # Studio stories have their own file; older stories that link to the old blog get a details page too.
+    items = []
+    for x in all_items:
+        if not x.get('file'):
+            x = dict(x, file=f"news-{x['slug']}.html")
+        items.append(x)
+    all_items = items
+    for i, it in enumerate(items):
+        body = it.get('bodyHtml') or ''
+        sample = not body.strip()
+        if sample:
+            body = ('<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus, posuere velit aliquet.</p>'
+                    '<p>Sed posuere consectetur est at lobortis. Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.</p>')
+        hero = (media_img(it['hero'], 'aspect-[16/9] w-full rounded-[28px]', '(min-width:1280px) 1200px, 100vw', eager=True) if it.get('hero')
+                else ph(it['title'], 'aspect-[16/9] w-full rounded-[28px]', '#E2E2E2'))
+        pills = it.get('pillars') or []
+        pillar_html = ''.join(f'<a href="{p["file"]}" class="na-tag"><span class="pj-dot" style="--c:{p.get("colour") or "#111"}"></span>{p["name"]}</a>' for p in pills) \
+            or (f'<span class="na-tag"><span class="pj-dot" style="--c:{it.get("colour") or "#111"}"></span>{it.get("pillar", "")}</span>' if it.get('pillar') else '')
+        tags = ''.join(f'<span class="na-tag">#{t}</span>' for t in (it.get('tags') or []))
+        author = ''
+        if it.get('authorName'):
+            ini = ''.join(w[0] for w in it['authorName'].split()[:2]).upper()
+            author = f'<div class="na-author"><span class="na-av">{ini}</span><span><span class="block text-[14px] font-semibold">{it["authorName"]}</span><span class="block text-[12.5px] text-ink-mid">{it.get("authorRole") or ""}</span></span></div>'
+        gallery = it.get('gallery') or []
+        ghtml = (f'<div class="na-gallery">{"".join(media_img(m, "aspect-[4/3] w-full rounded-[18px]", "(min-width:768px) 33vw, 50vw") for m in gallery)}</div>' if gallery else '')
+        projects = it.get('projects') or []
+        phtml = ''.join(f'<li><a href="{p["file"]}" class="na-proj"><span class="min-w-0 flex-1"><span class="block text-[15px] font-semibold">{p["name"]}</span><span class="block text-[13px] text-ink-mid">{p.get("category") or ""}</span></span><span aria-hidden="true">↗</span></a></li>' for p in projects if p.get('file'))
+        related = [x for x in all_items if x is not it][:3]
+        def card(x):
+            href = x['file']
+            return f'''
+      <li><a href="{href}" class="nw-card group"><div class="relative">{media_img(x['hero'], 'aspect-[16/10] w-full rounded-[20px]', '(min-width:1024px) 33vw, 100vw') if x.get('hero') else ph(x['title'], 'aspect-[16/10] w-full rounded-[20px]')}<span class="nw-type">{x.get('type', 'Story')}</span></div><span class="mt-5 flex flex-wrap items-center gap-x-3 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{x.get('colour') or '#111'}"></span>{x.get('pillar', '')}</span><span aria-hidden="true">·</span><time datetime="{x.get('date', '')}">{x.get('dateLabel', '')}</time></span><span class="mt-3 block text-[19px] font-semibold leading-[1.25] tracking-[-0.02em]">{x['title']}</span><span class="nw-read">Read the story <span aria-hidden="true">↗</span></span></a></li>'''
+        rel = ''.join(card(x) for x in related)
+        pn = ''
+        if len(items) > 1:
+            pv, nx = items[i - 1], items[(i + 1) % len(items)]
+            pn = f'''<nav class="na-pn" aria-label="More stories">
+        <a href="{pv['file']}" class="pj-nav group"><span class="label text-ink-mid">Previous story</span><span class="mt-2 block text-[17px] font-semibold leading-snug tracking-[-0.015em]">{pv['title']}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a>
+        <a href="{nx['file']}" class="pj-nav group"><span class="label text-ink-mid">Next story</span><span class="mt-2 block text-[17px] font-semibold leading-snug tracking-[-0.015em]">{nx['title']}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a>
+      </nav>'''
+        minutes = it.get('readMinutes') or max(1, round(len((it.get('excerpt', '') + body).split()) / 200))
+        body_html = page_header([('News &amp; Stories', 'news.html'), (it['title'], it['file'])], it.get('type') or 'Story', it['title'], it.get('excerpt', '')) + f'''
+
+<article class="na" data-studio-article-rev="{it.get('revision', '')}">
+  <div class="wrap pt-8 lg:pt-10">
+    <div class="na-hero">{hero}</div>
+  </div>
+
+  <div class="wrap na-grid py-12 lg:py-16">
+    <aside class="na-rail">
+      {author}
+      <dl class="na-meta">
+        <div><dt>Published</dt><dd><time datetime="{it.get('date', '')}">{it.get('dateLabel', '')}</time></dd></div>
+        <div><dt>Type</dt><dd>{it.get('type') or 'Story'}</dd></div>
+        <div><dt>Reading time</dt><dd>{minutes} min</dd></div>
+      </dl>
+      <div class="na-tags">{pillar_html}{tags}</div>
+      <div class="na-share">
+        <button type="button" class="na-copy" data-copy-link><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 11.5a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5l-.8.8M11.5 8.5a3.5 3.5 0 0 0-5 0L4 11a3.5 3.5 0 0 0 5 5l.8-.8"/></svg><span>Copy link</span></button>
+        <a class="na-back" href="news.html">← All stories</a>
+      </div>
+    </aside>
+
+    <div class="na-body">
+      {'<p class="na-sample">Sample article text: the full story will replace this.</p>' if sample else ''}
+      <p class="na-lead">{it.get('excerpt', '')}</p>
+      <div class="na-prose">{body}</div>
+      {f'<div class="na-callout"><p class="text-[15px] font-semibold">First published on the AFCD blog</p><p class="mt-1 text-[14px] leading-relaxed text-ink-dark">Read the full original post on afcdfoundation.org.</p><a href="{it["url"]}" class="btn-dark btn-cta mt-4 min-h-[44px] px-5 text-[13.5px]">Read the original {ARR}</a></div>' if it.get('external') and it.get('url') else ''}
+      {ghtml}
+      {f'<div class="na-related-proj"><p class="label text-ink-mid">Related projects</p><ul class="mt-3 grid gap-2">{phtml}</ul></div>' if phtml else ''}
+      {pn}
+    </div>
+  </div>
+</article>
+
+{f"""<section id="related" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('More Stories', 'Keep <span class="sh-soft">reading.</span>', ('All stories', 'news.html'))}
+    <ul class="nw-grid mt-8 lg:mt-10">{rel}
+    </ul>
+  </div>
+</section>""" if rel else ''}
+''' + cta_band('Have a story to share?', 'Alumni, volunteers and partners: tell us about the change you’ve seen.',
+               ('Contact us', 'contact.html'), ('Get Involved', 'get-involved.html'))
+        page(it['file'], f"{it.get('seoTitle') or it['title']} · News · AFCD Foundation", (it.get('seoDescription') or it.get('excerpt', ''))[:155], 'news', body_html, parent=('News &amp; Stories', 'news.html'))
+
+
+# ---------------------------------------------------------------- Events
+# Sample events: clearly marked placeholders until AFCD supplies its real calendar (e.g. through Studio).
+EVENTS = [
+    dict(slug='leadership-workshop', project='project-leadership-lab.html', day='12', mon='Dec', year='2026', iso='2026-12-12', kind='Workshop', pillar='youth-empowerment', title='Lorem ipsum leadership workshop', where='Ait Ourir', time='10:00 – 13:00', desc='Consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus posuere velit aliquet.', upcoming=True),
+    dict(slug='community-clean-up', project='project-eco-citizen.html', day='20', mon='Jan', year='2027', iso='2027-01-20', kind='Community day', pillar='green-thumbs', title='Dolor sit amet community clean-up', where='Al Haouz', time='09:00 – 16:00', desc='Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.', upcoming=True),
+    dict(slug='training-of-trainers', project=None, day='08', mon='Feb', year='2027', iso='2027-02-08', kind='Training', pillar='women-empowerment', title='Amet consectetur training of trainers', where='Marrakech', time='14:00 – 18:00', desc='Maecenas faucibus mollis interdum. Nullam quis risus eget urna mollis ornare vel eu leo.', upcoming=True),
+    dict(slug='digital-skills-webinar', project=None, day='27', mon='Feb', year='2027', iso='2027-02-27', kind='Webinar', pillar='digital-empowerment', title='Adipiscing elit digital skills webinar', where='Online', time='18:00 – 19:30', desc='Aenean lacinia bibendum nulla sed consectetur. Curabitur blandit tempus porttitor.', upcoming=True),
+    dict(slug='bootcamp', project='project-leadership-lab.html', day='18', mon='Oct', year='2026', iso='2026-10-18', kind='Bootcamp', pillar='youth-empowerment', title='Sed posuere bootcamp', where='Marrakech', time='3 days', desc='Etiam porta sem malesuada magna mollis euismod.', upcoming=False),
+    dict(slug='environmental-screening', project='project-youth-green-generation.html', day='05', mon='Jun', year='2026', iso='2026-06-05', kind='Festival', pillar='green-thumbs', title='Nulla vitae environmental screening', where='Al Haouz', time='Evening', desc='Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh.', upcoming=False),
+]
+# Studio loader (owned by AFCD Studio): when src/data/events.json exists it replaces EVENTS with real events
+# (same keys as above plus sample=False, studio=True, revision, endIso, online, bodyHtml, agenda, audience, poster,
+# registration, recap, seoTitle, seoDescription). All values are already HTML-escaped. Studio writes the file only
+# while at least one event is live, so the sample list above is used otherwise.
+_EVENTS_FILE = Path(os.environ.get('STUDIO_EVENTS_JSON') or Path(__file__).parent / 'data' / 'events.json')
+if _EVENTS_FILE.exists():
+    import json as _ej
+    EVENTS = _ej.loads(_EVENTS_FILE.read_text(encoding='utf-8'))['events']
+# End of Studio loader.
+EV_ICON = {
+    'pin': '<path d="M10 17s5-4.6 5-9a5 5 0 0 0-10 0c0 4.4 5 9 5 9Z"/><circle cx="10" cy="8" r="1.8"/>',
+    'clock': '<circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2"/>',
+}
+
+
+def event_file(e):
+    return f"event-{e['slug']}.html"
+
+
+def ev_ico(k):
+    return f'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{EV_ICON[k]}</svg>'
+
+
+def ev_sample(e):
+    return e.get('sample', True)
+
+
+def ev_badge(e):
+    return '<span class="ev-sample">Sample event</span>' if ev_sample(e) else ''
+
+
+def ev_poster(e, cls, sizes='(min-width:1024px) 400px, 100vw', label='Event poster · 1:1', tone='#E2E2E2'):
+    if e.get('poster'):
+        return media_img(e['poster'], cls, sizes)
+    return ph(label, cls, tone)
+
+
+def ev_register(e, block=False):
+    """Registration action for an event: contact form, external link or nothing (Studio events); contact for samples."""
+    size = 'mt-5 min-h-[50px] w-full justify-center px-6' if block else 'min-h-[50px] px-7'
+    if not e['upcoming']:
+        rc = e.get('recap')
+        if rc and rc.get('url'):
+            return f'<a href="{rc["url"]}" class="btn-dark btn-cta {size}">Read the recap {ARR}</a>'
+        return '<p class="mt-5 rounded-2xl bg-[#F6F6F6] px-4 py-3 text-[14px] text-ink-dark">This event has ended. See upcoming events below.</p>' if block else ''
+    reg = {'mode': 'contact', 'label': 'Register interest'} if ev_sample(e) else (e.get('registration') or {'mode': 'none'})
+    mode, label = reg.get('mode'), reg.get('label') or 'Register'
+    if mode == 'external' and reg.get('url'):
+        return f'<a href="{reg["url"]}" target="_blank" rel="noopener" class="btn-dark btn-cta {size}">{label} {ARR}</a>'
+    if mode == 'contact':
+        note = '<p class="mt-3 text-[12.5px] leading-relaxed text-ink-mid">Registration isn’t online yet: this sends us a message and we confirm your place.</p>' if block else ''
+        return f'<a href="contact.html?topic=General+question#message" class="btn-dark btn-cta {size}">{label} {ARR}</a>{note}'
+    return ''
+
+
+def event_row(e, compact=False):
+    """One event as a row: date tile, details, action. Used on the Events page, homepage and project pages."""
+    pname = next(p[2] for p in PILLARS if p[0] == e['pillar'])
+    state = 'Upcoming' if e['upcoming'] else 'Past'
+    act = (f'<a href="{event_file(e)}" class="ev-act">View details <span aria-hidden="true">↗</span></a>' if e['upcoming']
+           else f'<a href="{event_file(e)}" class="ev-act is-past">Event recap <span aria-hidden="true">↗</span></a>')
+    return f'''
+      <li class="ev-row{' is-past' if not e['upcoming'] else ''}" data-when="{state.lower()}">
+        <time class="ev-date" datetime="{e['iso']}"><span class="ev-day">{e['day']}</span><span class="ev-mon">{e['mon']} {e['year']}</span></time>
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">{e['kind']}</span><span class="ev-pillar"><span class="pj-dot" style="--c:#111"></span>{pname}</span>{ev_badge(e)}</div>
+          {f'<p class="ev-proj mt-2">Part of <a href="{e["project"]}">{DETAILS[e["project"]]["name"]}</a></p>' if e.get('project') in DETAILS else ''}
+          <p class="mt-3 text-[19px] font-semibold leading-snug tracking-[-0.02em] md:text-[21px]"><a href="{event_file(e)}" class="ev-link">{e['title']}</a></p>
+          {'' if compact else f'<p class="mt-1.5 max-w-[62ch] text-[14.5px] leading-relaxed text-ink-dark">{e["desc"]}</p>'}
+          <p class="ev-meta mt-3"><span>{ev_ico('pin')}{e['where']}</span><span>{ev_ico('clock')}{e['time']}</span></p>
+        </div>
+        <div class="ev-poster" aria-hidden="true">{ev_poster(e, 'aspect-square w-full rounded-[16px]', '96px', 'Poster', '#E6E6E6')}</div>
+        {act}
+      </li>'''
+
+
+def events():
+    up = [e for e in EVENTS if e['upcoming']]
+    past = [e for e in EVENTS if not e['upcoming']]
+    any_sample = any(ev_sample(x) for x in EVENTS)
+    feat = up[0] if up else (past[0] if past else None)
+    pname = next(p[2] for p in PILLARS if p[0] == feat['pillar']) if feat else ''
+    chips = (f'<button type="button" class="nw-chip" data-ev="all" aria-pressed="true">All <span class="pr-count">{len(EVENTS)}</span></button>'
+             f'<button type="button" class="nw-chip" data-ev="upcoming" aria-pressed="false">Upcoming <span class="pr-count">{len(up)}</span></button>'
+             f'<button type="button" class="nw-chip" data-ev="past" aria-pressed="false">Past <span class="pr-count">{len(past)}</span></button>')
+    rows = ''.join(event_row(e) for e in up + past)
+    next_html = (f'''<section id="next" class="pt-8 lg:pt-10">
+  <div class="wrap">
+    <article class="ev-feat">
+      <div class="ev-feat-date"><span class="label text-white/55">{'Next event' if feat['upcoming'] else 'Latest event'}</span><span class="ev-feat-day">{feat['day']}</span><span class="text-[15px] font-medium">{feat['mon']} {feat['year']}</span><span class="mt-auto text-[13px] text-white/55">{feat['time']}</span></div>
+      <div class="flex min-w-0 flex-col p-6 md:p-9">
+        <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">{feat['kind']}</span><span class="ev-pillar"><span class="pj-dot" style="--c:#111"></span>{pname}</span>{ev_badge(feat)}</div>
+        <h2 class="mt-5 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[42px]"><a href="{event_file(feat)}" class="ev-link">{feat['title']}</a></h2>
+        <p class="mt-4 max-w-[60ch] text-[16px] leading-relaxed text-ink-dark">{feat['desc']}</p>
+        <p class="ev-meta mt-5"><span>{ev_ico('pin')}{feat['where']}</span><span>{ev_ico('clock')}{feat['time']}</span></p>
+        <div class="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 lg:mt-auto lg:pt-8">
+          {ev_register(feat)}
+          <a href="{event_file(feat)}" class="link-arrow">View details {ARR}</a>
+        </div>
+      </div>
+      <div class="ev-feat-photo">{ev_poster(feat, 'aspect-square w-full rounded-[22px]')}</div>
+    </article>
+  </div>
+</section>''' if feat else '')
+    body = page_header([('Events', 'events.html')], 'Events',
+                       'Meet us <span class="text-ink-mid">in the community.</span>',
+                       'Workshops, trainings, community days and online sessions across Morocco. Join an event or register your interest.') + f'''
+
+{next_html}
+
+<section id="calendar" class="py-14 lg:py-16">
+  <div class="wrap">{sec_head('01 / Calendar', 'Upcoming <span class="sh-soft">and past events.</span>', f'{len(EVENTS)} events', desc='Dates, places and how to take part. Filter to see what’s coming up.')}
+    <div class="mt-8 nw-chips" role="group" aria-label="Filter events">{chips}</div>
+    <ul id="event-list" class="ev-list mt-6">{rows}
+    </ul>
+    <p class="ev-empty mt-6 hidden text-[15px] text-ink-mid" role="status">No events in this view yet.</p>
+    {placeholder_note('These are sample events (lorem ipsum) to show the layout. AFCD will publish its real event calendar here.') if any_sample else ''}
+  </div>
+</section>
+
+<section id="host" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap grid gap-4 lg:grid-cols-12">
+    <div class="rounded-[28px] border border-ink-light p-6 md:p-8 lg:col-span-5">
+      <p class="label text-ink-mid">Host or co-organise</p>
+      <p class="mt-4 text-[26px] font-semibold leading-[1.1] tracking-[-0.03em]">Bring an AFCD event <span class="text-ink-mid">to your community.</span></p>
+      <p class="mt-3 text-[15px] leading-relaxed text-ink-dark">Schools, associations and partners can propose a workshop, training or community day with us.</p>
+      <a href="contact.html?topic=Partnership#message" class="link-arrow mt-6">Propose an event {ARR}</a>
+    </div>
+    <div class="os-band on-dark text-white lg:col-span-7">
+      <span class="cta-kicker" style="background:#fff;color:#000"><span class="tb-dot" aria-hidden="true"></span>Newsletter</span>
+      <p class="mt-6 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[40px]">Never miss <span class="text-white/45">an event.</span></p>
+      <p class="mt-4 max-w-[46ch] text-[15.5px] leading-relaxed text-white/65">New events, calls for applications and stories, a few times a year.</p>
+      <a href="#ft-news-title" class="btn-light btn-cta mt-8 min-h-[48px] px-6 text-[14px]">Subscribe <span class="arr" aria-hidden="true">↓</span></a>
+    </div>
+  </div>
+</section>
+''' + cta_band('See you at the next one.', 'Volunteer at an event, join a programme or partner with us on a community day.',
+               ('Get Involved', 'get-involved.html'), ('Contact us', 'contact.html'))
+    # ---- one details page per event
+    for i, e in enumerate(EVENTS):
+        pname = next(p[2] for p in PILLARS if p[0] == e['pillar'])
+        others = [x for x in EVENTS if x is not e and x['upcoming']][:3]
+        facts = [('Date', f"{e['day']} {e['mon']} {e['year']}"), ('Time', e['time']), ('Location', e['where']), ('Format', e['kind']), ('Pillar', pname)]
+        if e.get('project') and e['project'] in DETAILS:
+            facts.insert(4, ('Project', f'<a class="underline underline-offset-2" href="{e["project"]}">{DETAILS[e["project"]]["name"]}</a>'))
+        fhtml = ''.join(f'<div class="evd-fact"><dt>{a}</dt><dd>{b}</dd></div>' for a, b in facts)
+        agenda = [('Arrival', 'Welcome and introductions. Lorem ipsum dolor sit amet.'), ('Session 1', 'Consectetur adipiscing elit, sed do eiusmod tempor.'),
+                  ('Break', 'Networking and refreshments.'), ('Session 2', 'Ut enim ad minim veniam, quis nostrud exercitation.'), ('Close', 'Next steps and how to stay involved.')]
+        ahtml = ''.join(f'<li class="evd-ag"><span class="evd-ag-n">{j:02d}</span><span><span class="block text-[16px] font-semibold tracking-[-0.015em]">{t}</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">{d}</span></span></li>' for j, (t, d) in enumerate(agenda, 1))
+        who = ['Lorem ipsum: young people and students', 'Dolor sit: community volunteers', 'Amet: local associations and partners']
+        whtml = ''.join(f'<li class="gi-check"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10.5 3.2 3L15 6.5"/></svg><span>{w}</span></li>' for w in who)
+        reg = ev_register(e, block=True)
+        sample = ev_sample(e)
+        highlights = [('learn', 'Learn', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do.'),
+                      ('connect', 'Connect', 'Vestibulum id ligula porta felis euismod semper cras mattis.'),
+                      ('act', 'Act', 'Aenean lacinia bibendum nulla sed consectetur curabitur blandit.')]
+        HI = {'learn': '<path d="M2.5 7 10 4l7.5 3L10 10 2.5 7Z"/><path d="M5.5 8.3v3.7c0 1.1 2 2 4.5 2s4.5-.9 4.5-2V8.3"/>',
+              'connect': '<circle cx="7" cy="7" r="2.5"/><circle cx="13.5" cy="8.5" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M12 13c1.9-.4 3.8.8 4.5 3"/>',
+              'act': '<path d="M10 2.5v3M4.7 4.7l2.1 2.1M15.3 4.7l-2.1 2.1"/><circle cx="10" cy="11.5" r="4"/><path d="M8.5 17.5h3"/>'}
+        hhtml = ''.join(f'<li class="wd-card" style="--c:#F3F3F3"><span class="flex items-start justify-between"><span class="wd-ico"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{HI[k]}</svg></span><span class="wd-n">{j:02d}</span></span><span class="mt-8 block text-[19px] font-semibold tracking-[-0.02em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for j, (k, t, d) in enumerate(highlights, 1))
+        outcomes = ['Lorem ipsum dolor sit amet, consectetur adipiscing elit.', 'Vestibulum id ligula porta felis euismod semper.',
+                    'Cras mattis consectetur purus sit amet fermentum.', 'Aenean lacinia bibendum nulla sed consectetur.']
+        ohtml = ''.join(f'<li class="evt-out"><span class="evt-out-n">{j:02d}</span><span class="block text-[16px] font-medium leading-snug">{o}</span></li>' for j, o in enumerate(outcomes, 1))
+
+        if sample:
+            about_html = f'''<section id="about" class="py-14 lg:py-16">
+  <div class="wrap" data-tabs>{sec_head('01 / About This Event', 'What to <span class="sh-soft">expect.</span>', 'Sample text')}
+    <div class="evt-tabs mt-8" role="tablist" aria-label="About this event">
+      <button type="button" role="tab" id="evt-t1" aria-controls="evt-p1" aria-selected="true">Overview</button>
+      <button type="button" role="tab" id="evt-t2" aria-controls="evt-p2" aria-selected="false">Outcomes</button>
+      <button type="button" role="tab" id="evt-t3" aria-controls="evt-p3" aria-selected="false">Highlights</button>
+      <button type="button" role="tab" id="evt-t4" aria-controls="evt-p4" aria-selected="false">Who should attend</button>
+    </div>
+
+    <div id="evt-p1" class="evt-panel" role="tabpanel" aria-labelledby="evt-t1">
+      <div class="grid gap-4 lg:grid-cols-12">
+        <div class="grid content-start gap-4 text-[16px] leading-[1.75] text-ink-dark lg:col-span-8">
+          <p class="text-[20px] leading-[1.5] tracking-[-0.01em] text-ink-pure">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus, posuere velit aliquet.</p>
+          <p>Sed posuere consectetur est at lobortis. Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.</p>
+          <p>Aenean lacinia bibendum nulla sed consectetur. Curabitur blandit tempus porttitor. Nulla vitae elit libero, a pharetra augue.</p>
+        </div>
+        <dl class="evt-at lg:col-span-4">
+          <div><dt>Format</dt><dd>{e['kind']}</dd></div>
+          <div><dt>Duration</dt><dd>{e['time']}</dd></div>
+          <div><dt>Location</dt><dd>{e['where']}</dd></div>
+          <div><dt>Pillar</dt><dd><span class="pj-dot" style="--c:#111"></span>{pname}</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div id="evt-p2" class="evt-panel" role="tabpanel" aria-labelledby="evt-t2">
+      <ul class="evt-outcomes">{ohtml}</ul>
+    </div>
+
+    <div id="evt-p3" class="evt-panel" role="tabpanel" aria-labelledby="evt-t3">
+      <ul class="grid gap-3 md:grid-cols-3">{hhtml}</ul>
+    </div>
+
+    <div id="evt-p4" class="evt-panel" role="tabpanel" aria-labelledby="evt-t4">
+      <div class="grid gap-4 lg:grid-cols-12">
+        <div class="os-band on-dark text-white lg:col-span-7" style="padding:28px">
+          <p class="label text-white/55">Who should attend</p>
+          <ul class="evd-who mt-5 grid gap-3">{whtml}</ul>
+        </div>
+        <div class="rounded-[28px] border border-ink-light p-6 md:p-7 lg:col-span-5">
+          <p class="text-[18px] font-semibold tracking-[-0.02em]">Not sure it’s for you?</p>
+          <p class="mt-2 text-[14.5px] leading-relaxed text-ink-dark">Send us a short message and we’ll tell you whether this event fits what you’re looking for.</p>
+          <a href="contact.html?topic=General+question#message" class="link-arrow mt-5">Ask a question {ARR}</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>'''
+        else:
+            tabs = []
+            overview = (e.get('bodyHtml') or '').strip()
+            facts_tiles = f'''<dl class="evt-at lg:col-span-4"><div><dt>Format</dt><dd>{e['kind']}</dd></div><div><dt>Duration</dt><dd>{e['time']}</dd></div><div><dt>Location</dt><dd>{e['where']}</dd></div><div><dt>Pillar</dt><dd><span class="pj-dot" style="--c:#111"></span>{pname}</dd></div></dl>'''
+            tabs.append(('Overview', f'''<div class="grid gap-4 lg:grid-cols-12"><div class="na-prose lg:col-span-8" style="margin-top:0">{overview or f'<p>{e["desc"]}</p>'}</div>{facts_tiles}</div>'''))
+            if e.get('agenda'):
+                ag = ''.join(f'<li class="evd-ag"><span class="evd-ag-n">{j:02d}</span><span><span class="block text-[16px] font-semibold tracking-[-0.015em]">{x.get("title", "")}</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">{x.get("text", "")}</span></span></li>' for j, x in enumerate(e['agenda'], 1))
+                tabs.append(('Programme', f'<div class="rounded-[28px] border border-ink-light p-6 md:p-7"><ol class="grid gap-3">{ag}</ol></div>'))
+            if e.get('audience'):
+                au = ''.join(f'<li class="gi-check"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10.5 3.2 3L15 6.5"/></svg><span>{w}</span></li>' for w in e['audience'])
+                tabs.append(('Who should attend', f'<div class="os-band on-dark text-white" style="padding:28px"><p class="label text-white/55">Who should attend</p><ul class="evd-who mt-5 grid gap-3">{au}</ul></div>'))
+            tab_btns = ''.join(f'<button type="button" role="tab" id="evt-t{k}" aria-controls="evt-p{k}" aria-selected="{"true" if k == 1 else "false"}">{t}</button>' for k, (t, _) in enumerate(tabs, 1))
+            tab_panels = ''.join(f'<div id="evt-p{k}" class="evt-panel" role="tabpanel" aria-labelledby="evt-t{k}">{h}</div>' for k, (_, h) in enumerate(tabs, 1))
+            about_html = f'''<section id="about" class="py-14 lg:py-16">
+  <div class="wrap"{' data-tabs' if len(tabs) > 1 else ''}>{sec_head('01 / About This Event', 'What to <span class="sh-soft">expect.</span>')}
+    {f'<div class="evt-tabs mt-8" role="tablist" aria-label="About this event">{tab_btns}</div>' if len(tabs) > 1 else ''}
+    {tab_panels}
+  </div>
+</section>'''
+        orows = ''.join(event_row(x, compact=True) for x in others)
+        if not orows:
+            orows = '<li class="rounded-[24px] border border-dashed border-ink-light p-6 text-[15px] text-ink-dark">No other upcoming events right now. <a class="link-arrow ml-1" href="events.html">See all events ↗</a></li>'
+        dbody = page_header([('Events', 'events.html'), (e['title'], event_file(e))], f"{e['kind']} · {'Upcoming' if e['upcoming'] else 'Past'}", e['title'], e['desc']) + f'''
+
+<section id="event" class="pt-8 lg:pt-10" data-studio-event-rev="{e.get('revision', '')}">
+  <div class="wrap evd-top">
+    <div class="evd-poster">{ev_poster(e, 'aspect-square w-full rounded-[28px]', '(min-width:1024px) 460px, 100vw')}</div>
+    <aside class="evd-card">
+      <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">{e['kind']}</span>{ev_badge(e)}</div>
+      <div class="evd-when mt-5"><span class="evd-day">{e['day']}</span><span><span class="block text-[18px] font-semibold tracking-[-0.02em]">{e['mon']} {e['year']}</span><span class="block text-[14px] text-ink-mid">{e['time']}</span></span></div>
+      <dl class="evd-facts mt-5">{fhtml}</dl>
+      {reg}
+    </aside>
+  </div>
+</section>
+
+{about_html}
+
+<section id="where" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap grid gap-4 lg:grid-cols-12">
+    <div class="lg:col-span-4">{sec_head('02 / Location', 'Where <span class="sh-soft">we meet.</span>', stack=True)}
+      <div class="evd-loc mt-6">
+        <span class="evd-loc-ico">{ev_ico('pin')}</span>
+        <span class="min-w-0"><span class="block text-[18px] font-semibold tracking-[-0.02em]">{e['where']}</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">The exact venue is shared with registered participants.</span></span>
+      </div>
+    </div>
+    <div class="lg:col-span-8">{ph('Map · ' + e['where'], 'aspect-[16/8] w-full rounded-[28px]', '#E8E8E8')}</div>
+  </div>
+</section>
+
+<section id="more" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('03 / More Events', 'Other upcoming <span class="sh-soft">events.</span>', ('All events', 'events.html'))}
+    <ul class="ev-list mt-8 lg:mt-10">{orows}
+    </ul>
+    {placeholder_note('Sample event (lorem ipsum) to show the layout. Real event details will replace it.') if sample else ''}
+  </div>
+</section>
+''' + cta_band('See you at the next one.', 'Volunteer at an event, join a programme or partner with us on a community day.',
+                   ('Get Involved', 'get-involved.html'), ('All events', 'events.html'))
+        page(event_file(e), f"{e.get('seoTitle') or e['title']} · Events · AFCD Foundation", (e.get('seoDescription') or f"{e['kind']} on {e['day']} {e['mon']} {e['year']} in {e['where']}: {e['desc']}")[:160], 'none', dbody, parent=('Events', 'events.html'))
+
+    page('events.html', 'Events · AFCD Foundation',
+         'AFCD Foundation events: workshops, trainings, community days and online sessions across Morocco.', 'none', body)
+
+
 # ---------------------------------------------------------------- Partners
+PARTNERS = [
+    ('International', ['World Denver', 'Danish Youth Council', 'Embassy of Switzerland in Morocco', 'U.S. Embassy Morocco', 'Embassy of France in Morocco', 'Service Civil International (Germany)', 'Plugged In Band Program', 'Rebild Ungdomsskole', 'MapWorks Learning']),
+    ('National', ['High Atlas Foundation', 'Heinrich Böll Stiftung Rabat', 'Moroccan Institute for Policy Analysis', 'Dar America Casablanca', 'Anoual Association', 'International Youth Council Morocco', 'Student Voice', 'Y-PEER PETRI Morocco']),
+    ('Local', ['Commune of Ait Ourir']),
+]
+# Studio loader (owned by AFCD Studio): when src/data/partners.json exists it replaces PARTNERS (same shape)
+# and fills PARTNER_DETAILS {name: {slug, scope, category, description, url, logo, since, current, projects}}.
+# All values in the file are already HTML-escaped by Studio; logo is a media ref for media_img() or None.
+_PARTNERS_FILE = Path(os.environ.get('STUDIO_PARTNERS_JSON') or Path(__file__).parent / 'data' / 'partners.json')
+PARTNER_DETAILS = {}
+PARTNERS_REV = ''
+if _PARTNERS_FILE.exists():
+    import json as _pj
+    _pd = _pj.loads(_PARTNERS_FILE.read_text(encoding='utf-8'))
+    PARTNERS = [(_g, _n) for _g, _n in ((g, [x['name'] for x in _pd['partners'] if x['scope'] == g]) for g in ('International', 'National', 'Local')) if _n]
+    PARTNER_DETAILS = {x['name']: x for x in _pd['partners']}
+    PARTNERS_REV = _pd.get('revision', '')
+# End of Studio loader.
+PT_ICONS = {
+    'International': '<circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3c2 2.2 2.8 4.6 2.8 7s-.8 4.8-2.8 7c-2-2.2-2.8-4.6-2.8-7S8 5.2 10 3Z"/>',
+    'National': '<path d="M10 17s5-4.6 5-9a5 5 0 0 0-10 0c0 4.4 5 9 5 9Z"/><circle cx="10" cy="8" r="1.8"/>',
+    'Local': '<path d="M3.5 9 10 3.5 16.5 9v7.5h-13V9Z"/><path d="M8 16.5v-4h4v4"/>',
+    'fund': '<rect x="2.5" y="5" width="15" height="10" rx="2"/><circle cx="10" cy="10" r="2.2"/><path d="M5.5 8v4M14.5 8v4"/>',
+    'design': '<path d="m3 10 3-3 3 2 2-2 3 3"/><path d="M3 10l4 4 1.5-1M17 10l-4 4-3-2.5"/>',
+    'share': '<circle cx="7" cy="7" r="2.5"/><circle cx="13.5" cy="8.5" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M12 13c1.9-.4 3.8.8 4.5 3"/>',
+}
+
+
 def partners():
+    def ico(k, cls=''):
+        return f'<svg class="{cls}" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{PT_ICONS[k]}</svg>'
+    total = sum(len(n) for _g, n in PARTNERS)
+    stats = f'<div class="pr-stat pr-stat-main"><dt>Partners</dt><dd>{total}</dd></div>' + ''.join(
+        f'<div class="pr-stat"><dt>{ico(g, "pr-stat-ico")}{g}</dt><dd>{len(n)}</dd></div>' for g, n in PARTNERS)
+    chips = '<button type="button" class="nw-chip" data-pf="all" aria-pressed="true">All <span class="pr-count">' + str(total) + '</span></button>' + ''.join(
+        f'<button type="button" class="nw-chip" data-pf="{g}" aria-pressed="false">{g} <span class="pr-count">{len(n)}</span></button>' for g, n in PARTNERS)
+    def initials(name):
+        w = [x for x in name.replace('(', '').replace(')', '').split() if x[0].isalpha() and x.lower() not in ('of', 'in', 'for', 'the', 'and')]
+        return ''.join(x[0] for x in w[:2]).upper()
+    cards = ''.join(f'''
+      <li class="pr-card" data-group="{g}" data-name="{n.lower()}">
+        <span class="pr-logo" aria-hidden="true"><span>{initials(n)}</span></span>
+        <span class="mt-5 block text-[16px] font-semibold leading-snug tracking-[-0.015em]">{n}</span>
+        <span class="pr-scope">{ico(g)}{g}</span>
+      </li>''' for g, names in PARTNERS for n in names)
+    models = [('fund', 'Fund', 'Support a programme under one of our four pillars, from a single cohort to multi-year work.'),
+              ('design', 'Co-design', 'Build an initiative with AFCD and the community, from the first idea to the final report.'),
+              ('share', 'Share expertise', 'Train, mentor or host participants, and bring your organisation’s know-how to a programme.')]
+    mhtml = ''.join(f'<li class="wd-card" style="--c:#F3F3F3"><span class="flex items-start justify-between"><span class="wd-ico">{ico(k)}</span><span class="wd-n">{i:02d}</span></span><span class="mt-8 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for i, (k, t, d) in enumerate(models, 1))
+    steps = [('Tell us about your organisation', 'Share your goals and the communities or pillar you’d like to support.'),
+             ('Explore the fit together', 'We look at how your goals connect with our four pillars and current programmes.'),
+             ('Co-design and launch', 'We agree the plan, launch the work together and report on what it achieves.')]
+    shtml = ''.join(f'<li class="os-step"><span class="os-step-k">{i:02d}</span><span class="os-step-dot" aria-hidden="true"></span><span class="mt-5 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for i, (t, d) in enumerate(steps, 1))
+
     body = page_header([('Partners', 'partners.html')], 'Our Partners',
                        'Stronger <span class="text-ink-mid">together.</span>',
-                       'International, national and local organizations that have supported AFCD’s programmes, as listed on the current Our Partners page.', points=('<b>18</b> Partners', 'International', 'National', 'Local')) + f'''
+                       'International, national and local organizations that have supported AFCD’s programmes, as listed on the current Our Partners page.') + f'''
 
-<section class="py-14 lg:py-16">
+<section id="overview" class="pt-8 lg:pt-10">
   <div class="wrap">
-    <div id="partner-groups"></div>
+    <dl class="pr-stats">{stats}</dl>
+  </div>
+</section>
+
+<section id="directory" class="py-14 lg:py-16">
+  <div class="wrap">{sec_head('01 / Partner Directory', 'Organisations <span class="sh-soft">we work with.</span>', f'{total} partners', desc='Filter by scope or search by name. Logos will be added once each partner approves their use.')}
+    <div class="pr-tools mt-8">
+      <div class="nw-chips" role="group" aria-label="Filter partners">{chips}</div>
+      <label class="pr-search"><span class="sr-only">Search partners</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13.2 13.2 3.3 3.3"/></svg><input id="partner-search" type="search" placeholder="Search partners" autocomplete="off"></label>
+    </div>
+    <ul id="partner-grid" class="pr-grid mt-6">{cards}
+    </ul>
+    <p class="pr-empty mt-6 hidden text-[15px] text-ink-mid" role="status">No partners match your search.</p>
     {placeholder_note('Logos to be added. AFCD will confirm which partnerships are current.')}
   </div>
 </section>
 
-<section class="py-14 lg:py-16">
-  <div class="wrap grid gap-12 lg:grid-cols-12 lg:gap-16">
-    <div class="lg:col-span-5">{sec_head('Partner with AFCD', 'Co-design <span class="sh-soft">change with us.</span>', stack=True)}</div>
-    <ul class="grid gap-3 sm:grid-cols-3 lg:col-span-7 lg:self-end">
-      <li class="rounded-2xl border border-ink-light p-6"><p class="label text-ink-mid">Fund</p><p class="mt-3 text-lg">Support a programme under one of our four pillars.</p></li>
-      <li class="rounded-2xl border border-ink-light p-6"><p class="label text-ink-mid">Co-design</p><p class="mt-3 text-lg">Build an initiative with us and the community.</p></li>
-      <li class="rounded-2xl border border-ink-light p-6"><p class="label text-ink-mid">Share expertise</p><p class="mt-3 text-lg">Train, mentor or host our participants.</p></li>
-    </ul>
+<section id="models" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('02 / Ways to Partner', 'Co-design <span class="sh-soft">change with us.</span>', 'Three models', desc='Every partnership is shaped around shared goals and the communities we serve.')}
+    <ul class="mt-8 grid gap-3 md:grid-cols-3 lg:mt-10">{mhtml}</ul>
+  </div>
+</section>
+
+<section id="how" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('03 / How It Starts', 'From first message <span class="sh-soft">to shared results.</span>', 'Three steps')}
+    <ol class="os-steps gi-journey mt-8 lg:mt-10">{shtml}
+    </ol>
   </div>
 </section>
 ''' + cta_band('Let’s build something together.', 'Tell us about your organization and what you would like to support.',
-               ('Partner With Us', 'contact.html'), ('Our projects', 'projects.html'))
+               ('Partner With Us', 'contact.html?topic=Partnership#message'), ('Our projects', 'projects.html'))
     page('partners.html', 'Partners · AFCD Foundation',
          'The international, national and local organizations that have supported AFCD Foundation’s programmes.', 'partners', body)
 
 
 # ---------------------------------------------------------------- Get Involved
+GI_ICONS = {
+    'volunteer': '<path d="M10 16.5s-6-3.6-6-8a3.3 3.3 0 0 1 6-1.9 3.3 3.3 0 0 1 6 1.9c0 4.4-6 8-6 8Z"/>',
+    'programs': '<path d="M2.5 7 10 4l7.5 3L10 10 2.5 7Z"/><path d="M5.5 8.3v3.7c0 1.1 2 2 4.5 2s4.5-.9 4.5-2V8.3"/>',
+    'partner': '<path d="m3 10 3-3 3 2 2-2 3 3"/><path d="M3 10l4 4 1.5-1M17 10l-4 4-3-2.5"/>',
+    'alumni': '<circle cx="7" cy="7" r="2.5"/><circle cx="13.5" cy="8.5" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M12 13c1.9-.4 3.8.8 4.5 3"/>',
+}
+
+
 def involved():
     ways = [
-        ('volunteer', '01', 'Volunteer', 'Give time to activities in Ait Ourir and beyond.',
-         ['Help run workshops and community days', 'Support events and campaigns', 'Bring your skills to a programme'], 'Become a volunteer'),
-        ('programs', '02', 'Join a Programme', 'Apply when calls open for youth and women’s programmes.',
-         ['Leadership and entrepreneurship tracks', 'Environmental and climate projects', 'Digital skills workshops'], 'Ask about open calls'),
-        ('partner', '03', 'Partner With Us', 'Co-design and fund community initiatives.',
-         ['Fund a programme or a pillar', 'Co-design an initiative', 'Share expertise and mentoring'], 'Start a partnership'),
-        ('alumni', '04', 'Alumni Club', 'Stay connected with the 2,700 alumni of AFCD programmes.',
-         ['Meet fellow alumni', 'Mentor new participants', 'Hear about new opportunities first'], 'Join the alumni club'),
+        dict(id='volunteer', n='01', tone='#FFB2B9', t='Volunteer', topic='Volunteering',
+             d='Give time to activities in Ait Ourir and beyond, alongside AFCD’s team and participants.',
+             who='Students, professionals and community members who want to help locally.',
+             items=['Help run workshops and community days', 'Support events and awareness campaigns', 'Bring your skills to a programme'],
+             steps=['Tell us where you are and what you’d like to do', 'We match you with an activity or event', 'Join the team on the day'],
+             cta='Become a volunteer'),
+        dict(id='programs', n='02', tone='#A8DDFB', t='Join a Programme', topic='Joining a programme',
+             d='Apply when calls open for youth and women’s programmes in leadership, environment and digital skills.',
+             who='Young people and women; criteria vary by programme and call.',
+             items=['Leadership and entrepreneurship tracks', 'Environmental and climate projects', 'Digital skills workshops'],
+             steps=['Watch News &amp; Stories for open calls', 'Apply following the call’s instructions', 'Take part and lead your own initiative'],
+             cta='Ask about open calls'),
+        dict(id='partner', n='03', tone='#82E591', t='Partner With Us', topic='Partnership',
+             d='Co-design and fund community initiatives with an organisation rooted in Moroccan communities since 2007.',
+             who='International, national and local organisations, institutions and companies.',
+             items=['Fund a programme or a pillar', 'Co-design an initiative', 'Share expertise and mentoring'],
+             steps=['Tell us about your organisation and goals', 'We explore fit with our four pillars together', 'Co-design, launch and report on the work'],
+             cta='Start a partnership'),
+        dict(id='alumni', n='04', tone='#FBE38A', t='Alumni Club', topic='Alumni club',
+             d='Stay connected with fellow alumni of AFCD programmes and keep the change going.',
+             who='Past participants of AFCD programmes.',
+             items=['Meet fellow alumni', 'Mentor new participants', 'Hear about new opportunities first'],
+             steps=['Tell us your programme and year', 'We reconnect you with the alumni network', 'Mentor, meet and take part'],
+             cta='Join the alumni club'),
     ]
-    cards = ''.join(f'''
-    <li id="{sid}" class="scroll-mt-28 flex flex-col rounded-3xl border border-ink-light bg-white p-6 md:p-8">
-      <div class="flex items-center justify-between"><span class="text-[11px] tabular-nums text-ink-mid">{n}</span><span class="brand-line brand-line-thin block w-10 rounded-full" aria-hidden="true"></span></div>
-      <h2 class="mt-8 text-[32px] font-semibold leading-[1.05] tracking-[-0.035em]">{t}</h2>
-      <p class="mt-3 text-[15px] leading-relaxed text-ink-dark">{d}</p>
-      <ul class="mt-6 border-b border-ink-light text-[15px]">{''.join(f'<li class="border-t border-ink-light py-3">{b}</li>' for b in bullets)}</ul>
-      <a href="contact.html" class="btn-dark btn-cta mt-8 self-start">{cta} {ARR}</a>
-    </li>''' for sid, n, t, d, bullets, cta in ways)
+    def ico(k):
+        return f'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{GI_ICONS[k]}</svg>'
+    tabs = ''.join(f'''<button type="button" class="gi-tab" role="tab" id="tab-{w['id']}" aria-controls="{w['id']}" aria-selected="{'true' if i == 0 else 'false'}" style="--c:{w['tone']}"><span class="gi-tab-ico">{ico(w['id'])}</span><span class="min-w-0 flex-1 text-left"><span class="block text-[11px] font-medium tabular-nums text-ink-mid">{w['n']}</span><span class="block text-[17px] font-semibold tracking-[-0.02em]">{w['t']}</span></span><span class="gi-tab-arr" aria-hidden="true">→</span></button>''' for i, w in enumerate(ways))
+    check = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10.5 3.2 3L15 6.5"/></svg>'
+    panels = ''.join(f'''
+      <article id="{w['id']}" class="gi-panel scroll-mt-32" role="tabpanel" aria-labelledby="tab-{w['id']}" style="--c:{w['tone']}">
+        <div class="gi-panel-top">
+          <span class="gi-panel-ico">{ico(w['id'])}</span>
+          <span class="pl-hero-n">{w['n']}<span class="text-black/40"> / 04</span></span>
+        </div>
+        <h2 class="mt-6 text-[34px] font-semibold leading-[1.02] tracking-[-0.045em] md:text-[48px]">{w['t']}</h2>
+        <p class="mt-4 max-w-[52ch] text-[16.5px] leading-relaxed text-black/75">{w['d']}</p>
+        <div class="mt-8 grid gap-3 md:grid-cols-2">
+          <div class="gi-box"><p class="label text-ink-mid">What you’ll do</p><ul class="mt-4 grid gap-2.5">{''.join(f'<li class="gi-check">{check}<span>{x}</span></li>' for x in w['items'])}</ul></div>
+          <div class="gi-box"><p class="label text-ink-mid">How it works</p><ol class="mt-4 grid gap-2.5">{''.join(f'<li class="gi-stepline"><span class="gi-stepline-n">{k}</span><span>{x}</span></li>' for k, x in enumerate(w['steps'], 1))}</ol></div>
+        </div>
+        <div class="mt-6 flex flex-wrap items-center justify-between gap-4">
+          <p class="max-w-[46ch] text-[14px] leading-relaxed text-black/65"><b class="font-semibold text-black">Who it’s for:</b> {w['who']}</p>
+          <a href="contact.html?topic={w['topic'].replace(' ', '+')}#message" class="btn-dark btn-cta min-h-[50px] px-7">{w['cta']} {ARR}</a>
+        </div>
+      </article>''' for w in ways)
+    journey = [('Choose your path', 'Volunteer, join a programme, partner with us or reconnect as an alumnus.'),
+               ('Get in touch', 'Send us a message with the right topic, and it goes straight to the right team.'),
+               ('Take part', 'We follow up with next steps, and you join AFCD’s community in action.')]
+    jhtml = ''.join(f'<li class="os-step"><span class="os-step-k">{i:02d}</span><span class="os-step-dot" aria-hidden="true"></span><span class="mt-5 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for i, (t, d) in enumerate(journey, 1))
+
     body = page_header([('Get Involved', 'get-involved.html')], 'Get Involved',
                        'Let’s create change <span class="text-ink-mid">together.</span>',
-                       'Join our community, explore opportunities or collaborate with AFCD Foundation to create meaningful and lasting impact.', points=('Volunteer', 'Programmes', 'Partner', 'Alumni')) + f'''
+                       'Join our community, explore opportunities or collaborate with AFCD Foundation to create meaningful and lasting impact.') + f'''
 
-<section class="py-14 lg:py-16">
+<section id="paths" class="pt-8 lg:pt-10">
   <div class="wrap">
-    <ul class="grid gap-4 md:grid-cols-2">{cards}
-    </ul>
+    <div class="gi-shell">
+      <div class="gi-side">
+        <p class="label text-ink-mid">Choose your path</p>
+        <div class="gi-tabs mt-4" role="tablist" aria-label="Ways to get involved">{tabs}</div>
+        <div class="gi-side-note">
+          <p class="text-[14px] font-semibold">Not sure where you fit?</p>
+          <p class="mt-1 text-[13.5px] leading-relaxed text-ink-dark">Write to us and we’ll suggest the right way to take part.</p>
+          <a href="contact.html#message" class="link-arrow mt-3 text-[13.5px]">Send a message {ARR}</a>
+        </div>
+      </div>
+      <div class="gi-panels">{panels}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how" class="py-14 lg:py-16">
+  <div class="wrap">{sec_head('01 / How It Works', 'Three steps <span class="sh-soft">to take part.</span>', 'Simple and personal', desc='Whichever path you choose, getting started looks the same.')}
+    <ol class="os-steps gi-journey mt-8 lg:mt-10">{jhtml}
+    </ol>
+  </div>
+</section>
+
+<section id="calls" class="pb-6 lg:pb-8">
+  <div class="wrap">
+    <a href="news.html" class="gi-calls group">
+      <span class="cta-kicker" style="background:#fff;color:#000"><span class="tb-dot" aria-hidden="true"></span>Open calls</span>
+      <span class="mt-6 block text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[44px]">Looking for the next call <span class="text-white/45">for applications?</span></span>
+      <span class="mt-4 block max-w-[52ch] text-[15.5px] leading-relaxed text-white/65">Calls for youth and women’s programmes are published on News &amp; Stories and in our newsletter.</span>
+      <span class="btn-light btn-cta mt-8 min-h-[48px] px-6 text-[14px]">See News &amp; Stories {ARR}</span>
+    </a>
   </div>
 </section>
 ''' + cta_band('Not sure where you fit?', 'Write to us and we’ll find the right way for you to take part.',
@@ -1094,18 +1616,17 @@ def contact():
   <div class="wrap grid gap-4 lg:grid-cols-12">
     <form id="contact-form" class="ct-form lg:col-span-7" novalidate>
       <div class="flex flex-wrap items-center justify-between gap-3"><div class="sh-top min-w-0 flex-1"><span class="sh-num">01</span><span class="sh-label">Send a message</span><span class="sh-rule" aria-hidden="true"></span></div><span class="ct-status"><span class="ct-status-dot" aria-hidden="true"></span>Preview form</span></div>
-      <h2 class="mt-6 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[40px]">How can <span class="text-ink-mid">we help?</span></h2>
-      <p class="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-ink-dark">Pick a topic, add a few details and we’ll route your message to the right team.</p>
+      <h2 class="mt-5 text-[26px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[32px]">How can <span class="text-ink-mid">we help?</span></h2>
 
-      <fieldset class="ct-step mt-8">
+      <fieldset class="ct-step mt-6">
         <legend class="ct-step-h"><span class="ct-step-n">1</span>What is it about?</legend>
-        <div class="ct-dd mt-4"><button type="button" class="ct-dd-btn" aria-haspopup="true" aria-expanded="false" aria-controls="ct-dd-menu"><span class="ct-dd-cur"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M8 8a2 2 0 1 1 2.8 1.8c-.5.3-.8.7-.8 1.2v.5M10 14.2v.1"/></svg>General question</span><svg class="ct-dd-chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5.5 8 4.5 4.5L14.5 8"/></svg></button><div id="ct-dd-menu" class="ct-dd-menu" role="radiogroup" aria-label="Topic" hidden><label class="ct-opt"><input type="radio" name="topic" value="General question" data-hint="Ask us anything about AFCD and our work." data-to="contact@afcdteam.com" checked><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M8 8a2 2 0 1 1 2.8 1.8c-.5.3-.8.7-.8 1.2v.5M10 14.2v.1"/></svg>General question</span></label><label class="ct-opt"><input type="radio" name="topic" value="Volunteering" data-hint="Tell us where you are based and how you’d like to help." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 16.5s-6-3.6-6-8a3.3 3.3 0 0 1 6-1.9 3.3 3.3 0 0 1 6 1.9c0 4.4-6 8-6 8Z"/></svg>Volunteering</span></label><label class="ct-opt"><input type="radio" name="topic" value="Joining a programme" data-hint="Mention the programme or call you’re interested in." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7 10 4l7.5 3L10 10 2.5 7Z"/><path d="M5.5 8.3v3.7c0 1.1 2 2 4.5 2s4.5-.9 4.5-2V8.3"/></svg>Joining a programme</span></label><label class="ct-opt"><input type="radio" name="topic" value="Partnership" data-hint="Tell us about your organisation and the pillar you’d like to support." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10 3-3 3 2 2-2 3 3"/><path d="M3 10l4 4 1.5-1M17 10l-4 4-3-2.5"/></svg>Partnership</span></label><label class="ct-opt"><input type="radio" name="topic" value="Alumni club" data-hint="Share your programme and year so we can reconnect you." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="2.5"/><circle cx="13.5" cy="8.5" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M12 13c1.9-.4 3.8.8 4.5 3"/></svg>Alumni club</span></label><label class="ct-opt"><input type="radio" name="topic" value="Press" data-hint="Include your outlet and deadline." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="11" height="12" rx="1.5"/><path d="M14 7h2.5v7.5a1.5 1.5 0 0 1-3 0M6 7.5h5M6 10.5h5M6 13.5h3"/></svg>Press</span></label><label class="ct-opt"><input type="radio" name="topic" value="Board &amp; governance" data-hint="Questions for AFCD’s board leadership." data-to="akaya@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.5 3 6v1.5h14V6L10 2.5Z"/><path d="M4.5 8.5v6M8 8.5v6M12 8.5v6M15.5 8.5v6M2.5 16.5h15"/></svg>Board &amp; governance</span></label></div></div>
-        <div class="ct-hint mt-4" aria-live="polite"><span class="ct-hint-ic" aria-hidden="true">i</span><span class="min-w-0 flex-1"><span class="ct-hint-t block">Ask us anything about AFCD and our work.</span><span class="mt-0.5 block text-[12.5px] text-ink-mid">Goes to <b class="ct-hint-to font-medium text-ink-pure">contact@afcdteam.com</b></span></span></div>
+        <div class="ct-dd mt-3"><button type="button" class="ct-dd-btn" aria-haspopup="true" aria-expanded="false" aria-controls="ct-dd-menu"><span class="ct-dd-cur"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M8 8a2 2 0 1 1 2.8 1.8c-.5.3-.8.7-.8 1.2v.5M10 14.2v.1"/></svg>General question</span><svg class="ct-dd-chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5.5 8 4.5 4.5L14.5 8"/></svg></button><div id="ct-dd-menu" class="ct-dd-menu" role="radiogroup" aria-label="Topic" hidden><label class="ct-opt"><input type="radio" name="topic" value="General question" data-hint="Ask us anything about AFCD and our work." data-to="contact@afcdteam.com" checked><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M8 8a2 2 0 1 1 2.8 1.8c-.5.3-.8.7-.8 1.2v.5M10 14.2v.1"/></svg>General question</span></label><label class="ct-opt"><input type="radio" name="topic" value="Volunteering" data-hint="Tell us where you are based and how you’d like to help." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 16.5s-6-3.6-6-8a3.3 3.3 0 0 1 6-1.9 3.3 3.3 0 0 1 6 1.9c0 4.4-6 8-6 8Z"/></svg>Volunteering</span></label><label class="ct-opt"><input type="radio" name="topic" value="Joining a programme" data-hint="Mention the programme or call you’re interested in." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7 10 4l7.5 3L10 10 2.5 7Z"/><path d="M5.5 8.3v3.7c0 1.1 2 2 4.5 2s4.5-.9 4.5-2V8.3"/></svg>Joining a programme</span></label><label class="ct-opt"><input type="radio" name="topic" value="Partnership" data-hint="Tell us about your organisation and the pillar you’d like to support." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10 3-3 3 2 2-2 3 3"/><path d="M3 10l4 4 1.5-1M17 10l-4 4-3-2.5"/></svg>Partnership</span></label><label class="ct-opt"><input type="radio" name="topic" value="Alumni club" data-hint="Share your programme and year so we can reconnect you." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="2.5"/><circle cx="13.5" cy="8.5" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M12 13c1.9-.4 3.8.8 4.5 3"/></svg>Alumni club</span></label><label class="ct-opt"><input type="radio" name="topic" value="Press" data-hint="Include your outlet and deadline." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="11" height="12" rx="1.5"/><path d="M14 7h2.5v7.5a1.5 1.5 0 0 1-3 0M6 7.5h5M6 10.5h5M6 13.5h3"/></svg>Press</span></label><label class="ct-opt"><input type="radio" name="topic" value="Board &amp; governance" data-hint="Questions for AFCD’s board leadership." data-to="akaya@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.5 3 6v1.5h14V6L10 2.5Z"/><path d="M4.5 8.5v6M8 8.5v6M12 8.5v6M15.5 8.5v6M2.5 16.5h15"/></svg>Board &amp; governance</span></label></div></div>
+        <div class="ct-hint mt-2" aria-live="polite"><span class="ct-hint-ic" aria-hidden="true">i</span><span class="min-w-0 flex-1"><span class="ct-hint-t block">Ask us anything about AFCD and our work.</span><span class="mt-0.5 block text-[12.5px] text-ink-mid">Goes to <b class="ct-hint-to font-medium text-ink-pure">contact@afcdteam.com</b></span></span></div>
       </fieldset>
 
-      <fieldset class="ct-step mt-8">
+      <fieldset class="ct-step mt-6">
         <legend class="ct-step-h"><span class="ct-step-n">2</span>Your details</legend>
-        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        <div class="mt-3 grid gap-3 sm:grid-cols-2">
           <label class="ct-field"><span>Full name</span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="7" r="3"/><path d="M4 16.5c.8-3 3.2-4.6 6-4.6s5.2 1.6 6 4.6"/></svg><input name="name" type="text" autocomplete="name" placeholder="Your name" required></span></label>
           <label class="ct-field"><span>Email</span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2"/><path d="m3.5 6 6.5 4.5L16.5 6"/></svg><input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></span></label>
           <label class="ct-field"><span>Phone <em>optional</em></span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5h3l1.5 3.7-2 1.2a10 10 0 0 0 6.1 6.1l1.2-2 3.7 1.5v3a1.7 1.7 0 0 1-1.8 1.7C8.4 17.2 2.8 11.6 2.3 4.3A1.7 1.7 0 0 1 4 2.5Z"/></svg><input name="phone" type="tel" autocomplete="tel" placeholder="+212 …"></span></label>
@@ -1113,15 +1634,14 @@ def contact():
         </div>
       </fieldset>
 
-      <fieldset class="ct-step mt-8">
+      <fieldset class="ct-step mt-6">
         <legend class="ct-step-h"><span class="ct-step-n">3</span>Your message</legend>
-        <label class="ct-field mt-4"><span class="sr-only">Message</span><textarea name="message" rows="6" maxlength="1000" placeholder="Write your message…" required></textarea></label>
-        <div class="mt-2 flex justify-end text-[12px] text-ink-mid"><span><span class="ct-count">0</span> / 1000</span></div>
-        <label class="ct-consent mt-4"><input type="checkbox" name="consent" required><span>I agree that AFCD Foundation may use these details to reply to my message. See our <a href="#privacy" class="underline underline-offset-2">Privacy Policy</a>.</span></label>
+        <label class="ct-field mt-3"><span class="sr-only">Message</span><textarea name="message" rows="4" maxlength="1000" placeholder="Write your message…" required></textarea></label>
+        <div class="mt-2 flex items-start justify-between gap-4"><label class="ct-consent"><input type="checkbox" name="consent" required><span>I agree that AFCD Foundation may use these details to reply to my message. See our <a href="#privacy" class="underline underline-offset-2">Privacy Policy</a>.</span></label><span class="shrink-0 pt-0.5 text-[12px] text-ink-mid"><span class="ct-count">0</span> / 1000</span></div>
       </fieldset>
 
       <p class="form-error mt-5 hidden rounded-2xl bg-[#FEF3F2] px-4 py-3 text-sm text-[#B42318]" role="alert">Please add your name, a valid email, a message and your consent.</p>
-      <div class="mt-7 flex flex-wrap items-center justify-between gap-4 border-t border-ink-light pt-6">
+      <div class="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-ink-light pt-5">
         <p class="max-w-[40ch] text-[12.5px] leading-relaxed text-ink-mid">This form isn’t connected yet, so nothing is sent. For now, please email the address shown above.</p>
         <button type="submit" class="btn-dark btn-cta min-h-[52px] px-7">Send message <span class="arr" aria-hidden="true">↗</span></button>
       </div>
@@ -1160,5 +1680,5 @@ def contact():
 
 
 if __name__ == '__main__':
-    about(); pillars(); projects(); project_details(); news(); partners(); involved(); contact()
+    about(); pillars(); projects(); project_details(); news(); news_articles(); events(); partners(); involved(); contact()
     print('pages written to', OUT)

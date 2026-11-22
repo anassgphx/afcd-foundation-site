@@ -42,31 +42,26 @@
     });
   })();
 
-  /* ---------- Values: the coloured card cycles through the four values ---------- */
+  /* ---------- Get Involved: path tabs on desktop (all panels stay visible on small screens) ---------- */
   (function () {
-    $$('.vl-row').forEach(function (row) {
-      var cards = $$('.vl-card', row);
-      if (cards.length < 2) return;
-      cards.forEach(function (c) { var p = document.createElement('span'); p.className = 'vl-prog'; p.setAttribute('aria-hidden', 'true'); c.appendChild(p); });
-      if (reduce) return;
-      var cur = Math.max(0, cards.findIndex(function (c) { return c.classList.contains('is-default'); }));
-      var timer = null, inView = false, held = false, STEP = 4200;
-      function show(i) {
-        cards[cur].classList.remove('is-default');
-        cur = (i + cards.length) % cards.length;
-        var c = cards[cur]; c.classList.add('is-default');
-        var p = $('.vl-prog', c); p.classList.remove('run'); void p.offsetWidth; p.classList.add('run');
-      }
-      function play() { stop(); if (!inView || held) return; row.classList.add('is-cycling'); show(cur); timer = setInterval(function () { show(cur + 1); }, STEP); }
-      function stop() { clearInterval(timer); timer = null; row.classList.remove('is-cycling'); }
-      row.addEventListener('mouseenter', function () { held = true; stop(); });
-      row.addEventListener('mouseleave', function () { held = false; play(); });
-      row.addEventListener('focusin', function () { held = true; stop(); });
-      row.addEventListener('focusout', function () { held = false; play(); });
-      if ('IntersectionObserver' in window) {
-        new IntersectionObserver(function (es) { inView = es[0].isIntersecting; inView ? play() : stop(); }, { threshold: 0.4 }).observe(row);
-      }
+    var tabs = $$('.gi-tab'); if (!tabs.length) return;
+    var panels = $$('.gi-panel'), mq = window.matchMedia('(min-width: 1024px)');
+    function select(id, focus) {
+      tabs.forEach(function (t) { var on = t.getAttribute('aria-controls') === id; t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1; if (on && focus) t.focus(); });
+      panels.forEach(function (p) { p.hidden = mq.matches && p.id !== id; });
+    }
+    function sync() { document.documentElement.classList.toggle('js-tabs', mq.matches); var cur = tabs.filter(function (t) { return t.getAttribute('aria-selected') === 'true'; })[0]; select(cur.getAttribute('aria-controls')); }
+    tabs.forEach(function (t, i) {
+      t.addEventListener('click', function () { select(t.getAttribute('aria-controls')); history.replaceState(null, '', '#' + t.getAttribute('aria-controls')); });
+      t.addEventListener('keydown', function (e) {
+        var d = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+        if (d) { e.preventDefault(); select(tabs[(i + d + tabs.length) % tabs.length].getAttribute('aria-controls'), true); }
+      });
     });
+    var fromHash = location.hash.slice(1);
+    if (fromHash && $('#' + fromHash + '.gi-panel')) tabs.forEach(function (t) { t.setAttribute('aria-selected', t.getAttribute('aria-controls') === fromHash ? 'true' : 'false'); });
+    (mq.addEventListener ? mq.addEventListener('change', sync) : mq.addListener(sync));
+    sync();
   })();
 
   /* ---------- Scroll reveal for [data-reveal] (skipped with reduced motion) ---------- */
@@ -149,6 +144,12 @@
         if (ddCur) ddCur.innerHTML = r.nextElementSibling.innerHTML;
       });
     });
+    // Pre-select a topic from links such as contact.html?topic=Volunteering
+    var wanted = new URLSearchParams(location.search).get('topic');
+    if (wanted) {
+      var match = $$('input[name="topic"]', form).filter(function (r) { return r.value.toLowerCase() === wanted.toLowerCase(); })[0];
+      if (match) { match.checked = true; match.dispatchEvent(new Event('change')); }
+    }
     // Character counter
     var count = $('.ct-count', form);
     if (count && form.message) form.message.addEventListener('input', function () { count.textContent = form.message.value.length; });
@@ -548,23 +549,78 @@
     render('all');
   })();
 
-  /* Partners page: grouped list */
+  /* Staff login: links to the AFCD Studio dashboard.
+     Set STUDIO_URL once Studio has a live address; until then the link only appears on a local machine. */
   (function () {
-    if (!$('#partner-groups')) return;
-  var GROUPS = PARTNER_GROUPS;
-  var pg = $('#partner-groups');
-  GROUPS.forEach(function (g) {
-    var cells = g[1].map(function (name) {
-      return '<li class="group flex min-h-[132px] flex-col justify-between rounded-2xl border border-ink-light bg-white p-4 transition-colors hover:border-ink-mid md:min-h-[150px] md:p-5">' +
-        '<span class="grid h-14 place-items-center"><span class="grid h-full w-[72%] max-w-[150px] place-items-center rounded-lg border border-dashed border-ink-light text-[10px] uppercase tracking-[0.12em] text-ink-mid transition-colors group-hover:border-ink-mid">Logo</span></span>' +
-        '<span class="mt-3 text-[13px] leading-snug text-ink-dark">' + name + '</span></li>';
-    }).join('');
-    pg.insertAdjacentHTML('beforeend',
-      '<div class="grid gap-4 border-t border-ink-light py-8 lg:grid-cols-12 lg:gap-8">' +
-        '<div class="lg:col-span-2"><p class="label">' + g[0] + '</p><p class="mt-1 text-xs tabular-nums text-ink-mid">' + g[1].length + (g[1].length === 1 ? ' partner' : ' partners') + '</p></div>' +
-        '<ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:col-span-10 lg:grid-cols-5">' + cells + '</ul>' +
-      '</div>');
+    var STUDIO_URL = '';
+    var local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    var url = STUDIO_URL || (local ? 'http://localhost:4400/studio/' : '');
+    if (!url) return;
+    $$('[data-studio-login]').forEach(function (a) { a.href = url; a.hidden = false; });
+  })();
+
+  /* Article pages: copy the page link */
+  $$('[data-copy-link]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var done = function () { toast('Link copied.'); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(location.href).then(done, function () { toast(location.href); });
+      else toast(location.href);
+    });
   });
+
+  /* Tabs inside a section ([data-tabs]): all panels stay visible if scripts don't run */
+  $$('[data-tabs]').forEach(function (root) {
+    var tabs = $$('[role="tab"]', root), panels = $$('[role="tabpanel"]', root);
+    root.classList.add('tabs-on');
+    function show(i, focus) {
+      tabs.forEach(function (t, k) { var on = k === i; t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1; if (on && focus) t.focus(); });
+      panels.forEach(function (p, k) { p.hidden = k !== i; });
+    }
+    tabs.forEach(function (t, i) {
+      t.addEventListener('click', function () { show(i); });
+      t.addEventListener('keydown', function (e) {
+        var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (d) { e.preventDefault(); show((i + d + tabs.length) % tabs.length, true); }
+      });
+    });
+    show(0);
+  });
+
+  /* Events page: upcoming / past filter */
+  (function () {
+    var list = $('#event-list'); if (!list) return;
+    var rows = $$('.ev-row', list), btns = $$('[data-ev]'), empty = $('.ev-empty');
+    btns.forEach(function (b) {
+      b.addEventListener('click', function () {
+        var f = b.dataset.ev, shown = 0;
+        btns.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+        rows.forEach(function (r) { var on = f === 'all' || r.dataset.when === f; r.hidden = !on; if (on) shown++; });
+        if (empty) empty.classList.toggle('hidden', shown > 0);
+      });
+    });
+  })();
+
+  /* Partners page: filter by scope and search by name (the list itself is plain HTML) */
+  (function () {
+    var grid = $('#partner-grid'); if (!grid) return;
+    var cards = $$('.pr-card', grid), btns = $$('[data-pf]'), search = $('#partner-search'), empty = $('.pr-empty');
+    var group = 'all';
+    function apply() {
+      var q = (search && search.value || '').trim().toLowerCase(), shown = 0;
+      cards.forEach(function (c) {
+        var on = (group === 'all' || c.dataset.group === group) && (!q || c.dataset.name.indexOf(q) > -1);
+        c.hidden = !on; if (on) shown++;
+      });
+      if (empty) empty.classList.toggle('hidden', shown > 0);
+    }
+    btns.forEach(function (b) {
+      b.addEventListener('click', function () {
+        group = b.dataset.pf;
+        btns.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+        apply();
+      });
+    });
+    if (search) search.addEventListener('input', apply);
   })();
 
 })();

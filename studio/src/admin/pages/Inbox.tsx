@@ -1,0 +1,409 @@
+// Inbox: messages sent through the website's contact form, and the newsletter sign-up list.
+// Three panes (filters · list · reading pane) that collapse to one pane at a time on a phone. Personal data: the page
+// is for forms.read; changing anything needs forms.manage. Studio sends no email: "Reply by email" opens a mail app.
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import '../inbox.css';
+import { api, del, patch, post, put } from '../api.ts';
+import { Icon, Modal, ago, fmtDate, initials, useCan, useMe, useToast } from '../ui.tsx';
+import { DataTable, EmptyState, ListToolbar, useUrlState, type Column } from '../DataTable.tsx';
+import { Field } from '../Editor.tsx';
+import { Loading } from './Dashboard.tsx';
+
+type Status = 'new' | 'in_progress' | 'replied' | 'closed';
+type View = 'all' | 'unread' | 'mine' | 'starred' | 'spam' | 'archived' | 'newsletter';
+type Counts = { total: number; unread: number };
+type FormInfo = { key: 'contact' | 'newsletter'; label: string; site: string; settings: { enabled: boolean; retentionDays: number; closedRetentionMonths: number | null } };
+type Summary = { views: Record<Exclude<View, 'newsletter'>, Counts>; topics: { topic: string; total: number; unread: number }[]; statuses: Record<Status, number>; subscribers: number; forms: FormInfo[] };
+type Row = { id: string; topic: string; name: string; email: string; status: Status; page: string; createdAt: string; preview: string; unread: boolean; starred: boolean; spam: boolean; spamReason: string | null; archived: boolean; assignedTo: string | null; assigneeName: string | null };
+type Ev = { id: string; kind: string; body: string; meta: Record<string, any> | null; at: string; actorId: string | null; actorName: string | null };
+type Msg = Omit<Row, 'preview'> & { phone: string; org: string; message: string; consentAt: string | null; archivedAt: string | null; closedAt: string | null; events: Ev[] };
+type Person = { id: string; name: string };
+
+export const STATUSES: [Status, string][] = [['new', 'New'], ['in_progress', 'In progress'], ['replied', 'Replied'], ['closed', 'Closed']];
+const SLABEL = Object.fromEntries(STATUSES) as Record<Status, string>;
+const SPAM_WHY: Record<string, string> = {
+  honeypot: 'It filled in the hidden anti-bot field.', too_fast: 'It was sent faster than a person can type.',
+  rate_limit: 'Many messages came from the same connection within 10 minutes.', manual: 'A teammate marked it as spam.', legacy: 'It was in spam before the Inbox update.',
+};
+const SORTS: [string, string][] = [['newest', 'Newest first'], ['oldest', 'Oldest first'], ['unread', 'Unread first'], ['sender', 'Sender A–Z']];
+const PAGE = 50;
+
+/** Signals the sidebar badge to refresh after a change here. */
+const pingBadge = () => window.dispatchEvent(new Event('studio:inbox'));
+
+// Small glyphs the shared icon set doesn't have (stroke, 20px grid, like ui.tsx).
+const G: Record<string, string> = {
+  star: 'M10 2.8l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 8.1l5-.7L10 2.8Z',
+  reply: 'M8 5 3 10l5 5M3 10h9a5 5 0 0 1 5 5v1',
+  shield: 'M10 2.5 4 5v4.5c0 3.6 2.6 6.6 6 7.5 3.4-.9 6-3.9 6-7.5V5l-6-2.5ZM7.5 10l2 2 3.5-4',
+  dot: 'M10 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z', back: 'M12 5 7 10l5 5', tag: 'M3 3h7l7 7-7 7-7-7V3ZM7 7h.01',
+  user: 'M10 10a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4ZM4 17c.6-3.2 3-5 6-5s5.4 1.8 6 5',
+  note: 'M4 3h9l3 3v11H4V3ZM7 8h6M7 11h6M7 14h3', filter: 'M3 4h14l-5.5 6.5V16l-3-1.5v-4L3 4Z', gear: 'M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4',
+};
+const Glyph = ({ n, solid, ...p }: { n: string; solid?: boolean } & Omit<React.SVGProps<SVGSVGElement>, "fill">) => (G[n]
+  ? <svg viewBox="0 0 20 20" fill={solid ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d={G[n]} /></svg>
+  : <Icon n={n} {...p} />);
+
+const firstName = (n: string) => n.trim().split(/\s+/)[0] ?? '';
+function mailto(m: Msg) {
+  const quoted = m.message.slice(0, 800).split('\n').map((l) => `> ${l}`).join('\n');
+  const body = `Hello ${firstName(m.name)},\n\nThank you for contacting AFCD Foundation.\n\n\n\nBest regards,\nAFCD Foundation\n\n---\nOn ${fmtDate(m.createdAt)}, ${m.name} wrote:\n${quoted}`;
+  return `mailto:${encodeURIComponent(m.email).replace('%40', '@')}?subject=${encodeURIComponent(`Re: ${m.topic || 'Your message'} · AFCD Foundation`)}&body=${encodeURIComponent(body)}`;
+}
+
+// ================================================================ Page
+export function InboxPage() {
+  const can = useCan(); const toast = useToast();
+  const [st, set] = useUrlState({ view: 'all', topic: '', status: '', q: '', sort: 'newest', m: '' });
+  const view = st.view as View;
+  const [sum, setSum] = useState<Summary | null>(null);
+  const [settings, setSettings] = useState(false);
+  const loadSum = useCallback(() => api<Summary>('/inbox/summary').then(setSum).catch((e) => toast(e.message, true)), []);
+  useEffect(() => { loadSum(); }, [loadSum]);
+  // new mail arrives while the page is open: refresh when the tab comes back into view
+  useEffect(() => { const f = () => { if (document.visibilityState === 'visible') { loadSum(); window.dispatchEvent(new Event('studio:inbox-refresh')); } }; document.addEventListener('visibilitychange', f); return () => document.removeEventListener('visibilitychange', f); }, [loadSum]);
+  const changed = useCallback(() => { loadSum(); pingBadge(); }, [loadSum]);
+  if (!sum) return <Loading />;
+  const contact = sum.forms.find((f) => f.key === 'contact')!;
+  const choose = (k: string, v: string) => { set(k, v); set('m', ''); };
+
+  return <div className="ix-page">
+    <div className="page-h ix-head">
+      <div><h1>Inbox</h1><p>Messages and sign-ups from the website. Visible to administrators only; views and exports are logged.</p></div>
+      <div className="pills">
+        {can('forms.manage') && view !== 'newsletter' && <a className="btn" href={`/studio/api/inbox/export.csv?${new URLSearchParams({ view, topic: st.topic, status: st.status, q: st.q, sort: st.sort })}`} download onClick={() => setTimeout(loadSum, 800)}><Icon n="upload" style={{ transform: 'rotate(180deg)' }} />Export CSV</a>}
+        {can('forms.manage') && <button className="btn" onClick={() => setSettings(true)}><Glyph n="gear" />Settings</button>}
+      </div>
+    </div>
+    {!contact.settings.enabled && <div className="notice n-warn ix-notice"><div>The contact form is paused: the website asks people to email contact@afcdteam.com instead.</div></div>}
+
+    <div className={`ix${st.m ? ' ix-reading' : ''}${view === 'newsletter' ? ' ix-subs' : ''}`}>
+      <Filters sum={sum} st={st} choose={choose} />
+      {view === 'newsletter'
+        ? <Subscribers onChange={changed} />
+        : <Mail st={st} set={set} sum={sum} onChange={changed} />}
+    </div>
+    {settings && <SettingsDialog forms={sum.forms} onClose={() => setSettings(false)} onSaved={() => { setSettings(false); loadSum(); toast('Settings saved'); }} />}
+  </div>;
+}
+
+// ================================================================ Filters pane
+function Filters({ sum, st, choose }: { sum: Summary; st: Record<string, string>; choose: (k: string, v: string) => void }) {
+  const item = (v: View, label: string, icon: string, c: Counts | number, unreadBadge = false) => {
+    const on = st.view === v && (v === 'newsletter' || (!st.topic && !st.status));
+    const n = typeof c === 'number' ? c : unreadBadge ? c.unread : c.total;
+    return <button key={v} className={`ix-f${on ? ' on' : ''}`} aria-current={on ? 'true' : undefined} onClick={() => { choose('view', v); choose('topic', ''); choose('status', ''); }}>
+      <Glyph n={icon} /><span>{label}</span>{n > 0 && <em className={unreadBadge ? 'ix-badge' : ''}>{n}</em>}</button>;
+  };
+  return <nav className="ix-filters" aria-label="Inbox folders">
+    <div className="ix-fgroup">
+      {item('all', 'All messages', 'inbox', sum.views.all, true)}
+      {item('unread', 'Unread', 'dot', sum.views.unread.total)}
+      {item('mine', 'Assigned to me', 'user', sum.views.mine, true)}
+      {item('starred', 'Starred', 'star', sum.views.starred.total)}
+    </div>
+    <div className="ix-fgroup"><span className="ix-flabel">Type</span>
+      {sum.topics.filter((t) => t.total > 0).length === 0 && <small className="muted ix-fnone">No messages yet</small>}
+      {sum.topics.filter((t) => t.total > 0).map((t) => { const on = st.topic === t.topic; return <button key={t.topic} className={`ix-f${on ? ' on' : ''}`} onClick={() => { choose('view', 'all'); choose('status', ''); choose('topic', on ? '' : t.topic); }}>
+        <Glyph n="tag" /><span>{t.topic}</span><em className={t.unread ? 'ix-badge' : ''}>{t.unread || t.total}</em></button>; })}
+    </div>
+    <div className="ix-fgroup"><span className="ix-flabel">Status</span>
+      {STATUSES.map(([k, l]) => { const on = st.status === k; return <button key={k} className={`ix-f${on ? ' on' : ''}`} onClick={() => { choose('view', 'all'); choose('topic', ''); choose('status', on ? '' : k); }}>
+        <span className={`ix-sdot s-${k}`} aria-hidden="true" /><span>{l}</span>{sum.statuses[k] > 0 && <em>{sum.statuses[k]}</em>}</button>; })}
+    </div>
+    <div className="ix-fgroup">
+      {item('spam', 'Spam', 'shield', sum.views.spam)}
+      {item('archived', 'Archived', 'archive', sum.views.archived)}
+    </div>
+    <div className="ix-fgroup"><span className="ix-flabel">Newsletter</span>
+      {item('newsletter', 'Subscribers', 'mail', sum.subscribers)}
+    </div>
+  </nav>;
+}
+
+// ================================================================ List + reading pane
+function Mail({ st, set, sum, onChange }: { st: Record<string, string>; set: (k: string, v: string) => void; sum: Summary; onChange: () => void }) {
+  const can = useCan(); const toast = useToast();
+  const [q, setQ] = useState(st.q);
+  const [data, setData] = useState<{ total: number; rows: Row[] } | null>(null);
+  const [more, setMore] = useState(false);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [confirmDel, setConfirmDel] = useState<string[] | null>(null);
+  const [people, setPeople] = useState<Person[]>([]);
+  const listRef = useRef<HTMLUListElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { const t = setTimeout(() => { if (q !== st.q) { set('q', q); set('m', ''); } }, 250); return () => clearTimeout(t); }, [q]);
+  const params = useMemo(() => new URLSearchParams({ view: st.view, topic: st.topic, status: st.status, q: st.q, sort: st.sort }).toString(), [st.view, st.topic, st.status, st.q, st.sort]);
+  const load = useCallback(async (keep = 0) => {
+    const r = await api<{ total: number; rows: Row[] }>(`/inbox/messages?${params}&limit=${Math.max(PAGE, keep)}`);
+    setData(r);
+  }, [params]);
+  useEffect(() => { setData(null); setSel(new Set()); load().catch((e) => toast(e.message, true)); }, [load]);
+  useEffect(() => { const f = () => { load(data?.rows.length ?? 0).catch(() => undefined); }; window.addEventListener('studio:inbox-refresh', f); return () => window.removeEventListener('studio:inbox-refresh', f); }, [load, data?.rows.length]);
+  useEffect(() => { api<Person[]>('/inbox/people').then(setPeople).catch(() => undefined); }, []);
+  const rows = data?.rows ?? [];
+  const reload = useCallback(async () => { await load(rows.length); onChange(); }, [load, rows.length, onChange]);
+  const patchRow = (id: string, p: Partial<Row>) => setData((d) => d && { ...d, rows: d.rows.map((r) => (r.id === id ? { ...r, ...p } : r)) });
+
+  async function loadMore() {
+    setMore(true);
+    try { const r = await api<{ total: number; rows: Row[] }>(`/inbox/messages?${params}&limit=${PAGE}&offset=${rows.length}`); setData((d) => d && { total: r.total, rows: [...d.rows, ...r.rows] }); }
+    catch (e) { toast((e as Error).message, true); } finally { setMore(false); }
+  }
+  async function bulk(flag: string, ids: string[], done: string) {
+    try { const r = await post<{ changed: number }>('/inbox/flag', { ids, flag }); setSel(new Set()); await reload(); toast(`${r.changed} ${r.changed === 1 ? 'message' : 'messages'} ${done}`); if (ids.includes(st.m) && ['archive', 'unarchive', 'spam', 'not_spam'].includes(flag)) set('m', ''); }
+    catch (e) { toast((e as Error).message, true); }
+  }
+  async function remove(ids: string[]) {
+    try { const r = await post<{ deleted: number }>('/inbox/delete', { ids }); setConfirmDel(null); setSel(new Set()); if (ids.includes(st.m)) set('m', ''); await reload(); toast(`${r.deleted} deleted permanently`); }
+    catch (e) { toast((e as Error).message, true); }
+  }
+  async function star(r: Row) {
+    patchRow(r.id, { starred: !r.starred });
+    try { await post(`/inbox/messages/${r.id}/star`, { starred: !r.starred }); onChange(); } catch (e) { patchRow(r.id, { starred: r.starred }); toast((e as Error).message, true); }
+  }
+  const open = (id: string) => { set('m', id); patchRow(id, { unread: false }); };
+
+  // keyboard: j/k or ↓/↑ move, s star, e archive, u mark unread, / search — not while typing
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (e.metaKey || e.ctrlKey || e.altKey || t.closest('input,textarea,select,[contenteditable],.modal')) return;
+      const i = rows.findIndex((r) => r.id === st.m);
+      if (e.key === '/') { e.preventDefault(); searchRef.current?.focus(); return; }
+      if (e.key === 'j' || e.key === 'k') {
+        const n = rows[Math.min(rows.length - 1, Math.max(0, i + (e.key === 'j' ? 1 : -1)))];
+        if (n) { e.preventDefault(); open(n.id); listRef.current?.querySelector<HTMLElement>(`[data-id="${n.id}"]`)?.scrollIntoView({ block: 'nearest' }); }
+        return;
+      }
+      const cur = rows[i]; if (!cur) return;
+      if (e.key === 's') star(cur);
+      if (e.key === 'e' && can('forms.manage')) bulk(cur.archived ? 'unarchive' : 'archive', [cur.id], cur.archived ? 'moved to the inbox' : 'archived');
+      if (e.key === 'u' && can('forms.manage')) { bulk('unread', [cur.id], 'marked unread'); set('m', ''); }
+    };
+    document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k);
+  }, [rows, st.m]);
+
+  const chosen = rows.filter((r) => sel.has(r.id));
+  const allOn = rows.length > 0 && chosen.length === rows.length;
+  const title = st.topic || (st.status ? SLABEL[st.status as Status] : { all: 'All messages', unread: 'Unread', mine: 'Assigned to me', starred: 'Starred', spam: 'Spam', archived: 'Archived', newsletter: '' }[st.view as View]);
+  const filtered = !!(st.q || st.topic || st.status);
+
+  return <>
+    <section className="ix-list" aria-label="Messages">
+      <div className="ix-list-h">
+        <div className="ix-list-t"><h2>{title}</h2><small className="muted">{data ? `${data.total} ${data.total === 1 ? 'message' : 'messages'}` : '…'}</small></div>
+        <div className="ix-list-tools">
+          <label className="search ix-search"><Icon n="search" /><span className="sr-only">Search messages</span>
+            <input ref={searchRef} className="input" placeholder="Search name, email, text" value={q} onChange={(e) => setQ(e.target.value)} />
+            {q && <button type="button" className="dt-clear" onClick={() => setQ('')} aria-label="Clear search">×</button>}</label>
+          <select className="select ix-sort" value={st.sort} onChange={(e) => set('sort', e.target.value)} aria-label="Sort">{SORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+        </div>
+        {can('forms.manage') && rows.length > 0 && <div className={`ix-bulk${chosen.length ? ' on' : ''}`}>
+          <label className="check" title="Select all shown"><input type="checkbox" checked={allOn} ref={(el) => { if (el) el.indeterminate = chosen.length > 0 && !allOn; }} onChange={() => setSel(allOn ? new Set() : new Set(rows.map((r) => r.id)))} aria-label="Select all shown messages" /></label>
+          {chosen.length ? <>
+            <b>{chosen.length} selected</b>
+            <button className="btn btn-sm btn-ghost" onClick={() => bulk('read', [...sel], 'marked read')}>Mark read</button>
+            {st.view === 'archived' ? <button className="btn btn-sm btn-ghost" onClick={() => bulk('unarchive', [...sel], 'moved to the inbox')}>Unarchive</button>
+              : st.view !== 'spam' && <button className="btn btn-sm btn-ghost" onClick={() => bulk('archive', [...sel], 'archived')}><Icon n="archive" />Archive</button>}
+            {st.view === 'spam' ? <button className="btn btn-sm btn-ghost" onClick={() => bulk('not_spam', [...sel], 'moved to the inbox')}>Not spam</button>
+              : <button className="btn btn-sm btn-ghost" onClick={() => bulk('spam', [...sel], 'moved to spam')}><Glyph n="shield" />Spam</button>}
+            {st.view !== 'spam' && <button className="btn btn-sm btn-ghost" onClick={() => bulk('close', [...sel], 'closed')}>Close</button>}
+            <button className="btn btn-sm btn-ghost btn-danger" onClick={() => setConfirmDel([...sel])}>Delete</button>
+          </> : <small className="muted">Select messages for bulk actions · <kbd>j</kbd>/<kbd>k</kbd> to move</small>}
+        </div>}
+      </div>
+      {!data ? <div className="ix-skel">{[0, 1, 2, 3, 4].map((i) => <div key={i}><div className="skeleton" style={{ width: '40%' }} /><div className="skeleton" style={{ width: '85%' }} /></div>)}</div>
+        : rows.length === 0 ? <EmptyState icon="inbox" text={filtered ? 'No messages match.' : st.view === 'spam' ? 'No spam. Suspicious messages land here instead of being lost.' : st.view === 'unread' ? 'You’re all caught up.' : 'No messages here yet.'}
+          onClear={filtered ? () => { setQ(''); set('q', ''); set('topic', ''); set('status', ''); } : undefined} />
+        : <ul className="ix-rows" ref={listRef}>
+          {rows.map((r) => <li key={r.id} data-id={r.id} className={`ix-row${r.id === st.m ? ' on' : ''}${r.unread ? ' unread' : ''}${sel.has(r.id) ? ' sel' : ''}`}>
+            {can('forms.manage') && <input type="checkbox" className="ix-check" checked={sel.has(r.id)} onChange={() => setSel((s) => { const n = new Set(s); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n; })} aria-label={`Select message from ${r.name}`} />}
+            <button className="ix-row-main" onClick={() => open(r.id)} aria-current={r.id === st.m ? 'true' : undefined}>
+              <span className="ix-av" aria-hidden="true">{initials(r.name || r.email)}</span>
+              <span className="ix-row-b">
+                <span className="ix-row-top">{r.unread && <span className="ix-unread" aria-label="Unread" />}<b className="ix-name">{r.name || r.email}</b><time className="muted" dateTime={r.createdAt} title={fmtDate(r.createdAt)}>{ago(r.createdAt)}</time></span>
+                <span className="ix-prev">{r.preview.split('\n')[0]}</span>
+                <span className="ix-row-meta"><span className="ix-chip">{r.topic}</span>{r.status !== 'new' && <span className={`ix-st s-${r.status}`}>{SLABEL[r.status]}</span>}
+                  {r.spam && <span className="ix-st s-spam">Spam</span>}{r.assigneeName && <span className="ix-who" title={`Assigned to ${r.assigneeName}`}>{initials(r.assigneeName)}</span>}</span>
+              </span>
+            </button>
+            <button className={`ix-star${r.starred ? ' on' : ''}`} onClick={() => star(r)} aria-pressed={r.starred} aria-label={r.starred ? 'Unstar' : 'Star'} title={r.starred ? 'Unstar (s)' : 'Star (s)'}><Glyph n="star" solid={r.starred} /></button>
+          </li>)}
+          {data.total > rows.length && <li className="ix-more"><button className="btn btn-sm" disabled={more} onClick={loadMore}>{more ? 'Loading…' : `Load ${Math.min(PAGE, data.total - rows.length)} more`}</button></li>}
+        </ul>}
+    </section>
+    <section className="ix-read" aria-label="Message">
+      {st.m ? <Reader key={st.m} id={st.m} people={people} onBack={() => set('m', '')} onChanged={async (p) => { if (p) patchRow(st.m, p); await reload(); }} onDelete={() => setConfirmDel([st.m])} onGone={() => set('m', '')} onOpened={onChange} />
+        : <div className="ix-read-empty"><Icon n="mail" /><b>{sum.views.unread.total ? `${sum.views.unread.total} unread` : 'Nothing selected'}</b><small className="muted">Choose a message to read it. Use <kbd>j</kbd> and <kbd>k</kbd> to move through the list.</small></div>}
+    </section>
+    {confirmDel && <Modal size="sm" title={confirmDel.length === 1 ? 'Delete this message?' : `Delete ${confirmDel.length} messages?`} onClose={() => setConfirmDel(null)}
+      footer={<><button className="btn" onClick={() => setConfirmDel(null)}>Cancel</button><button className="btn btn-primary" onClick={() => remove(confirmDel)}>Delete permanently</button></>}>
+      <div className="modal-b"><p style={{ margin: 0 }}>The message{confirmDel.length === 1 ? '' : 's'}, notes and history are deleted for good, for example after a request to erase personal data. This can’t be undone. Archive instead if you only want {confirmDel.length === 1 ? 'it' : 'them'} out of the way.</p></div></Modal>}
+  </>;
+}
+
+// ================================================================ Reading pane
+function Reader({ id, people, onBack, onChanged, onDelete, onGone, onOpened }: { id: string; people: Person[]; onBack: () => void; onChanged: (p?: Partial<Row>) => Promise<void>; onDelete: () => void; onGone: () => void; onOpened: () => void }) {
+  const can = useCan(); const me = useMe(); const toast = useToast();
+  const [m, setM] = useState<Msg | null>(null);
+  const [note, setNote] = useState(''); const [busy, setBusy] = useState('');
+  const [nudge, setNudge] = useState(false);
+  const load = useCallback(() => api<Msg>(`/inbox/messages/${id}`).then(setM), [id]);
+  useEffect(() => { load().then(onOpened).catch((e) => { toast(e.message, true); onGone(); }); }, [load]);
+  // on a phone the reader replaces the list: start at the top of the message
+  useEffect(() => { if (window.matchMedia('(max-width: 760px)').matches) window.scrollTo(0, 0); }, [id]);   // opening marks it read: refresh counts
+  const manage = can('forms.manage');
+  async function run(label: string, f: () => Promise<unknown>, msg?: string, p?: Partial<Row>) {
+    setBusy(label);
+    try { await f(); await load(); await onChanged(p); if (msg) toast(msg); } catch (e) { toast((e as Error).message, true); } finally { setBusy(''); }
+  }
+  if (!m) return <div className="ix-read-b"><div className="skeleton" style={{ width: '50%', height: 22 }} /><div className="skeleton" style={{ width: '30%' }} /><div className="skeleton" style={{ height: 120 }} /></div>;
+  const setStatus = (s: Status) => run('status', () => patch(`/inbox/messages/${m.id}`, { status: s }), `Marked ${SLABEL[s].toLowerCase()}`, { status: s });
+  const flag = (f: string, msg: string) => run(f, () => post('/inbox/flag', { ids: [m.id], flag: f }), msg);
+  const facts: [string, ReactNode][] = [
+    ['Email', <a href={`mailto:${m.email}`} className="mono">{m.email}</a>],
+    ...(m.phone ? [['Phone', <a href={`tel:${m.phone.replace(/[^\d+]/g, '')}`}>{m.phone}</a>] as [string, ReactNode]] : []),
+    ...(m.org ? [['Organisation', m.org] as [string, ReactNode]] : []),
+    ['Received', <time dateTime={m.createdAt}>{fmtDate(m.createdAt)}</time>],
+    ['Source page', <span className="mono">{m.page || 'contact.html'}</span>],
+    ['Consent', m.consentAt ? `Agreed to the privacy notice · ${fmtDate(m.consentAt)}` : '—'],
+  ];
+
+  return <article className="ix-read-b">
+    <div className="ix-read-top">
+      <button className="btn btn-ghost btn-sm ix-back" onClick={onBack}><Glyph n="back" />Messages</button>
+      <div className="ix-read-actions" role="toolbar" aria-label="Message actions">
+        <button className={`btn btn-ghost icon-btn ix-star${m.starred ? ' on' : ''}`} aria-pressed={m.starred} title={m.starred ? 'Unstar' : 'Star'} aria-label={m.starred ? 'Unstar' : 'Star'}
+          onClick={() => run('star', () => post(`/inbox/messages/${m.id}/star`, { starred: !m.starred }), undefined, { starred: !m.starred })}><Glyph n="star" solid={m.starred} /></button>
+        {manage && <>
+          <button className="btn btn-ghost icon-btn" title="Mark unread (u)" aria-label="Mark unread" onClick={() => run('unread', () => post('/inbox/flag', { ids: [m.id], flag: 'unread' }), 'Marked unread').then(onBack)}><Glyph n="dot" /></button>
+          {!m.spam && <button className="btn btn-ghost icon-btn" title={m.archived ? 'Move to inbox (e)' : 'Archive (e)'} aria-label={m.archived ? 'Move to inbox' : 'Archive'} disabled={!!busy} onClick={() => flag(m.archived ? 'unarchive' : 'archive', m.archived ? 'Moved to the inbox' : 'Archived')}><Icon n={m.archived ? 'undo' : 'archive'} /></button>}
+          <button className="btn btn-ghost icon-btn" title={m.spam ? 'Not spam' : 'Mark as spam'} aria-label={m.spam ? 'Not spam' : 'Mark as spam'} disabled={!!busy} onClick={() => flag(m.spam ? 'not_spam' : 'spam', m.spam ? 'Moved to the inbox' : 'Moved to spam')}><Glyph n="shield" /></button>
+          <button className="btn btn-ghost icon-btn btn-danger" title="Delete permanently" aria-label="Delete permanently" onClick={onDelete}><Icon n="x" /></button>
+        </>}
+      </div>
+    </div>
+
+    {m.spam && <div className="notice n-warn"><div><b>In spam.</b> {SPAM_WHY[m.spamReason ?? ''] ?? ''} {manage && <button className="btn btn-sm" style={{ marginLeft: 6 }} onClick={() => flag('not_spam', 'Moved to the inbox')}>Not spam</button>}</div></div>}
+    {m.archived && !m.spam && <div className="notice n-info"><div>Archived {m.archivedAt ? ago(m.archivedAt) : ''}. It stays searchable and is deleted with the retention rules.</div></div>}
+
+    <header className="ix-sender">
+      <span className="ix-av ix-av-lg" aria-hidden="true">{initials(m.name || m.email)}</span>
+      <div><span className="ix-chip">{m.topic}</span><h2>{m.name}</h2><p className="muted">{m.email}</p></div>
+    </header>
+
+    <div className="ix-controls">
+      <div className="ix-ctl"><span>Status</span>
+        <div className="seg ix-seg" role="group" aria-label="Status">{STATUSES.map(([k, l]) => <button key={k} className={m.status === k ? 'on' : ''} aria-pressed={m.status === k} disabled={!manage || !!busy} onClick={() => m.status !== k && setStatus(k)}><span className={`ix-sdot s-${k}`} aria-hidden="true" />{l}</button>)}</div></div>
+      <label className="ix-ctl"><span>Assigned to</span>
+        <select className="select" aria-label="Assigned to" value={m.assignedTo ?? ''} disabled={!manage || !!busy} onChange={(e) => run('assign', () => patch(`/inbox/messages/${m.id}`, { assignedTo: e.target.value || null }), e.target.value ? 'Assigned' : 'Unassigned')}>
+          <option value="">Nobody</option>{people.map((p) => <option key={p.id} value={p.id}>{p.id === me.user.id ? `${p.name} (me)` : p.name}</option>)}
+          {m.assignedTo && !people.some((p) => p.id === m.assignedTo) && <option value={m.assignedTo}>{m.assigneeName ?? 'Former teammate'}</option>}</select></label>
+    </div>
+
+    <div className="ix-body">{m.message}</div>
+
+    <div className="ix-reply">
+      {manage ? <a className="btn btn-primary" href={mailto(m)} onClick={() => { post(`/inbox/messages/${m.id}/reply`).then(load).catch(() => undefined); if (m.status !== 'replied' && m.status !== 'closed') setNudge(true); }}><Glyph n="reply" />Reply by email</a>
+        : <a className="btn btn-primary" href={mailto(m)}><Glyph n="reply" />Reply by email</a>}
+      <small className="muted">Opens your email app with the subject and a quote filled in. Studio doesn’t send email.</small>
+    </div>
+    {nudge && <div className="notice n-info ix-nudge" role="status"><div>Sent your reply? <button className="btn btn-sm btn-primary" onClick={() => { setNudge(false); setStatus('replied'); }}>Mark as replied</button> <button className="btn btn-sm btn-ghost" onClick={() => setNudge(false)}>Not yet</button></div></div>}
+
+    <dl className="ix-facts">{facts.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+
+    <section className="ix-activity" aria-label="Notes and activity">
+      <h3>Notes and activity</h3>
+      {manage && <form className="ix-note-form" onSubmit={(e) => { e.preventDefault(); if (note.trim()) run('note', () => post(`/inbox/messages/${m.id}/notes`, { body: note }), 'Note added').then(() => setNote('')); }}>
+        <textarea className="textarea" value={note} onChange={(e) => setNote(e.target.value)} maxLength={4000} rows={2} placeholder="Add an internal note. Only staff see it; it is never sent." aria-label="Internal note"
+          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) (e.currentTarget.form as HTMLFormElement).requestSubmit(); }} />
+        <div className="ix-note-f"><small className="muted">⌘/Ctrl + Enter to add</small><button className="btn btn-sm" disabled={!note.trim() || busy === 'note'}>{busy === 'note' ? 'Adding…' : 'Add note'}</button></div>
+      </form>}
+      <ol className="ix-timeline">
+        {[...m.events].reverse().map((e) => <li key={e.id} className={e.kind === 'note' ? 'ix-ev-note' : ''}>
+          {e.kind === 'note' ? <div className="ix-note"><div className="ix-note-h"><b>{e.actorName ?? 'Former teammate'}</b><time className="muted" title={fmtDate(e.at)}>{ago(e.at)}</time>
+            {manage && e.actorId === me.user.id && <button className="btn btn-ghost btn-sm btn-danger" onClick={() => run('delnote', () => del(`/inbox/messages/${m.id}/notes/${e.id}`), 'Note deleted')}>Delete</button>}</div><p>{e.body}</p></div>
+            : <><span className="ix-ev-dot" aria-hidden="true" /><span><b>{e.actorName ?? (e.actorId ? 'Former teammate' : 'Studio')}</b> {describe(e)} <time className="muted" title={fmtDate(e.at)}>· {ago(e.at)}</time></span></>}
+        </li>)}
+        <li><span className="ix-ev-dot" aria-hidden="true" /><span><b>Received</b> from the website ({m.page || 'contact.html'}) <time className="muted" title={fmtDate(m.createdAt)}>· {ago(m.createdAt)}</time></span></li>
+      </ol>
+    </section>
+  </article>;
+}
+
+function describe(e: Ev) {
+  const m = e.meta ?? {};
+  switch (e.kind) {
+    case 'status': return <>changed the status{m.from ? <> from <i>{SLABEL[m.from as Status] ?? m.from}</i></> : null} to <i>{SLABEL[m.to as Status] ?? m.to}</i></>;
+    case 'assign': return m.to ? <>assigned it to <i>{m.name ?? 'a teammate'}</i></> : <>removed the assignee</>;
+    case 'archive': return 'archived it'; case 'unarchive': return 'moved it back to the inbox';
+    case 'spam': return 'marked it as spam'; case 'not_spam': return 'marked it as not spam';
+    case 'reply': return 'opened a reply in their email app';
+    default: return e.kind;
+  }
+}
+
+// ================================================================ Newsletter subscribers
+type Sub = { id: string; email: string; status: 'subscribed' | 'unsubscribed'; source: string; consentAt: string; unsubscribedAt: string | null; createdAt: string };
+function Subscribers({ onChange }: { onChange: () => void }) {
+  const can = useCan(); const toast = useToast();
+  const [st, set] = useUrlState({ subs: 'subscribed', sq: '' });
+  const [q, setQ] = useState(st.sq);
+  const [data, setData] = useState<{ rows: Sub[]; counts: { subscribed: number; unsubscribed: number } } | null>(null);
+  const [delSub, setDelSub] = useState<Sub | null>(null);
+  useEffect(() => { const t = setTimeout(() => set('sq', q), 250); return () => clearTimeout(t); }, [q]);
+  const load = useCallback(() => api<typeof data>(`/inbox/subscribers?${new URLSearchParams({ status: st.subs === 'all' ? '' : st.subs, q: st.sq })}`).then(setData), [st.subs, st.sq]);
+  useEffect(() => { load().catch((e) => toast(e.message, true)); }, [load]);
+  async function act(s: Sub, a: 'unsubscribe' | 'delete') {
+    try { await post(`/inbox/subscribers/${s.id}/${a}`); setDelSub(null); await load(); onChange(); toast(a === 'delete' ? 'Subscriber deleted' : `${s.email} unsubscribed`); } catch (e) { toast((e as Error).message, true); }
+  }
+  const cols: Column<Sub>[] = [
+    { key: 'email', header: 'Email', render: (s) => <span className="mono">{s.email}</span>, sort: (s) => s.email },
+    { key: 'status', header: 'Status', render: (s) => <span className={`ix-st ${s.status === 'subscribed' ? 's-replied' : 's-closed'}`}>{s.status === 'subscribed' ? 'Subscribed' : `Unsubscribed${s.unsubscribedAt ? ` · ${ago(s.unsubscribedAt)}` : ''}`}</span>, sort: (s) => s.status },
+    { key: 'date', header: 'Signed up', render: (s) => <span className="sub" title={fmtDate(s.consentAt)}>{fmtDate(s.consentAt)}</span>, sort: (s) => s.consentAt, hideBelow: 640 },
+    { key: 'src', header: 'From page', render: (s) => <span className="sub mono">{s.source || '—'}</span>, sort: (s) => s.source, hideBelow: 860 },
+    ...(can('forms.manage') ? [{ key: 'act', header: '', align: 'right' as const, render: (s: Sub) => <span className="ix-sub-act">{s.status === 'subscribed' && <button className="btn btn-ghost btn-sm" onClick={() => act(s, 'unsubscribe')}>Unsubscribe</button>}<button className="btn btn-ghost btn-sm btn-danger" onClick={() => setDelSub(s)}>Delete</button></span> }] : []),
+  ];
+  return <section className="ix-subs-b card">
+    <div className="ix-subs-h">
+      <div><h2>Newsletter subscribers</h2><p className="muted">No mailing service is connected: export the subscribed addresses as CSV for your mailing tool. Unsubscribed people are never exported.</p></div>
+      {can('forms.manage') && <a className="btn" href="/studio/api/inbox/subscribers/export.csv" download><Icon n="upload" style={{ transform: 'rotate(180deg)' }} />Export subscribed</a>}
+    </div>
+    <ListToolbar tabs={[['subscribed', 'Subscribed', data?.counts.subscribed ?? 0], ['unsubscribed', 'Unsubscribed', data?.counts.unsubscribed ?? 0], ['all', 'All', (data?.counts.subscribed ?? 0) + (data?.counts.unsubscribed ?? 0)]]}
+      value={st.subs} onChange={(v) => set('subs', v)} q={q} setQ={setQ} placeholder="Search email" />
+    {!data ? <Loading /> : <DataTable id="inbox-subs" rows={data.rows} total={data.rows.length} rowKey={(s) => s.id} columns={cols} initialSort={{ key: 'date', dir: 'desc' }}
+      empty={<EmptyState icon="mail" text={st.sq ? 'No subscriber matches.' : 'No subscribers here yet.'} onClear={st.sq ? () => setQ('') : undefined} />}
+      actions={can('forms.manage') ? [{ label: 'Unsubscribe', icon: 'x', applies: (s) => s.status === 'subscribed', run: async (sel) => { for (const s of sel.filter((x) => x.status === 'subscribed')) await post(`/inbox/subscribers/${s.id}/unsubscribe`); await load(); onChange(); toast(`${sel.length} unsubscribed`); } }] : []} />}
+    {delSub && <Modal size="sm" title="Delete this subscriber?" onClose={() => setDelSub(null)} footer={<><button className="btn" onClick={() => setDelSub(null)}>Cancel</button><button className="btn btn-primary" onClick={() => act(delSub, 'delete')}>Delete permanently</button></>}>
+      <div className="modal-b"><p style={{ margin: 0 }}><span className="mono">{delSub.email}</span> is removed for good, for example after a request to erase their data. To stop emails but keep the record, unsubscribe instead.</p></div></Modal>}
+  </section>;
+}
+
+// ================================================================ Settings
+function SettingsDialog({ forms, onClose, onSaved }: { forms: FormInfo[]; onClose: () => void; onSaved: () => void }) {
+  const [v, setV] = useState(() => Object.fromEntries(forms.map((f) => [f.key, { ...f.settings }])) as Record<string, FormInfo['settings']>);
+  const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const up = (k: string, p: Partial<FormInfo['settings']>) => setV((x) => ({ ...x, [k]: { ...x[k], ...p } }));
+  async function save() {
+    setErr(''); setBusy(true);
+    try { for (const f of forms) await put(`/inbox/settings/${f.key}`, { enabled: v[f.key].enabled, retentionDays: v[f.key].retentionDays, ...(f.key === 'contact' ? { closedRetentionMonths: v[f.key].closedRetentionMonths } : {}) }); onSaved(); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  const c = v.contact;
+  return <Modal title="Inbox settings" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button></>}>
+    <div className="modal-b stack ix-settings">
+      {forms.map((f) => <fieldset key={f.key}><legend>{f.label} <small className="muted">· {f.site}</small></legend>
+        <label className="check"><input type="checkbox" checked={v[f.key].enabled} onChange={(e) => up(f.key, { enabled: e.target.checked })} /><span><b>Accept new submissions</b><br /><small className="muted">When paused, the website asks people to email contact@afcdteam.com instead.</small></span></label>
+        <Field label="Delete every submission after (days)" hint={f.key === 'contact' ? 'Spam is deleted after 30 days.' : 'The subscriber list itself is kept until people unsubscribe or are deleted.'}>
+          <input className="input" type="number" min={30} max={1825} value={v[f.key].retentionDays} onChange={(e) => up(f.key, { retentionDays: Number(e.target.value) })} /></Field>
+      </fieldset>)}
+      {c && <fieldset><legend>Closed messages</legend>
+        <label className="check"><input type="checkbox" checked={c.closedRetentionMonths != null} onChange={(e) => up('contact', { closedRetentionMonths: e.target.checked ? 6 : null })} /><span><b>Delete closed messages sooner</b><br /><small className="muted">Personal data is kept only as long as needed. Notes and history are deleted with the message.</small></span></label>
+        {c.closedRetentionMonths != null && <Field label="Months after closing"><input className="input" type="number" min={1} max={60} value={c.closedRetentionMonths} onChange={(e) => up('contact', { closedRetentionMonths: Number(e.target.value) })} /></Field>}
+      </fieldset>}
+      <div className="notice n-info"><div>The website sends forms here only when it is built with <span className="mono">FORMS_ENDPOINT</span> set to this Studio’s address. Retention runs every 15 minutes while Studio is running.</div></div>
+      {err && <div className="notice n-warn" role="alert"><div>{err}</div></div>}
+    </div>
+  </Modal>;
+}

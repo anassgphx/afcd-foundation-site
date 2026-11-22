@@ -7,6 +7,7 @@ import type { Config } from '../../config.ts';
 import { media, pillars, projects, projectRevisions } from '../../db/schema.ts';
 import { publicRef } from '../media/service.ts';
 import { esc, renderBlocks, validateDoc, type Doc, type MediaRef, type ProjectCard, type RenderCtx } from './blocks.ts';
+import { loadSources, type Pending } from './dynamic.ts';
 
 export type PageSnapshot = { slug: string; title: string; description: string; navSection: string; noindex: boolean; doc: Doc };
 
@@ -22,7 +23,7 @@ export function docMediaIds(doc: { blocks: unknown[] }): string[] {
 }
 
 /** Everything blocks need to render: images by id and the projects that are live on the site right now. */
-export async function buildCtx(db: DB, docs: { blocks: unknown[] }[], opts: { editor?: boolean; mediaPrefix?: string; projectOverride?: { projectId: string; revisionId: string | null } } = {}): Promise<Omit<RenderCtx, 'pageTitle'>> {
+export async function buildCtx(db: DB, docs: { blocks: unknown[] }[], opts: { editor?: boolean; mediaPrefix?: string; projectOverride?: { projectId: string; revisionId: string | null }; pending?: Pending } = {}): Promise<Omit<RenderCtx, 'pageTitle'>> {
   const pl = await db.select().from(pillars);
   const liveProjects = await db.select({ id: projects.id, rev: projects.publishedRevisionId }).from(projects).where(isNotNull(projects.publishedRevisionId));
   const map = new Map(liveProjects.map((r) => [r.id, r.rev as string]));
@@ -37,7 +38,8 @@ export async function buildCtx(db: DB, docs: { blocks: unknown[] }[], opts: { ed
     const p = pl.find((x) => x.key === s.pillar);
     return { name: s.name, slug: s.slug, pillar: p?.name ?? '', pillars: s.pillars ?? [s.pillar], category: s.category, summary: s.summary, file: s.file, hero: s.detail?.hero?.id ? byId.get(s.detail.hero.id) ?? null : null, colour: p?.colour ?? '#D4D4D4' };
   });
-  return { media: (id) => (id ? byId.get(id) ?? null : null), projects: cards, editor: opts.editor };
+  const sources = await loadSources(db, opts.pending, opts.mediaPrefix ?? 'assets/media/');
+  return { media: (id) => (id ? byId.get(id) ?? null : null), projects: cards, sources, editor: opts.editor };
 }
 
 /** Page source in the format build.mjs expects (front matter + body). Titles were validated to contain no markup. */
@@ -49,6 +51,13 @@ export function pageSource(s: PageSnapshot, ctx: Omit<RenderCtx, 'pageTitle'>, r
 }
 
 const NAV = ['home', 'about', 'pillars', 'projects', 'news', 'partners', 'contact', 'involved', 'none'];
+
+/** Canvas HTML is an iframe srcdoc. <base> makes it render right, but Chrome's preloader fetches early resources
+ *  against the parent page (/studio/…) before it sees <base>; absolute site paths avoid those 404s. */
+export const siteUrls = (html: string) => html
+  .replace(/(\s(?:src|href|poster)=["'])assets\//g, '$1/studio/site/assets/')
+  .replace(/(\ssrcset=")([^"]*)"/g, (_m, a: string, v: string) => `${a}${v.replace(/(^|,\s*)assets\//g, '$1/studio/site/assets/')}"`)
+  .replace(/url\((['"]?)assets\//g, 'url($1/studio/site/assets/');
 
 /** Live canvas for the builder: the real partials and CSS around the editor-mode render. Served as iframe srcdoc. */
 export function canvasHtml(cfg: Config, s: PageSnapshot, ctx: Omit<RenderCtx, 'pageTitle'>) {
@@ -68,5 +77,5 @@ export function canvasHtml(cfg: Config, s: PageSnapshot, ctx: Omit<RenderCtx, 'p
   const body = renderBlocks(validateDoc(s.doc).doc, { ...ctx, pageTitle: s.title, editor: true });
   return [head.trimEnd(), '<body class="font-sans">', mark(part('header')).trimEnd(),
     `<main id="main" data-page="${active}">${body || '<div class="wrap py-24 text-center text-ink-mid">Add a block from the library to start this page.</div>'}</main>`,
-    mark(part('footer')).trimEnd(), '</body></html>'].join('\n');
+    mark(part('footer')).trimEnd(), '</body></html>'].join('\n').replace(/^[\s\S]*$/, siteUrls);
 }

@@ -69,5 +69,5 @@ export function requirePerm(c: Context<Env>, perm: Permission): SessionUser {
 export const perm = (p: Permission): MiddlewareHandler<Env> => async (c, next) => { requirePerm(c, p); await next(); };
 
 export class AppError extends Error {
-  constructor(public status: 400 | 404 | 409 | 422, message: string, public details?: unknown) { super(message); }
+  constructor(public status: 400 | 404 | 409 | 422 | 429 | 503, message: string, public details?: unknown) { super(message); }
 }

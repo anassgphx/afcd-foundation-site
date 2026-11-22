@@ -12,7 +12,7 @@ import type { DB } from './db/client.ts';
 import type { Config } from './config.ts';
 import * as t from './db/schema.ts';
 import { AppError, clientIp, csrfGuard, loadSession, perm, requirePerm, requireUser, securityHeaders, type Env } from './http.ts';
-import { SESSION_COOKIE, createSession, deleteSession, hashPassword, recordAttempt, tooManyAttempts, validatePasswordStrength, verifyPassword } from './auth/session.ts';
+import { SESSION_COOKIE, createSession, deleteSession, hashPassword, recordAttempt, tooManyAttempts, validatePasswordStrength, verifyPassword, isLocalOrigin } from './auth/session.ts';
 import { ROLE_LABELS, ROLE_PERMISSIONS, ROLES, type Role } from './rbac.ts';
 import { audit } from './audit.ts';
 import * as P from './modules/projects/service.ts';
@@ -21,6 +21,24 @@ import * as G from './modules/pages/service.ts';
 import * as N from './modules/news/service.ts';
 import * as PT from './modules/partners/service.ts';
 import * as EV from './modules/events/service.ts';
+import * as OP from './modules/opportunities/service.ts';
+import * as FM from './modules/forms/service.ts';
+import * as SEO from './modules/seo/service.ts';
+import * as RD from './modules/seo/redirects.ts';
+import * as SCH from './modules/seo/schema.ts';
+import * as GSC from './modules/google/gsc.ts';
+import * as JOBS from './modules/jobs/service.ts';
+import * as TR from './modules/translations/service.ts';
+import { registerMenuRoutes } from './modules/menus/routes.ts';
+import { registerReviewRoutes } from './modules/review/routes.ts';
+import { registerInboxRoutes } from './modules/inbox/routes.ts';
+import * as HM from './modules/home/service.ts';
+import * as WS from './modules/workspace/service.ts';
+import { overview as dashboardOverview } from './modules/workspace/overview.ts';
+import { readFields, SECTION_LABEL, siteSections } from './modules/home/fields.ts';
+import { currentLayout, validateLayout, HOME_BLOCKS } from './modules/home/layout.ts';
+import { homeCanvas } from './modules/home/render.ts';
+import { docMediaIds } from './modules/pages/render.ts';
 import { importPartners } from './modules/partners/import.ts';
 import { blockCatalog } from './modules/pages/blocks.ts';
 import { Publisher, type BuildRunner } from './modules/publish/service.ts';
@@ -33,12 +51,35 @@ const MIME: Record<string, string> = {
 // Argon2id hash of a random value, used only to equalize response timing for unknown emails.
 const dummyHash = hashPassword(randomBytes(24).toString('hex'));
 
-export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = {}) {
+export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; googleHttp?: typeof fetch } = {}) {
   const publisher = new Publisher(db, cfg, opts.runner);
   const app = new Hono<Env>();
 
   app.use('*', async (c, next) => { c.set('db', db); c.set('cfg', cfg); c.set('publisher', publisher); await next(); });
   app.use('*', securityHeaders);
+
+  // ---------------------------------------------------------------- Public form intake (the website posts here; no cookies, no session)
+  const formOrigins = new Set([new URL(cfg.publicSiteUrl).origin, ...(process.env.FORMS_ALLOWED_ORIGINS ?? '').split(',').map((x) => x.trim()).filter(Boolean)]);
+  const cors = (c: { req: { header: (n: string) => string | undefined }; header: (n: string, v: string) => void }) => {
+    const o = c.req.header('origin');
+    if (o && formOrigins.has(o)) { c.header('Access-Control-Allow-Origin', o); c.header('Vary', 'Origin'); }
+    return !o || formOrigins.has(o);
+  };
+  app.options('/forms/v1/:key', (c) => {
+    if (!cors(c)) return c.body(null, 403);
+    c.header('Access-Control-Allow-Methods', 'POST'); c.header('Access-Control-Allow-Headers', 'Content-Type'); c.header('Access-Control-Max-Age', '600');
+    return c.body(null, 204);
+  });
+  app.post('/forms/v1/:key', bodyLimit({ maxSize: 16 * 1024, onError: (c) => c.json({ error: 'The message is too long.' }, 413) }), async (c) => {
+    if (!cors(c)) return c.json({ error: 'This website is not allowed to send forms here.' }, 403);
+    c.header('Cache-Control', 'no-store');
+    const key = c.req.param('key');
+    if (!FM.isFormKey(key)) return c.json({ error: 'Unknown form.' }, 404);
+    if (!(c.req.header('content-type') ?? '').includes('application/json')) return c.json({ error: 'Send JSON.' }, 415);
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== 'object') return c.json({ error: 'Send JSON.' }, 400);
+    return c.json(await FM.receive(db, cfg, key, body, clientIp(c)));
+  });
   app.use('/studio/*', loadSession);
   app.use('/studio/api/*', csrfGuard);
 
@@ -67,6 +108,11 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
     if (!u || !ok || !u.active) {
       await audit(db, null, 'auth.login_failed', { type: 'user', id: u?.id }, email, undefined, ip);
       throw new HTTPException(401, { message: 'Email or password is incorrect.' });
+    }
+    // A local-only (short) password never works once Studio runs on a real address.
+    if (u.localOnlyPassword && !isLocalOrigin(cfg.origin)) {
+      await audit(db, null, 'auth.login_refused_local_password', { type: 'user', id: u.id }, email, undefined, ip);
+      throw new HTTPException(403, { message: 'This account has a local-only password. An administrator must set a strong password (12+ characters) before it can sign in here.' });
     }
     const s = await createSession(db, u.id, ip, c.req.header('user-agent') ?? null);
     setCookie(c, SESSION_COOKIE, s.token, { httpOnly: true, sameSite: 'Strict', secure: cfg.secureCookies, path: '/studio', maxAge: s.maxAge });
@@ -279,6 +325,198 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
   });
   api.post('/events/:id/revisions/:rev/restore', perm('event.update'), async (c) => { await EV.restoreEventRevision(db, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
 
+  // ---------------------------------------------------------------- Opportunities
+  api.get('/opportunities', perm('opportunity.read'), async (c) => c.json(await OP.listOpportunities(db)));
+  api.post('/opportunities', perm('opportunity.create'), async (c) => c.json(await OP.createOpportunity(db, actor(c), await c.req.json()), 201));
+  api.get('/opportunities/:id', perm('opportunity.read'), async (c) => {
+    const o = await OP.loadOpportunity(db, c.req.param('id'));
+    const mediaRows = o.heroMediaId ? await db.select().from(t.media).where(eq(t.media.id, o.heroMediaId)) : [];
+    return c.json({ ...o, media: mediaRows.map(withUrl), problems: await OP.opportunityProblems(db, o), history: await OP.opportunityHistory(db, o.id) });
+  });
+  api.put('/opportunities/:id', perm('opportunity.update'), async (c) => c.json(await OP.updateOpportunity(db, actor(c), c.req.param('id'), await c.req.json())));
+  api.post('/opportunities/:id/transition', async (c) => {
+    const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
+    if (!body.success || !OP.opportunityTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, OP.opportunityTransitionPerm(body.data.action)!);
+    return c.json(await OP.transitionOpportunity(db, actor(c), u.role, c.req.param('id'), body.data.action, { comment: body.data.comment }));
+  });
+  api.post('/opportunities/:id/publish', perm('opportunity.publish'), async (c) => c.json(await publisher.publishOpportunity(actor(c), c.req.param('id'))));
+  api.post('/opportunities/:id/unpublish', perm('opportunity.publish'), async (c) => c.json(await publisher.unpublishOpportunity(actor(c), c.req.param('id'))));
+  api.post('/opportunities/:id/preview', perm('opportunity.read'), async (c) => {
+    const r = await publisher.previewOpportunity(c.req.param('id'), OP.toOpportunitySnapshot(await OP.loadOpportunity(db, c.req.param('id'))));
+    return c.json({ url: `/studio/preview/${r.token}/${r.file}` });
+  });
+  api.post('/opportunities/:id/revisions/:rev/restore', perm('opportunity.update'), async (c) => { await OP.restoreOpportunityRevision(db, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
+
+  // ---------------------------------------------------------------- Inbox: website messages and newsletter list (personal data, forms.read / forms.manage)
+  registerInboxRoutes(api);   // modules/inbox
+
+  // ---------------------------------------------------------------- SEO studio
+  api.get('/seo/audit', perm('seo.read'), async (c) => c.json({ last: await SEO.lastAudit(db), history: await SEO.auditHistory(db) }));
+  api.post('/seo/audit', perm('seo.read'), async (c) => c.json(await SEO.runAudit(db, cfg, actor(c))));
+  api.get('/seo/issues', perm('seo.read'), async (c) => c.json(await SEO.listIssues(db, cfg)));
+  api.post('/seo/issues/:id/review', perm('seo.update'), async (c) => {
+    const b = z.object({ reviewed: z.boolean(), note: z.string().max(500).optional() }).safeParse(await c.req.json());
+    if (!b.success) throw new AppError(422, 'Invalid change.');
+    await SEO.reviewIssue(db, actor(c), c.req.param('id'), b.data); return c.json({ ok: true });
+  });
+  api.get('/seo/pages', perm('seo.read'), async (c) => c.json(await SEO.listOverrides(db, cfg)));
+  api.get('/seo/pages/:file', perm('seo.read'), async (c) => {
+    const file = c.req.param('file');
+    const defaults = SEO.pageDefaults(cfg, file); if (!defaults) throw new AppError(404, 'Unknown page.');
+    const [o] = await db.select().from(t.seoOverrides).where(eq(t.seoOverrides.file, file));
+    const mediaRows = o?.imageMediaId ? await db.select().from(t.media).where(eq(t.media.id, o.imageMediaId)) : [];
+    const owner = (await SEO.owners(db, cfg)).get(file) ?? null;
+    return c.json({ file, defaults, owner, override: o ?? null, media: mediaRows.map(withUrl), problems: o ? await SEO.overrideProblems(db, o) : [], history: o ? await SEO.overrideHistory(db, o.id) : { revisions: [], comments: [] } });
+  });
+  api.put('/seo/pages/:file', perm('seo.update'), async (c) => c.json(await SEO.saveOverride(db, cfg, actor(c), c.req.param('file'), await c.req.json())));
+  api.post('/seo/overrides/:id/transition', async (c) => {
+    const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
+    if (!body.success || !SEO.seoTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, SEO.seoTransitionPerm(body.data.action)!);
+    return c.json(await SEO.transitionOverride(db, actor(c), u.role, c.req.param('id'), body.data.action, { comment: body.data.comment }));
+  });
+  api.post('/seo/overrides/:id/discard', perm('seo.update'), async (c) => { await SEO.discardOverride(db, actor(c), c.req.param('id')); return c.json({ ok: true }); });
+  api.post('/seo/overrides/:id/publish', perm('seo.publish'), async (c) => c.json(await publisher.publishSeo(actor(c), c.req.param('id'))));
+  api.post('/seo/overrides/:id/unpublish', perm('seo.publish'), async (c) => c.json(await publisher.unpublishSeo(actor(c), c.req.param('id'))));
+  // redirects: editors draft them (seo.update), administrators put them on the site (seo.publish)
+  api.get('/seo/redirects', perm('seo.read'), async (c) => c.json(await RD.listRedirects(db, cfg)));
+  api.post('/seo/redirects/check', perm('seo.update'), async (c) => {
+    const p = RD.redirectSchema.safeParse(await c.req.json());
+    if (!p.success) return c.json({ errors: p.error.issues.map((i) => i.message), warnings: [] });
+    return c.json(await RD.checkRedirect(db, cfg, p.data, requireUser(c).role, c.req.query('id') || undefined));
+  });
+  api.post('/seo/redirects', perm('seo.update'), async (c) => c.json(await RD.saveRedirect(db, cfg, actor(c), requireUser(c).role, await c.req.json()), 201));
+  api.put('/seo/redirects/:id', perm('seo.update'), async (c) => c.json(await RD.saveRedirect(db, cfg, actor(c), requireUser(c).role, await c.req.json(), c.req.param('id'))));
+  api.post('/seo/redirects/:id/disable', perm('seo.update'), async (c) => { await RD.setRedirectStatus(db, actor(c), c.req.param('id'), 'disabled'); return c.json({ ok: true }); });
+  api.post('/seo/redirects/:id/enable', perm('seo.update'), async (c) => { await RD.setRedirectStatus(db, actor(c), c.req.param('id'), 'draft'); return c.json({ ok: true }); });
+  api.delete('/seo/redirects/:id', perm('seo.update'), async (c) => { await RD.deleteRedirect(db, actor(c), c.req.param('id')); return c.json({ ok: true }); });
+  api.post('/seo/redirects/publish', perm('seo.publish'), async (c) => c.json(await publisher.publishRedirects(actor(c), requireUser(c).role)));
+  // structured data: drafted (seo.update), reviewed by someone else (seo.approve), published (seo.publish)
+  api.get('/seo/schema', perm('seo.read'), async (c) => c.json(await SCH.settingsView(db, cfg, await publisher.schemaLive())));
+  api.put('/seo/schema', perm('seo.update'), async (c) => { await SCH.saveSettings(db, actor(c), await c.req.json()); return c.json(await SCH.settingsView(db, cfg, await publisher.schemaLive())); });
+  api.post('/seo/schema/transition', async (c) => {
+    const body = z.object({ action: z.enum(['submit', 'withdraw', 'request_changes', 'approve']), comment: z.string().max(2000).optional() }).safeParse(await c.req.json());
+    if (!body.success) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, SCH.SCHEMA_ACTIONS[body.data.action]);
+    await SCH.transitionSettings(db, actor(c), u.role, body.data.action, body.data.comment ?? '');
+    return c.json(await SCH.settingsView(db, cfg, await publisher.schemaLive()));
+  });
+  api.post('/seo/schema/publish', perm('seo.publish'), async (c) => c.json(await publisher.publishSchema(actor(c))));
+  api.post('/seo/schema/unpublish', perm('seo.publish'), async (c) => c.json(await publisher.unpublishSchema(actor(c))));
+  registerMenuRoutes(api);   // website menus (modules/menus)
+  registerReviewRoutes(api); // approval queue across all content (modules/review)
+
+  // ---------------------------------------------------------------- SEO Pro: Google Search Console + background jobs
+  // Admins (seo.publish) connect, choose the property, change sync settings and disconnect; SEO editors (seo.update)
+  // start syncs and URL inspections; everyone with seo.read sees the stored Google data.
+  const http = opts.googleHttp ?? fetch;
+  api.get('/seo/google/status', perm('seo.read'), async (c) => c.json({ ...(await GSC.status(db, cfg)), coverage: await GSC.coverage(db), jobs: await JOBS.listJobs(db, ['gsc_sync'], 8) }));
+  api.post('/seo/google/connect', perm('seo.publish'), async (c) => c.json(await GSC.startConnect(db, cfg, actor(c))));
+  api.get('/seo/google/callback', async (c) => {
+    // Google redirects the browser here (top-level GET, so the session cookie is sent). Errors are shown in Studio.
+    const back = (q: string) => c.redirect(`/studio/seo/integrations?${q}`);
+    if (!c.var.user) return back('gsc_error=' + encodeURIComponent('Please sign in to Studio, then connect again.'));
+    requirePerm(c, 'seo.publish');
+    try { await GSC.finishConnect(db, cfg, http, actor(c), { state: c.req.query('state'), code: c.req.query('code'), error: c.req.query('error') }); return back('gsc=connected'); }
+    catch (e) { return back('gsc_error=' + encodeURIComponent((e as Error).message.slice(0, 300))); }
+  });
+  api.get('/seo/google/properties', perm('seo.publish'), async (c) => c.json(await GSC.listProperties(db, cfg, http).catch((e) => { throw new AppError(409, (e as Error).message); })));
+  api.put('/seo/google/property', perm('seo.publish'), async (c) => {
+    const b = z.object({ siteUrl: z.string().min(3).max(300) }).safeParse(await c.req.json()); if (!b.success) throw new AppError(422, 'Choose a property.');
+    await GSC.chooseProperty(db, cfg, http, actor(c), b.data.siteUrl);
+    await JOBS.enqueue(db, 'gsc_sync', {}, { by: actor(c).id });
+    return c.json(await GSC.status(db, cfg));
+  });
+  api.put('/seo/google/settings', perm('seo.publish'), async (c) => {
+    const b = z.object({ backfillDays: z.number().int().min(7).max(486), retentionDays: z.number().int().min(30).max(486), autoSync: z.boolean() }).strict().safeParse(await c.req.json());
+    if (!b.success) throw new AppError(422, 'Use 7–486 days to import and 30–486 days to keep.');
+    if (b.data.retentionDays < b.data.backfillDays) throw new AppError(422, 'Keep data at least as long as the import window.');
+    await GSC.saveSettings(db, actor(c), b.data); return c.json(await GSC.status(db, cfg));
+  });
+  api.post('/seo/google/disconnect', perm('seo.publish'), async (c) => c.json(await GSC.disconnect(db, cfg, http, actor(c))));
+  api.post('/seo/google/sync', perm('seo.update'), async (c) => {
+    const conn = await GSC.connection(db); if (!conn?.property) throw new AppError(409, 'Connect Search Console and choose a property first.');
+    const r = await JOBS.enqueue(db, 'gsc_sync', {}, { by: actor(c).id }); return c.json(r, r.existing ? 200 : 201);
+  });
+  api.post('/seo/jobs/:id/cancel', perm('seo.update'), async (c) => c.json(await JOBS.cancelJob(db, c.req.param('id'))));
+  api.get('/seo/jobs', perm('seo.read'), async (c) => c.json(await JOBS.listJobs(db, undefined, 30)));
+  const range = (c: { req: { query: (k: string) => string | undefined } }): GSC.Range => {
+    const d = /^\d{4}-\d{2}-\d{2}$/; const from = c.req.query('from') ?? '', to = c.req.query('to') ?? '';
+    if (!d.test(from) || !d.test(to) || from > to) throw new AppError(422, 'Use a date range like from=2026-10-01&to=2026-10-28.');
+    const device = c.req.query('device'), country = c.req.query('country');
+    if (device && !['DESKTOP', 'MOBILE', 'TABLET'].includes(device)) throw new AppError(422, 'Unknown device.');
+    if (country && !/^[a-z]{3}$/.test(country)) throw new AppError(422, 'Use a three-letter country code (Search Console format, e.g. mar).');
+    if (device && country) throw new AppError(422, 'Search Console data here is stored per device or per country, not both at once. Choose one filter.');
+    return { from, to, ...(device ? { device } : {}), ...(country ? { country } : {}) };
+  };
+  api.get('/seo/gsc/overview', perm('seo.read'), async (c) => { const r = range(c); return c.json({ coverage: await GSC.coverage(db), current: await GSC.overview(db, r),
+    previous: c.req.query('compare') === '1' ? await GSC.overview(db, (() => { const len = (Date.parse(r.to) - Date.parse(r.from)) / 86_400_000 + 1; const f = new Date(Date.parse(r.from) - len * 86_400_000).toISOString().slice(0, 10); const t = new Date(Date.parse(r.from) - 86_400_000).toISOString().slice(0, 10); return { ...r, from: f, to: t }; })()) : null }); });
+  api.get('/seo/gsc/queries', perm('seo.read'), async (c) => c.json(await GSC.queries(db, range(c))));
+  api.get('/seo/gsc/pages', perm('seo.read'), async (c) => c.json(await GSC.pages(db, range(c))));
+  api.get('/seo/gsc/breakdown', perm('seo.read'), async (c) => { const r = range(c); return c.json({ countries: await GSC.countries(db, r), devices: await GSC.devices(db, r) }); });
+  api.get('/seo/gsc/page', perm('seo.read'), async (c) => { const p = c.req.query('url'); if (!p) throw new AppError(422, 'Which page?'); return c.json(await GSC.pageHistory(db, p, range(c))); });
+  api.get('/seo/gsc/movers', perm('seo.read'), async (c) => { const r = range(c); const min = Math.max(1, Math.min(10000, Number(c.req.query('min') ?? 20) || 20));
+    return c.json({ pages: await GSC.movers(db, 'page', r, min), queries: await GSC.movers(db, 'query', r, min) }); });
+  api.get('/seo/gsc/inspections', perm('seo.read'), async (c) => c.json(await GSC.inspections(db)));
+  api.post('/seo/gsc/inspect', perm('seo.update'), async (c) => {
+    const b = z.object({ url: z.string().url().max(2000) }).safeParse(await c.req.json()); if (!b.success) throw new AppError(422, 'Enter a full address, like https://afcdfoundation.org/about.html');
+    return c.json(await GSC.inspect(db, cfg, http, actor(c), b.data.url));
+  });
+
+  // ---------------------------------------------------------------- Translations: edited (translation.update), reviewed by someone else (translation.approve), published (translation.publish)
+  const langOf = (c: { req: { param: (k: string) => string } }) => { const l = c.req.param('lang'); if (!TR.isLang(l)) throw new AppError(404, 'Unknown language.'); return l; };
+  api.get('/translations', perm('translation.read'), async (c) => c.json(await TR.overview(db, cfg)));
+  api.post('/translations/record', perm('translation.read'), async (c) => c.json(await TR.recordView(db, cfg, actor(c), await c.req.json())));
+  api.get('/translations/:lang', perm('translation.read'), async (c) => c.json(await TR.view(db, cfg, langOf(c), actor(c))));
+  api.patch('/translations/:lang', perm('translation.update'), async (c) => { const l = langOf(c); await TR.save(db, cfg, l, actor(c), await c.req.json()); return c.json(await TR.view(db, cfg, l, actor(c))); });
+  api.post('/translations/:lang/transition', async (c) => {
+    const l = langOf(c);
+    const body = z.object({ action: z.enum(['submit', 'withdraw', 'request_changes', 'approve']), comment: z.string().max(2000).optional() }).safeParse(await c.req.json());
+    if (!body.success) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, TR.TRANSLATION_ACTIONS[body.data.action]);
+    await TR.transition(db, l, actor(c), u.role, body.data.action, body.data.comment ?? '');
+    return c.json(await TR.view(db, cfg, l, actor(c)));
+  });
+  api.post('/translations/:lang/publish', perm('translation.publish'), async (c) => c.json(await publisher.publishTranslations(actor(c), langOf(c))));
+
+  // ---------------------------------------------------------------- Top bar: search and notifications (permission-filtered)
+  api.get('/search', async (c) => { const u = requireUser(c); return c.json(await WS.search(db, u.role, c.req.query('q') ?? '')); });
+  api.get('/overview', perm('dashboard.read'), async (c) => c.json(await dashboardOverview(db, requireUser(c))));
+  api.get('/notifications', async (c) => { const u = requireUser(c); return c.json(await WS.notifications(db, u)); });
+
+  // ---------------------------------------------------------------- Homepage editing
+  api.get('/home', perm('page.read'), async (c) => {
+    const fields = readFields(cfg.siteRoot, HM.HOME);
+    const content = await HM.loadContent(db);
+    const ids = Object.values(content?.values ?? {}).flatMap((v) => (v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId] : []));
+    const mediaRows = ids.length ? await db.select().from(t.media).where(inArray(t.media.id, ids)) : [];
+    const layout = currentLayout(cfg.siteRoot, HM.HOME, content?.layout ?? null);
+    const blockIds = layout.flatMap((e) => (e.kind === 'block' ? docMediaIds({ blocks: [e] }) : []));
+    const extra = blockIds.length ? await db.select().from(t.media).where(inArray(t.media.id, blockIds)) : [];
+    return c.json({ fields, sections: SECTION_LABEL, siteSections: siteSections(cfg.siteRoot, HM.HOME), layout, content, media: [...mediaRows, ...extra].map(withUrl),
+      catalog: blockCatalog().filter((b) => HOME_BLOCKS.includes(b.type)),
+      problems: content ? await HM.contentProblems(db, cfg, content.values, content.layout) : [], history: content ? await HM.contentHistory(db, content.id) : { revisions: [], comments: [] } });
+  });
+  api.put('/home', perm('page.update'), async (c) => c.json(await HM.saveContent(db, cfg, actor(c), await c.req.json())));
+  // Live canvas of the unsaved working copy (no files written): the real page, composed by the same code as the build.
+  api.post('/home/canvas', perm('page.read'), bodyLimit({ maxSize: 512 * 1024 }), async (c) => {
+    const b = await c.req.json().catch(() => ({})) as { values?: unknown; layout?: unknown };
+    const values = HM.validateValues(readFields(cfg.siteRoot, HM.HOME), b.values ?? {});
+    const { layout } = validateLayout(cfg.siteRoot, HM.HOME, b.layout ?? currentLayout(cfg.siteRoot, HM.HOME, null));
+    return c.json({ html: await homeCanvas(db, cfg, HM.HOME, values, layout) });
+  });
+  api.post('/home/transition', async (c) => {
+    const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
+    if (!body.success || !HM.homeTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, HM.homeTransitionPerm(body.data.action)!);
+    return c.json(await HM.transitionContent(db, cfg, actor(c), u.role, body.data.action, { comment: body.data.comment }));
+  });
+  api.post('/home/publish', perm('page.publish'), async (c) => c.json(await publisher.publishHome(actor(c))));
+  api.post('/home/unpublish', perm('page.publish'), async (c) => c.json(await publisher.unpublishHome(actor(c))));
+  api.post('/home/preview', perm('page.read'), async (c) => { const r = await publisher.previewHome(); return c.json({ url: `/studio/preview/${r.token}/${r.file}` }); });
+  api.post('/home/revisions/:rev/restore', perm('page.update'), async (c) => { await HM.restoreContentRevision(db, cfg, actor(c), c.req.param('rev')); return c.json({ ok: true }); });
+
   // ---------------------------------------------------------------- Publishing jobs, audit, users
   api.get('/publish-jobs', perm('dashboard.read'), async (c) => c.json(await publisher.recentJobs(30)));
   api.get('/audit', perm('audit.read'), async (c) => {
@@ -378,7 +616,10 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
   });
   app.get('/', (c) => c.redirect('/studio/'));
 
-  return { app, publisher };
+  // background jobs: the server calls runJobs() on a timer; tests call it directly
+  // `today` only changes which Search Console days count as final (tests use a fixed date); scheduling uses the clock
+  const runJobs = (today?: Date) => JOBS.runNext(db, { gsc_sync: (ctx) => GSC.syncJob(db, cfg, opts.googleHttp ?? fetch, ctx, today) });
+  return { app, publisher, runJobs };
 }
 
 function withUrl(m: M.MediaRow) { return { ...m, url: `/studio/media-file/${m.storageKey}-480.webp`, large: `/studio/media-file/${M.publicRef(m).src.split('/').pop()}` }; }

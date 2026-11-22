@@ -2,8 +2,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
+import { RecordTranslations } from '../RecordTranslations.tsx';
+import '../writer.css';
 
 export const TYPES: [string, string][] = [['programme_news', 'Programme news'], ['participant_story', 'Participant story'], ['call_for_applications', 'Call for applications'], ['event_recap', 'Event recap']];
 const typeLabel = (t: string) => TYPES.find((x) => x[0] === t)?.[1] ?? t;
@@ -13,33 +16,38 @@ const today = () => new Date().toISOString().slice(0, 10);
 type Row = { id: string; slug: string; title: string; type: string; status: string; publishDate: string; featured: boolean; externalUrl: string; scheduledAt: string | null; publishedRevisionId: string | null; updatedAt: string; pillars: { name: string; colour: string }[] };
 
 export function NewsList() {
-  const can = useCan();
-  const [rows, setRows] = useState<Row[] | null>(null); const [q, setQ] = useState(''); const [f, setF] = useState('all');
-  useEffect(() => { api<Row[]>('/news').then(setRows).catch(() => setRows([])); }, []);
+  const can = useCan(); const toast = useToast();
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [st, set] = useUrlState({ status: 'all', type: 'all', q: '' });
+  const load = () => api<Row[]>('/news').then(setRows).catch(() => setRows([]));
+  useEffect(() => { load(); }, []);
   async function create() {
-    const title = 'Untitled story';
-    const r = await post<{ id: string }>('/news', { title, slug: `story-${Date.now().toString(36)}`, publishDate: today() });
+    const r = await post<{ id: string }>('/news', { title: 'Untitled story', slug: `story-${Date.now().toString(36)}`, publishDate: today() });
     navigate(`/studio/news/${r.id}`);
   }
-  const shown = (rows ?? []).filter((r) => (f === 'all' ? r.status !== 'archived' : f === 'live' ? !!r.publishedRevisionId : r.status === f) && (!q || r.title.toLowerCase().includes(q.toLowerCase())));
+  const is = (k: string, r: Row) => (k === 'all' ? r.status !== 'archived' : k === 'live' ? !!r.publishedRevisionId : k === 'draft' ? ['draft', 'changes_requested'].includes(r.status) : r.status === k);
+  const base = (rows ?? []).filter((r) => (st.type === 'all' || r.type === st.type) && (!st.q || `${r.title} ${r.slug}`.toLowerCase().includes(st.q.toLowerCase())));
+  const shown = base.filter((r) => is(st.status, r));
+  const tabs: [string, string, number][] = [['all', 'All'], ['live', 'Live'], ['draft', 'Drafts'], ['in_review', 'In review'], ['scheduled', 'Scheduled'], ['archived', 'Archived']].map(([k, l]) => [k, l, base.filter((r) => is(k, r)).length]);
+  const columns: Column<Row>[] = [
+    { key: 'title', header: 'Story', sort: (r) => r.title, csv: (r) => r.title, render: (r) => <div className="dt-main"><span className="dt-thumb"><Icon n="log" /></span><span className="min-w-0">
+      <Link className="title" to={`/studio/news/${r.id}`}>{r.title}</Link><span className="sub">{[r.pillars.map((p) => p.name).join(' · ') || 'No pillar yet', r.featured && 'Featured', r.externalUrl && 'Old blog link'].filter(Boolean).join(' · ')}</span></span></div> },
+    { key: 'type', header: 'Type', sort: (r) => typeLabel(r.type), csv: (r) => typeLabel(r.type), hideBelow: 900, render: (r) => <span className="pill">{typeLabel(r.type)}</span> },
+    { key: 'date', header: 'Date', sort: (r) => r.publishDate, csv: (r) => r.publishDate, render: (r) => <span className="sub" style={{ whiteSpace: 'nowrap' }}>{r.publishDate}</span> },
+    { key: 'status', header: 'Status', sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} label={r.status === 'scheduled' && r.scheduledAt ? `Scheduled · ${fmtDate(r.scheduledAt)}` : undefined} /></div> },
+    { key: 'updated', header: 'Updated', align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
+  ];
   return <>
     <div className="page-h"><div><h1>News & Stories</h1><p>Programme news, participant stories, calls for applications and event recaps.</p></div>
       {can('news.create') && <button className="btn btn-primary" onClick={create}><Icon n="plus" />New story</button>}</div>
     <section className="card">
-      <div className="card-h">
-        <div className="seg" role="group" aria-label="Status">{[['all', 'All'], ['live', 'Live'], ['draft', 'Drafts'], ['in_review', 'In review'], ['scheduled', 'Scheduled'], ['archived', 'Archived']].map(([k, l]) => <button key={k} className={f === k ? 'on' : ''} onClick={() => setF(k)}>{l}</button>)}</div>
-        <label className="search"><Icon n="search" /><span className="sr-only">Search stories</span><input className="input" placeholder="Search stories" value={q} onChange={(e) => setQ(e.target.value)} /></label>
-      </div>
-      {!rows ? <Loading /> : <div className="scroll-x"><table className="table">
-        <thead><tr><th>Story</th><th>Type</th><th>Date</th><th>Status</th><th>Updated</th></tr></thead>
-        <tbody>{shown.length === 0 && <tr><td colSpan={5} className="empty">No stories here.</td></tr>}
-          {shown.map((r) => <tr key={r.id}>
-            <td><Link className="title" to={`/studio/news/${r.id}`}>{r.title}</Link><div className="sub">{r.pillars.map((p) => p.name).join(' · ') || 'No pillar yet'}{r.featured ? ' · Featured' : ''}{r.externalUrl ? ' · Old blog link' : ''}</div></td>
-            <td><span className="pill">{typeLabel(r.type)}</span></td>
-            <td className="sub" style={{ whiteSpace: 'nowrap' }}>{r.publishDate}</td>
-            <td><div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} label={r.status === 'scheduled' && r.scheduledAt ? `Scheduled · ${fmtDate(r.scheduledAt)}` : undefined} /></div></td>
-            <td className="sub">{ago(r.updatedAt)}</td></tr>)}</tbody>
-      </table></div>}
+      <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search stories">
+        <select className="select" value={st.type} onChange={(e) => set('type', e.target.value)} aria-label="Type"><option value="all">All types</option>{TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+      </ListToolbar>
+      {!rows ? <Loading /> : <DataTable id="news" rows={shown} total={base.filter((r) => is('all', r)).length} rowKey={(r) => r.id} columns={columns} csvName="afcd-stories" initialSort={{ key: 'date', dir: 'desc' }}
+        actions={workflowActions<Row>({ base: '/news', noun: ['story', 'stories'], name: (r) => r.title, canUpdate: can('news.update'), reload: load, post, toast })}
+        onOpen={(r) => navigate(`/studio/news/${r.id}`)}
+        empty={<EmptyState icon="log" text="No stories match these filters" onClear={st.q || st.type !== 'all' || st.status !== 'all' ? () => { set('q', ''); set('type', 'all'); set('status', 'all'); } : undefined} />} />}
     </section>
   </>;
 }
@@ -55,7 +63,8 @@ export function ArticleEditor({ id }: { id: string }) {
   const [media, setMedia] = useState<Record<string, MediaItem>>({});
   const [pillars, setPillars] = useState<{ key: string; name: string; colour: string }[]>([]);
   const [projects, setProjects] = useState<{ slug: string; name: string }[]>([]);
-  const [tab, setTab] = useState<'details' | 'links' | 'media' | 'seo' | 'publish'>('details');
+  const [tab, setTab] = useState<'details' | 'links' | 'media' | 'seo' | 'translations' | 'publish'>('details');
+  const [trOpen, setTrOpen] = useState(false);
   const [dirty, setDirty] = useState(false); const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
   const [dialog, setDialog] = useState<null | 'hero' | 'gallery' | 'preview' | 'publish' | 'unpublish' | 'changes' | 'schedule'>(null);
   const [url, setUrl] = useState(''); const [comment, setComment] = useState(''); const [when, setWhen] = useState('');
@@ -107,40 +116,68 @@ export function ArticleEditor({ id }: { id: string }) {
     requestAnimationFrame(() => { el.focus(); el.setSelectionRange(s + pre.length, s + pre.length + sel.length); });
   };
   const file = f.externalUrl ? null : `news-${f.slug}.html`;
+  const onBodyKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    const k = e.key.toLowerCase();
+    if (k === 'b') { e.preventDefault(); wrap('**', '**', 'bold text'); }
+    else if (k === 'i') { e.preventDefault(); wrap('*', '*', 'italic text'); }
+    else if (k === 'k') { e.preventDefault(); wrap('[', '](about.html)', 'link text'); }
+  };
+  const problems = a.problems;
+  const canSubmit = ['draft', 'changes_requested'].includes(status) && can('news.update');
+  const canPublish = status === 'approved' && can('news.publish');
+  const hero = f.heroMediaId ? media[f.heroMediaId] : null;
+  const TABS = [['details', 'Details', 'log'], ['links', 'Links', 'layers'], ['media', 'Media', 'image'], ['seo', 'SEO', 'search'], ['translations', 'FR · AR', 'globe'], ['publish', 'Publish', 'rocket']] as const;
 
   return <div className="writer">
-    <div className="b-bar">
+    <div className="b-bar wr-bar">
       <button className="btn btn-ghost icon-btn" onClick={() => navigate('/studio/news')} aria-label="Back to stories"><Icon n="chev" style={{ transform: 'rotate(180deg)' }} /></button>
       <div className="b-title"><b>{f.title || 'Untitled story'}</b><span className="mono muted">{file ?? 'Links to the old blog'}</span></div>
       <span className="pills">{live && status !== 'published' && <LiveBadge />}<Badge s={status} label={status === 'scheduled' && a.scheduledAt ? `Scheduled · ${fmtDate(a.scheduledAt)}` : undefined} /></span>
-      {dirty && <span className="muted" style={{ fontSize: 12 }}>Unsaved</span>}
+      <span className={`wr-save${dirty ? ' dirty' : ''}`} role="status">{busy === 'save' ? 'Saving…' : dirty ? 'Unsaved changes' : 'All changes saved'}</span>
       <span style={{ flex: 1 }} />
-      <span className="muted" style={{ fontSize: 12 }}>{words} words · {Math.max(1, Math.round(words / 200))} min read</span>
+      <span className="wr-stats" title="Reading time at about 200 words a minute">{words.toLocaleString('en-GB')} word{words === 1 ? '' : 's'} · {Math.max(1, Math.round(words / 200))} min read</span>
       <button className="btn" onClick={preview} disabled={!!busy}><Icon n="eye" />{busy === 'preview' ? 'Building…' : 'Preview'}</button>
-      {editable && <button className="btn btn-primary" onClick={save} disabled={!dirty || !!busy}><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save'}</button>}
+      {editable && dirty && <button className="btn btn-primary" onClick={save} disabled={!!busy} title="Save (⌘S)"><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save draft'}</button>}
+      {!dirty && canSubmit && <button className="btn btn-primary" disabled={!!busy || problems.length > 0} title={problems.length ? `${problems.length} thing${problems.length === 1 ? '' : 's'} to fix first (see Publish)` : undefined} onClick={() => act('submit')}><Icon n="send" />Submit for review</button>}
+      {!dirty && canPublish && <button className="btn btn-primary" disabled={!!busy} onClick={() => setDialog('publish')}><Icon n="rocket" />Publish…</button>}
     </div>
     {errs.length > 0 && <div className="notice n-warn b-notice" role="alert"><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErrs([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
     {!editable && can('news.update') && <div className="notice n-info b-notice">{status === 'in_review' ? 'In review: read-only. Withdraw it to edit.' : status === 'scheduled' ? 'Scheduled: read-only. Unschedule it to edit.' : status === 'archived' ? 'Archived. Restore it to edit.' : ''}</div>}
 
     <div className="w-body">
       <fieldset className="w-paper" disabled={!editable}>
+        {hero ? <figure className="wr-cover"><img src={hero.url} alt={hero.alt} />
+            {editable && <span className="wr-cover-acts"><button type="button" className="btn btn-sm" onClick={() => setDialog('hero')}><Icon n="image" />Change</button><button type="button" className="btn btn-sm" onClick={() => set('heroMediaId', null)}>Remove</button></span>}</figure>
+          : editable && <button type="button" className="wr-cover-add" onClick={() => setDialog('hero')}><Icon n="image" /><span><b>Add a cover photo</b><small>Shown at the top of the story and on its card. Without one, a neutral placeholder is used.</small></span></button>}
         <textarea className="w-title" rows={1} maxLength={160} placeholder="Story title" value={f.title} onChange={(e) => set('title', e.target.value.replace(/\n/g, ' '))} aria-label="Title" />
-        <textarea className="w-excerpt" rows={2} maxLength={320} placeholder="A one or two sentence summary for cards and search results" value={f.excerpt} onChange={(e) => set('excerpt', e.target.value.replace(/\n/g, ' '))} aria-label="Summary" />
-        <div className="w-tools" role="toolbar" aria-label="Formatting">
-          <button type="button" onClick={() => wrap('\n\n## ', '\n\n', 'Subheading')} title="Subheading">H2</button>
-          <button type="button" onClick={() => wrap('**', '**', 'bold text')} title="Bold"><b>B</b></button>
-          <button type="button" onClick={() => wrap('*', '*', 'italic text')} title="Italic"><i>I</i></button>
-          <button type="button" onClick={() => wrap('[', '](about.html)', 'link text')} title="Link">Link</button>
-          <button type="button" onClick={() => wrap('\n\n> ', '\n\n', 'A quote from a participant')} title="Quote">“ Quote</button>
-          <button type="button" onClick={() => wrap('\n\n- ', '\n', 'List item')} title="List">• List</button>
-          <span className="muted" style={{ marginLeft: 'auto', fontSize: 11.5 }}>Blank line = new paragraph</span>
+        <button type="button" className="wr-meta" onClick={() => setTab('details')} title="Edit in Details">
+          <span>{typeLabel(f.type)}</span><span>{f.publishDate ? new Date(`${f.publishDate}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : 'No date'}</span>
+          <span>{f.authorName ? `By ${f.authorName}${f.authorRole ? `, ${f.authorRole}` : ''}` : 'No author yet'}</span>{f.tags.length > 0 && <span>{f.tags.slice(0, 3).join(', ')}</span>}
+        </button>
+        <div className="wr-excerpt">
+          <textarea className="w-excerpt" rows={2} maxLength={320} placeholder="A one or two sentence summary for cards and search results" value={f.excerpt} onChange={(e) => set('excerpt', e.target.value.replace(/\n/g, ' '))} aria-label="Summary" />
+          <small className={f.excerpt.length > 160 ? 'warn' : ''}>{f.excerpt.length} / 160 recommended{f.excerpt.length > 160 ? ' · search results cut it here' : ''}</small>
         </div>
-        <textarea ref={bodyRef} className="w-text" placeholder={f.externalUrl ? 'This story links to the old blog. Write it here to publish it on the new site, then clear the old-blog link.' : 'Write the story…'} value={f.body} maxLength={30000} onChange={(e) => set('body', e.target.value)} aria-label="Story text" />
+        <div className="w-tools wr-tools" role="toolbar" aria-label="Formatting">
+          <span className="wr-group"><button type="button" onClick={() => wrap('\n\n## ', '\n\n', 'Subheading')} aria-label="Subheading">H2</button></span>
+          <span className="wr-group"><button type="button" onClick={() => wrap('**', '**', 'bold text')} aria-label="Bold" aria-keyshortcuts="Meta+B" title="Bold · ⌘B"><b>B</b></button>
+            <button type="button" onClick={() => wrap('*', '*', 'italic text')} aria-label="Italic" aria-keyshortcuts="Meta+I" title="Italic · ⌘I"><i>I</i></button>
+            <button type="button" onClick={() => wrap('[', '](about.html)', 'link text')} aria-label="Link" aria-keyshortcuts="Meta+K" title="Link · ⌘K"><Icon n="ext" width={14} height={14} />Link</button></span>
+          <span className="wr-group"><button type="button" onClick={() => wrap('\n\n> ', '\n\n', 'A quote from a participant')} aria-label="Quote">“ Quote</button>
+            <button type="button" onClick={() => wrap('\n\n- ', '\n', 'List item')} aria-label="Bulleted list">• List</button></span>
+          <span className="wr-hint">Blank line = new paragraph · ⌘S saves</span>
+        </div>
+        <textarea ref={bodyRef} className="w-text" placeholder={f.externalUrl ? 'This story links to the old blog. Write it here to publish it on the new site, then clear the old-blog link.' : 'Write the story…'} value={f.body} maxLength={30000} onChange={(e) => set('body', e.target.value)} onKeyDown={onBodyKey} aria-label="Story text" />
       </fieldset>
 
       <aside className="w-side">
-        <div className="seg w-tabs">{([['details', 'Details'], ['links', 'Links'], ['media', 'Media'], ['seo', 'SEO'], ['publish', 'Publish']] as const).map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
-        <fieldset className="b-insp stack" disabled={!editable && tab !== 'publish'}>
+        {problems.length > 0 && ['draft', 'changes_requested'].includes(status) && <button type="button" className="wr-ready" onClick={() => setTab('publish')}>
+          <span className="wr-ready-n">{problems.length}</span><span><b>{problems.length === 1 ? '1 thing' : `${problems.length} things`} before review</b><small>{problems[0]}{problems.length > 1 ? ` · +${problems.length - 1} more` : ''}</small></span><Icon n="chev" width={14} height={14} /></button>}
+        {problems.length === 0 && ['draft', 'changes_requested'].includes(status) && <div className="wr-ready ok"><span className="wr-ready-n"><Icon n="check" width={13} height={13} /></span><span><b>Ready for review</b><small>Everything a reviewer needs is filled in.</small></span></div>}
+        <div className="wr-tabs" role="tablist" aria-label="Story settings">{TABS.map(([k, l, ic]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+          <Icon n={ic} width={16} height={16} /><span>{l}</span>{k === 'publish' && problems.length > 0 && ['draft', 'changes_requested'].includes(status) && <i className="wr-dot" aria-label={`${problems.length} to fix`} />}</button>)}</div>
+        <fieldset className="b-insp stack" disabled={!editable && tab !== 'publish' && tab !== 'translations'}>
           {tab === 'details' && <>
             <Fld label="Type"><select className="select" value={f.type} onChange={(e) => set('type', e.target.value)} aria-label="Type">{TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Fld>
             <Fld label="Date shown"><input className="input" type="date" value={f.publishDate} onChange={(e) => set('publishDate', e.target.value)} aria-label="Date shown" /></Fld>
@@ -168,6 +205,10 @@ export function ArticleEditor({ id }: { id: string }) {
             <Fld label="Meta description" hint={`${f.seoDescription.length} / 170 · empty = summary`}><textarea className="textarea" maxLength={170} value={f.seoDescription} onChange={(e) => set('seoDescription', e.target.value)} aria-label="Meta description" /></Fld>
             <div className="card" style={{ padding: 12, background: 'var(--sunken)' }}><small className="muted">Search result preview</small><div style={{ color: '#1a0dab', fontSize: 16 }}>{f.seoTitle || f.title} · AFCD Foundation</div><div style={{ color: '#006621', fontSize: 12 }}>afcdfoundation.org › {file ?? 'news.html'}</div><div style={{ fontSize: 12.5 }}>{(f.seoDescription || f.excerpt).slice(0, 160)}</div></div>
           </>}
+          {tab === 'translations' && <>
+            <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>French and Arabic of this story: its title, summary and text as the website shows them. Reviewed and published on the Translations screen.</p>
+            <button type="button" className="btn" onClick={() => setTrOpen(true)}><Icon n="globe" />Open translations</button>
+          </>}
           {tab === 'publish' && <>
             <dl className="kv"><dt>Website</dt><dd>{live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'}</dd>{a.publishedAt && <><dt>Published</dt><dd>{fmtDate(a.publishedAt)}</dd></>}{a.scheduledAt && <><dt>Scheduled</dt><dd>{fmtDate(a.scheduledAt)}</dd></>}</dl>
             {live && <a className="btn btn-sm" href={f.externalUrl || me.siteUrl + file} target="_blank" rel="noopener"><Icon n="ext" />Open live story</a>}
@@ -191,6 +232,9 @@ export function ArticleEditor({ id }: { id: string }) {
 
     {dialog === 'hero' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { if (m[0]) { setMedia((x) => ({ ...x, [m[0].id]: m[0] })); set('heroMediaId', m[0].id); } setDialog(null); }} />}
     {dialog === 'gallery' && <MediaPicker multiple onClose={() => setDialog(null)} onPick={(m) => { setMedia((x) => ({ ...x, ...Object.fromEntries(m.map((i) => [i.id, i])) })); set('galleryMediaIds', [...new Set([...f.galleryMediaIds, ...m.map((i) => i.id)])].slice(0, 12)); setDialog(null); }} />}
+    {trOpen && <Modal wide title={`Languages · ${f.title || 'Story'}`} onClose={() => setTrOpen(false)}><div className="modal-b" style={{ overflow: 'auto' }}>
+      <RecordTranslations noun="story" dirty={status !== 'published'} files={f.externalUrl || !f.slug ? [] : [`news-${f.slug}.html`]} fields={[{ label: 'Story title', value: f.title }, { label: 'Summary', value: f.excerpt }, ...f.body.split(/\n{2,}/).map((x) => ({ label: 'Story text', value: x.replace(/^[>#-]+\s*/, '') })), { label: 'SEO title', value: f.seoTitle }, { label: 'Meta description', value: f.seoDescription }]} />
+    </div></Modal>}
     {dialog === 'preview' && <Modal wide title="Preview · the real story page" onClose={() => setDialog(null)}><div className="preview-wrap"><iframe title="Story preview" src={url} style={{ width: Math.min(1280, window.innerWidth - 80) }} /></div></Modal>}
     {dialog === 'changes' && <Modal size="sm" title="Request changes" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={!comment.trim()} onClick={() => act('request_changes', { comment })}>Send to author</button></>}><div className="modal-b"><textarea className="textarea" autoFocus aria-label="What needs to change" value={comment} onChange={(e) => setComment(e.target.value)} /></div></Modal>}
     {dialog === 'schedule' && <Modal size="sm" title="Schedule publishing" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={!when || !!busy} onClick={() => act('schedule', { at: new Date(when).toISOString() })}>Schedule</button></>}>

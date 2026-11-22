@@ -1,5 +1,5 @@
 // AFCD Studio admin app: session gate, shell (sidebar + top bar) and routes.
-import React, { StrictMode, useEffect, useState, type FormEvent } from 'react';
+import React, { StrictMode, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import './studio.css';
 import { api, post, setCsrf, ApiError } from './api.ts';
@@ -12,8 +12,17 @@ import { Builder } from './pages/Builder.tsx';
 import { NewsList, ArticleEditor } from './pages/News.tsx';
 import { PartnersList, PartnerEditor } from './pages/Partners.tsx';
 import { EventsList, EventEditor } from './pages/Events.tsx';
+import { OpportunitiesList, OpportunityEditor } from './pages/Opportunities.tsx';
+import { InboxPage } from './pages/Inbox.tsx';
+import { SeoPage } from './pages/Seo.tsx';
+import { TranslationsPage } from './pages/Translations.tsx';
+import { MenusPage } from './pages/Menus.tsx';
+import { HomeEditor } from './pages/Home.tsx';
+import { Breadcrumbs, Notifications, SearchButton, UserMenu, useRecent, type NavLink } from './Topbar.tsx';
+import { NAV, Sidebar } from './Sidebar.tsx';
 import { MediaLibrary } from './pages/Media.tsx';
-import { ApprovalQueue, Publishing, ActivityLog, Users } from './pages/Admin.tsx';
+import { Publishing, ActivityLog, Users } from './pages/Admin.tsx';
+import { ApprovalsPage } from './pages/Approvals.tsx';
 
 function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
@@ -95,65 +104,34 @@ function Login({ onDone }: { onDone: () => void }) {
   );
 }
 
-type NavItem = { to: string; label: string; icon: string; perm: string; match?: RegExp };
-const NAV: { group: string; items: NavItem[] }[] = [
-  { group: 'Overview', items: [{ to: '/studio/', label: 'Dashboard', icon: 'dash', perm: 'dashboard.read', match: /^\/studio\/?$/ }] },
-  { group: 'Website', items: [{ to: '/studio/pages', label: 'Pages', icon: 'layers', perm: 'page.read', match: /^\/studio\/pages/ }] },
-  { group: 'Content', items: [
-    { to: '/studio/projects', label: 'Projects', icon: 'folder', perm: 'project.read', match: /^\/studio\/projects/ },
-    { to: '/studio/news', label: 'News & Stories', icon: 'log', perm: 'news.read', match: /^\/studio\/news/ },
-    { to: '/studio/events', label: 'Events', icon: 'calendar', perm: 'event.read', match: /^\/studio\/events/ },
-    { to: '/studio/partners', label: 'Partners', icon: 'partner', perm: 'partner.read', match: /^\/studio\/partners/ },
-  ] },
-  { group: 'Media', items: [{ to: '/studio/media', label: 'Media Library', icon: 'image', perm: 'media.read' }] },
-  { group: 'Workflow', items: [
-    { to: '/studio/approvals', label: 'Approval Queue', icon: 'inbox', perm: 'project.read' },
-    { to: '/studio/publishing', label: 'Publishing', icon: 'globe', perm: 'dashboard.read' },
-  ] },
-  { group: 'Administration', items: [
-    { to: '/studio/users', label: 'Users & Roles', icon: 'users', perm: 'users.read' },
-    { to: '/studio/activity', label: 'Activity Log', icon: 'log', perm: 'audit.read' },
-  ] },
-];
-
 function Shell({ onLogout }: { onLogout: () => void }) {
   const me = useMe(); const can = useCan(); const path = usePath();
   const [collapsed, setCollapsed] = useState(() => localStorageGet('studio.side') === '1');
   const [mobile, setMobile] = useState(false);
-  const [queue, setQueue] = useState(0);
   useEffect(() => { setMobile(false); }, [path]);
-  useEffect(() => { if (can('project.read')) api('/projects').then((p: any[]) => setQueue(p.filter((x) => x.status === 'in_review' || x.status === 'approved').length)).catch(() => {}); }, [path]);
-  const isOn = (i: NavItem) => (i.match ? i.match.test(path) : path.startsWith(i.to));
+  // Inbox unread badge: on navigation, when the Inbox changes something, and every 2 minutes while Studio is open
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (!can('forms.read')) return;
+    const f = () => { api<{ unread: number }>('/inbox/unread').then((r) => setUnread(r.unread)).catch(() => {}); };
+    f(); window.addEventListener('studio:inbox', f); const t = setInterval(f, 120_000);
+    return () => { window.removeEventListener('studio:inbox', f); clearInterval(t); };
+  }, [path]);
+  const links: NavLink[] = NAV.flatMap((g) => g.items.filter((i) => can(i.perm)).map((i) => ({ to: i.to, label: i.label, icon: i.icon, perm: i.perm, group: g.group })));
+  useRecent(path, links);
   const page = route(path);
   return (
     <div className={`shell${collapsed ? ' collapsed' : ''}${mobile ? ' mobile-open' : ''}`}>
-      <aside className="side" aria-label="Studio navigation">
-        <div className="brand"><span className="brand-mark">AF</span><span className="brand-text">AFCD Studio<small>Website management</small></span></div>
-        <nav className="nav">
-          {NAV.map((g) => {
-            const items = g.items.filter((i) => can(i.perm));
-            if (!items.length) return null;
-            return <div className="nav-group" key={g.group}><span>{g.group}</span>
-              {items.map((i) => <Link key={i.to} to={i.to} className={isOn(i) ? 'on' : ''} aria-current={isOn(i) ? 'page' : undefined} title={i.label}>
-                <Icon n={i.icon} /><span>{i.label}</span>{i.to.endsWith('approvals') && queue > 0 && <em className="count">{queue}</em>}
-              </Link>)}
-            </div>;
-          })}
-        </nav>
-        <div className="side-foot">
-          <a href="/" onClick={(e) => { e.preventDefault(); window.open(me.siteUrl, '_blank', 'noopener'); }} className="btn btn-ghost" style={{ width: '100%', justifyContent: 'flex-start' }} title="Open the public website">
-            <Icon n="ext" /><span className="brand-text">View website</span>
-          </a>
-        </div>
-      </aside>
+      <Sidebar path={path} collapsed={collapsed} unread={unread} onCloseMobile={() => setMobile(false)}
+        onToggle={() => { const v = !collapsed; setCollapsed(v); localStorageSet('studio.side', v ? '1' : '0'); }} />
       <div className="main">
         <header className="top">
-          <button className="btn btn-ghost icon-btn mobile-menu" onClick={() => setMobile((v) => !v)} aria-label="Open navigation"><Icon n="menu" /></button>
-          <button className="btn btn-ghost icon-btn" onClick={() => { const v = !collapsed; setCollapsed(v); localStorageSet('studio.side', v ? '1' : '0'); }} aria-label="Collapse navigation" title="Collapse navigation"><Icon n="side" /></button>
-          <div className="crumbs"><span>Studio</span><Icon n="chev" width={14} height={14} /><b>{page.title}</b></div>
+          <button className="btn btn-ghost icon-btn mobile-menu" onClick={() => setMobile((v) => !v)} aria-label="Open navigation" aria-expanded={mobile}><Icon n="menu" /></button>
+          <Breadcrumbs path={path} title={page.title} nav={links} />
           <div className="top-right">
-            <div className="user-chip" title={me.user.email}><span className="avatar">{initials(me.user.name)}</span><span>{me.user.name}<br /><small>{me.user.roleLabel}</small></span></div>
-            <button className="btn btn-ghost icon-btn" onClick={onLogout} aria-label="Sign out" title="Sign out"><Icon n="logout" /></button>
+            <SearchButton nav={links} />
+            <Notifications path={path} />
+            <UserMenu onLogout={onLogout} />
           </div>
         </header>
         <main className={`content${page.full ? ' content-full' : ''}`} id="main">{page.el}</main>
@@ -164,6 +142,14 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 }
 
 function route(path: string): { title: string; el: React.ReactElement; full?: boolean } {
+  if (path.startsWith('/studio/home')) return { title: 'Homepage', el: <HomeEditor />, full: true };
+  if (path.startsWith('/studio/seo')) return { title: 'SEO', el: <SeoPage key={path} /> };
+  if (path.startsWith('/studio/translations')) return { title: 'Translations', el: <TranslationsPage /> };
+  if (path.startsWith('/studio/menus')) return { title: 'Menus', el: <MenusPage /> };
+  if (path.startsWith('/studio/inbox') || path.startsWith('/studio/forms')) return { title: 'Inbox', el: <InboxPage /> };
+  const op = path.match(/^\/studio\/opportunities\/([0-9a-f-]{36})$/);
+  if (op) return { title: 'Opportunity', el: <OpportunityEditor key={op[1]} id={op[1]} /> };
+  if (path.startsWith('/studio/opportunities')) return { title: 'Opportunities', el: <OpportunitiesList /> };
   const ev = path.match(/^\/studio\/events\/([0-9a-f-]{36})$/);
   if (ev) return { title: 'Event', el: <EventEditor key={ev[1]} id={ev[1]} /> };
   if (path.startsWith('/studio/events')) return { title: 'Events', el: <EventsList /> };
@@ -180,7 +166,7 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   if (m) return { title: m[1] === 'new' ? 'New project' : 'Edit project', el: <ProjectEditor key={m[1]} id={m[1]} /> };
   if (path.startsWith('/studio/projects')) return { title: 'Projects', el: <ProjectsList /> };
   if (path.startsWith('/studio/media')) return { title: 'Media Library', el: <MediaLibrary /> };
-  if (path.startsWith('/studio/approvals')) return { title: 'Approval Queue', el: <ApprovalQueue /> };
+  if (path.startsWith('/studio/approvals')) return { title: 'Approval Queue', el: <ApprovalsPage /> };
   if (path.startsWith('/studio/publishing')) return { title: 'Publishing', el: <Publishing /> };
   if (path.startsWith('/studio/activity')) return { title: 'Activity Log', el: <ActivityLog /> };
   if (path.startsWith('/studio/users')) return { title: 'Users & Roles', el: <Users /> };

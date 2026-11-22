@@ -36,6 +36,83 @@
       "when": 1795340721739,
       "tag": "0004_events",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795341429761,
+      "tag": "0005_opportunities",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795342145660,
+      "tag": "0006_forms",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795342746030,
+      "tag": "0007_seo",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795343605150,
+      "tag": "0008_page_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795343924472,
+      "tag": "0009_local_only_password",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795344846961,
+      "tag": "0010_homepage_layout",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795348533858,
+      "tag": "0011_seo_issues",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795349255448,
+      "tag": "0012_redirects_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795350117610,
+      "tag": "0013_redirects_published",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795361280521,
+      "tag": "0014_google_search_console",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1795365193053,
+      "tag": "0015_inbox",
+      "breakpoints": true
     }
   ]
 }

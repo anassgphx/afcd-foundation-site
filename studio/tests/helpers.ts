@@ -49,6 +49,26 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
     const pagesDir = mode.kind === 'live' ? join(cfg.siteRoot, 'src/pages') : mode.pagesDir;
     const files = existsSync(pagesDir) ? readdirSync(pagesDir).filter((f) => f.endsWith('.html')) : [];
     for (const f of files) writeFileSync(join(out, f), readFileSync(join(pagesDir, f), 'utf8').replace(/^---[\s\S]*?---\n/, ''));
+    // Stand-in for build.mjs's page fields (src/data/page-fields.json): revision marker on index.html, markers removed.
+    const fieldsFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/page-fields.json') : mode.fieldsFile;
+    if (existsSync(join(out, 'index.html'))) {
+      let html = readFileSync(join(out, 'index.html'), 'utf8').replace(/\sdata-sf(?:-type)?="[^"]*"/g, '');
+      if (fieldsFile && existsSync(fieldsFile)) { const f = JSON.parse(readFileSync(fieldsFile, 'utf8')).pages['index.html']; if (f) html = `<meta name="studio-fields-rev" content="${f.revision}">` + html.replace('>Old title<', `>${f.fields['hero.1.kicker'] ?? 'Old title'}<`); }
+      writeFileSync(join(out, 'index.html'), html);
+    }
+    // Stand-in for build.mjs's SEO overrides (src/data/seo.json): title and revision marker.
+    const seoFile = join(cfg.siteRoot, 'src/data/seo.json');
+    if (mode.kind === 'live' && existsSync(seoFile)) {
+      const seo = JSON.parse(readFileSync(seoFile, 'utf8')).pages as Record<string, { title?: string; revision: string }>;
+      for (const [f, o] of Object.entries(seo)) if (existsSync(join(out, f))) writeFileSync(join(out, f), `<title>${o.title ?? ''}</title><meta name="studio-seo-rev" content="${o.revision}">` + readFileSync(join(out, f), 'utf8'));
+    }
+    // Stand-in for build.mjs's structured data (src/data/schema.json): revision marker on index.html, JSON-LD per page.
+    const schemaFile = join(cfg.siteRoot, 'src/data/schema.json');
+    if (mode.kind === 'live' && existsSync(schemaFile)) {
+      const sc = JSON.parse(readFileSync(schemaFile, 'utf8')) as { revision: string; pages: Record<string, unknown[]> };
+      if (existsSync(join(out, 'index.html'))) writeFileSync(join(out, 'index.html'), `<meta name="studio-schema-rev" content="${sc.revision}">` + readFileSync(join(out, 'index.html'), 'utf8'));
+      for (const [f, objs] of Object.entries(sc.pages)) if (existsSync(join(out, f))) writeFileSync(join(out, f), readFileSync(join(out, f), 'utf8') + objs.map((o) => `<script type="application/ld+json">${JSON.stringify(o)}</script>`).join(''));
+    }
     writeFileSync(join(out, 'sitemap.xml'), `<urlset>${files.map((f) => `<loc>${f}</loc>`).join('')}</urlset>`);
     if (mode.kind === 'preview' && mode.only === 'pages') return 'fake page preview ok';
     for (const p of data.projects) if (p.file) writeFileSync(join(out, p.file), `<section data-studio-rev="${p.detail.revision}"><h1>${p.name}</h1><p>${p.detail.lede}</p></section>`);
@@ -56,7 +76,7 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
   };
 }
 
-export async function makeApp(opts: { runner?: BuildRunner; partners?: { scope: string; names: string[] }[] } = {}) {
+export async function makeApp(opts: { runner?: BuildRunner; partners?: { scope: string; names: string[] }[]; googleHttp?: typeof fetch; cfg?: Partial<Parameters<typeof loadConfig>[0]> } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'studio-test-'));
   const siteRoot = join(root, 'site');
   mkdirSync(join(siteRoot, 'src/data'), { recursive: true });
@@ -70,11 +90,12 @@ export async function makeApp(opts: { runner?: BuildRunner; partners?: { scope: 
     { slug: 'eco-citizen', file: 'project-eco-citizen.html', name: 'Eco Citizen', pillar: 'green-thumbs', category: 'Environment', summary: 'Awareness.',
       detail: { lede: 'Awareness.', facts: [['Pillar', 'Environment and Climate'], ['Location', 'Ait Ourir']], rows: [['Context', 'Waste.']], photo: 'Eco Citizen' } },
   ] }));
-  const cfg = loadConfig({ siteRoot, dataDir: join(root, 'data'), mediaDir: join(root, 'data/media'), previewDir: join(root, 'preview'), origin: ORIGIN, secureCookies: false });
+  const cfg = loadConfig({ siteRoot, dataDir: join(root, 'data'), mediaDir: join(root, 'data/media'), previewDir: join(root, 'preview'), origin: ORIGIN, secureCookies: false,
+    googleClientId: '', googleClientSecret: '', encryptionKey: '', ...opts.cfg });
   const { db, close } = await openDb(cfg, { memory: true });
   await seed(db, cfg, { strategy: STRATEGY, partners: opts.partners ?? [] });
-  const { app } = createApp(db, cfg, { runner: opts.runner ?? fakeRunner() });
-  return { app, db, cfg, close, siteRoot };
+  const { app, runJobs } = createApp(db, cfg, { runner: opts.runner ?? fakeRunner(), googleHttp: opts.googleHttp });
+  return { app, db, cfg, close, siteRoot, runJobs };
 }
 
 export async function addUser(db: Awaited<ReturnType<typeof makeApp>>['db'], email: string, role: Role) {

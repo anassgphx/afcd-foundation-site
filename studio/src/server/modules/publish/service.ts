@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, renameSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { and, desc, eq, inArray, isNotNull, lte } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
@@ -15,7 +15,15 @@ import { validateDoc } from '../pages/blocks.ts';
 import { articles, articleRevisions } from '../../db/schema.ts';
 import { articleFile, articleSource, listingEntry, newsCtx, type ArticleSnapshot } from '../news/render.ts';
 import { loadArticle, toArticleSnapshot } from '../news/service.ts';
-import { partners, partnerRevisions, events, eventRevisions } from '../../db/schema.ts';
+import { partners, partnerRevisions, events, eventRevisions, opportunities, opportunityRevisions, seoOverrides, seoRevisions } from '../../db/schema.ts';
+import type { OverrideSnapshot } from '../seo/service.ts';
+import { pageContents, pageContentRevisions } from '../../db/schema.ts';
+import { HOME } from '../home/service.ts';
+import { exportLayout } from '../home/render.ts';
+import { currentLayout, layoutBlocks, type LayoutEntry } from '../home/layout.ts';
+import { publicRef } from '../media/service.ts';
+import { detailSource, listingSource, oppCtx, oppState, opportunityFile, type LiveOpp } from '../opportunities/render.ts';
+import type { OpportunitySnapshot } from '../opportunities/service.ts';
 import { eventEntries, eventFile, isUpcoming } from '../events/render.ts';
 import type { EventSnapshot } from '../events/service.ts';
 import { partnerEntries } from '../partners/render.ts';
@@ -24,11 +32,18 @@ import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import { derivativeFiles } from '../media/service.ts';
 import { loadProject, toSnapshot, type Snapshot } from '../projects/service.ts';
+import { redirects } from '../../db/schema.ts';
+import { checkRedirect, redirectsFile, stubHtml, STUB_MARK, REDIRECTS_HEADER } from '../seo/redirects.ts';
+import type { Role } from '../../rbac.ts';
+import { seoSettings } from '../../db/schema.ts';
+import { buildSchemaFile, KEY as SCHEMA_KEY, settingsSchema, type LiveForSchema, type SchemaSettings } from '../seo/schema.ts';
+import * as TR from '../translations/service.ts';
+import * as MENU from '../menus/service.ts';
 
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
 
-export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string; partnersFile?: string; eventsFile?: string }) => Promise<string>;
+export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string; partnersFile?: string; eventsFile?: string; fieldsFile?: string }) => Promise<string>;
 
 /** Default runner: the real generator and build. Tests inject a fake. */
 export const realRunner: BuildRunner = async (cfg, mode) => {
@@ -38,7 +53,7 @@ export const realRunner: BuildRunner = async (cfg, mode) => {
     const b = await run('npm', ['run', 'build'], { ...opts, env: { ...process.env } });
     return [a.stdout, b.stdout, b.stderr].join('\n');
   }
-  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}), ...(mode.partnersFile ? { STUDIO_PARTNERS_JSON: mode.partnersFile } : {}), ...(mode.eventsFile ? { STUDIO_EVENTS_JSON: mode.eventsFile } : {}) };
+  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}), ...(mode.partnersFile ? { STUDIO_PARTNERS_JSON: mode.partnersFile } : {}), ...(mode.eventsFile ? { STUDIO_EVENTS_JSON: mode.eventsFile } : {}), ...(mode.fieldsFile ? { PAGE_FIELDS_JSON: mode.fieldsFile } : {}) };
   const a = mode.only === 'pages' ? { stdout: '' } : await run('python3', ['-I', 'src/content.py'], { ...opts, env });
   const b = await run('node', ['build.mjs'], { ...opts, env });
   return [a.stdout, b.stdout].join('\n');
@@ -169,14 +184,112 @@ export class Publisher {
     return live.map((x) => x.snap.posterMediaId).filter(Boolean) as string[];
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null } } = {}) {
+  /** Live opportunities (optionally overriding one). */
+  async liveOpportunities(override?: { opportunityId: string; revisionId: string | null }): Promise<LiveOpp[]> {
+    const live = await this.db.select({ id: opportunities.id, rev: opportunities.publishedRevisionId }).from(opportunities).where(isNotNull(opportunities.publishedRevisionId));
+    const map = new Map(live.map((r) => [r.id, r.rev as string]));
+    if (override) { if (override.revisionId) map.set(override.opportunityId, override.revisionId); else map.delete(override.opportunityId); }
+    if (!map.size) return [];
+    const revs = await this.db.select().from(opportunityRevisions).where(inArray(opportunityRevisions.id, [...map.values()]));
+    return revs.map((r) => ({ id: r.id, snap: r.snapshot as unknown as OpportunitySnapshot }));
+  }
+
+  /** Writes opportunities.html and one page per opportunity into `pagesDir`. With nothing live, the pages are removed
+   *  (also from `outDirs`), so the site has no empty listing. Stale opportunity pages are always removed. Returns image ids. */
+  private async writeOpportunities(pagesDir: string, outDirs: string[], live: LiveOpp[], projectOverride?: { projectId: string; revisionId: string | null }) {
+    const keep = new Set(live.length ? ['opportunities.html', ...live.map((o) => opportunityFile(o.snap.slug))] : []);
+    for (const dir of [pagesDir, ...outDirs]) {
+      if (existsSync(dir)) for (const f of readdirSync(dir)) if ((f === 'opportunities.html' || /^opportunity-[a-z0-9-]+\.html$/.test(f)) && !keep.has(f)) rmSync(resolve(dir, f));
+    }
+    if (!live.length) return [] as string[];
+    const ctx = await oppCtx(this.db, live.map((o) => o.snap), { projectOverride });
+    mkdirSync(pagesDir, { recursive: true });
+    const write = (f: string, src: string) => { const file = resolve(pagesDir, f); const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`; writeFileSync(tmp, src); renameSync(tmp, file); };
+    write('opportunities.html', listingSource(live, ctx));
+    for (const o of live) write(opportunityFile(o.snap.slug), detailSource(o, ctx));
+    return live.map((o) => o.snap.heroMediaId).filter(Boolean) as string[];
+  }
+
+  get seoFile() { return resolve(this.cfg.siteRoot, 'src/data/seo.json'); }
+
+  async liveSeo(override?: { overrideId: string; revisionId: string | null }) {
+    const live = await this.db.select({ id: seoOverrides.id, rev: seoOverrides.publishedRevisionId }).from(seoOverrides).where(isNotNull(seoOverrides.publishedRevisionId));
+    const map = new Map(live.map((r) => [r.id, r.rev as string]));
+    if (override) { if (override.revisionId) map.set(override.overrideId, override.revisionId); else map.delete(override.overrideId); }
+    if (!map.size) return [] as { id: string; snap: OverrideSnapshot }[];
+    const revs = await this.db.select().from(seoRevisions).where(inArray(seoRevisions.id, [...map.values()]));
+    return revs.map((r) => ({ id: r.id, snap: r.snapshot as unknown as OverrideSnapshot }));
+  }
+
+  /** seo.json (read by build.mjs) exists only while an SEO override is live. Values are plain text; build.mjs escapes them. */
+  private async writeSeo(override?: { overrideId: string; revisionId: string | null }) {
+    const live = await this.liveSeo(override);
+    if (!live.length) { if (existsSync(this.seoFile)) rmSync(this.seoFile); return [] as string[]; }
+    const ids = [...new Set(live.map((x) => x.snap.imageMediaId).filter(Boolean) as string[])];
+    const rows = ids.length ? await this.db.select().from(media).where(inArray(media.id, ids)) : [];
+    const pagesOut: Record<string, unknown> = {};
+    for (const { id, snap: s } of live) {
+      const m = rows.find((r) => r.id === s.imageMediaId);
+      const ref = m ? publicRef(m, 'assets/media/') : null;
+      pagesOut[s.file] = { title: s.title || undefined, description: s.description || undefined, noindex: s.noindex || undefined,
+        image: ref ? { src: ref.src, w: ref.w, h: ref.h, alt: m!.alt } : undefined, revision: id };
+    }
+    const tmp = `${this.seoFile}.${randomBytes(4).toString('hex')}.tmp`;
+    mkdirSync(resolve(this.seoFile, '..'), { recursive: true });
+    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), pages: pagesOut }, null, 2) + '\n'); renameSync(tmp, this.seoFile);
+    return ids;
+  }
+
+  get fieldsFile() { return resolve(this.cfg.siteRoot, 'src/data/page-fields.json'); }
+
+  /** Resolves stored values for build.mjs: images become { src, srcset, w, h, alt, fx, fy }. Returns [values, media ids]. */
+  private async resolveFields(values: Record<string, unknown>): Promise<[Record<string, unknown>, string[]]> {
+    const ids = Object.values(values).flatMap((v) => (v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId] : []));
+    const rows = ids.length ? await this.db.select().from(media).where(inArray(media.id, ids)) : [];
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(values)) {
+      if (v && typeof v === 'object' && 'mediaId' in v) {
+        const m = rows.find((r) => r.id === (v as { mediaId: string }).mediaId); if (!m) continue;
+        const ref = publicRef(m, 'assets/media/');
+        out[k] = { src: ref.src, srcset: ref.srcset, w: ref.w, h: ref.h, alt: m.alt, fx: m.focalX ?? 50, fy: m.focalY ?? 50 };
+      } else out[k] = v;
+    }
+    return [out, ids];
+  }
+
+  /** page-fields.json (read by build.mjs) exists only while edited homepage text is live. */
+  private async writeFields(override?: { revisionId: string | null }, ctxOpts: Parameters<typeof exportLayout>[2] = {}) {
+    const [c] = await this.db.select().from(pageContents).where(eq(pageContents.file, HOME));
+    const revId = override ? override.revisionId : c?.publishedRevisionId ?? null;
+    if (!revId) { if (existsSync(this.fieldsFile)) rmSync(this.fieldsFile); return [] as string[]; }
+    const [rev] = await this.db.select().from(pageContentRevisions).where(eq(pageContentRevisions.id, revId));
+    const snap = rev.snapshot as { values: Record<string, unknown>; layout?: unknown };
+    const [values, fieldIds] = await this.resolveFields(snap.values);
+    const layout = snap.layout ? currentLayout(this.cfg.siteRoot, HOME, snap.layout) : null;
+    const exported = await exportLayout(this.db, layout, ctxOpts);
+    const ids = [...fieldIds, ...(layout ? docMediaIds({ blocks: layoutBlocks(layout) }) : [])];
+    const tmp = `${this.fieldsFile}.${randomBytes(4).toString('hex')}.tmp`;
+    mkdirSync(resolve(this.fieldsFile, '..'), { recursive: true });
+    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), pages: { [HOME]: { revision: revId, fields: values, ...(exported ? { layout: exported } : {}) } } }, null, 2) + '\n'); renameSync(tmp, this.fieldsFile);
+    return ids;
+  }
+
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string } } = {}) {
     const entries = await this.liveEntries(o.project);
+    await this.writeRedirects(o.redirects === 'pending');
     this.writeData(this.dataFile, entries);
     const partnerMedia = await this.writePartners(this.partnersFile, o.partner, o.project);
     const eventMedia = await this.writeEvents(this.eventsFile, o.event, o.project);
+    const seoMedia = await this.writeSeo(o.seo);
+    await this.writeSchema(o.schema, o.article, o.event);
+    await this.writeTranslations(o.translations);
+    await this.writeMenus(o.menus);
+    const pending = { article: o.article, event: o.event, opportunity: o.opportunity, partner: o.partner };
+    const homeMedia = await this.writeFields(o.home, { projectOverride: o.project, pending });
+    const oppMedia = await this.writeOpportunities(resolve(this.cfg.siteRoot, 'src/pages'), [this.cfg.siteRoot], await this.liveOpportunities(o.opportunity), o.project);
     const newsMedia = await this.writeNews(this.newsFile, resolve(this.cfg.siteRoot, 'src/pages'), await this.liveArticles(o.article), o.project);
     const live = await this.livePages(o.page);
-    const ctx = await buildCtx(this.db, live.map((x) => x.snap.doc), { projectOverride: o.project });
+    const ctx = await buildCtx(this.db, live.map((x) => x.snap.doc), { projectOverride: o.project, pending });
     const dir = resolve(this.cfg.siteRoot, 'src/pages');
     mkdirSync(dir, { recursive: true });
     for (const { id, snap } of live) {
@@ -184,7 +297,7 @@ export class Publisher {
       const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
       writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
     }
-    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...eventMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...eventMedia, ...oppMedia, ...seoMedia, ...homeMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
     return { entries, live };
   }
 
@@ -325,7 +438,7 @@ export class Publisher {
   }
 
   // ---------------------------------------------------------------- Pages
-  private async deliver(kind: string, actor: NonNullable<Actor>, entityId: string, revisionId: string, apply: (log: string[]) => Promise<void>, failLabel: string) {
+  private async deliver(kind: string, actor: NonNullable<Actor>, entityId: string | null, revisionId: string | null, apply: (log: string[]) => Promise<void>, failLabel: string) {
     const [job] = await this.db.insert(publishJobs).values({ kind, entityId, revisionId, requestedBy: actor.id }).returning();
     const log: string[] = [];
     try { await apply(log); }
@@ -333,7 +446,7 @@ export class Publisher {
       const msg = (e as Error).message;
       try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
       await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
-      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('partner') ? 'partner' : kind.includes('event') ? 'event' : 'page', id: entityId }, `${failLabel}: ${msg}`, { jobId: job.id });
+      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
       throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
     }
     return { job, log };
@@ -668,6 +781,447 @@ export class Publisher {
     await this.locked(async () => { const log: string[] = []; await this.rebuildFromDb(log); });
     await audit(this.db, null, 'event.refresh', { type: 'event' }, 'Rebuilt the events calendar because an event has passed');
     return true;
+  }
+
+  // ---------------------------------------------------------------- Opportunities
+  private verifyOpportunity(slug: string, revisionId: string, removed: boolean) {
+    const root = this.cfg.siteRoot;
+    const page = resolve(root, opportunityFile(slug)), listing = resolve(root, 'opportunities.html');
+    if (removed) {
+      if (existsSync(page)) throw new Error(`${opportunityFile(slug)} is still on the site.`);
+      if (existsSync(listing) && readFileSync(listing, 'utf8').includes(`data-studio-opportunity="${revisionId}"`)) throw new Error('The opportunity is still listed on opportunities.html.');
+      return;
+    }
+    if (!existsSync(page) || !readFileSync(page, 'utf8').includes(`data-studio-opportunity-rev="${revisionId}"`)) throw new Error(`${opportunityFile(slug)} does not contain the published revision.`);
+    // closed opportunities leave the listing 12 months after their deadline, so only open or coming ones must be listed
+    const closed = readFileSync(page, 'utf8').includes('data-state="closed"');
+    if (!closed && (!existsSync(listing) || !readFileSync(listing, 'utf8').includes(`data-studio-opportunity="${revisionId}"`))) throw new Error('The opportunity is missing from opportunities.html.');
+  }
+
+  async publishOpportunity(actor: NonNullable<Actor>, opportunityId: string) {
+    return this.locked(async () => {
+      const [o] = await this.db.select().from(opportunities).where(eq(opportunities.id, opportunityId));
+      if (!o) throw new AppError(404, 'Opportunity not found.');
+      if (o.status !== 'approved' || !o.approvedRevisionId) throw new AppError(409, 'Only an approved opportunity can be published.');
+      const [rev] = await this.db.select().from(opportunityRevisions).where(eq(opportunityRevisions.id, o.approvedRevisionId));
+      const snap = rev.snapshot as unknown as OpportunitySnapshot;
+      const { job, log } = await this.deliver('publish_opportunity', actor, opportunityId, rev.id, async (log) => {
+        await this.writeSite({ opportunity: { opportunityId, revisionId: rev.id } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyOpportunity(snap.slug, rev.id, false);
+      }, `Publishing “${o.title}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(opportunities).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, updatedAt: new Date() }).where(eq(opportunities.id, opportunityId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'opportunity.publish', { type: 'opportunity', id: opportunityId }, `Published opportunity “${o.title}” (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file: opportunityFile(snap.slug) };
+    });
+  }
+
+  async unpublishOpportunity(actor: NonNullable<Actor>, opportunityId: string) {
+    return this.locked(async () => {
+      const [o] = await this.db.select().from(opportunities).where(eq(opportunities.id, opportunityId));
+      if (!o) throw new AppError(404, 'Opportunity not found.');
+      if (!o.publishedRevisionId) throw new AppError(409, 'This opportunity is not on the live site.');
+      const [rev] = await this.db.select().from(opportunityRevisions).where(eq(opportunityRevisions.id, o.publishedRevisionId));
+      const snap = rev.snapshot as unknown as OpportunitySnapshot;
+      const { job, log } = await this.deliver('unpublish_opportunity', actor, opportunityId, rev.id, async (log) => {
+        await this.writeSite({ opportunity: { opportunityId, revisionId: null } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyOpportunity(snap.slug, rev.id, true);
+      }, `Removing “${o.title}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(opportunities).set({ status: 'draft', publishedRevisionId: null, publishedAt: null, updatedAt: new Date() }).where(eq(opportunities.id, opportunityId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'opportunity.unpublish', { type: 'opportunity', id: opportunityId }, `Removed opportunity “${o.title}” from the website`, { jobId: job.id });
+      });
+      return { jobId: job.id };
+    });
+  }
+
+  /** Builds the listing and the opportunity page with the saved working copy in an isolated folder. */
+  async previewOpportunity(opportunityId: string, snap: OpportunitySnapshot) {
+    return this.locked(async () => {
+      this.cleanupPreviews();
+      const token = randomBytes(16).toString('hex');
+      const dir = resolve(this.cfg.previewDir, token);
+      const pagesDir = resolve(dir, 'pages'), outDir = resolve(dir, 'site'), dataFile = resolve(dir, 'projects.json');
+      mkdirSync(pagesDir, { recursive: true }); mkdirSync(outDir, { recursive: true });
+      this.writeData(dataFile, await this.liveEntries());
+      await this.writeOpportunities(pagesDir, [], (await this.liveOpportunities({ opportunityId, revisionId: null })).concat({ id: 'preview', snap }));
+      await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, only: 'pages' });
+      const file = opportunityFile(snap.slug);
+      if (!existsSync(resolve(outDir, file))) throw new AppError(409, 'The preview could not be generated.');
+      return { token, file };
+    });
+  }
+
+  /** Rebuilds when an opportunity has opened or closed since its page was built (checked by the scheduler). */
+  async refreshOpportunityStates(now = new Date()) {
+    const live = await this.liveOpportunities();
+    if (!live.length) return false;
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    const stale = live.some((o) => {
+      const f = resolve(this.cfg.siteRoot, opportunityFile(o.snap.slug));
+      if (!existsSync(f)) return true;
+      const m = readFileSync(f, 'utf8').match(/data-state="(open|soon|closed)"/);
+      return m?.[1] !== oppState(o.snap, today);
+    });
+    if (!stale) return false;
+    await this.locked(async () => { const log: string[] = []; await this.rebuildFromDb(log); });
+    await audit(this.db, null, 'opportunity.refresh', { type: 'opportunity' }, 'Rebuilt opportunities because one has opened or closed');
+    return true;
+  }
+
+  // ---------------------------------------------------------------- SEO overrides
+  private verifySeo(file: string, revisionId: string, removed: boolean) {
+    const p = resolve(this.cfg.siteRoot, file);
+    if (!existsSync(p)) throw new Error(`${file} was not built.`);
+    const has = readFileSync(p, 'utf8').includes(`<meta name="studio-seo-rev" content="${revisionId}">`);
+    if (!removed && !has) throw new Error(`${file} does not carry the published SEO settings (build.mjs must apply src/data/seo.json).`);
+    if (removed && has) throw new Error(`${file} still carries the removed SEO settings.`);
+  }
+
+  async publishSeo(actor: NonNullable<Actor>, overrideId: string) {
+    return this.locked(async () => {
+      const [o] = await this.db.select().from(seoOverrides).where(eq(seoOverrides.id, overrideId));
+      if (!o) throw new AppError(404, 'SEO settings not found.');
+      if (o.status !== 'approved' || !o.approvedRevisionId) throw new AppError(409, 'Only approved SEO settings can be published.');
+      const [rev] = await this.db.select().from(seoRevisions).where(eq(seoRevisions.id, o.approvedRevisionId));
+      const { job, log } = await this.deliver('publish_seo', actor, overrideId, rev.id, async (log) => {
+        await this.writeSite({ seo: { overrideId, revisionId: rev.id } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifySeo(o.file, rev.id, false);
+      }, `Publishing SEO for ${o.file} failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(seoOverrides).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, updatedAt: new Date() }).where(eq(seoOverrides.id, overrideId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'seo.publish', { type: 'seo', id: overrideId }, `Published SEO for ${o.file} (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file: o.file };
+    });
+  }
+
+  /** Removes the override from the site: the page goes back to its own title and description. */
+  async unpublishSeo(actor: NonNullable<Actor>, overrideId: string) {
+    return this.locked(async () => {
+      const [o] = await this.db.select().from(seoOverrides).where(eq(seoOverrides.id, overrideId));
+      if (!o) throw new AppError(404, 'SEO settings not found.');
+      if (!o.publishedRevisionId) throw new AppError(409, 'These SEO settings are not on the live site.');
+      const rev = o.publishedRevisionId;
+      const { job, log } = await this.deliver('unpublish_seo', actor, overrideId, rev, async (log) => {
+        await this.writeSite({ seo: { overrideId, revisionId: null } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifySeo(o.file, rev, true);
+      }, `Restoring the page’s own SEO for ${o.file} failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(seoOverrides).set({ status: 'draft', publishedRevisionId: null, publishedAt: null, updatedAt: new Date() }).where(eq(seoOverrides.id, overrideId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'seo.unpublish', { type: 'seo', id: overrideId }, `Restored the page’s own SEO for ${o.file}`, { jobId: job.id });
+      });
+      return { jobId: job.id };
+    });
+  }
+
+  // ---------------------------------------------------------------- Homepage fields
+  private verifyHome(revisionId: string, removed: boolean) {
+    const html = readFileSync(resolve(this.cfg.siteRoot, HOME), 'utf8');
+    const has = html.includes(`<meta name="studio-fields-rev" content="${revisionId}">`);
+    if (!removed && !has) throw new Error('index.html does not carry the published homepage changes (build.mjs must apply src/data/page-fields.json).');
+    if (removed && has) throw new Error('index.html still carries the removed homepage changes.');
+    if (html.includes('data-sf=')) throw new Error('index.html still contains editing markers.');
+  }
+
+  async publishHome(actor: NonNullable<Actor>) {
+    return this.locked(async () => {
+      const [c] = await this.db.select().from(pageContents).where(eq(pageContents.file, HOME));
+      if (!c || c.status !== 'approved' || !c.approvedRevisionId) throw new AppError(409, 'Only approved homepage changes can be published.');
+      const [rev] = await this.db.select().from(pageContentRevisions).where(eq(pageContentRevisions.id, c.approvedRevisionId));
+      const { job, log } = await this.deliver('publish_home', actor, c.id, rev.id, async (log) => {
+        await this.writeSite({ home: { revisionId: rev.id } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyHome(rev.id, false);
+      }, 'Publishing the homepage failed');
+      await this.db.transaction(async (tx) => {
+        await tx.update(pageContents).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, updatedAt: new Date() }).where(eq(pageContents.id, c.id));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'home.publish', { type: 'page_content', id: c.id }, `Published homepage changes (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file: HOME };
+    });
+  }
+
+  /** Puts the homepage back to the text written in the page. The edits stay in Studio as a draft. */
+  async unpublishHome(actor: NonNullable<Actor>) {
+    return this.locked(async () => {
+      const [c] = await this.db.select().from(pageContents).where(eq(pageContents.file, HOME));
+      if (!c?.publishedRevisionId) throw new AppError(409, 'No homepage changes are live.');
+      const rev = c.publishedRevisionId;
+      const { job, log } = await this.deliver('unpublish_home', actor, c.id, rev, async (log) => {
+        await this.writeSite({ home: { revisionId: null } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyHome(rev, true);
+      }, 'Restoring the original homepage failed');
+      await this.db.transaction(async (tx) => {
+        await tx.update(pageContents).set({ status: 'draft', publishedRevisionId: null, publishedAt: null, updatedAt: new Date() }).where(eq(pageContents.id, c.id));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'home.unpublish', { type: 'page_content', id: c.id }, 'Restored the homepage’s original text', { jobId: job.id });
+      });
+      return { jobId: job.id };
+    });
+  }
+
+  /** Builds the homepage with the saved working copy into an isolated folder. */
+  async previewHome() {
+    return this.locked(async () => {
+      const [c] = await this.db.select().from(pageContents).where(eq(pageContents.file, HOME));
+      this.cleanupPreviews();
+      const token = randomBytes(16).toString('hex');
+      const dir = resolve(this.cfg.previewDir, token);
+      const pagesDir = resolve(dir, 'pages'), outDir = resolve(dir, 'site'), dataFile = resolve(dir, 'projects.json'), fieldsFile = resolve(dir, 'page-fields.json');
+      mkdirSync(pagesDir, { recursive: true }); mkdirSync(outDir, { recursive: true });
+      this.writeData(dataFile, await this.liveEntries());
+      copyFileSync(resolve(this.cfg.siteRoot, 'src/pages', HOME), resolve(pagesDir, HOME));
+      const [values] = await this.resolveFields(c?.values ?? {});
+      const layout = c?.layout ? currentLayout(this.cfg.siteRoot, HOME, c.layout) : null;
+      const exported = await exportLayout(this.db, layout);
+      writeFileSync(fieldsFile, JSON.stringify({ version: 1, source: 'AFCD Studio (preview)', pages: { [HOME]: { revision: 'preview', fields: values, ...(exported ? { layout: exported } : {}) } } }, null, 2));
+      await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, only: 'pages', fieldsFile });
+      if (!existsSync(resolve(outDir, HOME))) throw new AppError(409, 'The preview could not be generated.');
+      return { token, file: HOME };
+    });
+  }
+
+  // ---------------------------------------------------------------- Redirects
+  /** Redirect pages at the old addresses and the _redirects file. Live = each redirect's published copy; 'pending' = what
+   *  publishing will deliver (every redirect that is not disabled). Studio only ever replaces or removes its own files. */
+  private async redirectSet(pending: boolean) {
+    const rows = await this.db.select().from(redirects);
+    const want = pending
+      ? rows.filter((r) => r.status !== 'disabled').map((r) => ({ source: r.source, destination: r.destination, code: r.code }))
+      : rows.flatMap((r) => (r.published ? [r.published] : []));
+    return { rows, want };
+  }
+  private async writeRedirects(pending: boolean) {
+    const root = this.cfg.siteRoot; const { rows, want } = await this.redirectSet(pending);
+    const keep = new Set(want.map((r) => r.source));
+    const candidates = new Set([...readdirSync(root).filter((f) => f.endsWith('.html')), ...rows.map((r) => r.source), ...rows.flatMap((r) => (r.published ? [r.published.source] : []))]);
+    for (const f of candidates) {
+      const file = resolve(root, f);
+      if (!keep.has(f) && existsSync(file) && readFileSync(file, 'utf8').includes(STUB_MARK)) rmSync(file);
+    }
+    for (const r of want) {
+      const file = resolve(root, r.source);
+      if (existsSync(file) && !readFileSync(file, 'utf8').includes(STUB_MARK)) throw new Error(`${r.source} is a real page on the site; the redirect was not written over it.`);
+      mkdirSync(resolve(file, '..'), { recursive: true });
+      const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`; writeFileSync(tmp, stubHtml(r)); renameSync(tmp, file);
+    }
+    const rf = resolve(root, '_redirects');
+    const ours = !existsSync(rf) || readFileSync(rf, 'utf8').startsWith(REDIRECTS_HEADER);
+    if (!ours) { if (want.length) throw new Error('A _redirects file not made by Studio is already on the site; Studio will not replace it.'); return; }
+    if (want.length) { const tmp = `${rf}.${randomBytes(4).toString('hex')}.tmp`; writeFileSync(tmp, redirectsFile(want)); renameSync(tmp, rf); }
+    else if (existsSync(rf)) rmSync(rf);
+  }
+  private verifyRedirects(want: { source: string; destination: string; code: number }[], gone: string[]) {
+    const root = this.cfg.siteRoot;
+    for (const r of want) {
+      const file = resolve(root, r.source);
+      const html = existsSync(file) ? readFileSync(file, 'utf8') : '';
+      if (!html.includes(STUB_MARK) || !html.includes(stubHtml(r).match(/url=([^"]+)"/)![1])) throw new Error(`The redirect page ${r.source} was not written correctly.`);
+    }
+    for (const f of gone) { const file = resolve(root, f); if (existsSync(file) && readFileSync(file, 'utf8').includes(STUB_MARK)) throw new Error(`The old redirect page ${f} is still on the site.`); }
+    const rf = resolve(root, '_redirects'); const txt = existsSync(rf) ? readFileSync(rf, 'utf8') : '';
+    for (const r of want) if (!txt.includes(`/${r.source} `)) throw new Error(`_redirects is missing ${r.source}.`);
+  }
+
+  /** Puts every pending redirect change on the site at once: new and edited redirects go live, disabled ones are removed. */
+  async publishRedirects(actor: NonNullable<Actor>, role: Role) {
+    return this.locked(async () => {
+      const { rows, want } = await this.redirectSet(true);
+      const changes = rows.filter((r) => r.status === 'draft' || (r.status === 'disabled' && r.published));
+      if (!changes.length) throw new AppError(409, 'There are no redirect changes to publish.');
+      const problems: { path: string; message: string }[] = [];
+      for (const r of rows.filter((x) => x.status !== 'disabled')) {
+        const { errors } = await checkRedirect(this.db, this.cfg, { source: r.source, destination: r.destination, code: r.code as 301, reason: r.reason }, role, r.id);
+        for (const m of errors) problems.push({ path: r.source, message: `${r.source}: ${m}` });
+      }
+      if (problems.length) throw new AppError(422, 'Some redirects need attention before publishing.', problems);
+      const gone = rows.filter((r) => r.status === 'disabled' && r.published).map((r) => r.published!.source)
+        .concat(rows.flatMap((r) => (r.published && r.status !== 'disabled' && r.published.source !== r.source ? [r.published.source] : [])));
+      const { job, log } = await this.deliver('publish_redirects', actor, null, null, async (log) => {
+        await this.writeSite({ redirects: 'pending' });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyRedirects(want, gone);
+      }, 'Publishing redirects failed');
+      await this.db.transaction(async (tx) => {
+        const now = new Date();
+        for (const r of rows) {
+          if (r.status === 'disabled') { if (r.published) await tx.update(redirects).set({ published: null, publishedAt: null }).where(eq(redirects.id, r.id)); }
+          else await tx.update(redirects).set({ status: 'active', published: { source: r.source, destination: r.destination, code: r.code }, publishedAt: r.status === 'draft' ? now : r.publishedAt }).where(eq(redirects.id, r.id));
+        }
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: now }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'redirect.publish', { type: 'redirect' }, `Published redirects: ${want.length} live, ${gone.length} removed`, { jobId: job.id });
+      });
+      return { jobId: job.id, live: want.length, removed: gone.length };
+    });
+  }
+
+  // ---------------------------------------------------------------- Structured data (schema.json, read by build.mjs)
+  get schemaFile() { return resolve(this.cfg.siteRoot, 'src/data/schema.json'); }
+  /** Published records the generated markup describes (with the same pending overrides as the rest of the delivery). */
+  async schemaLive(article?: { articleId: string; revisionId: string | null }, event?: { eventId: string; revisionId: string | null }): Promise<LiveForSchema> {
+    const arts = await this.liveArticles(article); const evs = await this.liveEvents(event);
+    const ids = [...arts.map((a) => a.snap.heroMediaId), ...evs.map((e) => e.snap.posterMediaId)].filter(Boolean) as string[];
+    const rows = ids.length ? await this.db.select().from(media).where(inArray(media.id, ids)) : [];
+    const img = (id: string | null) => { const m = id ? rows.find((r) => r.id === id) : null; if (!m) return null; const r = publicRef(m, 'assets/media/'); return { src: r.src, w: r.w, h: r.h }; };
+    return { articles: arts.map((a) => ({ snap: a.snap, img: img(a.snap.heroMediaId) })), events: evs.map((e) => ({ snap: e.snap, img: img(e.snap.posterMediaId) })) };
+  }
+  /** schema.json exists only while structured data settings are published. undefined = as published; null = none. */
+  private async writeSchema(override: { settings: SchemaSettings; revision: string } | null | undefined, article?: { articleId: string; revisionId: string | null }, event?: { eventId: string; revisionId: string | null }) {
+    let cur = override;
+    if (cur === undefined) {
+      const [row] = await this.db.select().from(seoSettings).where(eq(seoSettings.key, SCHEMA_KEY));
+      const pub = row?.published as (SchemaSettings & { _revision?: string }) | null | undefined;
+      cur = pub?._revision ? { settings: settingsSchema.parse({ organization: pub.organization, articles: pub.articles, events: pub.events }), revision: pub._revision } : null;
+    }
+    if (!cur) { if (existsSync(this.schemaFile)) rmSync(this.schemaFile); return null; }
+    const out = buildSchemaFile(cur.settings, await this.schemaLive(article, event), cur.revision);
+    const tmp = `${this.schemaFile}.${randomBytes(4).toString('hex')}.tmp`;
+    mkdirSync(resolve(this.schemaFile, '..'), { recursive: true });
+    writeFileSync(tmp, JSON.stringify(out, null, 2) + '\n'); renameSync(tmp, this.schemaFile);
+    return out;
+  }
+  private verifySchema(revision: string, removed: boolean) {
+    const root = this.cfg.siteRoot; const home = readFileSync(resolve(root, 'index.html'), 'utf8');
+    const has = home.includes(`<meta name="studio-schema-rev" content="${revision}">`);
+    if (removed) { if (has) throw new Error('index.html still carries the removed structured data.'); return; }
+    if (!has) throw new Error('index.html does not carry the published structured data (build.mjs must apply src/data/schema.json).');
+    const data = JSON.parse(readFileSync(this.schemaFile, 'utf8')) as { pages: Record<string, { '@type': string }[]> };
+    for (const [file, objs] of Object.entries(data.pages)) {
+      const p = resolve(root, file); if (!existsSync(p)) throw new Error(`${file} is missing.`);
+      const html = readFileSync(p, 'utf8');
+      for (const o of objs) if (!html.includes(`"@type":"${o['@type']}"`)) throw new Error(`${file} does not carry its ${o['@type']} markup.`);
+    }
+  }
+
+  async publishSchema(actor: NonNullable<Actor>) {
+    return this.locked(async () => {
+      const [row] = await this.db.select().from(seoSettings).where(eq(seoSettings.key, SCHEMA_KEY));
+      if (!row || row.status !== 'approved' || !row.draft) throw new AppError(409, 'Only approved structured data settings can be published.');
+      const bf = resolve(this.cfg.siteRoot, 'build.mjs');
+      if (!existsSync(bf) || !/SCHEMA_JSON|schema\.json/.test(readFileSync(bf, 'utf8'))) throw new AppError(409, 'The website build does not read Studio’s structured data yet (build.mjs needs the schema.json hook). Nothing was changed.');
+      const settings = settingsSchema.parse(row.draft); const revision = randomUUID();
+      const { job, log } = await this.deliver('publish_seo_schema', actor, null, null, async (log) => {
+        await this.writeSite({ schema: { settings, revision } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifySchema(revision, false);
+      }, 'Publishing structured data failed');
+      await this.db.transaction(async (tx) => {
+        await tx.update(seoSettings).set({ status: 'published', published: { ...settings, _revision: revision }, publishedAt: new Date(), updatedAt: new Date() }).where(eq(seoSettings.key, SCHEMA_KEY));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'schema.publish', { type: 'seo_settings', id: SCHEMA_KEY }, 'Published structured data settings', { jobId: job.id, revision });
+      });
+      return { jobId: job.id, revision };
+    });
+  }
+
+  /** Takes Studio's structured data off the site: the homepage goes back to the markup written in build.mjs. */
+  async unpublishSchema(actor: NonNullable<Actor>) {
+    return this.locked(async () => {
+      const [row] = await this.db.select().from(seoSettings).where(eq(seoSettings.key, SCHEMA_KEY));
+      const rev = (row?.published as { _revision?: string } | null)?._revision;
+      if (!rev) throw new AppError(409, 'No structured data settings are on the live site.');
+      const { job, log } = await this.deliver('unpublish_seo_schema', actor, null, null, async (log) => {
+        await this.writeSite({ schema: null });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifySchema(rev, true);
+      }, 'Removing structured data failed');
+      await this.db.transaction(async (tx) => {
+        await tx.update(seoSettings).set({ status: 'draft', published: null, publishedAt: null, updatedAt: new Date() }).where(eq(seoSettings.key, SCHEMA_KEY));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'schema.unpublish', { type: 'seo_settings', id: SCHEMA_KEY }, 'Removed Studio structured data from the site', { jobId: job.id });
+      });
+      return { jobId: job.id };
+    });
+  }
+
+  // ---------------------------------------------------------------- Translations (src/i18n/<lang>.json, read by lib/i18n.mjs)
+  /** Writes each language Studio manages from its published copy (or the one being delivered). Others stay as they are. */
+  private async writeTranslations(override?: { lang: TR.Lang; data: TR.LangData; revision: string }) {
+    for (const { lang, content } of await TR.publishedFiles(this.db, this.cfg, override)) {
+      const file = resolve(this.cfg.siteRoot, 'src/i18n', `${lang}.json`);
+      if (existsSync(file) && readFileSync(file, 'utf8') === content) continue;
+      mkdirSync(resolve(file, '..'), { recursive: true });
+      const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
+      writeFileSync(tmp, content); renameSync(tmp, file);
+    }
+  }
+
+  /** Every page of the language carries the new revision, and its text came from the new file. */
+  private verifyTranslations(lang: TR.Lang, revision: string) {
+    const dir = resolve(this.cfg.siteRoot, lang);
+    const home = resolve(dir, 'index.html');
+    if (!existsSync(home)) throw new Error(`${lang}/index.html was not built (lib/i18n.mjs must build the ${lang} pages).`);
+    const pages = readdirSync(dir).filter((f) => f.endsWith('.html'));
+    const stale = pages.filter((f) => !readFileSync(resolve(dir, f), 'utf8').includes(`<meta name="studio-i18n-rev" content="${revision}">`));
+    if (stale.length) throw new Error(`${stale.length} ${lang} page${stale.length === 1 ? '' : 's'} do not carry the new translations (e.g. ${stale[0]}).`);
+  }
+
+  async publishTranslations(actor: NonNullable<Actor>, lang: TR.Lang) {
+    return this.locked(async () => {
+      const row = await TR.loadRow(this.db, lang);
+      if (!row || row.status !== 'approved' || !row.draft) throw new AppError(409, 'Only approved translations can be published.');
+      const data = structuredClone(row.draft as TR.LangData); const revision = randomUUID();
+      const { job, log } = await this.deliver('publish_translations', actor, null, null, async (log) => {
+        await this.writeSite({ translations: { lang, data, revision } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyTranslations(lang, revision);
+      }, `Publishing ${TR.LANG_INFO[lang].name} translations failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(seoSettings).set({ status: 'published', published: { ...data, _revision: revision }, publishedAt: new Date(), updatedAt: new Date() }).where(eq(seoSettings.key, TR.KEY_OF(lang)));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'translation.publish', { type: 'translation', id: lang }, `Published ${TR.LANG_INFO[lang].name} translations${data.live ? ' (public on the live site)' : ' (preview only)'}`, { jobId: job.id, revision, strings: Object.keys(data.strings).length });
+      });
+      TR.clearSegmentCache();
+      return { jobId: job.id, revision };
+    });
+  }
+
+  // ---------------------------------------------------------------- Menus (src/data/menu.json, read by build.mjs through lib/menu.mjs)
+  get menuFile() { return resolve(this.cfg.siteRoot, 'src/data/menu.json'); }
+  /** menu.json holds the published menus (or the ones being delivered); without published Studio menus there is no file. */
+  private async writeMenus(override?: { menu: MENU.Menu; revision: string }) {
+    const content = await MENU.publishedFile(this.db, override);
+    if (content === null) { if (existsSync(this.menuFile)) rmSync(this.menuFile); return; }
+    if (existsSync(this.menuFile) && readFileSync(this.menuFile, 'utf8') === content) return;
+    mkdirSync(resolve(this.menuFile, '..'), { recursive: true });
+    const tmp = `${this.menuFile}.${randomBytes(4).toString('hex')}.tmp`;
+    writeFileSync(tmp, content); renameSync(tmp, this.menuFile);
+  }
+  /** Every built page carries the new menu revision. */
+  private verifyMenus(revision: string) {
+    const pages = readdirSync(resolve(this.cfg.siteRoot, 'src/pages')).filter((f) => f.endsWith('.html'));
+    const stale = pages.filter((f) => { const p = resolve(this.cfg.siteRoot, f); return !existsSync(p) || !readFileSync(p, 'utf8').includes(`<meta name="studio-menu-rev" content="${revision}">`); });
+    if (stale.length) throw new Error(`${stale.length} page${stale.length === 1 ? '' : 's'} do not carry the new menus (e.g. ${stale[0]}). build.mjs must apply src/data/menu.json.`);
+  }
+  async publishMenus(actor: NonNullable<Actor>) {
+    return this.locked(async () => {
+      const row = await MENU.loadRow(this.db);
+      if (!row || row.status !== 'approved' || !row.draft) throw new AppError(409, 'Only approved menus can be published.');
+      const menu = MENU.menuSchema.parse(row.draft); const revision = randomUUID();
+      const { job, log } = await this.deliver('publish_menus', actor, null, null, async (log) => {
+        await this.writeSite({ menus: { menu, revision } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyMenus(revision);
+      }, 'Publishing the menus failed');
+      await this.db.transaction(async (tx) => {
+        await tx.update(seoSettings).set({ status: 'published', published: { ...menu, _revision: revision } as unknown as Record<string, unknown>, publishedAt: new Date(), updatedAt: new Date() }).where(eq(seoSettings.key, MENU.KEY));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'menu.publish', { type: 'menu', id: MENU.KEY }, 'Published the website menus', { jobId: job.id, revision });
+      });
+      return { jobId: job.id, revision };
+    });
   }
 
   async recentJobs(limit = 10) {

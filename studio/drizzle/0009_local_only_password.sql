@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "local_only_password" boolean DEFAULT false NOT NULL;

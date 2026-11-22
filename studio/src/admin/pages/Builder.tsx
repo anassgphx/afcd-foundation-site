@@ -5,9 +5,10 @@ import { Badge, Icon, LiveBadge, Modal, fmtDate, navigate, useCan, useMe, useToa
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 
-type Field = { key: string; label: string; type: string; max?: number; hint?: string; required?: boolean; options?: [string, string][]; itemLabel?: string; min?: number; fields?: Field[] };
-type BlockDef = { type: string; version: number; label: string; group: string; description: string; fields: Field[]; defaults: Record<string, any> };
-type Block = { id: string; type: string; v: number; hidden: boolean; props: Record<string, any> };
+export type Field = { key: string; label: string; type: string; max?: number; hint?: string; required?: boolean; options?: [string, string][]; itemLabel?: string; min?: number; fields?: Field[] };
+export type BlockDef = { type: string; version: number; label: string; group: string; description: string; fields: Field[]; defaults: Record<string, any> };
+type Block = { id: string; type: string; v: number; hidden: boolean; props: Record<string, any>; design?: Design };
+export type Design = { bg: 'none' | 'soft' | 'line'; show: 'all' | 'desktop' | 'mobile'; anchor: string };
 type Doc = { version: number; blocks: Block[] };
 type Settings = { title: string; slug: string; description: string; navSection: string; noindex: boolean };
 type PageData = Settings & { id: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; doc: Doc; problems: string[];
@@ -25,6 +26,7 @@ export function Builder({ id }: { id: string }) {
   const [doc, setDoc] = useState<Doc>({ version: 1, blocks: [] });
   const [past, setPast] = useState<Doc[]>([]); const [future, setFuture] = useState<Doc[]>([]);
   const [sel, setSel] = useState<string | null>(null);
+  const [tab, setTab] = useState<'content' | 'design'>('content');
   const [left, setLeft] = useState<'add' | 'layers'>('layers');
   const [device, setDevice] = useState(1280);
   const [dirty, setDirty] = useState(false); const [busy, setBusy] = useState('');
@@ -140,7 +142,7 @@ export function Builder({ id }: { id: string }) {
   if (!page || !settings || !catalog) return <Loading />;
   const selBlock = doc.blocks.find((b) => b.id === sel) ?? null;
   const selDef = selBlock ? defs.get(selBlock.type) : null;
-  const groups = ['Structure', 'Text', 'Media', 'Content', 'Action'];
+  const groups = ['Live', 'Structure', 'Text', 'Media', 'Content', 'Action'];
 
   return (
     <div className="builder">
@@ -192,7 +194,7 @@ export function Builder({ id }: { id: string }) {
         <div className="b-canvas" ref={canvasBox} onClick={() => setSel(null)}>
           {/* The page renders at the real device width and is scaled down to fit, so layouts match the live site. */}
           <div className="b-device" style={{ width: device * scale, height: canvasH }} onClick={(e) => e.stopPropagation()}>
-            <iframe ref={frame} title="Page canvas" srcDoc={html} onLoad={wire} style={{ width: device, height: canvasH / scale, transform: `scale(${scale})`, transformOrigin: '0 0' }} />
+            <iframe ref={frame} title="Page canvas" srcDoc={html} onLoad={wire} style={{ width: device, height: canvasH / scale, zoom: scale }} />
           </div>
           <span className="b-zoom">{device}px · {Math.round(scale * 100)}%</span>
         </div>
@@ -203,7 +205,9 @@ export function Builder({ id }: { id: string }) {
             <div className="between b-insp-h"><div><small className="muted">Block</small><h2>{selDef.label}</h2></div><button className="btn btn-ghost btn-sm" onClick={() => setSel(null)}>Page settings</button></div>
             <fieldset disabled={!editable} className="b-insp stack">
               {selDef.fields.length === 0 && <p className="muted">This block has no settings.</p>}
-              {selDef.fields.map((f) => <FieldEditor key={f.key} f={f} value={selBlock.props[f.key]} links={catalog.links} onChange={(v) => updateProps(selBlock.id, { ...selBlock.props, [f.key]: v })} />)}
+              <div className="seg ds-tabs" role="tablist">{(['content', 'design'] as const).map((t) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t === 'content' ? 'Content' : 'Design'}</button>)}</div>
+              {tab === 'design' ? <DesignFields value={selBlock.design} onChange={(d) => setBlocks(doc.blocks.map((b) => (b.id === selBlock.id ? { ...b, design: d } : b)))} /> : <>
+              {selDef.fields.map((f) => <FieldEditor key={f.key} f={f} value={selBlock.props[f.key]} links={catalog.links} onChange={(v) => updateProps(selBlock.id, { ...selBlock.props, [f.key]: v })} />)}</>}
             </fieldset>
           </> : <>
             <div className="b-insp-h"><small className="muted">Page</small><h2>Page settings</h2></div>
@@ -247,12 +251,24 @@ function summary(b: Block) {
   return String(s).replace(/[*[\]()]/g, '').slice(0, 60) + (b.hidden ? ' · hidden' : '');
 }
 
+/** Design presets for a block (approved options only; no free CSS). Shared by the page builder and the homepage editor. */
+export function DesignFields({ value, onChange }: { value?: Partial<Design>; onChange: (d: Design) => void }) {
+  const d: Design = { bg: value?.bg ?? 'none', show: value?.show ?? 'all', anchor: value?.anchor ?? '' };
+  const set = (k: keyof Design, v: string) => onChange({ ...d, [k]: v });
+  const seg = (k: 'bg' | 'show', opts: [string, string][]) => <div className="seg ds-seg" role="group">{opts.map(([v, l]) => <button key={v} type="button" className={d[k] === v ? 'on' : ''} onClick={() => set(k, v)}>{l}</button>)}</div>;
+  return <div className="stack">
+    <Labeled label="Background" hint="Light grey sets the section apart; the line adds a thin divider above it.">{seg('bg', [['none', 'None'], ['soft', 'Light grey'], ['line', 'Divider line']])}</Labeled>
+    <Labeled label="Show on" hint={d.show === 'all' ? undefined : 'Hidden sections still exist for other screen sizes. Do not hide essential information.'}>{seg('show', [['all', 'All screens'], ['desktop', 'Desktop only'], ['mobile', 'Mobile only']])}</Labeled>
+    <Labeled label="Anchor name (optional)" hint={d.anchor ? `Link to it with #${d.anchor}` : 'Lets a button link straight to this section, e.g. #volunteer.'}><div className="ed-slug"><span>#</span><input className="input mono" maxLength={40} value={d.anchor} onChange={(e) => set('anchor', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^[^a-z]+/, ''))} aria-label="Anchor name" /></div></Labeled>
+  </div>;
+}
+
 function Labeled({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return <div className="field"><span>{label}</span>{children}{hint && <small>{hint}</small>}</div>;
 }
 
 // ---------------------------------------------------------------- Field editors (driven by block metadata)
-function FieldEditor({ f, value, onChange, links }: { f: Field; value: any; onChange: (v: any) => void; links: string[] }) {
+export function FieldEditor({ f, value, onChange, links }: { f: Field; value: any; onChange: (v: any) => void; links: string[] }) {
   const [picker, setPicker] = useState(false);
   const [mediaInfo, setMediaInfo] = useState<MediaItem | null>(null);
   const [pillars, setPillars] = useState<{ key: string; name: string }[]>([]);

@@ -1,0 +1,86 @@
+/* Approval Queue (pages/Approvals.tsx). Uses the tokens and components of studio.css. */
+.aq-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+@media (max-width: 900px) { .aq-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.aq-tab { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink-2); font: inherit; text-align: start; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease; }
+.aq-tab svg { flex-shrink: 0; color: var(--muted); }
+.aq-tab span { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aq-tab b { font-size: 20px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.aq-tab:hover { border-color: var(--line-strong); }
+.aq-tab.on { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); color: var(--ink); }
+.aq-tab.on svg { color: var(--ink); }
+.aq-tab.hot b { color: #b45309; }
+
+.aq-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.aq.has-panel .aq-body { grid-template-columns: minmax(0, 1fr) minmax(360px, 440px); }
+@media (max-width: 1100px) { .aq.has-panel .aq-body { grid-template-columns: minmax(0, 1fr); } }
+.aq-list { min-width: 0; }
+.aq-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px; border-bottom: 1px solid var(--line); }
+.aq-tools .search { width: min(280px, 100%); }
+.aq-tools .select { width: auto; min-width: 140px; }
+.aq-all { font-size: 12.5px; }
+
+.aq-rows { list-style: none; margin: 0; padding: 0; }
+.aq-row { display: grid; grid-template-columns: 22px 34px minmax(0, 1fr) minmax(120px, 170px) 90px 120px; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .12s ease; }
+.aq-row:last-child { border-bottom: 0; }
+.aq-row:hover { background: var(--sunken); }
+.aq-row.cur { box-shadow: inset 2px 0 0 var(--line-strong); }
+.aq-row.open { background: var(--canvas); box-shadow: inset 2px 0 0 var(--ink); }
+.aq-pick input { width: 15px; height: 15px; accent-color: var(--ink); }
+.aq-type { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--canvas); color: var(--ink-2); }
+.aq-type.lg { width: 40px; height: 40px; flex-shrink: 0; }
+.aq-main { min-width: 0; }
+.aq-main b { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aq-main small { display: block; font-size: 12px; color: var(--muted); }
+.aq-who { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12.5px; color: var(--ink-2); }
+.aq-who > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.avatar.sm { width: 22px; height: 22px; font-size: 9.5px; flex-shrink: 0; }
+.aq-age { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.aq-age.late { justify-self: start; padding: 2px 8px; border-radius: 999px; background: #fef3c7; color: #92400e; font-weight: 600; }
+.aq-age.old { justify-self: start; padding: 2px 8px; border-radius: 999px; background: #fee2e2; color: #991b1b; font-weight: 600; }
+.aq-st { justify-self: end; }
+@media (max-width: 760px) {
+  .aq-row { grid-template-columns: 22px 34px minmax(0, 1fr) auto; }
+  .aq-who, .aq-st { display: none; }
+}
+.aq-keys { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 11.5px; }
+.aq-keys kbd { min-width: 18px; padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: #fff; font: 600 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-2); text-align: center; }
+@media (max-width: 760px) { .aq-keys { display: none; } }
+
+.aq-empty { display: grid; justify-items: center; gap: 6px; padding: 48px 20px; text-align: center; }
+.aq-empty-i { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 6px; border-radius: 14px; background: var(--canvas); color: var(--muted); }
+.aq-empty b { font-size: 15px; }
+.aq-empty p { margin: 0 0 6px; max-width: 420px; font-size: 13px; color: var(--muted); }
+
+/* Review panel */
+.aq-panel { position: sticky; top: 72px; display: flex; flex-direction: column; gap: 14px; max-height: calc(100vh - 88px); overflow-y: auto; padding: 16px; }
+@media (max-width: 1100px) { .aq-panel { position: static; max-height: none; } }
+.aq-p-h { display: flex; align-items: flex-start; gap: 12px; }
+.aq-p-h h2 { margin: 2px 0 6px; font-size: 17px; line-height: 1.3; letter-spacing: -.015em; overflow-wrap: anywhere; }
+.aq-k { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.aq-p-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.aq-open { align-self: flex-start; }
+.aq-diff { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.aq-diff-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 13px; }
+.aq-diff-h .muted { font-size: 11.5px; }
+.aq-changes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.aq-changes li { padding: 10px; border-radius: 10px; background: var(--sunken); border: 1px solid var(--line); }
+.aq-path { display: block; margin-bottom: 4px; font-size: 11px; font-weight: 600; color: var(--muted); overflow-wrap: anywhere; }
+.aq-val { font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
+.aq-add { background: #dcfce7; color: #14532d; border-radius: 3px; }
+.aq-del { background: #fee2e2; color: #7f1d1d; text-decoration: line-through; border-radius: 3px; }
+.aq-acts { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.aq-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.aq-blocked { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 12px; border-radius: 10px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; font-size: 12.5px; font-weight: 500; }
+.aq-ask { display: grid; gap: 8px; }
+.aq-ask em { font-style: normal; font-weight: 400; font-size: 11.5px; }
+.aq-foot { margin: 0; font-size: 11.5px; }
+
+/* With the review panel open, the list keeps the title readable: the author column steps aside. */
+.aq.has-panel .aq-row { grid-template-columns: 22px 34px minmax(0, 1fr) 84px auto; }
+.aq.has-panel .aq-who { display: none; }
+@media (max-width: 600px) {
+  .aq-tab { padding: 10px 12px; gap: 8px; }
+  .aq-tab span { white-space: normal; font-size: 12.5px; line-height: 1.25; }
+  .aq-tab b { font-size: 18px; }
+  .aq-tools .search, .aq-tools .select { width: 100%; }
+}

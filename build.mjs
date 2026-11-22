@@ -8,6 +8,9 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { renderPage } from './lib/page-fields.mjs';
+import { activeLangs, decorateEnglish, buildLanguages } from './lib/i18n.mjs';
+import { renderMenus } from './lib/menu.mjs';
 import { execSync } from 'node:child_process';
 
 const SRC = 'src';
@@ -20,8 +23,13 @@ const CSS_V = version('assets/styles.css');
 const JS_V = version('assets/main.js');
 
 const head = partial('head').replace('href="assets/styles.css"', `href="assets/styles.css?v=${CSS_V}"`);
-const header = partial('header');
-const footer = partial('footer');
+// Studio menus (owned by AFCD Studio): src/data/menu.json, or env MENU_JSON, replaces the main, phone and footer menus of the
+// partials (see lib/menu.mjs). Without it the partials are used exactly as written.
+const MENU_FILE = process.env.MENU_JSON || join(SRC, 'data', 'menu.json');
+const MENU = existsSync(MENU_FILE) ? JSON.parse(readFileSync(MENU_FILE, 'utf8')) : null;
+const menus = MENU ? renderMenus(partial('header'), partial('footer'), MENU) : null;
+const header = menus ? menus.header : partial('header');
+const footer = menus ? menus.footer : partial('footer');
 
 const NAV = ['home', 'about', 'pillars', 'projects', 'news', 'partners', 'contact', 'involved', 'events', 'none'];
 // Escapes for attributes without double-escaping entities already in the text (front matter titles may contain &amp;).
@@ -106,56 +114,26 @@ function applySeo(file, meta) {
   return meta;
 }
 
-// Studio page fields (owned by AFCD Studio): elements marked data-sf="key" (optionally data-sf-type) in a page source can be
-// edited in Studio. src/data/page-fields.json (or env PAGE_FIELDS_JSON) holds the edited values as plain text; they are
-// escaped here. The data-sf attributes are always removed from the output, so an unedited page builds exactly as written.
+// Studio page fields and homepage sections (owned by AFCD Studio): see lib/page-fields.mjs. src/data/page-fields.json (or env
+// PAGE_FIELDS_JSON) holds edited values and section layouts; without it pages build exactly as written.
 const FIELDS_FILE = process.env.PAGE_FIELDS_JSON || join(SRC, 'data', 'page-fields.json');
 const FIELDS = existsSync(FIELDS_FILE) ? JSON.parse(readFileSync(FIELDS_FILE, 'utf8')).pages ?? {} : {};
-const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const SAFE_HREF = /^(https:\/\/[^\s"'<>]+|mailto:[^\s"'<>]+|tel:\+?[0-9 ]+|#[a-z0-9-]+|[a-z0-9-]+\.html(#[a-z0-9-]+)?)$/i;
-function closeIndex(html, tag, from) {   // index of the matching </tag>, counting nested tags of the same name
-  const re = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'gi'); re.lastIndex = from; let depth = 1, m;
-  while ((m = re.exec(html))) { depth += m[1] ? -1 : 1; if (!depth) return m.index; }
-  throw new Error(`unclosed <${tag}> for a Studio field`);
+
+// Studio structured data (owned by AFCD Studio): src/data/schema.json (or env SCHEMA_JSON), written only after reviewed
+// settings are published, adds Organization fields to the homepage markup and Article/Event markup to Studio pages.
+// Without it pages build exactly as written. Only public organization fields pass (never tax, CNSS or registration
+// numbers, the legal representative or the street address), and only the foundation's public email addresses.
+const SCHEMA_FILE = process.env.SCHEMA_JSON || join(SRC, 'data', 'schema.json');
+const SCHEMA = existsSync(SCHEMA_FILE) ? JSON.parse(readFileSync(SCHEMA_FILE, 'utf8')) : null;
+const SCHEMA_ORG_KEYS = ['alternateName', 'legalName', 'description', 'email', 'telephone', 'foundingDate', 'sameAs'];
+const PUBLIC_EMAILS = ['contact@afcdteam.com', 'akaya@afcdteam.com'];
+function schemaOrg() {
+  const o = SCHEMA?.organization ?? {}; const out = { ...ORG };
+  for (const k of SCHEMA_ORG_KEYS) if (o[k] !== undefined && o[k] !== '' && (k !== 'email' || PUBLIC_EMAILS.includes(o[k]))) out[k] = o[k];
+  return out;
 }
-function fieldValue(type, v, inner, open) {
-  const softCls = (inner.match(/<span class="([^"]+)"/) || [])[1];
-  switch (type) {
-    case 'split': return { inner: escHtml(v.main) + (v.soft ? ` <span class="${softCls || 'sh-soft'}">${escHtml(v.soft)}</span>` : '') };
-    case 'plain': return { inner: escHtml(typeof v === 'object' ? [v.main, v.soft].filter(Boolean).join(' ') : v) };
-    case 'rich': return { inner: escHtml(v).replace(/\*\*(.+?)\*\*/g, `<span class="${softCls || 'font-semibold'}">$1</span>`) };
-    case 'tail': { const i = inner.lastIndexOf('</span>'); return { inner: (i >= 0 ? inner.slice(0, i + 7) : '') + escHtml(v) }; }
-    case 'link': {
-      const rest = inner.search(/\s*<span/); const tailHtml = rest >= 0 ? inner.slice(rest) : '';
-      return { inner: escHtml(v.label) + tailHtml, open: v.href && SAFE_HREF.test(v.href) ? open.replace(/\shref="[^"]*"/, ` href="${escHtml(v.href)}"`) : open };
-    }
-    default: return { inner: escHtml(v) };
-  }
-}
-function imageTag(open, v) {
-  let t = open.replace(/\s(src|srcset|sizes|alt|width|height)="[^"]*"/g, '');
-  const style = `object-position:${Number(v.fx) || 50}% ${Number(v.fy) || 50}%`;
-  t = /\sstyle="/.test(t) ? t.replace(/\sstyle="[^"]*"/, ` style="${style}"`) : t.replace(/\/?>$/, ` style="${style}">`);
-  return t.replace(/^<img\b/, `<img src="${escHtml(v.src)}"${v.srcset ? ` srcset="${escHtml(v.srcset)}" sizes="100vw"` : ''} alt="${escHtml(v.alt)}" width="${Number(v.w)}" height="${Number(v.h)}"`);
-}
-function applyFields(file, body) {
-  const vals = FIELDS[file]?.fields ?? {};
-  const re = /<([a-z][a-z0-9]*)\b[^>]*\sdata-sf="([^"]+)"[^>]*>/gi;
-  let out = '', last = 0, m;
-  while ((m = re.exec(body))) {
-    const [raw, tag, key] = m;
-    const type = (raw.match(/\sdata-sf-type="([^"]+)"/) || [])[1] || 'text';
-    const open = raw.replace(/\sdata-sf(?:-type)?="[^"]*"/g, '');
-    const v = vals[key];
-    out += body.slice(last, m.index);
-    if (tag.toLowerCase() === 'img') { out += v !== undefined && type === 'image' && v.src ? imageTag(open, v) : open; last = m.index + raw.length; continue; }
-    const start = m.index + raw.length, end = closeIndex(body, tag, start), inner = body.slice(start, end);
-    if (v === undefined || v === null || v === '') { out += open + inner; }
-    else { const r = fieldValue(type, v, inner, open); out += (r.open ?? open) + r.inner; }
-    last = end; re.lastIndex = end;
-  }
-  return out + body.slice(last);
-}
+const schemaPage = (file) => (SCHEMA?.pages?.[file] ?? []).filter((x) => x && (x['@type'] === 'Article' || x['@type'] === 'Event'));
+const jsonLd = (obj) => JSON.stringify(obj).replace(/</g, '\\u003c');   // editor text can never close the script tag
 
 function seoTags(file, meta) {
   const noindex = !PRODUCTION || meta.noindex === 'true';
@@ -175,6 +153,7 @@ function seoTags(file, meta) {
     `<meta property="og:image:alt" content="${meta.ogImage ? escapeAttr(escapeText(meta.ogImage.alt)) : 'AFCD Leadership Lab panel discussion'}">`,
     ...(meta.seoRevision ? [`<meta name="studio-seo-rev" content="${meta.seoRevision}">`] : []),
     ...(FIELDS[file]?.revision ? [`<meta name="studio-fields-rev" content="${FIELDS[file].revision}">`] : []),
+    ...(MENU?.revision && /^[\w-]{1,64}$/.test(MENU.revision) ? [`<meta name="studio-menu-rev" content="${MENU.revision}">`] : []),
     `<meta name="twitter:card" content="summary_large_image">`,
   ];
   // Website forms → AFCD Studio: only when FORMS_ENDPOINT is set (e.g. http://localhost:4400/forms/v1).
@@ -182,12 +161,14 @@ function seoTags(file, meta) {
   if (FORMS_ENDPOINT) tags.push(`<meta name="afcd-forms" content="${escapeAttr(FORMS_ENDPOINT)}">`);
   const ld = [];
   if (file === 'index.html') {
-    ld.push(ORG, WEBSITE);
+    ld.push(SCHEMA ? schemaOrg() : ORG, WEBSITE);
+    if (SCHEMA?.revision) tags.push(`<meta name="studio-schema-rev" content="${escapeAttr(String(SCHEMA.revision))}">`);
     tags.push('<link rel="preload" as="image" href="assets/img/hero-leadership-lab.webp" fetchpriority="high">');
   }
   const bc = breadcrumbs(file, meta);
   if (bc) ld.push(bc);
-  for (const obj of ld) tags.push(`<script type="application/ld+json">${JSON.stringify(obj)}</script>`);
+  ld.push(...schemaPage(file));
+  for (const obj of ld) tags.push(`<script type="application/ld+json">${jsonLd(obj)}</script>`);
   return tags.join('\n');
 }
 
@@ -204,11 +185,16 @@ const sitemap = [];
 const PAGES_DIR = process.env.PAGES_DIR || join(SRC, 'pages');
 const OUT_DIR = process.env.OUT_DIR || '.';
 const pages = readdirSync(PAGES_DIR).filter((f) => f.endsWith('.html'));
+// Site languages (lib/i18n.mjs, src/i18n/*.json): only for full builds of the site root, where assets/ sits next to the pages.
+const WITH_LANGS = existsSync(join(OUT_DIR, 'assets', 'main.js')) && process.env.SKIP_LANGS !== '1';
+const LANGS = WITH_LANGS ? activeLangs(SRC, PRODUCTION) : [];
+const noindexFiles = new Set();
 for (const file of pages) {
   const { meta: meta0, body } = parse(file);
   const meta = applySeo(file, meta0);
   if (!NAV.includes(meta.active)) throw new Error(`${file}: unknown active "${meta.active}"`);
   if (meta.noindex !== 'true') sitemap.push(`  <url><loc>${pageUrl(file)}</loc><lastmod>${lastmod(file)}</lastmod></url>`);
+  else noindexFiles.add(file);
   const html = [
     head.replace('{{title}}', meta.title).replace('{{description}}', escapeAttr(meta.description)).replace('</head>', seoTags(file, meta) + '\n</head>').trimEnd(),
     '<body class="font-sans">',
@@ -218,7 +204,7 @@ for (const file of pages) {
     markActive(header, meta.active).trimEnd(),
     '',
     `<main id="main" data-page="${meta.active}">`,
-    applyFields(file, body.trim()),
+    renderPage(body.trim(), FIELDS[file]),
     '</main>',
     '',
     markActive(footer, meta.active).trimEnd(),
@@ -228,8 +214,12 @@ for (const file of pages) {
     '</html>',
     '',
   ].join('\n');
-  writeFileSync(join(OUT_DIR, file), html);
+  writeFileSync(join(OUT_DIR, file), LANGS.length ? decorateEnglish(html, file, { site: SITE, langs: LANGS, pageUrl }) : html);
   console.log('built', file);
+}
+if (LANGS.length) {
+  const r = buildLanguages({ src: SRC, outDir: OUT_DIR, files: pages, site: SITE, production: PRODUCTION, lastmod, noindexFiles });
+  sitemap.push(...r.sitemap);
 }
 
 // Sitemap: indexable canonical pages only, absolute production URLs.

@@ -37,7 +37,7 @@ const HOME_ICO = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" str
 // ---------------------------------------------------------------- Render context
 export type MediaRef = { src: string; srcset: string; w: number; h: number; alt: string; fx: number; fy: number };
 export type ProjectCard = { name: string; slug: string; pillar: string; pillars: string[]; category: string; summary: string; file: string | null; hero: MediaRef | null; colour: string };
-export type RenderCtx = { media: (id: string | null | undefined) => MediaRef | null; projects: ProjectCard[]; pageTitle: string; editor?: boolean };
+export type RenderCtx = { media: (id: string | null | undefined) => MediaRef | null; projects: ProjectCard[]; pageTitle: string; editor?: boolean; sources?: import('./dynamic.ts').Sources };
 
 function img(m: MediaRef | null, cls: string, sizes = '100vw', caption = 'Photo') {
   if (!m) return `<div class="ph ${cls}" style="--ph:#D4D4D4"><span class="ph-cap"><b>Photo</b> · ${esc(caption)}</span></div>`;
@@ -55,7 +55,7 @@ export type Field =
   | { key: string; label: string; type: 'list'; itemLabel: string; min: number; max: number; fields: Field[]; hint?: string };
 
 type Def<S extends z.ZodTypeAny> = {
-  type: string; version: number; label: string; group: 'Structure' | 'Text' | 'Media' | 'Content' | 'Action';
+  type: string; version: number; label: string; group: 'Structure' | 'Text' | 'Media' | 'Content' | 'Action' | 'Live';
   description: string; fields: Field[]; schema: S; defaults: z.infer<S>;
   migrate?: (from: number, props: Record<string, unknown>) => Record<string, unknown>;
   render: (p: z.infer<S>, ctx: RenderCtx) => string;
@@ -193,6 +193,67 @@ export const BLOCKS = [
       return `<section class="${PAD[p.space]}"><div class="wrap">${p.title ? `<h2 class="text-[30px] font-semibold tracking-[-0.04em] md:text-[40px]">${esc(p.title)}</h2>` : ''}${list.length ? `<ul class="nw-grid ${p.title ? 'mt-8' : ''}">${cards}</ul>` : `<p class="mt-6 text-ink-mid">${ctx.editor ? 'No live projects match yet.' : ''}</p>`}</div></section>`;
     },
   }),
+  // ---------------- Live content: filled from published Studio records; on the public site they disappear when empty.
+  def({
+    type: 'latest_stories', version: 1, label: 'Latest stories', group: 'Live', description: 'The newest published stories, filtered by type or pillar. Updates on every publish.',
+    fields: [{ key: 'label', label: 'Small label', type: 'text', max: 40 }, { key: 'title', label: 'Title', type: 'text', max: 120 }, { key: 'soft', label: 'Title, grey part', type: 'text', max: 80 }, { key: 'desc', label: 'Introduction', type: 'textarea', max: 300 },
+      { key: 'kind', label: 'Stories', type: 'select', options: [['all', 'All types'], ['programme_news', 'Programme news'], ['participant_story', 'Participant stories'], ['call_for_applications', 'Calls for applications'], ['event_recap', 'Event recaps']] },
+      { key: 'pillar', label: 'Pillar (optional)', type: 'pillar', hint: 'Leave empty for every pillar.' },
+      { key: 'limit', label: 'How many', type: 'select', options: [['3', '3'], ['6', '6']] }, { key: 'link', label: 'Show “All stories” link', type: 'toggle' }, SPACE_FIELD],
+    schema: z.object({ label: t(40), title: t(120), soft: t(80), desc: t(300), kind: z.enum(['all', 'programme_news', 'participant_story', 'call_for_applications', 'event_recap']).default('all'), pillar: t(40), limit: z.enum(['3', '6']).default('3'), link: z.boolean().default(true), space }),
+    defaults: { label: 'News & Stories', title: 'Stories from', soft: 'our communities.', desc: '', kind: 'all', pillar: '', limit: '3', link: true, space: 'md' },
+    render: (p, ctx) => {
+      const list = (ctx.sources?.stories ?? []).filter((x) => (p.kind === 'all' || x.typeKey === p.kind) && (!p.pillar || x.pillarKey === p.pillar)).slice(0, Number(p.limit));
+      if (!list.length) return ctx.editor ? `<div class="wrap py-8"><p class="rounded-2xl border border-dashed border-ink-light p-5 text-[13px] text-ink-mid">Latest stories: no published story matches these settings yet. On the website this section stays hidden until one does.</p></div>` : '';
+      const cards = list.map((x) => `<li><a href="${esc(x.url)}" class="nw-card group"><div class="relative">${img(x.hero, 'aspect-[16/10] w-full rounded-[20px]', '(min-width:1024px) 33vw, 100vw', x.title)}<span class="nw-type">${esc(x.type)}</span></div><span class="mt-5 flex items-center gap-2 px-2.5 text-[12.5px] text-ink-mid">${x.pillar ? `<span class="pj-dot" style="--c:${esc(x.colour)}"></span>${esc(x.pillar)}<span aria-hidden="true">·</span>` : ''}<time datetime="${esc(x.date)}">${esc(x.dateLabel)}</time></span><span class="mt-3 block px-2.5 text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">${esc(x.title)}</span>${x.excerpt ? `<span class="mt-2 block px-2.5 text-[14.5px] leading-relaxed text-ink-dark">${esc(x.excerpt)}</span>` : ''}<span class="nw-read px-2.5">Read the story <span aria-hidden="true">↗</span></span></a></li>`).join('');
+      return `<section class="${PAD[p.space]}"><div class="wrap">${p.title ? secHead({ label: p.label, title: p.title, soft: p.soft, desc: p.desc }) : ''}<ul class="nw-grid ${p.title ? 'mt-8 lg:mt-10' : ''}">${cards}</ul>${p.link ? `<p class="mt-8"><a href="news.html" class="link-arrow">All stories ${ARR}</a></p>` : ''}</div></section>`;
+    },
+  }),
+  def({
+    type: 'upcoming_events', version: 1, label: 'Upcoming events', group: 'Live', description: 'The next published events, soonest first. Past events drop off by themselves.',
+    fields: [{ key: 'label', label: 'Small label', type: 'text', max: 40 }, { key: 'title', label: 'Title', type: 'text', max: 120 }, { key: 'soft', label: 'Title, grey part', type: 'text', max: 80 }, { key: 'desc', label: 'Introduction', type: 'textarea', max: 300 },
+      { key: 'pillar', label: 'Pillar (optional)', type: 'pillar', hint: 'Leave empty for every pillar.' },
+      { key: 'limit', label: 'How many', type: 'select', options: [['3', '3'], ['4', '4'], ['6', '6']] }, { key: 'link', label: 'Show “All events” link', type: 'toggle' }, SPACE_FIELD],
+    schema: z.object({ label: t(40), title: t(120), soft: t(80), desc: t(300), pillar: t(40), limit: z.enum(['3', '4', '6']).default('3'), link: z.boolean().default(true), space }),
+    defaults: { label: 'Upcoming events', title: 'Meet us', soft: 'in the community.', desc: '', pillar: '', limit: '3', link: true, space: 'md' },
+    render: (p, ctx) => {
+      const list = (ctx.sources?.events ?? []).filter((x) => x.upcoming && (!p.pillar || x.pillarKey === p.pillar)).slice(0, Number(p.limit));
+      if (!list.length) return ctx.editor ? `<div class="wrap py-8"><p class="rounded-2xl border border-dashed border-ink-light p-5 text-[13px] text-ink-mid">Upcoming events: no published upcoming event matches yet. On the website this section stays hidden until one does.</p></div>` : '';
+      const rows = list.map((x) => { const d = new Date(`${x.start}T12:00:00Z`); return `<li class="ev-row"><time class="ev-date" datetime="${esc(x.start)}"><span class="ev-day">${d.getUTCDate()}</span><span class="ev-mon">${d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })}</span></time><div class="min-w-0 flex-1"><span class="ev-kind">${esc(x.kind)}</span><p class="mt-3 text-[19px] font-semibold leading-snug tracking-[-0.02em] md:text-[21px]"><a href="${esc(x.file)}" class="ev-link">${esc(x.title)}</a></p><p class="mt-2 text-[13.5px] text-ink-mid">${[x.where, x.time].filter(Boolean).map(esc).join(' · ')}</p></div><a href="${esc(x.file)}" class="ev-act">View details <span aria-hidden="true">↗</span></a></li>`; }).join('');
+      return `<section class="${PAD[p.space]}"><div class="wrap">${p.title ? secHead({ label: p.label, title: p.title, soft: p.soft, desc: p.desc }) : ''}<ul class="ev-list ${p.title ? 'mt-8 lg:mt-10' : ''}">${rows}</ul>${p.link ? `<p class="mt-8"><a href="events.html" class="link-arrow">All events ${ARR}</a></p>` : ''}</div></section>`;
+    },
+  }),
+  def({
+    type: 'open_opportunities', version: 1, label: 'Open opportunities', group: 'Live', description: 'Calls, volunteering and other opportunities that are open now, nearest deadline first.',
+    fields: [{ key: 'label', label: 'Small label', type: 'text', max: 40 }, { key: 'title', label: 'Title', type: 'text', max: 120 }, { key: 'soft', label: 'Title, grey part', type: 'text', max: 80 }, { key: 'desc', label: 'Introduction', type: 'textarea', max: 300 },
+      { key: 'kind', label: 'Opportunities', type: 'select', options: [['all', 'All types'], ['call_for_applications', 'Calls for applications'], ['volunteering', 'Volunteering'], ['internship', 'Internships'], ['job', 'Jobs'], ['consultancy', 'Consultancies'], ['call_for_partners', 'Calls for partners']] },
+      { key: 'soon', label: 'Also show those opening soon', type: 'toggle' },
+      { key: 'limit', label: 'How many', type: 'select', options: [['3', '3'], ['4', '4'], ['6', '6']] }, { key: 'link', label: 'Show “All opportunities” link', type: 'toggle' }, SPACE_FIELD],
+    schema: z.object({ label: t(40), title: t(120), soft: t(80), desc: t(300), kind: z.enum(['all', 'call_for_applications', 'volunteering', 'internship', 'job', 'consultancy', 'call_for_partners']).default('all'), soon: z.boolean().default(false), limit: z.enum(['3', '4', '6']).default('3'), link: z.boolean().default(true), space }),
+    defaults: { label: 'Opportunities', title: 'Apply, volunteer', soft: 'or work with us.', desc: '', kind: 'all', soon: false, limit: '3', link: true, space: 'md' },
+    render: (p, ctx) => {
+      const list = (ctx.sources?.opportunities ?? []).filter((x) => (x.state === 'open' || (p.soon && x.state === 'soon')) && (p.kind === 'all' || x.typeKey === p.kind)).slice(0, Number(p.limit));
+      if (!list.length) return ctx.editor ? `<div class="wrap py-8"><p class="rounded-2xl border border-dashed border-ink-light p-5 text-[13px] text-ink-mid">Open opportunities: nothing published is open right now. On the website this section stays hidden until something is.</p></div>` : '';
+      const rows = list.map((x) => { const iso = x.state === 'soon' ? x.opensOn : x.deadline; const d = iso ? new Date(`${iso}T12:00:00Z`) : null;
+        return `<li class="ev-row">${d ? `<time class="ev-date" datetime="${esc(iso!)}"><span class="ev-day">${d.getUTCDate()}</span><span class="ev-mon">${d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })}</span></time>` : '<span class="ev-date"><span class="ev-day">∞</span><span class="ev-mon">Rolling</span></span>'}<div class="min-w-0 flex-1"><span class="ev-kind">${esc(x.type)}</span><p class="mt-3 text-[19px] font-semibold leading-snug tracking-[-0.02em] md:text-[21px]"><a href="${esc(x.file)}" class="ev-link">${esc(x.title)}</a></p><p class="mt-2 text-[13.5px] text-ink-mid">${x.state === 'soon' ? 'Opens soon' : x.deadline ? 'Apply by the date shown' : 'Rolling applications'}${x.location ? ` · ${esc(x.location)}` : ''}</p></div><a href="${esc(x.file)}" class="ev-act">See how to apply <span aria-hidden="true">↗</span></a></li>`; }).join('');
+      return `<section class="${PAD[p.space]}"><div class="wrap">${p.title ? secHead({ label: p.label, title: p.title, soft: p.soft, desc: p.desc }) : ''}<ul class="ev-list ${p.title ? 'mt-8 lg:mt-10' : ''}">${rows}</ul>${p.link ? `<p class="mt-8"><a href="opportunities.html" class="link-arrow">All opportunities ${ARR}</a></p>` : ''}</div></section>`;
+    },
+  }),
+  def({
+    type: 'partner_strip', version: 1, label: 'Partners', group: 'Live', description: 'Published partners as a grid of logos (or initials until a logo is added).',
+    fields: [{ key: 'label', label: 'Small label', type: 'text', max: 40 }, { key: 'title', label: 'Title', type: 'text', max: 120 }, { key: 'soft', label: 'Title, grey part', type: 'text', max: 80 }, { key: 'desc', label: 'Introduction', type: 'textarea', max: 300 },
+      { key: 'scope', label: 'Partners', type: 'select', options: [['all', 'All partners'], ['international', 'International'], ['national', 'National'], ['local', 'Local']] },
+      { key: 'limit', label: 'How many', type: 'select', options: [['8', '8'], ['12', '12'], ['24', '24']] }, { key: 'link', label: 'Show “All partners” link', type: 'toggle' }, SPACE_FIELD],
+    schema: z.object({ label: t(40), title: t(120), soft: t(80), desc: t(300), scope: z.enum(['all', 'international', 'national', 'local']).default('all'), limit: z.enum(['8', '12', '24']).default('12'), link: z.boolean().default(true), space }),
+    defaults: { label: 'Our partners', title: 'Stronger', soft: 'together.', desc: '', scope: 'all', limit: '12', link: true, space: 'md' },
+    render: (p, ctx) => {
+      const list = (ctx.sources?.partners ?? []).filter((x) => p.scope === 'all' || x.scopeKey === p.scope).slice(0, Number(p.limit));
+      if (!list.length) return ctx.editor ? `<div class="wrap py-8"><p class="rounded-2xl border border-dashed border-ink-light p-5 text-[13px] text-ink-mid">Partners: no published partner matches yet. On the website this section stays hidden until one does.</p></div>` : '';
+      const initials = (n: string) => n.replace(/[()]/g, '').split(/\s+/).filter((w) => /^\p{L}/u.test(w) && !['of', 'in', 'for', 'the', 'and'].includes(w.toLowerCase())).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+      const tiles = list.map((x) => `<li class="flex min-h-[112px] flex-col items-center justify-center gap-2 rounded-[20px] border border-ink-light bg-white p-4 text-center">${x.logo ? `<img src="${esc(x.logo.src)}" alt="${esc(x.logo.alt || x.name)}" width="${x.logo.w}" height="${x.logo.h}" loading="lazy" decoding="async" class="max-h-12 w-auto object-contain">` : `<span class="grid h-11 w-11 place-items-center rounded-full bg-[#F3F3F3] text-[14px] font-semibold tracking-wide" aria-hidden="true">${esc(initials(x.name))}</span>`}<span class="text-[13px] font-medium leading-snug">${esc(x.name)}</span><span class="text-[11.5px] uppercase tracking-[0.12em] text-ink-mid">${esc(x.scope)}</span></li>`).join('');
+      return `<section class="${PAD[p.space]}"><div class="wrap">${p.title ? secHead({ label: p.label, title: p.title, soft: p.soft, desc: p.desc }) : ''}<ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 ${p.title ? 'mt-8 lg:mt-10' : ''}">${tiles}</ul>${p.link ? `<p class="mt-8"><a href="partners.html" class="link-arrow">All partners ${ARR}</a></p>` : ''}</div></section>`;
+    },
+  }),
   def({
     type: 'quote', version: 1, label: 'Quote', group: 'Text', description: 'A highlighted quote with attribution.',
     fields: [{ key: 'text', label: 'Quote', type: 'textarea', max: 400, required: true, hint: 'Only quotes with the person’s consent.' }, { key: 'name', label: 'Name', type: 'text', max: 80 }, { key: 'role', label: 'Role', type: 'text', max: 120 },
@@ -239,12 +300,29 @@ export const BLOCKS = [
 export const BLOCK_MAP = new Map(BLOCKS.map((b) => [b.type, b]));
 export const DOC_VERSION = 1;
 
+/** Design presets every block can use (no free CSS): background, which screens show it, and an anchor for #links. */
+export const designSchema = z.object({
+  bg: z.enum(['none', 'soft', 'line']).default('none'),
+  show: z.enum(['all', 'desktop', 'mobile']).default('all'),
+  anchor: z.string().trim().max(40).regex(/^([a-z][a-z0-9-]*)?$/, 'Use lower-case letters, numbers and hyphens, starting with a letter.').default(''),
+}).strict();
+export type Design = z.infer<typeof designSchema>;
+const DESIGN_CLASS = { bg: { none: '', soft: 'bg-[#F6F6F6]', line: 'border-t border-ink-light' }, show: { all: '', desktop: 'max-md:hidden', mobile: 'md:hidden' } } as const;
+/** Wraps a rendered block with its design classes; returns the HTML unchanged when nothing is set. */
+export function applyDesign(html: string, d?: Partial<Design> | null) {
+  if (!html || !d) return html;
+  const cls = [DESIGN_CLASS.bg[d.bg ?? 'none'], DESIGN_CLASS.show[d.show ?? 'all']].filter(Boolean).join(' ');
+  const id = d.anchor && /^[a-z][a-z0-9-]*$/.test(d.anchor) ? ` id="${d.anchor}"` : '';
+  return cls || id ? `<div${id}${cls ? ` class="${cls}"` : ''}>${html}</div>` : html;
+}
+
 export const blockSchema = z.object({
   id: z.string().regex(/^[a-z0-9]{6,24}$/),
   type: z.string(),
   v: z.number().int().min(1),
   hidden: z.boolean().default(false),
   props: z.record(z.string(), z.unknown()),
+  design: designSchema.optional(),
 });
 export const docSchema = z.object({ version: z.literal(DOC_VERSION), blocks: z.array(blockSchema).max(60) });
 export type Block = z.infer<typeof blockSchema>;
@@ -274,7 +352,7 @@ export function renderBlocks(doc: Doc, ctx: RenderCtx) {
     const d = BLOCK_MAP.get(b.type);
     if (!d || (b.hidden && !ctx.editor)) return '';
     const r = d.schema.safeParse(b.props);
-    const html = r.success ? d.render(r.data as never, ctx) : (ctx.editor ? `<div class="wrap py-6"><p class="rounded-2xl border border-dashed border-ink-light p-4 text-[13px] text-ink-mid">${esc(d.label)}: complete the required fields.</p></div>` : '');
+    const html = r.success ? applyDesign(d.render(r.data as never, ctx), b.design) : (ctx.editor ? `<div class="wrap py-6"><p class="rounded-2xl border border-dashed border-ink-light p-4 text-[13px] text-ink-mid">${esc(d.label)}: complete the required fields.</p></div>` : '');
     return ctx.editor ? `<div data-block-id="${b.id}"${b.hidden ? ' data-hidden="1"' : ''}>${html}</div>` : html;
   }).join('\n');
 }

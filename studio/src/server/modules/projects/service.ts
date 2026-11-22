@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, max, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
 import {
-  projects, projectPillars, projectObjectives, projectGallery, projectRevisions, pillars, objectives, media, reviewComments,
+  projects, projectPillars, projectObjectives, projectGallery, projectRevisions, pillars, objectives, media, reviewComments, users,
 } from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
@@ -271,7 +271,13 @@ export async function listProjects(db: DB) {
   const rows = await db.select().from(projects).orderBy(asc(projects.sort), asc(projects.name));
   const pl = await db.select({ projectId: projectPillars.projectId, key: pillars.key, name: pillars.name, colour: pillars.colour, isPrimary: projectPillars.isPrimary })
     .from(projectPillars).innerJoin(pillars, eq(pillars.id, projectPillars.pillarId));
-  return rows.map((r) => ({ ...r, pillars: pl.filter((x) => x.projectId === r.id).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)) }));
+  // list extras: a small thumbnail of the main photo and who last edited the record
+  const mids = [...new Set(rows.map((r) => r.heroMediaId).filter(Boolean) as string[])];
+  const thumbs = new Map((mids.length ? await db.select({ id: media.id, key: media.storageKey }).from(media).where(inArray(media.id, mids)) : []).map((m) => [m.id, `/studio/media-file/${m.key}-480.webp`]));
+  const uids = [...new Set(rows.map((r) => r.updatedBy).filter(Boolean) as string[])];
+  const names = new Map((uids.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, uids)) : []).map((u) => [u.id, u.name]));
+  return rows.map((r) => ({ ...r, thumb: r.heroMediaId ? thumbs.get(r.heroMediaId) ?? null : null, updatedByName: r.updatedBy ? names.get(r.updatedBy) ?? null : null,
+    pillars: pl.filter((x) => x.projectId === r.id).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)) }));
 }
 
 export async function projectHistory(db: DB, id: string) {

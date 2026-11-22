@@ -1,0 +1,64 @@
+/* Account menu (Topbar.tsx UserMenu). Own `am-` prefix; studio.css is left untouched. */
+
+/* trigger pill */
+.am-trigger { height: 38px; padding: 3px 10px 3px 3px; gap: 9px; transition: border-color .15s, background-color .15s; }
+.am-trigger:hover { background: var(--sunken); border-color: var(--line-strong); }
+.am-trigger[aria-expanded="true"] { background: var(--sunken); border-color: var(--ink); }
+.am-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.am-trigger .avatar { width: 30px; height: 30px; font-size: 11.5px; }
+.am-caret { transform: rotate(90deg); transition: transform .15s; }
+.am-trigger[aria-expanded="true"] .am-caret { transform: rotate(-90deg); }
+
+/* panel */
+.am-scrim { display: none; }
+.am-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: 300px; max-height: min(calc(100vh - 80px), 560px); overflow-y: auto; overscroll-behavior: contain;
+  padding: 6px; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px -16px rgba(0, 0, 0, .22), 0 1px 2px rgba(0, 0, 0, .04);
+  animation: am-in .14s var(--ease, ease-out); }
+@keyframes am-in { from { opacity: 0; transform: translateY(-4px); } }
+
+/* header */
+.am-head { display: flex; align-items: center; gap: 12px; padding: 10px 10px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.am-avatar { position: relative; display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 13.5px; font-weight: 600; letter-spacing: .02em; }
+.am-avatar i { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; background: var(--ok); border: 2px solid #fff; }
+.am-who { display: grid; gap: 1px; min-width: 0; justify-items: start; }
+.am-who b { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.am-who small { max-width: 100%; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.am-role { display: inline-flex; align-items: center; height: 20px; margin-top: 6px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--sunken); font-size: 11.5px; font-weight: 600; color: var(--ink-2); }
+
+/* groups and items */
+.am-group { padding: 4px 0; }
+.am-group + .am-group { border-top: 1px solid var(--line); }
+.am-label { padding: 6px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); }
+.am-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: none;
+  font: inherit; font-size: 13.5px; color: var(--ink); text-align: left; text-decoration: none; cursor: pointer; }
+.am-item > span:first-of-type { flex: 1; min-width: 0; }
+.am-item > svg { flex: none; width: 16px; height: 16px; color: var(--muted); }
+.am-item:hover, .am-item:focus { background: var(--sunken); outline: none; }
+.am-item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.am-item:hover > svg, .am-item:focus > svg { color: var(--ink); }
+.am-hint { display: inline-flex; align-items: center; flex: none; color: var(--faint); }
+.am-hint kbd { font-size: 10.5px; }
+.am-ext { width: 14px; height: 14px; }
+.am-sep { height: 1px; margin: 4px 0; background: var(--line); }
+.am-danger { color: var(--bad); }
+.am-danger > svg, .am-danger:hover > svg, .am-danger:focus > svg { color: var(--bad); }
+.am-danger:hover, .am-danger:focus { background: var(--bad-bg); }
+
+/* below 900px the trigger is the avatar only */
+@media (max-width: 900px) {
+  .am-trigger { padding: 3px; gap: 0; }
+  .am-trigger .am-caret { display: none; }
+}
+
+/* phones: full-width bottom sheet */
+@media (max-width: 640px) {
+  .am-scrim { display: block; position: fixed; inset: 0; z-index: 59; background: rgba(12, 10, 9, .32); animation: am-fade .16s ease-out; }
+  .am-menu { position: fixed; left: 0; right: 0; top: auto; bottom: 0; width: auto; max-height: 85vh; padding: 8px 8px calc(12px + env(safe-area-inset-bottom));
+    border-radius: 16px 16px 0 0; border-bottom: 0; box-shadow: 0 -8px 32px -12px rgba(0, 0, 0, .25); animation: am-up .2s var(--ease, ease-out); }
+  .am-menu::before { content: ''; display: block; width: 36px; height: 4px; margin: 2px auto 6px; border-radius: 999px; background: var(--line-strong); }
+  .am-item { min-height: 44px; font-size: 14.5px; }
+  .am-hint kbd { display: none; }
+}
+@keyframes am-up { from { transform: translateY(100%); } }
+@keyframes am-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .am-menu, .am-scrim, .am-caret { animation: none; transition: none; } }

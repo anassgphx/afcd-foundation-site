@@ -2,18 +2,26 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import { EditorHeader, Field, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
+import { RecordTranslations } from '../RecordTranslations.tsx';
+import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 
 const SCOPES: [string, string][] = [['international', 'International'], ['national', 'National'], ['local', 'Local']];
 const scopeLabel = (s: string) => SCOPES.find((x) => x[0] === s)?.[1] ?? s;
+/** Initials as the Partners page shows them when there is no logo (same rule as the site generator). */
+const initials = (name: string) => name.replace(/[()]/g, '').split(/\s+/).filter((x) => /^\p{L}/u.test(x) && !['of', 'in', 'for', 'the', 'and'].includes(x.toLowerCase())).slice(0, 2).map((x) => x[0]).join('').toUpperCase();
+const nameKey = (n: string) => n.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const SCOPE_INFO: Record<string, string> = { international: 'Embassies, international NGOs, foundations and networks.', national: 'Moroccan institutions, associations and companies.', local: 'Communes and local groups in Al Haouz and Marrakech.' };
+const thisYear = new Date().getFullYear();
 const slugify = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
 
 type Row = { id: string; slug: string; name: string; scope: string; category: string; current: boolean; status: string; sort: number; logoMediaId: string | null; websiteUrl: string; publishedRevisionId: string | null; updatedAt: string; projects: number };
 
 export function PartnersList() {
   const can = useCan(); const toast = useToast();
-  const [rows, setRows] = useState<Row[] | null>(null); const [q, setQ] = useState(''); const [f, setF] = useState('all'); const [busy, setBusy] = useState(false);
+  const [rows, setRows] = useState<Row[] | null>(null); const [st, set] = useUrlState({ status: 'all', q: '' }); const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false); const [name, setName] = useState(''); const [scope, setScope] = useState('national'); const [err, setErr] = useState('');
   const load = () => api<Row[]>('/partners').then(setRows).catch(() => setRows([]));
   useEffect(() => { load(); }, []);
@@ -27,8 +35,19 @@ export function PartnersList() {
     try { const r = await post<{ imported: number; skipped: number }>('/partners/import'); toast(`Imported ${r.imported} partners from the current website`); await load(); }
     catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
   }
-  const shown = (rows ?? []).filter((r) => (f === 'all' ? r.status !== 'archived' : f === 'live' ? !!r.publishedRevisionId : ['international', 'national', 'local'].includes(f) ? r.scope === f && r.status !== 'archived' : r.status === f)
-    && (!q || r.name.toLowerCase().includes(q.toLowerCase())));
+  const is = (k: string, r: Row) => (k === 'all' ? r.status !== 'archived' : k === 'live' ? !!r.publishedRevisionId : ['international', 'national', 'local'].includes(k) ? r.scope === k && r.status !== 'archived' : k === 'draft' ? ['draft', 'changes_requested'].includes(r.status) : r.status === k);
+  const base = (rows ?? []).filter((r) => !st.q || `${r.name} ${r.category}`.toLowerCase().includes(st.q.toLowerCase()));
+  const shown = base.filter((r) => is(st.status, r));
+  const tabs: [string, string, number][] = [['all', 'All'], ['international', 'International'], ['national', 'National'], ['local', 'Local'], ['in_review', 'In review'], ['draft', 'Drafts'], ['archived', 'Archived']].map(([k, l]) => [k, l, base.filter((r) => is(k, r)).length]);
+  const initials = (n: string) => n.replace(/[()]/g, '').split(/\s+/).filter((w) => /^[A-Za-zÀ-ÿ]/.test(w) && !['of', 'in', 'for', 'the', 'and'].includes(w.toLowerCase())).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  const columns: Column<Row>[] = [
+    { key: 'name', header: 'Organisation', sort: (r) => r.name, csv: (r) => r.name, render: (r) => <div className="dt-main"><span className="dt-thumb dt-initials">{initials(r.name)}</span><span className="min-w-0">
+      <Link className="title" to={`/studio/partners/${r.id}`}>{r.name}</Link><span className="sub">{[r.category, r.current ? '' : 'Past partner', r.logoMediaId ? 'Logo' : 'No logo', r.websiteUrl ? 'Website' : ''].filter(Boolean).join(' · ')}</span></span></div> },
+    { key: 'scope', header: 'Scope', sort: (r) => r.scope, csv: (r) => scopeLabel(r.scope), render: (r) => <span className="pill">{scopeLabel(r.scope)}</span> },
+    { key: 'projects', header: 'Projects', sort: (r) => -r.projects, csv: (r) => String(r.projects), align: 'right', hideBelow: 900, render: (r) => <span className="sub">{r.projects || '—'}</span> },
+    { key: 'status', header: 'Status', sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div> },
+    { key: 'updated', header: 'Updated', align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
+  ];
   const missingLogo = (rows ?? []).filter((r) => r.publishedRevisionId && !r.logoMediaId).length;
   return <>
     <div className="page-h"><div><h1>Partners</h1><p>One record per organisation. Changes reach the Our Partners page only after review and publishing.</p></div>
@@ -37,20 +56,11 @@ export function PartnersList() {
       {can('partner.publish') && <button className="btn btn-primary btn-sm" disabled={busy} onClick={importList}>{busy ? 'Importing…' : 'Import current list'}</button>}</div>}
     {missingLogo > 0 && <div className="notice n-info"><div>{missingLogo} live partners show initials instead of a logo. Add a logo only with the partner’s permission.</div></div>}
     <section className="card">
-      <div className="card-h">
-        <div className="seg" role="group" aria-label="Filter">{[['all', 'All'], ['international', 'International'], ['national', 'National'], ['local', 'Local'], ['in_review', 'In review'], ['draft', 'Drafts'], ['archived', 'Archived']].map(([k, l]) => <button key={k} className={f === k ? 'on' : ''} onClick={() => setF(k)}>{l}</button>)}</div>
-        <label className="search"><Icon n="search" /><span className="sr-only">Search partners</span><input className="input" placeholder="Search partners" value={q} onChange={(e) => setQ(e.target.value)} /></label>
-      </div>
-      {!rows ? <Loading /> : <div className="scroll-x"><table className="table">
-        <thead><tr><th>Organisation</th><th>Scope</th><th>Projects</th><th>Status</th><th>Updated</th></tr></thead>
-        <tbody>{shown.length === 0 && <tr><td colSpan={5} className="empty">No partners here.</td></tr>}
-          {shown.map((r) => <tr key={r.id}>
-            <td><Link className="title" to={`/studio/partners/${r.id}`}>{r.name}</Link><div className="sub">{[r.category, r.current ? '' : 'Past partner', r.logoMediaId ? 'Logo' : 'No logo', r.websiteUrl ? 'Website' : ''].filter(Boolean).join(' · ')}</div></td>
-            <td><span className="pill">{scopeLabel(r.scope)}</span></td>
-            <td className="sub">{r.projects || '—'}</td>
-            <td><div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div></td>
-            <td className="sub">{ago(r.updatedAt)}</td></tr>)}</tbody>
-      </table></div>}
+      <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search partners" />
+      {!rows ? <Loading /> : <DataTable id="partners" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-partners"
+        actions={workflowActions<Row>({ base: '/partners', noun: ['partner', 'partners'], name: (r) => r.name, canUpdate: can('partner.update'), reload: load, post, toast })}
+        onOpen={(r) => navigate(`/studio/partners/${r.id}`)}
+        empty={<EmptyState icon="partner" text="No partners match these filters" onClear={st.q || st.status !== 'all' ? () => { set('q', ''); set('status', 'all'); } : undefined} />} />}
     </section>
     {adding && <Modal size="sm" title="Add a partner" onClose={() => setAdding(false)} footer={<><button className="btn" onClick={() => setAdding(false)}>Cancel</button><button className="btn btn-primary" disabled={name.trim().length < 2} onClick={create}>Add</button></>}>
       <div className="modal-b stack">
@@ -74,9 +84,11 @@ export function PartnerEditor({ id }: { id: string }) {
   const [dirty, setDirty] = useState(false); const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
   const [dialog, setDialog] = useState<null | 'logo' | 'preview' | 'publish' | 'unpublish' | 'changes'>(null);
   const [url, setUrl] = useState(''); const [comment, setComment] = useState('');
+  const [others, setOthers] = useState<{ id: string; name: string }[]>([]); const [pq, setPq] = useState('');
 
   const load = useCallback(async () => {
-    const [d, pr] = await Promise.all([api<Loaded>(`/partners/${id}`), api('/projects')]);
+    const [d, pr, all] = await Promise.all([api<Loaded>(`/partners/${id}`), api('/projects'), api<{ id: string; name: string }[]>('/partners')]);
+    setOthers(all.filter((x) => x.id !== id));
     setP(d); setF(Object.fromEntries(KEYS.map((k) => [k, (d as any)[k]])) as Form); setLogo(d.media[0] ?? null);
     setProjects(pr.filter((x: any) => x.publishedRevisionId)); setDirty(false);
   }, [id]);
@@ -89,6 +101,13 @@ export function PartnerEditor({ id }: { id: string }) {
   const editable = can('partner.update') && !['in_review', 'archived'].includes(status);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => { setF((x) => ({ ...x!, [k]: v })); setDirty(true); };
   function showErr(e: unknown) { setErrs(e instanceof ApiError && e.details?.length ? e.details.map((d) => (d.path ? `${d.path}: ` : '') + d.message) : [e instanceof Error ? e.message : 'Something went wrong.']); }
+  const key = nameKey(f.name);
+  const dupe = key.length > 2 ? others.find((o) => nameKey(o.name) === key) : undefined;
+  const similar = !dupe && key.length > 4 ? others.find((o) => { const k = nameKey(o.name); return k.length > 4 && (k.includes(key) || key.includes(k)); }) : undefined;
+  const site = (() => { try { const u = new URL(f.websiteUrl); return u.protocol === 'https:' || u.protocol === 'http:' ? u : null; } catch { return null; } })();
+  const siteIssue = !f.websiteUrl ? '' : !site ? 'Use a full address starting with https://' : site.protocol === 'http:' ? 'Prefer the secure https:// address if the site has one.' : '';
+  const years = f.sinceYear && f.sinceYear <= thisYear ? thisYear - f.sinceYear : null;
+  const shownProjects = projects.filter((x) => !pq || x.name.toLowerCase().includes(pq.toLowerCase())).sort((a, b) => Number(f.projectSlugs.includes(b.slug)) - Number(f.projectSlugs.includes(a.slug)));
   async function save(): Promise<boolean> {
     setBusy('save'); setErrs([]);
     try { await put(`/partners/${id}`, f); await load(); toast(live ? 'Draft saved. The live listing is unchanged until you publish.' : 'Draft saved'); return true; }
@@ -113,57 +132,96 @@ export function PartnerEditor({ id }: { id: string }) {
   }
 
   return <>
-    <div className="page-h">
-      <div><Link to="/studio/partners" className="muted" style={{ fontSize: 13 }}>← Partners</Link><h1>{f.name || 'Partner'}</h1>
-        <p><span className="pills">{live && status !== 'published' && <LiveBadge />}<Badge s={status} /></span>{dirty && <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>Unsaved</span>}</p></div>
-      <div className="pills">
+    <EditorHeader back={{ to: '/studio/partners', label: 'Partners' }} title={f.name} status={status} live={live} dirty={dirty}
+      extra={<span className="pill">{SCOPES.find((x) => x[0] === f.scope)?.[1]}</span>}
+      actions={<>
         <button className="btn" onClick={preview} disabled={!!busy}><Icon n="eye" />{busy === 'preview' ? 'Building…' : 'Preview'}</button>
-        {editable && <button className="btn btn-primary" onClick={save} disabled={!dirty || !!busy}><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save'}</button>}
-      </div>
-    </div>
+        {editable && dirty && <button className="btn btn-primary" onClick={save} disabled={!!busy} title="Save (⌘S)"><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save draft'}</button>}
+        {!dirty && ['draft', 'changes_requested'].includes(status) && can('partner.update') && <button className="btn btn-primary" disabled={!!busy || p.problems.length > 0} title={p.problems.length ? `${p.problems.length} thing${p.problems.length === 1 ? '' : 's'} to do first (see the publishing panel)` : undefined} onClick={() => act('submit')}><Icon n="send" />Submit for review</button>}
+        {!dirty && status === 'approved' && can('partner.publish') && <button className="btn btn-primary" disabled={!!busy} onClick={() => setDialog('publish')}><Icon n="rocket" />Publish…</button>}
+      </>} />
     {errs.length > 0 && <div className="notice n-warn" role="alert"><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErrs([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
-    {!editable && can('partner.update') && <div className="notice n-info"><div>{status === 'in_review' ? 'In review: read-only. Withdraw it to edit.' : 'Archived. Restore it to edit.'}</div></div>}
-
-    <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(280px,1fr)', gap: 16, alignItems: 'start' }}>
-      <fieldset className="card stack" style={{ padding: 20, border: 0, margin: 0 }} disabled={!editable}>
-        <Fld label="Organisation name"><input className="input" maxLength={140} value={f.name} onChange={(e) => set('name', e.target.value)} aria-label="Organisation name" /></Fld>
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Fld label="Scope" hint="Groups the partner on the website."><select className="select" value={f.scope} onChange={(e) => set('scope', e.target.value)} aria-label="Scope">{SCOPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Fld>
-          <Fld label="Type of organisation" hint="e.g. Embassy, Foundation, Association"><input className="input" maxLength={60} value={f.category} onChange={(e) => set('category', e.target.value)} aria-label="Type of organisation" /></Fld>
-        </div>
-        <Fld label="What we do together" hint={`${f.description.length} / 400 · only facts AFCD can confirm`}><textarea className="textarea" maxLength={400} value={f.description} onChange={(e) => set('description', e.target.value)} aria-label="What we do together" /></Fld>
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-          <Fld label="Website"><input className="input mono" maxLength={300} placeholder="https://…" value={f.websiteUrl} onChange={(e) => set('websiteUrl', e.target.value.trim())} aria-label="Website" /></Fld>
-          <Fld label="Partner since"><input className="input" type="number" min={2000} max={2100} placeholder="Year" value={f.sinceYear ?? ''} onChange={(e) => set('sinceYear', e.target.value ? Number(e.target.value) : null)} aria-label="Partner since" /></Fld>
-        </div>
-        <label className="check"><input type="checkbox" checked={f.current} onChange={(e) => set('current', e.target.checked)} /><span><b>Current partnership</b><br /><small className="muted">Untick for organisations that supported past programmes.</small></span></label>
-        <Fld label="Logo" hint="Upload logos only with the partner’s permission, then confirm rights in Media. Without a logo the site shows initials.">
-          {f.logoMediaId && logo ? <div className="thumb" style={{ width: 180, background: '#fff' }}><img src={logo.url} alt={logo.alt} style={{ objectFit: 'contain' }} /><button type="button" aria-label="Remove logo" onClick={() => set('logoMediaId', null)}>×</button></div> : <div className="muted">No logo</div>}
-          <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('logo')}><Icon n="image" />{f.logoMediaId ? 'Change' : 'Choose'} logo</button></Fld>
-        <Fld label="Projects with this partner" hint="Live projects only."><div className="b-checks">{projects.map((x) => <label key={x.slug} className="check"><input type="checkbox" checked={f.projectSlugs.includes(x.slug)} onChange={(e) => set('projectSlugs', e.target.checked ? [...f.projectSlugs, x.slug] : f.projectSlugs.filter((s) => s !== x.slug))} /><span>{x.name}</span></label>)}</div></Fld>
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
-          <Fld label="Order" hint="Lower comes first."><input className="input" type="number" min={0} max={10000} value={f.sort} onChange={(e) => set('sort', Number(e.target.value) || 0)} aria-label="Order" /></Fld>
-          <Fld label="Source (internal)" hint="Where these details come from. Not shown on the website."><input className="input" maxLength={300} value={f.provenance} onChange={(e) => set('provenance', e.target.value)} aria-label="Source" /></Fld>
-        </div>
-        <Fld label="Record key" hint={live ? 'A live partner’s key cannot change.' : 'Used for links and to prevent duplicates.'}><input className="input mono" disabled={live} value={f.slug} onChange={(e) => set('slug', slugify(e.target.value))} aria-label="Record key" /></Fld>
+    {status === 'in_review' && can('partner.update') && <div className="notice n-info"><div>In review: read-only. Withdraw it to edit.</div></div>}
+    <div className="ed-layout">
+      <SectionNav sections={[
+        { id: 'basics', label: 'Organisation', icon: 'partner', done: !!f.name },
+        { id: 'about', label: 'About the partnership', icon: 'log', optional: true, done: f.description || f.websiteUrl ? true : undefined },
+        { id: 'logo', label: 'Logo', icon: 'image', optional: true, done: f.logoMediaId ? true : undefined },
+        { id: 'projects', label: 'Projects', icon: 'folder', optional: true, done: f.projectSlugs.length ? true : undefined },
+        { id: 'internal', label: 'Internal', icon: 'lock', optional: true },
+        { id: 'translations', label: 'Translations', icon: 'globe', optional: true },
+      ]} />
+      <div className="ed-col">
+      <fieldset className="ed-main" disabled={!editable}>
+        <Section id="basics" title="Organisation" desc="One record per organisation. Use its official name.">
+          <div className="pt-top s3">
+            <div className="pt-name">
+              <Field label="Organisation name" count={[f.name.length, 140]} hint="Its official name, as the organisation writes it."><input className="input input-lg" maxLength={140} value={f.name} onChange={(x) => set('name', x.target.value)} aria-label="Organisation name" /></Field>
+              {dupe && <p className="pt-warn" role="alert"><Icon n="alert" width={14} height={14} /><span>Another partner already has this name: <Link to={`/studio/partners/${dupe.id}`}>{dupe.name}</Link>. Keep one record per organisation.</span></p>}
+              {similar && <p className="pt-note"><Icon n="alert" width={14} height={14} /><span>Similar name already listed: <Link to={`/studio/partners/${similar.id}`}>{similar.name}</Link>. Is it the same organisation?</span></p>}
+            </div>
+            <div className="pt-prev" aria-label="Preview on the Partners page">
+              <span className="op-cap">On the Partners page</span>
+              <div className="pt-tile">
+                <span className="pt-logo">{f.logoMediaId && logo ? <img src={logo.url} alt="" /> : <span>{initials(f.name) || '?'}</span>}</span>
+                <b>{f.name || 'Organisation name'}</b>
+                <span className="pt-scope">{scopeLabel(f.scope)}{f.category ? ` · ${f.category}` : ''}</span>
+              </div>
+            </div>
+          </div>
+          <Field label="Scope" span={3} hint="Groups the partner on the website."><div className="ed-choice">
+            {SCOPES.map(([v, l]) => <label key={v} className={f.scope === v ? 'on' : ''}><input type="radio" name="scope" checked={f.scope === v} onChange={() => set('scope', v)} /><b>{l}</b><small>{SCOPE_INFO[v]}</small></label>)}</div></Field>
+          <Field label="Type of organisation" span={2} hint="e.g. Embassy, Foundation, Association, Commune"><input className="input" maxLength={60} value={f.category} onChange={(x) => set('category', x.target.value)} aria-label="Type of organisation" /></Field>
+          <Field label="Partnership"><div className="seg pt-seg" role="radiogroup" aria-label="Partnership">
+            <button type="button" role="radio" aria-checked={f.current} className={f.current ? 'on' : ''} onClick={() => set('current', true)}>Current</button>
+            <button type="button" role="radio" aria-checked={!f.current} className={!f.current ? 'on' : ''} onClick={() => set('current', false)}>Past</button></div></Field>
+        </Section>
+        <Section id="about" title="About the partnership" desc="Only facts AFCD can confirm.">
+          <Field label="What we do together" span={3} count={[f.description.length, 400]}><textarea className="textarea" rows={3} maxLength={400} value={f.description} onChange={(x) => set('description', x.target.value)} aria-label="What we do together" /></Field>
+          <Field label="Website" span={2} hint={siteIssue ? <span className="pt-hint-warn">{siteIssue}</span> : site ? <>Links to <b>{site.hostname.replace(/^www\./, '')}</b></> : 'Their official site, if they have one.'}>
+            <div className="pt-url"><input className="input mono" maxLength={300} placeholder="https://…" value={f.websiteUrl} onChange={(x) => set('websiteUrl', x.target.value.trim())} aria-label="Website" aria-invalid={!!siteIssue && !site} />
+              {site && <a className="btn btn-sm" href={site.href} target="_blank" rel="noopener noreferrer"><Icon n="ext" />Open</a>}</div></Field>
+          <Field label="Partner since" hint={f.sinceYear && f.sinceYear > thisYear ? <span className="pt-hint-warn">That year is in the future.</span> : years !== null ? (years === 0 ? 'Since this year' : `${years} year${years === 1 ? '' : 's'} of partnership`) : 'Year the partnership started.'}>
+            <input className="input" type="number" min={2000} max={thisYear} placeholder="Year" value={f.sinceYear ?? ''} onChange={(x) => set('sinceYear', x.target.value ? Number(x.target.value) : null)} aria-label="Partner since" /></Field>
+        </Section>
+        <Section id="logo" title="Logo" desc="Only with the partner’s permission; confirm the rights in the Media Library. Without a logo the site shows initials.">
+          <div className="ed-media s3">
+            {f.logoMediaId && logo ? <div className="ed-media-img" style={{ background: '#fff' }}><img src={logo.url} alt={logo.alt} style={{ objectFit: 'contain', aspectRatio: '3 / 2', padding: 12 }} /><button type="button" className="btn btn-sm" onClick={() => set('logoMediaId', null)}><Icon n="x" />Remove</button></div>
+              : <button type="button" className="ed-drop" onClick={() => setDialog('logo')}><Icon n="image" /><b>Choose a logo</b><small>From the media library.</small></button>}
+            {f.logoMediaId && <button type="button" className="btn btn-sm" onClick={() => setDialog('logo')}><Icon n="image" />Change logo</button>}
+          </div>
+        </Section>
+        <Section id="projects" title="Projects with this partner" desc="Live projects only.">
+          {projects.length > 6 && <div className="pt-pbar s3"><label className="search"><Icon n="search" /><span className="sr-only">Search projects</span><input className="input" placeholder="Search projects" value={pq} onChange={(e) => setPq(e.target.value)} /></label><span className="muted">{f.projectSlugs.length} selected</span></div>}
+          {projects.length === 0 && <p className="muted s3" style={{ margin: 0 }}>No live projects yet. Projects appear here once they are published.</p>}
+          {projects.length > 0 && projects.length <= 6 && <span className="muted s3" style={{ fontSize: 12 }}>{f.projectSlugs.length} selected</span>}
+          <div className="ed-checks s3">{shownProjects.map((x) => <label key={x.slug} className={f.projectSlugs.includes(x.slug) ? 'on' : ''}><input type="checkbox" checked={f.projectSlugs.includes(x.slug)} onChange={(e) => set('projectSlugs', e.target.checked ? [...f.projectSlugs, x.slug] : f.projectSlugs.filter((s) => s !== x.slug))} /><span>{x.name}</span></label>)}</div>
+        </Section>
+        <Section id="internal" title="Internal" desc="Not shown on the website.">
+          <Field label="Source" span={2} hint="Where these details come from."><input className="input" maxLength={300} value={f.provenance} onChange={(x) => set('provenance', x.target.value)} aria-label="Source" /></Field>
+          <Field label="Order" hint="Lower comes first."><input className="input" type="number" min={0} max={10000} value={f.sort} onChange={(x) => set('sort', Number(x.target.value) || 0)} aria-label="Order" /></Field>
+          <Field label="Record key" span={3} hint={live ? 'A live partner’s key cannot change.' : 'Used for links and to prevent duplicates.'}><input className="input mono" disabled={live} value={f.slug} onChange={(x) => set('slug', slugify(x.target.value))} aria-label="Record key" /></Field>
+        </Section>
       </fieldset>
-
-      <section className="card stack" style={{ padding: 20 }}>
-        <dl className="kv"><dt>Website</dt><dd>{live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'}</dd>{p.publishedAt && <><dt>Published</dt><dd>{fmtDate(p.publishedAt)}</dd></>}{p.verifiedAt && <><dt>Last approved</dt><dd>{fmtDate(p.verifiedAt)}</dd></>}</dl>
+      <Section id="translations" title="Translations" desc="French and Arabic of this partner. Reviewed and published on the Translations screen.">
+        <RecordTranslations noun="partner" dirty={status !== 'published'} files={[]} fields={[{ label: 'Organisation name', value: f.name }, { label: 'Category', value: f.category }, { label: 'About the partnership', value: f.description }]} />
+      </Section>
+      </div>
+      <WorkflowPanel status={status} live={live} problems={p.problems}
+        facts={[['Website', live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'], ...(p.publishedAt ? [['Published', fmtDate(p.publishedAt)] as [string, string]] : []), ...(p.verifiedAt ? [['Last approved', fmtDate(p.verifiedAt)] as [string, string]] : [])]}>
         {live && <a className="btn btn-sm" href={me.siteUrl + 'partners.html'} target="_blank" rel="noopener"><Icon n="ext" />Open Our Partners</a>}
-        {p.problems.length > 0 && status !== 'archived' && <div className="notice n-warn"><div><b>Before review</b><ul>{p.problems.map((x) => <li key={x}>{x}</li>)}</ul></div></div>}
         {['draft', 'changes_requested'].includes(status) && can('partner.update') && <button className="btn btn-primary" disabled={!!busy} onClick={() => act('submit')}><Icon n="send" />Submit for review</button>}
         {status === 'in_review' && can('partner.approve') && <><button className="btn btn-ok" disabled={!!busy} onClick={() => act('approve')}><Icon n="check" />Approve</button><button className="btn" onClick={() => setDialog('changes')}>Request changes</button></>}
         {status === 'approved' && can('partner.publish') && <button className="btn btn-ok" disabled={!!busy} onClick={() => setDialog('publish')}><Icon n="rocket" />Publish</button>}
         {['in_review', 'approved'].includes(status) && can('partner.update') && <button className="btn btn-ghost" onClick={() => act('withdraw')}><Icon n="undo" />Withdraw to draft</button>}
         {live && can('partner.publish') && <button className="btn btn-ghost btn-danger" onClick={() => setDialog('unpublish')}>Remove from website</button>}
-        {!live && status !== 'archived' && can('partner.update') && <button className="btn btn-ghost" onClick={() => { if (confirm('Archive this partner?')) act('archive'); }}><Icon n="archive" />Archive</button>}
+        {!live && status !== 'archived' && can('partner.update') && <button className="btn btn-ghost" onClick={() => { if (confirm('Archive this record?')) act('archive'); }}><Icon n="archive" />Archive</button>}
         {status === 'archived' && can('partner.update') && <button className="btn" onClick={() => act('restore')}>Restore as draft</button>}
-        <small className="muted">History</small>
-        <ol className="timeline">{p.history.revisions.slice(0, 6).map((r) => <li key={r.id}><b>Revision {r.number} · {r.reason}{r.id === p.publishedRevisionId ? ' · live' : ''}</b><small>{fmtDate(r.createdAt)}</small>
-          {editable && <button className="btn btn-sm btn-ghost" style={{ padding: 0, height: 'auto' }} onClick={async () => { if (confirm(`Copy revision ${r.number} into the draft?`)) { await post(`/partners/${id}/revisions/${r.id}/restore`); await load(); toast('Revision restored as a draft'); } }}>Restore this version</button>}</li>)}
-          {p.history.comments.filter((c) => c.body).slice(0, 5).map((c) => <li key={c.id}><b>{c.kind.replace('_', ' ')}</b><q>{c.body}</q><small>{fmtDate(c.createdAt)}</small></li>)}</ol>
-      </section>
+        {(p.history.revisions.length > 0 || p.history.comments.some((c) => c.body)) && <details className="ed-history"><summary>History</summary>
+          <ol className="timeline">{p.history.revisions.slice(0, 8).map((r) => <li key={r.id}><b>Revision {r.number} · {r.reason}{r.id === p.publishedRevisionId ? ' · live' : ''}</b><small>{fmtDate(r.createdAt)}</small>
+            {editable && <button className="btn btn-sm btn-ghost" style={{ padding: 0, height: 'auto' }} onClick={async () => { if (confirm(`Copy revision ${r.number} into the draft?`)) { await post(`/partners/${id}/revisions/${r.id}/restore`); await load(); toast('Revision restored as a draft'); } }}>Restore this version</button>}</li>)}
+            {p.history.comments.filter((c) => c.body).slice(0, 5).map((c) => <li key={c.id}><b>{c.kind.replace('_', ' ')}</b><q>{c.body}</q><small>{fmtDate(c.createdAt)}</small></li>)}</ol></details>}
+      </WorkflowPanel>
     </div>
 
     {dialog === 'logo' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { if (m[0]) { setLogo(m[0]); set('logoMediaId', m[0].id); } setDialog(null); }} />}

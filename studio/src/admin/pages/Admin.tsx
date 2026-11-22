@@ -1,24 +1,9 @@
 // Approval queue, publishing history, activity log and users.
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, patch, post } from '../api.ts';
-import { Badge, Link, Modal, ago, fmtDate, useCan, useMe, useToast } from '../ui.tsx';
+import { Badge, Icon, Link, Modal, ago, fmtDate, useCan, useMe, useToast } from '../ui.tsx';
+import { DataTable, EmptyState, ListToolbar, useUrlState, type Column } from '../DataTable.tsx';
 import { Loading } from './Dashboard.tsx';
-
-export function ApprovalQueue() {
-  const [rows, setRows] = useState<any[] | null>(null);
-  useEffect(() => { api<any[]>('/projects').then((p) => setRows(p.filter((x) => ['in_review', 'approved', 'changes_requested'].includes(x.status)))).catch(() => setRows([])); }, []);
-  const groups = [['in_review', 'Waiting for review'], ['approved', 'Approved, ready to publish'], ['changes_requested', 'Sent back to authors']] as const;
-  return <>
-    <div className="page-h"><div><h1>Approval Queue</h1><p>Content moving through review. Approvers cannot approve their own submissions.</p></div></div>
-    {!rows ? <Loading /> : <div className="grid">{groups.map(([s, label]) => {
-      const list = rows.filter((r) => r.status === s);
-      return <section className="card" key={s}><div className="card-h"><h2>{label}</h2><span className="muted">{list.length}</span></div>
-        {list.length === 0 ? <div className="empty">Nothing here.</div> : <table className="table"><tbody>{list.map((r) => (
-          <tr key={r.id}><td><Link className="title" to={`/studio/projects/${r.id}`}>{r.name}</Link><div className="sub">{r.pillars.map((p: any) => p.name).join(' · ')}</div></td>
-            <td style={{ width: 1 }}><Badge s={r.status} /></td><td className="sub" style={{ width: 1, whiteSpace: 'nowrap' }}>{ago(r.updatedAt)}</td></tr>))}</tbody></table>}
-      </section>; })}</div>}
-  </>;
-}
 
 export function Publishing() {
   const [jobs, setJobs] = useState<any[] | null>(null); const [open, setOpen] = useState<any>(null);
@@ -47,24 +32,41 @@ export function ActivityLog() {
 
 export function Users() {
   const me = useMe(); const can = useCan(); const toast = useToast();
-  const [d, setD] = useState<{ users: any[]; roles: { id: string; label: string; permissions: string[] }[] } | null>(null);
+  const [d, setD] = useState<{ users: UserRow[]; roles: { id: string; label: string; permissions: string[] }[] } | null>(null);
   const [adding, setAdding] = useState(false);
+  const [st, set] = useUrlState({ status: 'active', role: 'all', q: '' });
   const load = () => api('/users').then(setD);
   useEffect(() => { load(); }, []);
   async function change(id: string, body: Record<string, unknown>) { try { await patch(`/users/${id}`, body); toast('User updated'); load(); } catch (e) { toast((e as Error).message, true); } }
+  const roleLabel = (r: string) => d?.roles.find((x) => x.id === r)?.label ?? r;
+  const is = (k: string, u: UserRow) => (k === 'active' ? u.active : k === 'inactive' ? !u.active : true);
+  const base = (d?.users ?? []).filter((u) => (st.role === 'all' || u.role === st.role) && (!st.q || `${u.name} ${u.email}`.toLowerCase().includes(st.q.toLowerCase())));
+  const shown = base.filter((u) => is(st.status, u));
+  const tabs: [string, string, number][] = [['active', 'Active'], ['inactive', 'Inactive'], ['all', 'All']].map(([k, l]) => [k, l, base.filter((u) => is(k, u)).length]);
+  const manage = (u: UserRow) => can('users.manage') && u.id !== me.user.id;
+  const columns: Column<UserRow>[] = [
+    { key: 'name', header: 'Name', sort: (u) => u.name, csv: (u) => u.name, render: (u) => <div className="dt-main"><span className="avatar">{u.name.split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase()}</span><span className="min-w-0"><b>{u.name}{u.id === me.user.id ? ' (you)' : ''}</b><span className="sub">{u.email}</span></span></div> },
+    { key: 'role', header: 'Role', sort: (u) => roleLabel(u.role), csv: (u) => roleLabel(u.role), render: (u) => manage(u) && d ? <select className="select" style={{ width: 'auto', height: 32 }} value={u.role} onChange={(e) => change(u.id, { role: e.target.value })} aria-label={`Role of ${u.name}`}>{d.roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select> : <span className="pill">{roleLabel(u.role)}</span> },
+    { key: 'last', header: 'Last sign-in', sort: (u) => (u.lastLoginAt ? -new Date(u.lastLoginAt).getTime() : 0), csv: (u) => u.lastLoginAt ?? 'never', hideBelow: 800, render: (u) => <span className="sub">{u.lastLoginAt ? ago(u.lastLoginAt) : 'Never'}</span> },
+    { key: 'access', header: 'Access', sort: (u) => (u.active ? 0 : 1), csv: (u) => (u.active ? 'active' : 'inactive'), align: 'right',
+      render: (u) => manage(u) ? <button className="btn btn-sm" onClick={() => change(u.id, { active: !u.active })}>{u.active ? 'Deactivate' : 'Reactivate'}</button> : <span className="dt-state"><span className="dot" style={{ ['--c' as string]: u.active ? '#16a34a' : '#a8a29e' }} />{u.active ? 'Active' : 'Inactive'}</span> },
+  ];
   return <>
-    <div className="page-h"><div><h1>Users & Roles</h1><p>Who can edit, review and publish. Permissions are enforced by the server.</p></div>{can('users.manage') && <button className="btn btn-primary" onClick={() => setAdding(true)}>Add user</button>}</div>
+    <div className="page-h"><div><h1>Users & Roles</h1><p>Who can edit, review and publish. Permissions are enforced by the server.</p></div>{can('users.manage') && <button className="btn btn-primary" onClick={() => setAdding(true)}><Icon n="plus" />Add user</button>}</div>
     <div className="grid">
-      <section className="card">{!d ? <Loading /> : <div className="scroll-x"><table className="table"><thead><tr><th>Name</th><th>Role</th><th>Last sign-in</th><th>Access</th></tr></thead><tbody>{d.users.map((u) => (
-        <tr key={u.id}><td><b>{u.name}</b><div className="sub">{u.email}</div></td>
-          <td>{can('users.manage') && u.id !== me.user.id ? <select className="select" style={{ width: 'auto' }} value={u.role} onChange={(e) => change(u.id, { role: e.target.value })}>{d.roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select> : d.roles.find((r) => r.id === u.role)?.label}</td>
-          <td className="sub">{u.lastLoginAt ? ago(u.lastLoginAt) : 'Never'}</td>
-          <td>{can('users.manage') && u.id !== me.user.id ? <button className="btn btn-sm" onClick={() => change(u.id, { active: !u.active })}>{u.active ? 'Deactivate' : 'Reactivate'}</button> : <span className="pill">{u.active ? 'Active' : 'Inactive'}</span>}</td></tr>))}</tbody></table></div>}</section>
+      <section className="card">
+        <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search name or email">
+          <select className="select" value={st.role} onChange={(e) => set('role', e.target.value)} aria-label="Role"><option value="all">All roles</option>{d?.roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select>
+        </ListToolbar>
+        {!d ? <Loading /> : <DataTable id="users" rows={shown} total={d.users.length} rowKey={(u) => u.id} columns={columns} csvName="afcd-studio-users" initialSort={{ key: 'name', dir: 'asc' }}
+          empty={<EmptyState icon="users" text="No users match these filters" onClear={() => { set('q', ''); set('role', 'all'); set('status', 'all'); }} />} />}
+      </section>
       {d && <section className="card"><div className="card-h"><h2>What each role can do</h2></div><div className="scroll-x"><table className="table"><tbody>{d.roles.map((r) => <tr key={r.id}><td style={{ whiteSpace: 'nowrap' }}><b>{r.label}</b></td><td><div className="pills">{r.permissions.map((p) => <span key={p} className="pill mono">{p}</span>)}</div></td></tr>)}</tbody></table></div></section>}
     </div>
     {adding && d && <AddUser roles={d.roles} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />}
   </>;
 }
+type UserRow = { id: string; email: string; name: string; role: string; active: boolean; lastLoginAt: string | null };
 
 function AddUser({ roles, onClose, onDone }: { roles: { id: string; label: string }[]; onClose: () => void; onDone: () => void }) {
   const toast = useToast();

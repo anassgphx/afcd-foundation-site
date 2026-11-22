@@ -20,6 +20,8 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   role: roleEnum('role').notNull().default('read_only'),
   active: boolean('active').notNull().default(true),
+  // Set only by `npm run user:password -- --local-only`: a short password that works only while Studio runs on localhost.
+  localOnlyPassword: boolean('local_only_password').notNull().default(false),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -367,3 +369,322 @@ export const eventRevisions = pgTable('event_revisions', {
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex('event_revisions_num_uq').on(t.eventId, t.number)]);
+
+// ---------------------------------------------------------------- Opportunities (calls for applications, volunteering, jobs, internships, consultancies)
+export const opportunityTypeEnum = pgEnum('opportunity_type', ['call_for_applications', 'volunteering', 'job', 'internship', 'consultancy', 'call_for_partners']);
+export const applyMethodEnum = pgEnum('apply_method', ['external', 'email', 'contact']);
+
+export const opportunities = pgTable('opportunities', {
+  id: id(),
+  slug: text('slug').notNull(),
+  title: text('title').notNull(),
+  type: opportunityTypeEnum('type').notNull().default('call_for_applications'),
+  summary: text('summary').notNull().default(''),
+  body: text('body').notNull().default(''),
+  eligibility: jsonb('eligibility').$type<string[]>().notNull().default([]),
+  benefits: jsonb('benefits').$type<string[]>().notNull().default([]),
+  location: text('location').notNull().default(''),
+  commitment: text('commitment').notNull().default(''),        // e.g. "3 months, part-time", "2 days"
+  opensOn: text('opens_on'),                                    // YYYY-MM-DD, optional
+  deadline: text('deadline'),                                   // YYYY-MM-DD, null = rolling
+  applyMethod: applyMethodEnum('apply_method').notNull().default('external'),
+  applyUrl: text('apply_url').notNull().default(''),
+  applyEmail: text('apply_email').notNull().default(''),
+  pillarId: uuid('pillar_id').references(() => pillars.id, { onDelete: 'restrict' }),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  heroMediaId: uuid('hero_media_id').references(() => media.id, { onDelete: 'set null' }),
+  seoTitle: text('seo_title').notNull().default(''),
+  seoDescription: text('seo_description').notNull().default(''),
+  status: workflowEnum('status').notNull().default('draft'),
+  publishedRevisionId: uuid('published_revision_id'),
+  approvedRevisionId: uuid('approved_revision_id'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('opportunities_slug_uq').on(t.slug), index('opportunities_status_idx').on(t.status)]);
+
+export const opportunityRevisions = pgTable('opportunity_revisions', {
+  id: id(),
+  opportunityId: uuid('opportunity_id').notNull().references(() => opportunities.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('opportunity_revisions_num_uq').on(t.opportunityId, t.number)]);
+
+// ---------------------------------------------------------------- Forms / Inbox (submissions from the public site; personal data)
+// Status is the reply workflow; spam, archive, read and star are separate so a message keeps its status when it is
+// archived or flagged. 0015_inbox moved the old enum (new, in_progress, done, spam) to this shape.
+export const SUBMISSION_STATUSES = ['new', 'in_progress', 'replied', 'closed'] as const;
+export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number];
+
+export const formSettings = pgTable('form_settings', {
+  key: text('key').primaryKey(),                          // 'contact' | 'newsletter'
+  enabled: boolean('enabled').notNull().default(true),     // accepting submissions
+  retentionDays: integer('retention_days').notNull().default(365),
+  closedRetentionMonths: integer('closed_retention_months'),   // delete closed messages this long after closing; null = off
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedAt: updatedAt(),
+});
+
+export const formSubmissions = pgTable('form_submissions', {
+  id: id(),
+  formKey: text('form_key').notNull(),
+  topic: text('topic').notNull().default(''),
+  name: text('name').notNull().default(''),
+  email: text('email').notNull().default(''),
+  data: jsonb('data').$type<Record<string, string>>().notNull().default({}),
+  status: text('status').$type<SubmissionStatus>().notNull().default('new'),
+  spam: boolean('spam').notNull().default(false),
+  spamReason: text('spam_reason'),                         // honeypot | too_fast | rate_limit | manual
+  readAt: timestamp('read_at', { withTimezone: true }),    // first opened by a staff member (shared team inbox)
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+  assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
+  note: text('note').notNull().default(''),               // legacy single note; 0015 copied it into submission_events
+  consentAt: timestamp('consent_at', { withTimezone: true }),
+  ipHash: text('ip_hash'),                                 // salted hash, for rate limiting only
+  page: text('page').notNull().default(''),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('form_submissions_form_idx').on(t.formKey, t.status, t.createdAt), index('form_submissions_ip_idx').on(t.ipHash, t.createdAt),
+  index('form_submissions_inbox_idx').on(t.formKey, t.spam, t.archivedAt, t.readAt)]);
+
+/** Personal star: each staff member keeps their own starred list. */
+export const submissionStars = pgTable('submission_stars', {
+  submissionId: uuid('submission_id').notNull().references(() => formSubmissions.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: createdAt(),
+}, (t) => [primaryKey({ columns: [t.submissionId, t.userId] })]);
+
+/** Activity on a message: internal notes (body) and changes (kind + meta). Deleted with the message. */
+export const submissionEvents = pgTable('submission_events', {
+  id: id(),
+  submissionId: uuid('submission_id').notNull().references(() => formSubmissions.id, { onDelete: 'cascade' }),
+  actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+  kind: text('kind').notNull(),                            // note | status | assign | archive | unarchive | spam | not_spam | reply
+  body: text('body').notNull().default(''),                // note text only
+  meta: jsonb('meta').$type<Record<string, unknown>>(),
+  createdAt: createdAt(),
+}, (t) => [index('submission_events_sub_idx').on(t.submissionId, t.createdAt)]);
+
+export const newsletterSubscribers = pgTable('newsletter_subscribers', {
+  id: id(),
+  email: text('email').notNull(),
+  status: text('status').notNull().default('subscribed'),  // 'subscribed' | 'unsubscribed'
+  source: text('source').notNull().default(''),            // page it was submitted from
+  consentAt: timestamp('consent_at', { withTimezone: true }).notNull(),
+  unsubscribedAt: timestamp('unsubscribed_at', { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('newsletter_email_uq').on(t.email)]);
+
+// ---------------------------------------------------------------- SEO (overrides for template pages; audit results)
+export const seoOverrides = pgTable('seo_overrides', {
+  id: id(),
+  file: text('file').notNull(),                       // e.g. 'about.html' (template pages only)
+  title: text('title').notNull().default(''),         // plain text; empty = keep the page's own
+  description: text('description').notNull().default(''),
+  noindex: boolean('noindex').notNull().default(false),
+  imageMediaId: uuid('image_media_id').references(() => media.id, { onDelete: 'set null' }),
+  status: workflowEnum('status').notNull().default('draft'),
+  publishedRevisionId: uuid('published_revision_id'),
+  approvedRevisionId: uuid('approved_revision_id'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('seo_overrides_file_uq').on(t.file)]);
+
+export const seoRevisions = pgTable('seo_revisions', {
+  id: id(),
+  overrideId: uuid('override_id').notNull().references(() => seoOverrides.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('seo_revisions_num_uq').on(t.overrideId, t.number)]);
+
+export const seoAudits = pgTable('seo_audits', {
+  id: id(),
+  result: jsonb('result').$type<Record<string, unknown>>().notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+});
+
+// ---------------------------------------------------------------- Page fields (editable texts/links/images marked data-sf in hand-written pages, e.g. the homepage)
+export const pageContents = pgTable('page_contents', {
+  id: id(),
+  file: text('file').notNull(),                                    // e.g. 'index.html'
+  values: jsonb('values').$type<Record<string, unknown>>().notNull().default({}),   // only edited fields; others keep the page's own text
+  // Section list (Studio V2): site sections by id and registry blocks, in page order. null = the page as written.
+  layout: jsonb('layout').$type<unknown[] | null>(),
+  status: workflowEnum('status').notNull().default('draft'),
+  publishedRevisionId: uuid('published_revision_id'),
+  approvedRevisionId: uuid('approved_revision_id'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('page_contents_file_uq').on(t.file)]);
+
+export const pageContentRevisions = pgTable('page_content_revisions', {
+  id: id(),
+  contentId: uuid('content_id').notNull().references(() => pageContents.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('page_content_revisions_num_uq').on(t.contentId, t.number)]);
+
+// SEO issue tracking (audit engine v2): one row per rule + page, kept across audit runs.
+export const seoIssueStatusEnum = pgEnum('seo_issue_status', ['open', 'reviewed', 'resolved']);
+export const seoIssues = pgTable('seo_issues', {
+  id: id(),
+  code: text('code').notNull(),
+  file: text('file').notNull(),
+  severity: text('severity').notNull(),
+  category: text('category').notNull(),
+  evidence: jsonb('evidence').$type<string[]>().notNull().default([]),
+  status: seoIssueStatusEnum('status').notNull().default('open'),
+  firstSeen: timestamp('first_seen', { withTimezone: true }).notNull().defaultNow(),
+  lastSeen: timestamp('last_seen', { withTimezone: true }).notNull().defaultNow(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),          // set when an audit no longer finds it (verified)
+  reviewedBy: uuid('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+  note: text('note').notNull().default(''),
+}, (t) => [uniqueIndex('seo_issues_key_uq').on(t.code, t.file), index('seo_issues_status_idx').on(t.status, t.severity)]);
+
+// ---------------------------------------------------------------- Redirects (static hosting: instant redirect pages + a _redirects file)
+export const redirectStatusEnum = pgEnum('redirect_status', ['draft', 'active', 'disabled']);
+export const redirects = pgTable('redirects', {
+  id: id(),
+  source: text('source').notNull(),               // e.g. 'old-page.html' (exact path, no wildcards)
+  destination: text('destination').notNull(),     // internal path ('new-page.html', 'projects.html#x') or https URL
+  code: integer('code').notNull().default(301),   // 301 | 302 | 307 | 308 (used by hosts that support _redirects)
+  reason: text('reason').notNull().default(''),
+  status: redirectStatusEnum('status').notNull().default('draft'),
+  published: jsonb('published').$type<{ source: string; destination: string; code: number } | null>(),   // what the live site has; null = not live
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('redirects_source_uq').on(t.source)]);
+
+// ---------------------------------------------------------------- SEO settings with a draft and a published value (e.g. the Organization profile)
+export const seoSettings = pgTable('seo_settings', {
+  key: text('key').primaryKey(),
+  draft: jsonb('draft').$type<Record<string, unknown> | null>(),
+  published: jsonb('published').$type<Record<string, unknown> | null>(),
+  status: workflowEnum('status').notNull().default('draft'),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedAt: updatedAt(),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+});
+
+// ---------------------------------------------------------------- Google connections (SEO Pro). One row per provider.
+// Tokens are stored encrypted (AES-256-GCM, key from STUDIO_ENCRYPTION_KEY); they never leave the server.
+export const googleConnections = pgTable('google_connections', {
+  id: id(),
+  provider: text('provider').notNull(),                         // 'gsc' (Search Console); 'ga4' later
+  status: text('status').notNull().default('connected'),        // connected | error (needs reconnect)
+  accountEmail: text('account_email'),
+  scopes: text('scopes').notNull().default(''),
+  property: text('property'),                                    // e.g. 'sc-domain:afcdfoundation.org' (chosen by an admin)
+  permissionLevel: text('permission_level'),
+  refreshTokenEnc: text('refresh_token_enc').notNull(),
+  accessTokenEnc: text('access_token_enc'),
+  accessExpiresAt: timestamp('access_expires_at', { withTimezone: true }),
+  connectedBy: uuid('connected_by').references(() => users.id, { onDelete: 'set null' }),
+  connectedAt: timestamp('connected_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSyncAt: timestamp('last_sync_at', { withTimezone: true }),
+  lastSyncedDate: text('last_synced_date'),                      // last complete GSC day stored (YYYY-MM-DD)
+  lastError: text('last_error'),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('google_connections_provider_uq').on(t.provider)]);
+
+// OAuth authorization requests in flight: single use, 10 minutes, bound to the Studio user who started them.
+export const oauthStates = pgTable('oauth_states', {
+  state: text('state').primaryKey(),
+  provider: text('provider').notNull(),
+  codeVerifierEnc: text('code_verifier_enc').notNull(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: createdAt(),
+});
+
+// Search Console Search Analytics rows, one per property × day × dimension set × dimension values. Re-syncing a day
+// replaces its rows (unique key), so there are no duplicates. Fields not in the dimension set are ''.
+export const gscMetrics = pgTable('gsc_metrics', {
+  id: id(),
+  property: text('property').notNull(),
+  searchType: text('search_type').notNull().default('web'),
+  dims: text('dims').notNull(),                                  // 'date' | 'query' | 'page' | 'query,page' | 'country' | 'device'
+  date: text('date').notNull(),                                  // YYYY-MM-DD (Google's Pacific-time day)
+  query: text('query').notNull().default(''),
+  page: text('page').notNull().default(''),
+  country: text('country').notNull().default(''),
+  device: text('device').notNull().default(''),
+  clicks: integer('clicks').notNull(),
+  impressions: integer('impressions').notNull(),
+  ctr: text('ctr').notNull(),                                    // as returned (0–1), kept as text to avoid float drift
+  position: text('position').notNull(),                          // Google's average position, not a live rank
+  dataState: text('data_state').notNull().default('final'),
+  importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('gsc_metrics_uq').on(t.property, t.searchType, t.dims, t.date, t.query, t.page, t.country, t.device),
+  index('gsc_metrics_lookup_idx').on(t.property, t.dims, t.date),
+]);
+
+// URL Inspection API results: Google's last known (indexed) version of a URL, not a live test.
+export const urlInspections = pgTable('url_inspections', {
+  id: id(),
+  property: text('property').notNull(),
+  url: text('url').notNull(),
+  verdict: text('verdict'),
+  coverageState: text('coverage_state'),
+  indexingState: text('indexing_state'),
+  robotsTxtState: text('robots_txt_state'),
+  pageFetchState: text('page_fetch_state'),
+  lastCrawlTime: text('last_crawl_time'),
+  googleCanonical: text('google_canonical'),
+  userCanonical: text('user_canonical'),
+  raw: jsonb('raw').$type<Record<string, unknown>>().notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [index('url_inspections_url_idx').on(t.property, t.url, t.createdAt)]);
+
+// Background jobs (SEO Pro): progress, retries with backoff, cancellation, failure details and history.
+export const seoJobs = pgTable('seo_jobs', {
+  id: id(),
+  kind: text('kind').notNull(),                                  // 'gsc_sync' | 'url_inspection' | ...
+  status: text('status').notNull().default('queued'),           // queued | running | succeeded | failed | cancelled
+  progress: integer('progress').notNull().default(0),            // 0–100
+  message: text('message').notNull().default(''),
+  attempts: integer('attempts').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(4),
+  runAfter: timestamp('run_after', { withTimezone: true }).notNull().defaultNow(),
+  params: jsonb('params').$type<Record<string, unknown>>().notNull().default({}),
+  result: jsonb('result').$type<Record<string, unknown>>(),
+  error: text('error'),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+}, (t) => [index('seo_jobs_status_idx').on(t.status, t.runAfter)]);
+
+// API calls per provider and day, to stay inside Google's quotas.
+export const apiUsage = pgTable('api_usage', {
+  provider: text('provider').notNull(),
+  endpoint: text('endpoint').notNull(),
+  day: text('day').notNull(),
+  calls: integer('calls').notNull().default(0),
+}, (t) => [primaryKey({ columns: [t.provider, t.endpoint, t.day] })]);

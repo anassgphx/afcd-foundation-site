@@ -13,8 +13,36 @@ describe('block library', () => {
     for (const b of BLOCKS) {
       const { doc, problems } = validateDoc({ version: 1, blocks: [{ id: 'abcdef', type: b.type, v: b.version, hidden: false, props: b.defaults }] });
       expect(problems, b.type).toEqual([]);
-      expect(renderBlocks(doc, ctx).length, b.type).toBeGreaterThan(10);
+      if (b.group === 'Live') {
+        // live sections disappear from the public page when there is nothing to show, and explain why in the editor
+        expect(renderBlocks(doc, ctx), b.type).toBe('');
+        expect(renderBlocks(doc, { ...ctx, editor: true }), b.type).toContain('stays hidden');
+      } else expect(renderBlocks(doc, ctx).length, b.type).toBeGreaterThan(10);
     }
+  });
+
+  it('live sections show published records, filtered, and design presets wrap any block', () => {
+    const sources = {
+      today: '2026-11-22',
+      stories: [{ title: 'Climate camp & more', url: 'news-climate-camp.html', type: 'Event recap', typeKey: 'event_recap', pillar: 'Environment and Climate', pillarKey: 'green-thumbs', colour: '#82E591', date: '2026-11-20', dateLabel: '20 November 2026', hero: null, excerpt: '' },
+        { title: 'Leadership call', url: 'news-call.html', type: 'Call for applications', typeKey: 'call_for_applications', pillar: '', pillarKey: '', colour: '#ccc', date: '2026-11-10', dateLabel: '10 November 2026', hero: null, excerpt: '' }],
+      events: [{ title: 'Past workshop', file: 'event-past.html', start: '2026-10-01', end: null, upcoming: false, kind: 'Workshop', where: 'Marrakech', time: '10:00', pillarKey: '', colour: '#ccc', poster: null },
+        { title: 'Next workshop', file: 'event-next.html', start: '2027-01-10', end: null, upcoming: true, kind: 'Workshop', where: 'Ait Ourir', time: '10:00', pillarKey: '', colour: '#ccc', poster: null }],
+      opportunities: [{ title: 'Open call', file: 'opportunity-open.html', type: 'Volunteering', typeKey: 'volunteering', state: 'open' as const, deadline: '2027-01-31', opensOn: null, location: '', pillarKey: '' },
+        { title: 'Closed call', file: 'opportunity-closed.html', type: 'Job', typeKey: 'job', state: 'closed' as const, deadline: '2026-01-01', opensOn: null, location: '', pillarKey: '' }],
+      partners: [{ name: 'Danish Youth Council', scope: 'International', scopeKey: 'international', logo: null, url: null }],
+    };
+    const one = (type: string, props: Record<string, unknown>, design?: unknown) => renderBlocks(validateDoc({ version: 1, blocks: [{ id: 'abcdef', type, v: 1, hidden: false, props: { ...BLOCKS.find((b) => b.type === type)!.defaults, ...props }, ...(design ? { design } : {}) }] }).doc, { ...ctx, sources });
+    const stories = one('latest_stories', { kind: 'event_recap' });
+    expect(stories).toContain('Climate camp &amp; more'); expect(stories).not.toContain('Leadership call');
+    const ev = one('upcoming_events', {}); expect(ev).toContain('Next workshop'); expect(ev).not.toContain('Past workshop');
+    const op = one('open_opportunities', {}); expect(op).toContain('Open call'); expect(op).not.toContain('Closed call');
+    expect(one('partner_strip', { scope: 'national' })).toBe('');
+    expect(one('partner_strip', {})).toContain('>DY<');   // initials: first two words
+    const designed = one('upcoming_events', {}, { bg: 'soft', show: 'desktop', anchor: 'events' });
+    expect(designed.startsWith('<div id="events" class="bg-[#F6F6F6] max-md:hidden">')).toBe(true);
+    // only approved design presets are accepted (no free colours or CSS)
+    expect(validateDoc({ version: 1, blocks: [{ id: 'abcdef', type: 'divider', v: 1, hidden: false, props: {}, design: { bg: 'red' } }] }).problems[0].message).toBe('The page layout is not valid.');
   });
 
   it('escapes HTML and blocks dangerous URLs in rich text and links', () => {

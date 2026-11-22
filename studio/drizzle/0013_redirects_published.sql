@@ -1,0 +1,1 @@
+ALTER TABLE "redirects" ADD COLUMN "published" jsonb;

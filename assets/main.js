@@ -20,6 +20,55 @@
   var yrs = $('#years-since'); if (yrs) yrs.textContent = (y - 2007);
   $$('[data-years-since]').forEach(function (el) { el.textContent = y - 2007; });
 
+  /* ---------- Auto reveal: cards and headings across the site, staggered by position ---------- */
+  (function () {
+    if (reduce) return;
+    var groups = ['.so-card', '.nw-card', '.wd-card', '.pj-step', '.os-step', '.ct-q', '.pl-card', '.pl-other',
+                  '.gi-tile', '.cta-way', '.ap-step', '.os-act', '.wd-person', '.ct-faq', '.pj-nav', '.os-area', '.pj-obj'];
+    groups.forEach(function (sel) {
+      $$(sel).forEach(function (el) {
+        if (el.hasAttribute('data-reveal') || el.closest('[data-reveal]')) return;
+        var item = el.parentElement && el.parentElement.tagName === 'LI' ? el.parentElement : el;
+        var sibs = item.parentElement ? Array.prototype.indexOf.call(item.parentElement.children, item) : 0;
+        el.setAttribute('data-reveal', '');
+        el.style.setProperty('--d', Math.min(sibs, 6) * 80 + 'ms');
+      });
+    });
+    $$('.sh-title, .sh-desc, .phd-hr').forEach(function (el) {
+      if (!el.hasAttribute('data-reveal') && !el.classList.contains('reveal')) el.setAttribute('data-reveal', '');
+    });
+    $$('.pl-hero, .ap-band, .wd-who, .os-band, .cta-card, .ct-form, .nw-feat, .pj-hero').forEach(function (el) {
+      if (!el.hasAttribute('data-reveal')) el.setAttribute('data-reveal', 'block');
+    });
+  })();
+
+  /* ---------- Values: the coloured card cycles through the four values ---------- */
+  (function () {
+    $$('.vl-row').forEach(function (row) {
+      var cards = $$('.vl-card', row);
+      if (cards.length < 2) return;
+      cards.forEach(function (c) { var p = document.createElement('span'); p.className = 'vl-prog'; p.setAttribute('aria-hidden', 'true'); c.appendChild(p); });
+      if (reduce) return;
+      var cur = Math.max(0, cards.findIndex(function (c) { return c.classList.contains('is-default'); }));
+      var timer = null, inView = false, held = false, STEP = 4200;
+      function show(i) {
+        cards[cur].classList.remove('is-default');
+        cur = (i + cards.length) % cards.length;
+        var c = cards[cur]; c.classList.add('is-default');
+        var p = $('.vl-prog', c); p.classList.remove('run'); void p.offsetWidth; p.classList.add('run');
+      }
+      function play() { stop(); if (!inView || held) return; row.classList.add('is-cycling'); show(cur); timer = setInterval(function () { show(cur + 1); }, STEP); }
+      function stop() { clearInterval(timer); timer = null; row.classList.remove('is-cycling'); }
+      row.addEventListener('mouseenter', function () { held = true; stop(); });
+      row.addEventListener('mouseleave', function () { held = false; play(); });
+      row.addEventListener('focusin', function () { held = true; stop(); });
+      row.addEventListener('focusout', function () { held = false; play(); });
+      if ('IntersectionObserver' in window) {
+        new IntersectionObserver(function (es) { inView = es[0].isIntersecting; inView ? play() : stop(); }, { threshold: 0.4 }).observe(row);
+      }
+    });
+  })();
+
   /* ---------- Scroll reveal for [data-reveal] (skipped with reduced motion) ---------- */
   (function () {
     var els = $$('[data-reveal]');
@@ -75,11 +124,54 @@
   /* ---------- Contact form: client-side checks only (no backend yet) ---------- */
   (function () {
     var form = $('#contact-form'); if (!form) return;
+    // Topic hint: what to include, and which team inbox it goes to
+    var hintT = $('.ct-hint-t', form), hintTo = $('.ct-hint-to', form);
+    // Topic dropdown: a button that opens a menu of radio options
+    var dd = $('.ct-dd', form), ddBtn = dd && $('.ct-dd-btn', dd), ddMenu = dd && $('.ct-dd-menu', dd), ddCur = dd && $('.ct-dd-cur', dd);
+    function ddOpen(open) {
+      if (!dd) return;
+      ddMenu.hidden = !open; ddBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) { var c = $('input:checked', ddMenu) || $('input', ddMenu); if (c) c.focus(); }
+    }
+    if (dd) {
+      ddBtn.addEventListener('click', function () { ddOpen(ddMenu.hidden); });
+      document.addEventListener('click', function (e) { if (!dd.contains(e.target)) ddOpen(false); });
+      dd.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !ddMenu.hidden) { ddOpen(false); ddBtn.focus(); } });
+      $$('.ct-opt', ddMenu).forEach(function (o) {
+        o.addEventListener('click', function () { setTimeout(function () { ddOpen(false); ddBtn.focus(); }, 0); });
+        o.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('input', o).checked = true; $('input', o).dispatchEvent(new Event('change')); ddOpen(false); ddBtn.focus(); } });
+      });
+    }
+    $$('input[name="topic"]', form).forEach(function (r) {
+      r.addEventListener('change', function () {
+        if (hintT && r.dataset.hint) hintT.textContent = r.dataset.hint;
+        if (hintTo && r.dataset.to) hintTo.textContent = r.dataset.to;
+        if (ddCur) ddCur.innerHTML = r.nextElementSibling.innerHTML;
+      });
+    });
+    // Character counter
+    var count = $('.ct-count', form);
+    if (count && form.message) form.message.addEventListener('input', function () { count.textContent = form.message.value.length; });
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      var ok = form.name.value.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.value.trim()) && form.message.value.trim();
-      $('.form-error', form).classList.toggle('hidden', !!ok);
-      if (ok) { toast('Thanks! The form isn’t connected yet, so nothing was sent.'); form.reset(); }
+      var checks = [
+        [form.name, !!form.name.value.trim()],
+        [form.email, /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.value.trim())],
+        [form.message, !!form.message.value.trim()]
+      ];
+      var ok = true;
+      checks.forEach(function (c) { c[0].setAttribute('aria-invalid', c[1] ? 'false' : 'true'); if (!c[1]) ok = false; });
+      if (form.consent && !form.consent.checked) ok = false;
+      $('.form-error', form).classList.toggle('hidden', ok);
+      if (ok) {
+        toast('Thanks! The form isn’t connected yet, so nothing was sent.');
+        form.reset(); if (count) count.textContent = '0';
+        var first0 = $('input[name="topic"]:checked', form); if (first0) first0.dispatchEvent(new Event('change'));
+        checks.forEach(function (c) { c[0].removeAttribute('aria-invalid'); });
+      } else {
+        var first = checks.filter(function (c) { return !c[1]; })[0];
+        (first ? first[0] : form.consent).focus();
+      }
     });
   })();
 

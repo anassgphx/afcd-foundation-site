@@ -521,10 +521,45 @@ PILLAR_ACTS = {'youth-empowerment': [1, 2, 3, 4], 'women-empowerment': [0, 1, 2,
               'green-thumbs': [3, 4, 2, 0], 'digital-empowerment': [5, 0, 1, 7]}
 PILLAR_GROUPS = {'youth-empowerment': [0, 3, 4], 'women-empowerment': [1, 3, 5],
                  'green-thumbs': [0, 5, 6, 4], 'digital-empowerment': [0, 1, 2, 5]}
+ACT_ICONS = ['<path d="M2.5 6 10 3l7.5 3L10 9 2.5 6Z"/><path d="M5.5 7.3v4c0 1.2 2 2.2 4.5 2.2s4.5-1 4.5-2.2v-4"/>', '<path d="M10 2.5v3M4.7 4.7l2.1 2.1M15.3 4.7l-2.1 2.1"/><circle cx="10" cy="11.5" r="4"/><path d="M8.5 17.5h3"/>', '<circle cx="7" cy="6.5" r="2.5"/><circle cx="13.5" cy="8" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M11.5 13.2c.6-.5 1.3-.7 2-.7 1.8 0 3.2 1.3 3.7 3.5"/>', '<path d="M3 8.5v3l9 3.5V5L3 8.5Z"/><path d="M12 7h2.5a2 2 0 0 1 0 4H12M5.5 12.5 6.5 16"/>', '<path d="M3.5 4.5h13v8h-7l-4 3v-3h-2v-8Z"/><path d="M7 8.5h6"/>', '<rect x="3" y="4" width="14" height="9.5" rx="1.5"/><path d="M7.5 16.5h5M10 13.5v3M7.5 8.7l1.7 1.6 3.3-3.3"/>', '<path d="M10 2.5 3 6v1.5h14V6L10 2.5Z"/><path d="M4.5 8.5v6M8 8.5v6M12 8.5v6M15.5 8.5v6M2.5 16.5h15"/>', '<circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3c2 2.2 2.8 4.6 2.8 7s-.8 4.8-2.8 7c-2-2.2-2.8-4.6-2.8-7S8 5.2 10 3Z"/>']
 PILLAR_STEPS = [('Learn', 'Non-formal education and practical training build knowledge and skills.'),
                 ('Practise', 'Workshops, mentoring and hands-on activities turn skills into action.'),
                 ('Lead', 'Participants design and run their own initiatives in their communities.'),
                 ('Share', 'Results, stories and recommendations are shared with partners and decision-makers.')]
+PILLAR_APPROACH = {
+    'youth-empowerment': dict(
+        title='From learning <span class="text-white/45">to leading.</span>',
+        view='We see young people as actors of change, not only participants. Our role is to build their leadership and civic skills, then step back so they can shape initiatives that answer their own communities’ needs.',
+        principles=['Youth-led', 'Civic participation', 'Rooted locally'],
+        steps=[('Learn', 'Leadership and civic skills through non-formal education and practical training.'),
+               ('Practise', 'Workshops, bootcamps and mentoring turn new skills into confidence.'),
+               ('Lead', 'Participants design and run their own initiatives responding to local needs.'),
+               ('Engage', 'Young people take part in community life, dialogue and civic action.')]),
+    'women-empowerment': dict(
+        title='Confidence, skills <span class="text-white/45">and a voice.</span>',
+        view='We believe lasting change for women comes from confidence as much as skills. We open access to learning, leadership and economic opportunities so women can take a full part in community life and decision-making.',
+        principles=['Equal opportunities', 'Economic independence', 'Safe spaces'],
+        steps=[('Build confidence', 'Supportive spaces where women strengthen their capacities and self-belief.'),
+               ('Learn', 'Access to learning, leadership training and training of trainers.'),
+               ('Earn', 'Entrepreneurial skills, mentoring and connections to economic opportunities.'),
+               ('Participate', 'Meaningful participation in community life and decision-making.')]),
+    'green-thumbs': dict(
+        title='Local action, <span class="text-white/45">national dialogue.</span>',
+        view='Climate action starts close to home. We help communities understand environmental challenges, act on them locally, and carry their perspectives into dialogue on Morocco’s climate priorities and commitments.',
+        principles=['Community-led', 'Sustainable practices', 'Climate resilience'],
+        steps=[('Raise awareness', 'Environmental education and awareness campaigns with residents and young people.'),
+               ('Act locally', 'Locally led initiatives that protect the environment and encourage sustainable practices.'),
+               ('Build resilience', 'Communities better prepared for the effects of climate change.'),
+               ('Shape policy', 'Consultations and dialogue connecting local voices to national climate policy.')]),
+    'digital-empowerment': dict(
+        title='From access <span class="text-white/45">to innovation.</span>',
+        view='Digital skills should not depend on where you live. We widen access to digital knowledge and give young people and communities the chance to explore AI, science and emerging technologies to solve real problems.',
+        principles=['Access for all', 'Learning by doing', 'Responsible innovation'],
+        steps=[('Access', 'Digital literacy and skills for young people and communities.'),
+               ('Explore', 'Hands-on discovery of artificial intelligence, science and emerging technologies.'),
+               ('Apply', 'Practical innovation activities that tackle real learning and community problems.'),
+               ('Connect', 'Exchange and cooperation that link local innovators with wider networks.')]),
+}
 PILLAR_SHORT = {'youth-empowerment': 'Youth', 'women-empowerment': 'Women', 'green-thumbs': 'Environment', 'digital-empowerment': 'Digital'}
 
 
@@ -550,9 +585,11 @@ def pillars():
         proj_html = ''.join(pcard(p) for p in projs)
         for k in range(max(0, 3 - len(projs))):
             proj_html += f'''<li><div class="nw-card is-ph"><div class="relative">{ph('Upcoming project', 'aspect-[16/10] w-full rounded-[20px]', '#E6E6E6')}<span class="nw-type">Placeholder</span></div><span class="mt-5 block px-2.5 text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">Lorem ipsum dolor sit amet</span><span class="mt-2 block px-2.5 text-[14.5px] leading-relaxed text-ink-dark">Consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus.</span><span class="nw-read px-2.5">Coming soon <span aria-hidden="true">↗</span></span></div></li>'''
-        acts = ''.join(f'<li class="os-act"><span class="os-act-n">{j:02d}</span><span>{ACTIVITIES[a]}</span></li>' for j, a in enumerate(PILLAR_ACTS[slug], 1))
-        groups = ''.join(f'<li class="inline-flex min-h-[38px] items-center gap-2 rounded-full bg-white px-4 text-[14px] font-medium"><span class="pj-dot" style="--c:{tone}"></span>{BENEFICIARIES[g]}</li>' for g in PILLAR_GROUPS[slug])
-        steps = ''.join(f'<li class="os-ap"><span class="os-ap-n">{j:02d}</span><span><span class="block text-[18px] font-semibold tracking-[-0.02em]">{a}</span><span class="mt-1 block text-[14px] leading-relaxed text-white/65">{b}</span></span></li>' for j, (a, b) in enumerate(PILLAR_STEPS, 1))
+        acts = ''.join(f'''<li class="wd-card" style="--c:{tone}"><span class="flex items-start justify-between"><span class="wd-ico"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{ACT_ICONS[a]}</svg></span><span class="wd-n">{j:02d}</span></span><span class="mt-8 block text-[16.5px] font-medium leading-[1.45] tracking-[-0.01em]">{ACTIVITIES[a]}</span></li>''' for j, a in enumerate(PILLAR_ACTS[slug], 1))
+        groups = ''.join(f'<li class="wd-person"><span class="wd-av" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="7" r="3"/><path d="M4 16.5c.8-3 3.2-4.6 6-4.6s5.2 1.6 6 4.6"/></svg></span><span>{BENEFICIARIES[g]}</span></li>' for g in PILLAR_GROUPS[slug])
+        ap = PILLAR_APPROACH[slug]
+        steps = ''.join(f'<li class="ap-step" style="--c:{tone}"><span class="ap-step-n">{j:02d}</span><span class="min-w-0"><span class="block text-[18px] font-semibold tracking-[-0.02em]">{a}</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">{b}</span></span></li>' for j, (a, b) in enumerate(ap['steps'], 1))
+        princ = ''.join(f'<li class="ap-pr"><span class="pj-dot" style="--c:{tone}"></span>{x}</li>' for x in ap['principles'])
         others = ''.join(f'''<li><a href="{PILLAR_FILE[s2]}" class="pl-other group" style="--c:{PILLAR_TONE[s2]}"><span class="pl-other-n">{n2}</span><span class="mt-8 block text-[22px] font-semibold leading-[1.1] tracking-[-0.03em]">{t2}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a></li>'''
                          for s2, n2, t2, _d2, _r2 in PILLARS if s2 != slug)
         brand = '<span class="pg-tag">Programme brand: Green Thumbs</span>' if slug == 'green-thumbs' else ''
@@ -587,33 +624,33 @@ def pillars():
 
 <section id="what-we-do" class="border-t border-ink-light py-14 lg:py-16">
   <div class="wrap">{sec_head('02 / What We Do', 'How this pillar <span class="sh-soft">comes to life.</span>', 'Activities · Participants', desc='The kinds of activities AFCD runs under this pillar, and the people they involve.')}
-    <div class="mt-8 grid gap-4 lg:mt-10 lg:grid-cols-12">
-      <div class="rounded-[28px] bg-[#F6F6F6] p-6 md:p-8 lg:col-span-7">
-        <p class="label text-ink-mid">Core activities</p>
-        <ol class="mt-4 grid gap-2 sm:grid-cols-2">{acts}</ol>
-      </div>
-      <div class="pl-hero lg:col-span-5" style="--c:{tone};padding:28px">
+    <ul class="wd-grid mt-8 lg:mt-10">{acts}</ul>
+    <div class="wd-who mt-3" style="--c:{tone}">
+      <div class="wd-who-head">
         <p class="label text-black/60">Who we work with</p>
-        <ul class="mt-4 flex flex-wrap gap-2">{groups}</ul>
-        <p class="mt-6 text-[14px] leading-relaxed text-black/65">Participants and criteria vary by programme.</p>
+        <p class="mt-3 text-[22px] font-semibold leading-[1.15] tracking-[-0.03em] md:text-[26px]">The people <span class="text-black/45">behind the work.</span></p>
+        <p class="mt-3 text-[13.5px] leading-relaxed text-black/60">Participants and criteria vary by programme.</p>
       </div>
+      <ul class="wd-people">{groups}</ul>
     </div>
   </div>
 </section>
 
 <section id="approach" class="py-6 lg:py-8">
   <div class="wrap">
-    <div class="os-band on-dark text-white">
-      <div class="grid gap-10 lg:grid-cols-12 lg:gap-16">
-        <div class="lg:col-span-5">
+    <div class="ap-band">
+      <div class="grid gap-10 lg:grid-cols-12 lg:gap-14">
+        <div class="flex flex-col lg:col-span-5">
           <div class="sh-top"><span class="sh-num">03</span><span class="sh-label">Our Approach</span></div>
-          <p class="mt-8 text-[34px] font-semibold leading-[1.04] tracking-[-0.045em] md:text-[48px]">From learning <span class="text-white/45">to leading.</span></p>
-          <blockquote class="mt-8 rounded-[22px] border border-white/10 bg-white/5 p-6">
-            <p class="text-[18px] leading-snug">“Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.”</p>
-            <footer class="mt-4 text-[13px] text-white/55">Participant voice · placeholder until a real quote is approved</footer>
-          </blockquote>
+          <p class="mt-8 text-[34px] font-semibold leading-[1.04] tracking-[-0.045em] md:text-[46px]">{ap['title'].replace('text-white/45', 'text-ink-mid')}</p>
+          <div class="ap-view mt-8" style="--c:{tone}">
+            <p class="label text-ink-mid">Our perspective</p>
+            <p class="mt-3 text-[16.5px] leading-[1.6] text-ink-pure">{ap['view']}</p>
+          </div>
+          <p class="label mt-8 text-ink-mid">Guiding principles</p>
+          <ul class="mt-3 flex flex-wrap gap-2">{princ}</ul>
         </div>
-        <ol class="grid content-end gap-3 lg:col-span-7">{steps}</ol>
+        <ol class="ap-steps lg:col-span-7">{steps}</ol>
       </div>
     </div>
   </div>
@@ -1038,22 +1075,37 @@ def contact():
 <section id="message" class="py-12 lg:py-16">
   <div class="wrap grid gap-4 lg:grid-cols-12">
     <form id="contact-form" class="ct-form lg:col-span-7" novalidate>
-      <div class="sh-top"><span class="sh-num">01</span><span class="sh-label">Send a message</span><span class="sh-rule" aria-hidden="true"></span></div>
+      <div class="flex flex-wrap items-center justify-between gap-3"><div class="sh-top min-w-0 flex-1"><span class="sh-num">01</span><span class="sh-label">Send a message</span><span class="sh-rule" aria-hidden="true"></span></div><span class="ct-status"><span class="ct-status-dot" aria-hidden="true"></span>Preview form</span></div>
       <h2 class="mt-6 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[40px]">How can <span class="text-ink-mid">we help?</span></h2>
-      <fieldset class="mt-7">
-        <legend class="label text-ink-mid">I’m interested in</legend>
-        <div class="mt-3 flex flex-wrap gap-2">{tchips}</div>
+      <p class="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-ink-dark">Pick a topic, add a few details and we’ll route your message to the right team.</p>
+
+      <fieldset class="ct-step mt-8">
+        <legend class="ct-step-h"><span class="ct-step-n">1</span>What is it about?</legend>
+        <div class="ct-dd mt-4"><button type="button" class="ct-dd-btn" aria-haspopup="true" aria-expanded="false" aria-controls="ct-dd-menu"><span class="ct-dd-cur"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M8 8a2 2 0 1 1 2.8 1.8c-.5.3-.8.7-.8 1.2v.5M10 14.2v.1"/></svg>General question</span><svg class="ct-dd-chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5.5 8 4.5 4.5L14.5 8"/></svg></button><div id="ct-dd-menu" class="ct-dd-menu" role="radiogroup" aria-label="Topic" hidden><label class="ct-opt"><input type="radio" name="topic" value="General question" data-hint="Ask us anything about AFCD and our work." data-to="contact@afcdteam.com" checked><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M8 8a2 2 0 1 1 2.8 1.8c-.5.3-.8.7-.8 1.2v.5M10 14.2v.1"/></svg>General question</span></label><label class="ct-opt"><input type="radio" name="topic" value="Volunteering" data-hint="Tell us where you are based and how you’d like to help." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 16.5s-6-3.6-6-8a3.3 3.3 0 0 1 6-1.9 3.3 3.3 0 0 1 6 1.9c0 4.4-6 8-6 8Z"/></svg>Volunteering</span></label><label class="ct-opt"><input type="radio" name="topic" value="Joining a programme" data-hint="Mention the programme or call you’re interested in." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7 10 4l7.5 3L10 10 2.5 7Z"/><path d="M5.5 8.3v3.7c0 1.1 2 2 4.5 2s4.5-.9 4.5-2V8.3"/></svg>Joining a programme</span></label><label class="ct-opt"><input type="radio" name="topic" value="Partnership" data-hint="Tell us about your organisation and the pillar you’d like to support." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10 3-3 3 2 2-2 3 3"/><path d="M3 10l4 4 1.5-1M17 10l-4 4-3-2.5"/></svg>Partnership</span></label><label class="ct-opt"><input type="radio" name="topic" value="Alumni club" data-hint="Share your programme and year so we can reconnect you." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="2.5"/><circle cx="13.5" cy="8.5" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M12 13c1.9-.4 3.8.8 4.5 3"/></svg>Alumni club</span></label><label class="ct-opt"><input type="radio" name="topic" value="Press" data-hint="Include your outlet and deadline." data-to="contact@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="11" height="12" rx="1.5"/><path d="M14 7h2.5v7.5a1.5 1.5 0 0 1-3 0M6 7.5h5M6 10.5h5M6 13.5h3"/></svg>Press</span></label><label class="ct-opt"><input type="radio" name="topic" value="Board &amp; governance" data-hint="Questions for AFCD’s board leadership." data-to="akaya@afcdteam.com"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.5 3 6v1.5h14V6L10 2.5Z"/><path d="M4.5 8.5v6M8 8.5v6M12 8.5v6M15.5 8.5v6M2.5 16.5h15"/></svg>Board &amp; governance</span></label></div></div>
+        <div class="ct-hint mt-4" aria-live="polite"><span class="ct-hint-ic" aria-hidden="true">i</span><span class="min-w-0 flex-1"><span class="ct-hint-t block">Ask us anything about AFCD and our work.</span><span class="mt-0.5 block text-[12.5px] text-ink-mid">Goes to <b class="ct-hint-to font-medium text-ink-pure">contact@afcdteam.com</b></span></span></div>
       </fieldset>
-      <div class="mt-6 grid gap-5 sm:grid-cols-2">
-        <label class="field"><span>Full name</span><input name="name" type="text" autocomplete="name" required></label>
-        <label class="field"><span>Email</span><input name="email" type="email" autocomplete="email" required></label>
-      </div>
-      <label class="field mt-5"><span>Organisation <span class="normal-case tracking-normal text-ink-mid">(optional)</span></span><input name="org" type="text" autocomplete="organization"></label>
-      <label class="field mt-5"><span>Message</span><textarea name="message" rows="6" required></textarea></label>
-      <p class="form-error mt-4 hidden text-sm text-[#B42318]" role="alert">Please fill in your name, a valid email and a message.</p>
-      <div class="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-ink-light pt-6">
-        <p class="max-w-[38ch] text-[12.5px] leading-relaxed text-ink-mid">This form isn’t connected yet. Nothing is sent. Please email us directly for now.</p>
-        <button type="submit" class="btn-dark btn-cta min-h-[50px] px-7">Send message {ARR}</button>
+
+      <fieldset class="ct-step mt-8">
+        <legend class="ct-step-h"><span class="ct-step-n">2</span>Your details</legend>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          <label class="ct-field"><span>Full name</span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="7" r="3"/><path d="M4 16.5c.8-3 3.2-4.6 6-4.6s5.2 1.6 6 4.6"/></svg><input name="name" type="text" autocomplete="name" placeholder="Your name" required></span></label>
+          <label class="ct-field"><span>Email</span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2"/><path d="m3.5 6 6.5 4.5L16.5 6"/></svg><input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></span></label>
+          <label class="ct-field"><span>Phone <em>optional</em></span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5h3l1.5 3.7-2 1.2a10 10 0 0 0 6.1 6.1l1.2-2 3.7 1.5v3a1.7 1.7 0 0 1-1.8 1.7C8.4 17.2 2.8 11.6 2.3 4.3A1.7 1.7 0 0 1 4 2.5Z"/></svg><input name="phone" type="tel" autocomplete="tel" placeholder="+212 …"></span></label>
+          <label class="ct-field"><span>Organisation <em>optional</em></span><span class="ct-in"><svg class="ct-fi" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3" width="9" height="14" rx="1"/><path d="M12.5 8h4v9h-4M6.5 6.5h3M6.5 9.5h3M6.5 12.5h3"/></svg><input name="org" type="text" autocomplete="organization" placeholder="School, association, company…"></span></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="ct-step mt-8">
+        <legend class="ct-step-h"><span class="ct-step-n">3</span>Your message</legend>
+        <label class="ct-field mt-4"><span class="sr-only">Message</span><textarea name="message" rows="6" maxlength="1000" placeholder="Write your message…" required></textarea></label>
+        <div class="mt-2 flex justify-end text-[12px] text-ink-mid"><span><span class="ct-count">0</span> / 1000</span></div>
+        <label class="ct-consent mt-4"><input type="checkbox" name="consent" required><span>I agree that AFCD Foundation may use these details to reply to my message. See our <a href="#privacy" class="underline underline-offset-2">Privacy Policy</a>.</span></label>
+      </fieldset>
+
+      <p class="form-error mt-5 hidden rounded-2xl bg-[#FEF3F2] px-4 py-3 text-sm text-[#B42318]" role="alert">Please add your name, a valid email, a message and your consent.</p>
+      <div class="mt-7 flex flex-wrap items-center justify-between gap-4 border-t border-ink-light pt-6">
+        <p class="max-w-[40ch] text-[12.5px] leading-relaxed text-ink-mid">This form isn’t connected yet, so nothing is sent. For now, please email the address shown above.</p>
+        <button type="submit" class="btn-dark btn-cta min-h-[52px] px-7">Send message <span class="arr" aria-hidden="true">↗</span></button>
       </div>
     </form>
 

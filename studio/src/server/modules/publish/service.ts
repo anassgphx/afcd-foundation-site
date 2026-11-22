@@ -251,7 +251,7 @@ export class Publisher {
   }
 
   /** page-fields.json (read by build.mjs) exists only while edited homepage text is live. */
-  private async writeFields(override?: { revisionId: string | null }) {
+  private async writeFields(override?: { revisionId: string | null }, ctxOpts: Parameters<typeof exportLayout>[2] = {}) {
     const [c] = await this.db.select().from(pageContents).where(eq(pageContents.file, HOME));
     const revId = override ? override.revisionId : c?.publishedRevisionId ?? null;
     if (!revId) { if (existsSync(this.fieldsFile)) rmSync(this.fieldsFile); return [] as string[]; }
@@ -259,7 +259,7 @@ export class Publisher {
     const snap = rev.snapshot as { values: Record<string, unknown>; layout?: unknown };
     const [values, fieldIds] = await this.resolveFields(snap.values);
     const layout = snap.layout ? currentLayout(this.cfg.siteRoot, HOME, snap.layout) : null;
-    const exported = await exportLayout(this.db, layout);
+    const exported = await exportLayout(this.db, layout, ctxOpts);
     const ids = [...fieldIds, ...(layout ? docMediaIds({ blocks: layoutBlocks(layout) }) : [])];
     const tmp = `${this.fieldsFile}.${randomBytes(4).toString('hex')}.tmp`;
     mkdirSync(resolve(this.fieldsFile, '..'), { recursive: true });
@@ -273,11 +273,12 @@ export class Publisher {
     const partnerMedia = await this.writePartners(this.partnersFile, o.partner, o.project);
     const eventMedia = await this.writeEvents(this.eventsFile, o.event, o.project);
     const seoMedia = await this.writeSeo(o.seo);
-    const homeMedia = await this.writeFields(o.home);
+    const pending = { article: o.article, event: o.event, opportunity: o.opportunity, partner: o.partner };
+    const homeMedia = await this.writeFields(o.home, { projectOverride: o.project, pending });
     const oppMedia = await this.writeOpportunities(resolve(this.cfg.siteRoot, 'src/pages'), [this.cfg.siteRoot], await this.liveOpportunities(o.opportunity), o.project);
     const newsMedia = await this.writeNews(this.newsFile, resolve(this.cfg.siteRoot, 'src/pages'), await this.liveArticles(o.article), o.project);
     const live = await this.livePages(o.page);
-    const ctx = await buildCtx(this.db, live.map((x) => x.snap.doc), { projectOverride: o.project });
+    const ctx = await buildCtx(this.db, live.map((x) => x.snap.doc), { projectOverride: o.project, pending });
     const dir = resolve(this.cfg.siteRoot, 'src/pages');
     mkdirSync(dir, { recursive: true });
     for (const { id, snap } of live) {

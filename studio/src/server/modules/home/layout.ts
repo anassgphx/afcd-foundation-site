@@ -3,12 +3,12 @@
 // added, duplicated and removed. Unknown block types are refused; block props are validated by the registry.
 import { z } from 'zod';
 import { AppError } from '../../http.ts';
-import { BLOCK_MAP, validateDoc, type Block } from '../pages/blocks.ts';
+import { BLOCK_MAP, designSchema, validateDoc, type Block, type Design } from '../pages/blocks.ts';
 import { siteSections } from './fields.ts';
 
 export type LayoutEntry =
   | { kind: 'section'; id: string; hidden: boolean }
-  | { kind: 'block'; id: string; type: string; v: number; hidden: boolean; props: Record<string, unknown> };
+  | { kind: 'block'; id: string; type: string; v: number; hidden: boolean; props: Record<string, unknown>; design?: Design };
 
 /** Blocks offered on the homepage (a breadcrumb page header does not belong there). */
 export const HOME_BLOCKS = [...BLOCK_MAP.keys()].filter((t) => t !== 'page_header');
@@ -16,7 +16,7 @@ const MAX_ITEMS = 40;
 
 const entrySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('section'), id: z.string().max(60), hidden: z.boolean().default(false) }).strict(),
-  z.object({ kind: z.literal('block'), id: z.string().regex(/^[a-z0-9]{6,24}$/), type: z.string().max(40), v: z.number().int().min(1), hidden: z.boolean().default(false), props: z.record(z.string(), z.unknown()) }).strict(),
+  z.object({ kind: z.literal('block'), id: z.string().regex(/^[a-z0-9]{6,24}$/), type: z.string().max(40), v: z.number().int().min(1), hidden: z.boolean().default(false), props: z.record(z.string(), z.unknown()), design: designSchema.optional() }).strict(),
 ]);
 
 export const defaultLayout = (siteRoot: string, file: string): LayoutEntry[] => siteSections(siteRoot, file).map((s) => ({ kind: 'section', id: s.id, hidden: false }));
@@ -48,15 +48,15 @@ export function validateLayout(siteRoot: string, file: string, raw: unknown) {
     if (e.kind === 'block' && !HOME_BLOCKS.includes(e.type)) throw new AppError(422, `Unknown section type “${e.type}”.`);
   }
   const blocks = r.data.filter((e) => e.kind === 'block') as Extract<LayoutEntry, { kind: 'block' }>[];
-  const { doc, problems } = validateDoc({ version: 1, blocks: blocks.map((b) => ({ id: b.id, type: b.type, v: b.v, hidden: b.hidden, props: b.props })) });
+  const { doc, problems } = validateDoc({ version: 1, blocks: blocks.map((b) => ({ id: b.id, type: b.type, v: b.v, hidden: b.hidden, props: b.props, ...(b.design ? { design: b.design } : {}) })) });
   const upgraded = new Map(doc.blocks.map((b) => [b.id, b]));
   const layout: LayoutEntry[] = r.data.map((e) => {
     if (e.kind === 'section') return e;
     const b = upgraded.get(e.id)!;
-    return { kind: 'block', id: b.id, type: b.type, v: b.v, hidden: b.hidden, props: b.props as Record<string, unknown> };
+    return { kind: 'block', id: b.id, type: b.type, v: b.v, hidden: b.hidden, props: b.props as Record<string, unknown>, ...(b.design ? { design: b.design } : {}) };
   });
   return { layout, problems };
 }
 
 export const layoutBlocks = (layout: LayoutEntry[]): Block[] =>
-  layout.filter((e): e is Extract<LayoutEntry, { kind: 'block' }> => e.kind === 'block').map((b) => ({ id: b.id, type: b.type, v: b.v, hidden: b.hidden, props: b.props }));
+  layout.filter((e): e is Extract<LayoutEntry, { kind: 'block' }> => e.kind === 'block').map((b) => ({ id: b.id, type: b.type, v: b.v, hidden: b.hidden, props: b.props, ...(b.design ? { design: b.design } : {}) }));

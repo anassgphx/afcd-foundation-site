@@ -6,17 +6,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, LiveBadge, Modal, fmtDate, useCan, useMe, useToast } from '../ui.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
-import { FieldEditor, type BlockDef } from './Builder.tsx';
+import { DesignFields, FieldEditor, type BlockDef, type Design } from './Builder.tsx';
 import { Loading } from './Dashboard.tsx';
 
 type FieldDef = { key: string; type: 'text' | 'split' | 'rich' | 'link' | 'tail' | 'image'; section: string; sectionId: string | null; label: string; default: any };
-type Entry = { kind: 'section'; id: string; hidden: boolean } | { kind: 'block'; id: string; type: string; v: number; hidden: boolean; props: Record<string, any> };
+type Entry = { kind: 'section'; id: string; hidden: boolean } | { kind: 'block'; id: string; type: string; v: number; hidden: boolean; props: Record<string, any>; design?: Design };
 type Data = { fields: FieldDef[]; siteSections: { id: string; label: string }[]; layout: Entry[]; catalog: BlockDef[]; media: MediaItem[]; problems: string[];
   content: null | { id: string; status: string; values: Record<string, any>; layout: Entry[] | null; publishedRevisionId: string | null; publishedAt: string | null; updatedAt: string };
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] } };
 type State = { values: Record<string, any>; layout: Entry[] };
 const DEVICES = [[1280, 'monitor', 'Desktop'], [820, 'tablet', 'Tablet'], [390, 'phone', 'Mobile']] as const;
-const GROUPS = ['Text', 'Media', 'Content', 'Action', 'Structure'];
+const GROUPS = ['Live', 'Text', 'Media', 'Content', 'Action', 'Structure'];
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const rid = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (x) => (x % 36).toString(36)).join('') + Date.now().toString(36).slice(-4);
 const SECTION_ICON: Record<string, string> = { hero: 'image', 'who-we-are': 'users', purpose: 'heart', pillars: 'layers', projects: 'folder', impact: 'dash', news: 'log', events: 'calendar', partners: 'partner', 'get-involved': 'send' };
@@ -27,6 +27,7 @@ export function HomeEditor() {
   const [st, setSt] = useState<State>({ values: {}, layout: [] });
   const [past, setPast] = useState<State[]>([]); const [future, setFuture] = useState<State[]>([]);
   const [sel, setSel] = useState<string | null>('hero');
+  const [tab, setTab] = useState<'content' | 'design'>('content');
   const [device, setDevice] = useState(1280);
   const [save, setSave] = useState<'saved' | 'saving' | 'unsaved' | 'failed'>('saved');
   const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
@@ -194,7 +195,10 @@ export function HomeEditor() {
           <label className="check"><input type="checkbox" checked={!selEntry.hidden} onChange={() => toggle(selEntry.id)} /><span>Show on the homepage</span></label>
           {selEntry.kind === 'section'
             ? <SectionFields fields={d.fields.filter((f) => f.sectionId === selEntry.id)} values={st.values} media={media} editable={editable} onChange={setField} onPickImage={(key) => setDialog({ kind: 'image', key })} />
-            : (defs.get(selEntry.type)?.fields ?? []).map((f) => <FieldEditor key={f.key} f={f} value={selEntry.props[f.key]} links={links} onChange={(v) => setProps(selEntry.id, { ...selEntry.props, [f.key]: v })} />)}
+            : <>
+              <div className="seg ds-tabs" role="tablist">{(['content', 'design'] as const).map((t) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t === 'content' ? 'Content' : 'Design'}</button>)}</div>
+              {tab === 'design' ? <DesignFields value={selEntry.design} onChange={(d) => setLayout(st.layout.map((x) => (x.id === selEntry.id && x.kind === 'block' ? { ...x, design: d } : x)))} />
+                : (defs.get(selEntry.type)?.fields ?? []).map((f) => <FieldEditor key={f.key} f={f} value={selEntry.props[f.key]} links={links} onChange={(v) => setProps(selEntry.id, { ...selEntry.props, [f.key]: v })} />)}</>}
         </fieldset>}
       </aside>
     </div>

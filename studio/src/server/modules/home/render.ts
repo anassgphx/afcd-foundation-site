@@ -14,14 +14,14 @@ import { pageBody } from './fields.ts';
 import { layoutBlocks, type LayoutEntry } from './layout.ts';
 
 /** Layout as build.mjs reads it: sections by id, blocks as HTML from the registry (hidden blocks left out). */
-export async function exportLayout(db: DB, layout: LayoutEntry[] | null, opts: { mediaPrefix?: string; projectOverride?: { projectId: string; revisionId: string | null } } = {}) {
+export async function exportLayout(db: DB, layout: LayoutEntry[] | null, opts: { mediaPrefix?: string; projectOverride?: { projectId: string; revisionId: string | null }; pending?: import('../pages/dynamic.ts').Pending } = {}) {
   if (!layout) return undefined;
   const blocks = layoutBlocks(layout);
   const ctx = await buildCtx(db, [{ blocks }], opts);
   return layout.flatMap((e): LayoutItem[] => {
     if (e.kind === 'section') return [{ section: e.id, ...(e.hidden ? { hidden: true } : {}) }];
     if (e.hidden) return [];
-    const html = renderBlocks({ version: 1, blocks: [{ id: e.id, type: e.type, v: e.v, hidden: false, props: e.props }] }, { ...ctx, pageTitle: 'Home' });
+    const html = renderBlocks({ version: 1, blocks: [{ id: e.id, type: e.type, v: e.v, hidden: false, props: e.props, ...(e.design ? { design: e.design } : {}) }] }, { ...ctx, pageTitle: 'Home' });
     return html ? [{ block: e.id, html }] : [];
   });
 }

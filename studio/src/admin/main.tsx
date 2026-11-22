@@ -150,7 +150,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   return (
     <div className={`shell${collapsed ? ' collapsed' : ''}${mobile ? ' mobile-open' : ''}`}>
       <aside className="side" aria-label="Studio navigation">
-        <Link to="/studio/" className="brand" aria-label="AFCD Studio, dashboard"><img className="brand-logo" src="/studio/brand/afcd-logo.png" alt="AFCD Foundation" width="640" height="133" /><img className="brand-sym" src="/studio/brand/afcd-mark.png" alt="AFCD" width="30" height="30" /><span className="brand-tag"><i aria-hidden="true" />Studio · Website management</span></Link>
+        <Link to="/studio/" className="brand" aria-label="AFCD Studio, dashboard"><img className="brand-logo" src="/studio/brand/afcd-logo.png" alt="AFCD Foundation" width="640" height="133" /><img className="brand-sym" src="/studio/brand/afcd-mark.png" alt="AFCD" width="30" height="30" /><span className="brand-tag">Studio</span></Link>
         <nav className="nav" ref={navRef}>
           <span className="nav-ind" aria-hidden="true" style={ind ? { transform: `translateY(${ind.top}px)`, height: ind.h, opacity: 1 } : { opacity: 0 }} />
           {NAV.map((g) => {

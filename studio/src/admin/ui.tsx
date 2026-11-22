@@ -84,6 +84,9 @@ const PATHS: Record<string, string> = {
   ext: 'M11 3h6v6M17 3l-8 8M14 11v5H4V6h5', alert: 'M10 3 2 17h16L10 3ZM10 8v4M10 14.5h.01', clock: 'M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM10 6v4l3 2',
   pin: 'M10 17s5-4.6 5-8.5a5 5 0 0 0-10 0c0 3.9 5 8.5 5 8.5ZM10 10.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z', layers: 'M10 3 3 7l7 4 7-4-7-4ZM3 11l7 4 7-4',
   side: 'M3 4h14v12H3zM8 4v12',
+  mail: 'M3 5h14v10H3zM3.5 5.5 10 10.5l6.5-5',
+  lock: 'M5 9h10v8H5zM7 9V6.5a3 3 0 0 1 6 0V9M10 12.5v1.5',
+  eyeoff: 'M3 3l14 14M8.2 5a8 8 0 0 1 1.8-.2c5 0 8 5.2 8 5.2a14 14 0 0 1-2.3 2.8M12.1 12.2A2.5 2.5 0 0 1 7.8 8M5.4 6.6C3.4 8 2 10 2 10s3 5.5 8 5.5a7.6 7.6 0 0 0 3.2-.7',
 };
 export function Icon({ n, ...p }: { n: string } & React.SVGProps<SVGSVGElement>) {
   return <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d={PATHS[n] ?? ''} /></svg>;

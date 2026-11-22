@@ -24,26 +24,68 @@ function App() {
 
 function Login({ onDone }: { onDone: () => void }) {
   const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
-  const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const [show, setShow] = useState(false);
+  const [err, setErr] = useState(''); const [fieldErr, setFieldErr] = useState<{ email?: string; password?: string }>({});
+  const [busy, setBusy] = useState(false);
+  const [siteUrl, setSiteUrl] = useState('');
+  useEffect(() => { api<{ siteUrl: string }>('/public-config').then((c) => setSiteUrl(c.siteUrl)).catch(() => {}); }, []);
   async function submit(e: FormEvent) {
-    e.preventDefault(); setBusy(true); setErr('');
-    try { await post('/auth/login', { email, password }); onDone(); }
-    catch (x) { setErr(x instanceof ApiError ? x.message : 'Could not sign in.'); }
+    e.preventDefault(); setErr('');
+    const fe: typeof fieldErr = {};
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) fe.email = 'Enter the email address of your Studio account.';
+    if (!password) fe.password = 'Enter your password.';
+    setFieldErr(fe);
+    if (fe.email || fe.password) return;
+    setBusy(true);
+    try { await post('/auth/login', { email: email.trim(), password }); onDone(); }
+    catch (x) { setErr(x instanceof ApiError ? x.message : 'Could not sign in. Check your connection and try again.'); }
     finally { setBusy(false); }
   }
+  const FEATURES: [string, string, string][] = [
+    ['layers', 'Pages and projects', 'Build pages from approved blocks and keep projects up to date.'],
+    ['check', 'Review and publish', 'Every change is reviewed, then published and checked on the site.'],
+    ['image', 'Media library', 'Photos with alt text, credits and confirmed usage rights.'],
+  ];
   return (
-    <main className="login">
-      <form className="login-card" onSubmit={submit} noValidate>
-        <div className="brand-mark">AF</div>
-        <h1>Sign in to AFCD Studio</h1>
-        <p>Manage the AFCD Foundation website.</p>
-        <div className="stack">
-          <label className="field"><span>Email</span><input className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></label>
-          <label className="field"><span>Password</span><input className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
-          {err && <div className="notice n-bad" role="alert">{err}</div>}
-          <button className="btn btn-primary" disabled={busy} style={{ height: 38 }}>{busy ? 'Signing in…' : 'Sign in'}</button>
+    <main className="auth">
+      <section className="auth-brand" aria-label="AFCD Studio">
+        <div className="auth-line" aria-hidden="true" />
+        <div className="auth-glow" aria-hidden="true" />
+        <img className="auth-logo" src="/studio/brand/afcd-logo-white.png" alt="AFCD Foundation" width="1525" height="318" />
+        <div className="auth-copy">
+          <span className="auth-kicker"><span className="auth-dot" aria-hidden="true" />AFCD Studio</span>
+          <h1>Manage the AFCD Foundation <span>website.</span></h1>
+          <p>One place for pages, projects, stories and photos, with review before anything goes live.</p>
+          <ul className="auth-features">{FEATURES.map(([ic, t, d]) => <li key={t}><span className="auth-ico"><Icon n={ic} /></span><span><b>{t}</b><small>{d}</small></span></li>)}</ul>
         </div>
-      </form>
+        <small className="auth-foot">© {new Date().getFullYear()} AFCD Foundation · Marrakech, Morocco</small>
+      </section>
+
+      <section className="auth-panel">
+        <form className="auth-form" onSubmit={submit} noValidate aria-describedby={err ? 'auth-err' : undefined}>
+          <h2>Sign in</h2>
+          <p className="auth-sub">Use your AFCD Studio account.</p>
+          <label className="auth-field">
+            <span>Email</span>
+            <span className={`auth-in${fieldErr.email ? ' bad' : ''}`}><Icon n="mail" />
+              <input type="email" autoComplete="username" value={email} onChange={(e) => { setEmail(e.target.value); setFieldErr((f) => ({ ...f, email: undefined })); }}
+                aria-invalid={!!fieldErr.email} aria-describedby={fieldErr.email ? 'err-email' : undefined} placeholder="you@afcdteam.com" autoFocus required /></span>
+            {fieldErr.email && <small id="err-email" className="auth-err-t">{fieldErr.email}</small>}
+          </label>
+          <label className="auth-field">
+            <span>Password</span>
+            <span className={`auth-in${fieldErr.password ? ' bad' : ''}`}><Icon n="lock" />
+              <input type={show ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(e) => { setPassword(e.target.value); setFieldErr((f) => ({ ...f, password: undefined })); }}
+                aria-invalid={!!fieldErr.password} aria-describedby={fieldErr.password ? 'err-pw' : undefined} required />
+              <button type="button" className="auth-eye" onClick={() => setShow((v) => !v)} aria-label={show ? 'Hide password' : 'Show password'} aria-pressed={show}><Icon n={show ? 'eyeoff' : 'eye'} /></button></span>
+            {fieldErr.password && <small id="err-pw" className="auth-err-t">{fieldErr.password}</small>}
+          </label>
+          {err && <div id="auth-err" className="auth-alert" role="alert"><Icon n="alert" />{err}</div>}
+          <button className="auth-btn" disabled={busy}>{busy ? <><span className="auth-spin" aria-hidden="true" />Signing in…</> : <>Sign in<span className="auth-btn-arr" aria-hidden="true">→</span></>}</button>
+          <p className="auth-note">Access is for AFCD staff. Ask an administrator for an account.</p>
+          {siteUrl && <a className="auth-back" href={siteUrl}>← Back to website</a>}
+        </form>
+      </section>
     </main>
   );
 }

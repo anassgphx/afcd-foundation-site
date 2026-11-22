@@ -78,6 +78,9 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
     return c.json({ ok: true });
   });
 
+  // Public, non-sensitive settings for the sign-in screen.
+  api.get('/public-config', (c) => c.json({ siteUrl: cfg.publicSiteUrl }));
+
   api.get('/me', (c) => {
     const u = requireUser(c);
     return c.json({ user: { ...u, roleLabel: ROLE_LABELS[u.role] }, permissions: ROLE_PERMISSIONS[u.role], csrf: c.var.csrf, siteUrl: cfg.publicSiteUrl });
@@ -285,6 +288,13 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
     // The preview is the real public template; it only needs its own scripts and styles.
     c.header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; frame-ancestors 'self'");
     return sendFile(c, p, { private: true });
+  });
+
+  // Brand files for the sign-in screen (public; allow-listed names only).
+  app.get('/studio/brand/:name', (c) => {
+    const name = c.req.param('name');
+    if (!['afcd-logo-white.png', 'afcd-mark.png', 'afcd-logo.png'].includes(name)) return c.notFound();
+    return sendFile(c, resolve(cfg.siteRoot, 'assets/brand', name), { immutable: false });
   });
 
   // Site assets for the builder canvas (iframe srcdoc with <base href="/studio/site/">).

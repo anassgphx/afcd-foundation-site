@@ -50,6 +50,13 @@
       "when": 1795342145660,
       "tag": "0006_forms",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795342746030,
+      "tag": "0007_seo",
+      "breakpoints": true
     }
   ]
 }

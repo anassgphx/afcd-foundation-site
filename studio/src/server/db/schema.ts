@@ -452,3 +452,38 @@ export const newsletterSubscribers = pgTable('newsletter_subscribers', {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (t) => [uniqueIndex('newsletter_email_uq').on(t.email)]);
+
+// ---------------------------------------------------------------- SEO (overrides for template pages; audit results)
+export const seoOverrides = pgTable('seo_overrides', {
+  id: id(),
+  file: text('file').notNull(),                       // e.g. 'about.html' (template pages only)
+  title: text('title').notNull().default(''),         // plain text; empty = keep the page's own
+  description: text('description').notNull().default(''),
+  noindex: boolean('noindex').notNull().default(false),
+  imageMediaId: uuid('image_media_id').references(() => media.id, { onDelete: 'set null' }),
+  status: workflowEnum('status').notNull().default('draft'),
+  publishedRevisionId: uuid('published_revision_id'),
+  approvedRevisionId: uuid('approved_revision_id'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('seo_overrides_file_uq').on(t.file)]);
+
+export const seoRevisions = pgTable('seo_revisions', {
+  id: id(),
+  overrideId: uuid('override_id').notNull().references(() => seoOverrides.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('seo_revisions_num_uq').on(t.overrideId, t.number)]);
+
+export const seoAudits = pgTable('seo_audits', {
+  id: id(),
+  result: jsonb('result').$type<Record<string, unknown>>().notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+});

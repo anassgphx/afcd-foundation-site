@@ -49,6 +49,12 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
     const pagesDir = mode.kind === 'live' ? join(cfg.siteRoot, 'src/pages') : mode.pagesDir;
     const files = existsSync(pagesDir) ? readdirSync(pagesDir).filter((f) => f.endsWith('.html')) : [];
     for (const f of files) writeFileSync(join(out, f), readFileSync(join(pagesDir, f), 'utf8').replace(/^---[\s\S]*?---\n/, ''));
+    // Stand-in for build.mjs's SEO overrides (src/data/seo.json): title and revision marker.
+    const seoFile = join(cfg.siteRoot, 'src/data/seo.json');
+    if (mode.kind === 'live' && existsSync(seoFile)) {
+      const seo = JSON.parse(readFileSync(seoFile, 'utf8')).pages as Record<string, { title?: string; revision: string }>;
+      for (const [f, o] of Object.entries(seo)) if (existsSync(join(out, f))) writeFileSync(join(out, f), `<title>${o.title ?? ''}</title><meta name="studio-seo-rev" content="${o.revision}">` + readFileSync(join(out, f), 'utf8'));
+    }
     writeFileSync(join(out, 'sitemap.xml'), `<urlset>${files.map((f) => `<loc>${f}</loc>`).join('')}</urlset>`);
     if (mode.kind === 'preview' && mode.only === 'pages') return 'fake page preview ok';
     for (const p of data.projects) if (p.file) writeFileSync(join(out, p.file), `<section data-studio-rev="${p.detail.revision}"><h1>${p.name}</h1><p>${p.detail.lede}</p></section>`);

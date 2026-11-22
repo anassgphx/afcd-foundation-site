@@ -15,7 +15,9 @@ import { validateDoc } from '../pages/blocks.ts';
 import { articles, articleRevisions } from '../../db/schema.ts';
 import { articleFile, articleSource, listingEntry, newsCtx, type ArticleSnapshot } from '../news/render.ts';
 import { loadArticle, toArticleSnapshot } from '../news/service.ts';
-import { partners, partnerRevisions, events, eventRevisions, opportunities, opportunityRevisions } from '../../db/schema.ts';
+import { partners, partnerRevisions, events, eventRevisions, opportunities, opportunityRevisions, seoOverrides, seoRevisions } from '../../db/schema.ts';
+import type { OverrideSnapshot } from '../seo/service.ts';
+import { publicRef } from '../media/service.ts';
 import { detailSource, listingSource, oppCtx, oppState, opportunityFile, type LiveOpp } from '../opportunities/render.ts';
 import type { OpportunitySnapshot } from '../opportunities/service.ts';
 import { eventEntries, eventFile, isUpcoming } from '../events/render.ts';
@@ -197,11 +199,42 @@ export class Publisher {
     return live.map((o) => o.snap.heroMediaId).filter(Boolean) as string[];
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null } } = {}) {
+  get seoFile() { return resolve(this.cfg.siteRoot, 'src/data/seo.json'); }
+
+  async liveSeo(override?: { overrideId: string; revisionId: string | null }) {
+    const live = await this.db.select({ id: seoOverrides.id, rev: seoOverrides.publishedRevisionId }).from(seoOverrides).where(isNotNull(seoOverrides.publishedRevisionId));
+    const map = new Map(live.map((r) => [r.id, r.rev as string]));
+    if (override) { if (override.revisionId) map.set(override.overrideId, override.revisionId); else map.delete(override.overrideId); }
+    if (!map.size) return [] as { id: string; snap: OverrideSnapshot }[];
+    const revs = await this.db.select().from(seoRevisions).where(inArray(seoRevisions.id, [...map.values()]));
+    return revs.map((r) => ({ id: r.id, snap: r.snapshot as unknown as OverrideSnapshot }));
+  }
+
+  /** seo.json (read by build.mjs) exists only while an SEO override is live. Values are plain text; build.mjs escapes them. */
+  private async writeSeo(override?: { overrideId: string; revisionId: string | null }) {
+    const live = await this.liveSeo(override);
+    if (!live.length) { if (existsSync(this.seoFile)) rmSync(this.seoFile); return [] as string[]; }
+    const ids = [...new Set(live.map((x) => x.snap.imageMediaId).filter(Boolean) as string[])];
+    const rows = ids.length ? await this.db.select().from(media).where(inArray(media.id, ids)) : [];
+    const pagesOut: Record<string, unknown> = {};
+    for (const { id, snap: s } of live) {
+      const m = rows.find((r) => r.id === s.imageMediaId);
+      const ref = m ? publicRef(m, 'assets/media/') : null;
+      pagesOut[s.file] = { title: s.title || undefined, description: s.description || undefined, noindex: s.noindex || undefined,
+        image: ref ? { src: ref.src, w: ref.w, h: ref.h, alt: m!.alt } : undefined, revision: id };
+    }
+    const tmp = `${this.seoFile}.${randomBytes(4).toString('hex')}.tmp`;
+    mkdirSync(resolve(this.seoFile, '..'), { recursive: true });
+    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), pages: pagesOut }, null, 2) + '\n'); renameSync(tmp, this.seoFile);
+    return ids;
+  }
+
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null } } = {}) {
     const entries = await this.liveEntries(o.project);
     this.writeData(this.dataFile, entries);
     const partnerMedia = await this.writePartners(this.partnersFile, o.partner, o.project);
     const eventMedia = await this.writeEvents(this.eventsFile, o.event, o.project);
+    const seoMedia = await this.writeSeo(o.seo);
     const oppMedia = await this.writeOpportunities(resolve(this.cfg.siteRoot, 'src/pages'), [this.cfg.siteRoot], await this.liveOpportunities(o.opportunity), o.project);
     const newsMedia = await this.writeNews(this.newsFile, resolve(this.cfg.siteRoot, 'src/pages'), await this.liveArticles(o.article), o.project);
     const live = await this.livePages(o.page);
@@ -213,7 +246,7 @@ export class Publisher {
       const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
       writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
     }
-    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...eventMedia, ...oppMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...eventMedia, ...oppMedia, ...seoMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
     return { entries, live };
   }
 
@@ -362,7 +395,7 @@ export class Publisher {
       const msg = (e as Error).message;
       try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
       await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
-      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('partner') ? 'partner' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : 'page', id: entityId }, `${failLabel}: ${msg}`, { jobId: job.id });
+      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('partner') ? 'partner' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('seo') ? 'seo' : 'page', id: entityId }, `${failLabel}: ${msg}`, { jobId: job.id });
       throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
     }
     return { job, log };
@@ -788,6 +821,56 @@ export class Publisher {
     await this.locked(async () => { const log: string[] = []; await this.rebuildFromDb(log); });
     await audit(this.db, null, 'opportunity.refresh', { type: 'opportunity' }, 'Rebuilt opportunities because one has opened or closed');
     return true;
+  }
+
+  // ---------------------------------------------------------------- SEO overrides
+  private verifySeo(file: string, revisionId: string, removed: boolean) {
+    const p = resolve(this.cfg.siteRoot, file);
+    if (!existsSync(p)) throw new Error(`${file} was not built.`);
+    const has = readFileSync(p, 'utf8').includes(`<meta name="studio-seo-rev" content="${revisionId}">`);
+    if (!removed && !has) throw new Error(`${file} does not carry the published SEO settings (build.mjs must apply src/data/seo.json).`);
+    if (removed && has) throw new Error(`${file} still carries the removed SEO settings.`);
+  }
+
+  async publishSeo(actor: NonNullable<Actor>, overrideId: string) {
+    return this.locked(async () => {
+      const [o] = await this.db.select().from(seoOverrides).where(eq(seoOverrides.id, overrideId));
+      if (!o) throw new AppError(404, 'SEO settings not found.');
+      if (o.status !== 'approved' || !o.approvedRevisionId) throw new AppError(409, 'Only approved SEO settings can be published.');
+      const [rev] = await this.db.select().from(seoRevisions).where(eq(seoRevisions.id, o.approvedRevisionId));
+      const { job, log } = await this.deliver('publish_seo', actor, overrideId, rev.id, async (log) => {
+        await this.writeSite({ seo: { overrideId, revisionId: rev.id } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifySeo(o.file, rev.id, false);
+      }, `Publishing SEO for ${o.file} failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(seoOverrides).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, updatedAt: new Date() }).where(eq(seoOverrides.id, overrideId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'seo.publish', { type: 'seo', id: overrideId }, `Published SEO for ${o.file} (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file: o.file };
+    });
+  }
+
+  /** Removes the override from the site: the page goes back to its own title and description. */
+  async unpublishSeo(actor: NonNullable<Actor>, overrideId: string) {
+    return this.locked(async () => {
+      const [o] = await this.db.select().from(seoOverrides).where(eq(seoOverrides.id, overrideId));
+      if (!o) throw new AppError(404, 'SEO settings not found.');
+      if (!o.publishedRevisionId) throw new AppError(409, 'These SEO settings are not on the live site.');
+      const rev = o.publishedRevisionId;
+      const { job, log } = await this.deliver('unpublish_seo', actor, overrideId, rev, async (log) => {
+        await this.writeSite({ seo: { overrideId, revisionId: null } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifySeo(o.file, rev, true);
+      }, `Restoring the page’s own SEO for ${o.file} failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(seoOverrides).set({ status: 'draft', publishedRevisionId: null, publishedAt: null, updatedAt: new Date() }).where(eq(seoOverrides.id, overrideId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'seo.unpublish', { type: 'seo', id: overrideId }, `Restored the page’s own SEO for ${o.file}`, { jobId: job.id });
+      });
+      return { jobId: job.id };
+    });
   }
 
   async recentJobs(limit = 10) {

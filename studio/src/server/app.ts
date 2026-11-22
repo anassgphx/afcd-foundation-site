@@ -23,6 +23,7 @@ import * as PT from './modules/partners/service.ts';
 import * as EV from './modules/events/service.ts';
 import * as OP from './modules/opportunities/service.ts';
 import * as FM from './modules/forms/service.ts';
+import * as SEO from './modules/seo/service.ts';
 import { importPartners } from './modules/partners/import.ts';
 import { blockCatalog } from './modules/pages/blocks.ts';
 import { Publisher, type BuildRunner } from './modules/publish/service.ts';
@@ -355,6 +356,29 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner } = 
     c.header('Content-Disposition', `attachment; filename="afcd-${w}-${new Date().toISOString().slice(0, 10)}.csv"`);
     return c.body(csv);
   });
+
+  // ---------------------------------------------------------------- SEO studio
+  api.get('/seo/audit', perm('seo.read'), async (c) => c.json({ last: await SEO.lastAudit(db), history: await SEO.auditHistory(db) }));
+  api.post('/seo/audit', perm('seo.read'), async (c) => c.json(await SEO.runAudit(db, cfg, actor(c))));
+  api.get('/seo/pages', perm('seo.read'), async (c) => c.json(await SEO.listOverrides(db, cfg)));
+  api.get('/seo/pages/:file', perm('seo.read'), async (c) => {
+    const file = c.req.param('file');
+    const defaults = SEO.pageDefaults(cfg, file); if (!defaults) throw new AppError(404, 'Unknown page.');
+    const [o] = await db.select().from(t.seoOverrides).where(eq(t.seoOverrides.file, file));
+    const mediaRows = o?.imageMediaId ? await db.select().from(t.media).where(eq(t.media.id, o.imageMediaId)) : [];
+    const owner = (await SEO.owners(db, cfg)).get(file) ?? null;
+    return c.json({ file, defaults, owner, override: o ?? null, media: mediaRows.map(withUrl), problems: o ? await SEO.overrideProblems(db, o) : [], history: o ? await SEO.overrideHistory(db, o.id) : { revisions: [], comments: [] } });
+  });
+  api.put('/seo/pages/:file', perm('seo.update'), async (c) => c.json(await SEO.saveOverride(db, cfg, actor(c), c.req.param('file'), await c.req.json())));
+  api.post('/seo/overrides/:id/transition', async (c) => {
+    const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
+    if (!body.success || !SEO.seoTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, SEO.seoTransitionPerm(body.data.action)!);
+    return c.json(await SEO.transitionOverride(db, actor(c), u.role, c.req.param('id'), body.data.action, { comment: body.data.comment }));
+  });
+  api.post('/seo/overrides/:id/discard', perm('seo.update'), async (c) => { await SEO.discardOverride(db, actor(c), c.req.param('id')); return c.json({ ok: true }); });
+  api.post('/seo/overrides/:id/publish', perm('seo.publish'), async (c) => c.json(await publisher.publishSeo(actor(c), c.req.param('id'))));
+  api.post('/seo/overrides/:id/unpublish', perm('seo.publish'), async (c) => c.json(await publisher.unpublishSeo(actor(c), c.req.param('id'))));
 
   // ---------------------------------------------------------------- Publishing jobs, audit, users
   api.get('/publish-jobs', perm('dashboard.read'), async (c) => c.json(await publisher.recentJobs(30)));

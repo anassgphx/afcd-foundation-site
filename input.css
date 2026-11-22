@@ -1294,3 +1294,9 @@ a.na-tag:hover { border-color: #000; }
 /* Black bands */
 .os-band { position: relative; overflow: hidden; isolation: isolate; }
 .os-band::after { z-index: -1; width: 300px; right: -50px; bottom: -60px; transform: rotate(10deg); color: #fff; opacity: .07; }
+
+/* Page header: white AFCD symbol in the black home button and label pill */
+.phd-home svg { display: none; }
+.phd-home::before { content: ""; width: 17px; height: 17px; background: #fff; -webkit-mask: url(brand/afcd-symbol.svg) center / contain no-repeat; mask: url(brand/afcd-symbol.svg) center / contain no-repeat; }
+.phd-home { width: 32px; height: 32px; }
+.phd-label .tb-dot { width: 13px; height: 13px; border-radius: 0; background: #fff; -webkit-mask: url(brand/afcd-symbol.svg) center / contain no-repeat; mask: url(brand/afcd-symbol.svg) center / contain no-repeat; }

@@ -23,13 +23,19 @@ export const KEY = 'organization';
 const ORG_ID = SITE + '#organization';
 const plain = (n: number) => z.string().trim().max(n).refine((v) => !/[<>]/.test(v), 'Use plain text.');
 const HTTPS = /^https:\/\/[a-z0-9.-]+\.[a-z]{2,}(\/[^\s"'<>]*)?$/i;
+/** The foundation's public addresses. Any other address (personal, administrative) never goes into public markup. */
+export const PUBLIC_EMAILS = ['contact@afcdteam.com', 'akaya@afcdteam.com'];
+/** Keys build.mjs may take from schema.json for the Organization: names, description and public contacts only. */
+export const ORG_KEYS = ['alternateName', 'legalName', 'description', 'email', 'telephone', 'foundingDate', 'sameAs'] as const;
+/** Sample or placeholder text that must never be described to search engines as real content. */
+const PLACEHOLDER = /lorem ipsum|consectetur adipiscing|\bsample\b|placeholder|\bdummy\b|\btest (event|story|article)\b|\bto be confirmed\b|\bTBC\b|\bTBD\b/i;
 
 export const settingsSchema = z.object({
   organization: z.object({
     alternateName: plain(60).default(''),
     legalName: plain(160).default(''),
     description: plain(320).refine((v) => v === '' || v.length >= 50, 'Write at least 50 characters, or leave it empty to keep the site’s own.').default(''),
-    email: z.string().trim().max(120).refine((v) => v === '' || /^[^\s@<>]+@[^\s@<>]+\.[a-z]{2,}$/i.test(v), 'Use a public email address like contact@example.org.').default(''),
+    email: z.string().trim().toLowerCase().max(120).refine((v) => v === '' || PUBLIC_EMAILS.includes(v), `Use one of the foundation’s public addresses: ${PUBLIC_EMAILS.join(' or ')}.`).default(''),
     telephone: z.string().trim().max(24).refine((v) => v === '' || /^\+[0-9 ]{8,20}$/.test(v), 'Use the international format, e.g. +212 6…').default(''),
     foundingDate: z.string().trim().refine((v) => v === '' || /^(19|20)\d{2}$/.test(v), 'Use a year like 2007.').default(''),
     sameAs: z.array(z.string().trim().max(300).regex(HTTPS, 'Use a full https:// address.')).max(10).default([]),
@@ -78,6 +84,8 @@ export function eventLd(e: EventSnapshot, img: Img) {
 export function validateLd(obj: Record<string, unknown>) {
   const errors: string[] = []; const warnings: string[] = [];
   const t = obj['@type'];
+  const words = [obj.headline, obj.name, obj.description].filter((x) => typeof x === 'string').join(' ');
+  if (PLACEHOLDER.test(words)) errors.push('Looks like sample or placeholder content; it is not described to search engines.');
   if (t === 'Article') {
     if (!obj.headline) errors.push('Missing headline.');
     if (!obj.datePublished) errors.push('Missing publication date.');

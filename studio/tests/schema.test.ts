@@ -14,11 +14,14 @@ const story = { title: 'Climate camp in Ait Ourir', slug: 'climate-camp', excerp
 
 describe('structured data builders', () => {
   it('keeps only filled-in organization fields and validates generated markup', () => {
-    const s = settingsSchema.parse({ organization: { email: 'contact@afcd.org', telephone: '+212 663 618 536', sameAs: ['https://www.facebook.com/afcd.foundation'] } });
-    expect(orgOverrides(s)).toEqual({ email: 'contact@afcd.org', telephone: '+212663618536', sameAs: ['https://www.facebook.com/afcd.foundation'] });
+    const s = settingsSchema.parse({ organization: { email: 'contact@afcdteam.com', telephone: '+212 663 618 536', sameAs: ['https://www.facebook.com/afcd.foundation'] } });
+    expect(orgOverrides(s)).toEqual({ email: 'contact@afcdteam.com', telephone: '+212663618536', sameAs: ['https://www.facebook.com/afcd.foundation'] });
     expect(settingsSchema.safeParse({ organization: { taxID: '123' } }).success).toBe(false);   // no field for internal identifiers
     expect(settingsSchema.safeParse({ organization: { description: 'Too short' } }).success).toBe(false);
     expect(settingsSchema.safeParse({ organization: { sameAs: ['http://insecure.example'] } }).success).toBe(false);
+    expect(settingsSchema.safeParse({ organization: { email: 'someone@gmail.com' } }).success).toBe(false);   // public addresses only
+    expect(settingsSchema.parse({ organization: { email: 'Akaya@afcdteam.com' } }).organization.email).toBe('akaya@afcdteam.com');
+    expect(validateLd({ '@type': 'Event', name: 'Sample event', startDate: '2027-01-01', location: { '@type': 'Place', name: 'x' } }).errors[0]).toMatch(/placeholder/);
     const art = articleLd({ ...story, seo: { title: '', description: '' }, type: 'Event recap' } as never, null)!;
     expect(art).toMatchObject({ '@type': 'Article', headline: 'Climate camp in Ait Ourir', datePublished: '2026-11-20', url: 'https://afcdfoundation.org/news-climate-camp.html' });
     expect(validateLd(art)).toEqual({ errors: [], warnings: ['No image: add a cover photo to the story.'] });

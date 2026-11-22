@@ -786,3 +786,17 @@ a.db-h:hover { border-color: var(--line-strong); box-shadow: 0 8px 22px -16px rg
 .sch-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--sunken, #fafaf9); border-radius: 0 0 var(--r, 12px) var(--r, 12px); }
 @media (max-width: 1000px) { .sch-grid { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .sch-fields { grid-template-columns: 1fr; } .sch-fields .s2 { grid-column: auto; } }
+
+/* homepage editor: section list. Even gutters, titles on one line, actions overlay the row instead of taking width */
+.b-left .b-scroll { padding: 2px 12px 12px; overflow-x: hidden; scrollbar-gutter: stable; }
+.b-layer { position: relative; min-width: 0; overflow: hidden; }
+.b-layer-main { padding: 8px 10px; border-radius: 8px; }
+.b-layer-main:focus { outline: none; }
+.b-layer:has(.b-layer-main:focus-visible) { border-color: #2563EB; box-shadow: 0 0 0 2px rgba(37,99,235,.25); }
+.b-layer-main b, .b-layer-main small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.b-layer-act { position: absolute; top: 1px; right: 1px; bottom: 1px; align-items: center; padding: 0 6px 0 22px; border-radius: 0 8px 8px 0;
+  background: linear-gradient(90deg, rgba(255,255,255,0), #fff 18px); pointer-events: none; }
+.b-layer:hover .b-layer-act, .b-layer:focus-within .b-layer-act { opacity: 1; pointer-events: auto; }
+.b-layer.on .b-layer-act { opacity: 0; }
+.b-layer.on:hover .b-layer-act, .b-layer.on:focus-within .b-layer-act { opacity: 1; }
+.b-layer-act button:focus-visible { outline: 2px solid #2563EB; outline-offset: -1px; }

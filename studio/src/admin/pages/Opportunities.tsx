@@ -178,7 +178,7 @@ export function OpportunityEditor({ id }: { id: string }) {
         </Section>
       </fieldset>
       <Section id="translations" title="Translations" desc="French and Arabic of this opportunity. Reviewed and published on the Translations screen.">
-        <RecordTranslations noun="opportunity" dirty={status !== 'published'} files={f.slug ? [`opportunity-${f.slug}.html`] : []} texts={[f.title, f.summary, f.body, f.location, f.commitment, ...f.eligibility, ...f.benefits]} />
+        <RecordTranslations noun="opportunity" dirty={status !== 'published'} files={f.slug ? [`opportunity-${f.slug}.html`] : []} fields={[{ label: 'Title', value: f.title }, { label: 'Summary', value: f.summary }, ...f.body.split(/\n{2,}/).map((x) => ({ label: 'Description', value: x.replace(/^[>#-]+\s*/, '') })), ...f.eligibility.map((x) => ({ label: 'Who can apply', value: x })), ...f.benefits.map((x) => ({ label: 'What you get', value: x })), { label: 'Location', value: f.location }, { label: 'Commitment', value: f.commitment }, { label: 'SEO title', value: f.seoTitle }, { label: 'Meta description', value: f.seoDescription }]} />
       </Section>
       <WorkflowPanel status={status} live={live} problems={o.problems}
         facts={[['Website', live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'], ...(o.publishedAt ? [['Published', fmtDate(o.publishedAt)] as [string, string]] : []), ['Applications', `${state}${f.deadline ? ` · until ${dateLabel(f.deadline)}` : ' · rolling'}`]]}>

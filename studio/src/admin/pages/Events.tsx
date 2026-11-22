@@ -176,7 +176,7 @@ export function EventEditor({ id }: { id: string }) {
         </Section>
       </fieldset>
       <Section id="translations" title="Translations" desc="French and Arabic of this event. Reviewed and published on the Translations screen.">
-        <RecordTranslations noun="event" dirty={status !== 'published'} files={f.slug ? [`event-${f.slug}.html`] : []} texts={[f.title, f.summary, f.body, f.location, f.timeLabel, ...f.agenda.flatMap((a) => [a.title, a.text]), ...f.audience]} />
+        <RecordTranslations noun="event" dirty={status !== 'published'} files={f.slug ? [`event-${f.slug}.html`] : []} fields={[{ label: 'Event title', value: f.title }, { label: 'Summary', value: f.summary }, ...f.body.split(/\n{2,}/).map((x) => ({ label: 'Description', value: x.replace(/^[>#-]+\s*/, '') })), { label: 'Location', value: f.location }, { label: 'Time', value: f.timeLabel }, ...f.agenda.flatMap((a) => [{ label: 'Programme step', value: a.title }, { label: 'Programme step text', value: a.text }]), ...f.audience.map((x) => ({ label: 'Who should attend', value: x })), { label: 'SEO title', value: f.seoTitle }, { label: 'Meta description', value: f.seoDescription }]} />
       </Section>
 
       <WorkflowPanel status={status} live={live} problems={e.problems}

@@ -164,7 +164,7 @@ export function PartnerEditor({ id }: { id: string }) {
         </Section>
       </fieldset>
       <Section id="translations" title="Translations" desc="French and Arabic of this partner. Reviewed and published on the Translations screen.">
-        <RecordTranslations noun="partner" dirty={status !== 'published'} files={[]} texts={[f.name, f.category, f.description]} />
+        <RecordTranslations noun="partner" dirty={status !== 'published'} files={[]} fields={[{ label: 'Organisation name', value: f.name }, { label: 'Category', value: f.category }, { label: 'About the partnership', value: f.description }]} />
       </Section>
       <WorkflowPanel status={status} live={live} problems={p.problems}
         facts={[['Website', live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'], ...(p.publishedAt ? [['Published', fmtDate(p.publishedAt)] as [string, string]] : []), ...(p.verifiedAt ? [['Last approved', fmtDate(p.verifiedAt)] as [string, string]] : [])]}>

@@ -108,9 +108,10 @@ describe('Translations workflow', () => {
     expect(ov.find((l: { lang: string }) => l.lang === 'ar')).toMatchObject({ translated: 0, status: null });
     // one record's texts, for the Translations tab of its editor: its page minus site chrome, plus listing texts with its fields
     writeFileSync(join(h.siteRoot, '404.html'), '<html><body><title>Home</title><p>Not found</p></body></html>');
-    const rec = await ed.post('/translations/record', { files: [], texts: ['Volunteers planting trees'] });
+    const rec = await ed.post('/translations/record', { files: [], fields: [{ label: 'Photo description', value: 'Volunteers planting trees' }] });
     expect(rec.status).toBe(200);
     expect(rec.body.items.map((i: { key: string }) => i.key)).toEqual(['Volunteers planting trees']);
+    expect(rec.body.items[0]).toMatchObject({ label: 'Photo description', group: 'field', where: ['Homepage'] });
     expect(rec.body.items[0].t.fr).toMatchObject({ text: 'Des bénévoles plantent des arbres', state: 'done' });
     expect(rec.body.items[0].t.ar).toMatchObject({ text: '', state: 'missing' });
     expect((await ed.post('/translations/record', { files: ['../secret.html'] })).status).toBe(422);

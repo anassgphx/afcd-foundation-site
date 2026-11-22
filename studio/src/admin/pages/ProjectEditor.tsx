@@ -154,6 +154,11 @@ export function ProjectEditor({ id }: { id: string }) {
           <div className="tabs" role="tablist">{TABS.map((t) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t}{tabErr(t) && <span className="err-dot" />}</button>)}</div>
           {locked && <div className="notice n-info" style={{ margin: '14px 18px 0' }}>{status === 'in_review' ? 'This project is in review, so it is read-only. Withdraw it to make changes.' : 'This project is archived. Restore it to edit.'}</div>}
           {seoOnly && <div className="notice n-info" style={{ margin: '14px 18px 0' }}>Your role can edit the SEO tab only.</div>}
+          {tab === 'Translations' && <div className="form"><RecordTranslations noun="project" dirty={status !== 'published'} files={form.hasDetailPage && form.slug ? [`project-${form.slug}.html`] : []}
+            fields={[{ label: 'Project name', value: form.name }, { label: 'One-line summary', value: form.summary }, { label: 'Category', value: form.category }, { label: 'Location', value: form.location }, { label: 'Years', value: form.years },
+              ...form.extraFacts.flatMap((x) => [{ label: 'Fact label', value: x.label }, { label: `Fact · ${x.label || 'value'}`, value: x.value }]),
+              { label: 'Context', value: form.context }, { label: 'Approach', value: form.approach }, { label: 'Activities', value: form.activities }, { label: 'Results', value: form.results },
+              { label: 'Photo caption', value: form.photoCaption }, { label: 'SEO title', value: form.seoTitle }, { label: 'Meta description', value: form.seoDescription }]} /></div>}
           <fieldset disabled={!editable} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
             {tab === 'Overview' && <div className="form">
               <Field label="Project name" err={errors.name}><input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} maxLength={160} disabled={ro} aria-invalid={!!errors.name} /></Field>
@@ -240,9 +245,6 @@ export function ProjectEditor({ id }: { id: string }) {
                 {!ro && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('gallery')}><Icon n="plus" />Add photos</button>}
               </Field>
             </div>}
-
-            {tab === 'Translations' && <RecordTranslations noun="project" dirty={status !== 'published'} files={form.hasDetailPage && form.slug ? [`project-${form.slug}.html`] : []}
-              texts={[form.name, form.summary, form.category, form.location, form.years, ...form.extraFacts.flatMap((x) => [x.label, x.value]), form.context, form.approach, form.activities, form.results, form.photoCaption]} />}
 
             {tab === 'SEO' && <fieldset disabled={!editable} style={{ border: 0, margin: 0, padding: 0 }}><div className="form">
               <Field label="SEO title" optional hint="Leave empty to use the project name." count={[form.seoTitle.length, 70]} err={errors.seoTitle}><input className="input" value={form.seoTitle} onChange={(e) => set('seoTitle', e.target.value)} maxLength={70} /></Field>

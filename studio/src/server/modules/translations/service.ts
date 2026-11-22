@@ -82,7 +82,7 @@ async function ensureRow(db: DB, cfg: Config, lang: Lang, actor: NonNullable<Act
   return (await loadRow(db, lang))!;
 }
 
-let segCache: { at: number; root: string; map: Map<string, Set<string>> } | null = null;
+let segCache: { at: number; root: string; map: ReturnType<typeof collectSegments> } | null = null;
 /** English segments of the built site (re-read at most every few seconds; the site changes only when it is rebuilt). */
 export function segments(cfg: Config) {
   if (!segCache || segCache.root !== cfg.siteRoot || Date.now() - segCache.at > 5000) segCache = { at: Date.now(), root: cfg.siteRoot, map: collectSegments(cfg.siteRoot) };
@@ -188,23 +188,55 @@ export const KEY_OF = KEY;
 const plainText = (s: string) => s.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&rsquo;/g, '’').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 export const recordBody = z.object({
   files: z.array(z.string().regex(/^[a-z0-9][a-z0-9-]*\.html$/)).max(5).default([]),
-  texts: z.array(z.string().max(2000)).max(80).default([]),
+  /** The editor's fields, in form order: rows that show a field's text are labelled with the field's name. */
+  fields: z.array(z.object({ label: z.string().max(80), value: z.string().max(4000) })).max(80).default([]),
 }).strict();
 
+/** What kind of text a segment is, from where it sits on the page (see lib/i18n.mjs mapText). */
+export function contextLabel(where: string, key: string) {
+  if (/^<b>Photo<\/b>/.test(key)) return 'Photo placeholder label';
+  const m: Record<string, string> = {
+    title: 'Page title · browser tab and search results', 'meta:description': 'Search result description', 'meta:og:title': 'Title when shared',
+    'meta:og:description': 'Description when shared', 'meta:og:image:alt': 'Share image description', 'attr:alt': 'Image description',
+    'attr:aria-label': 'Screen reader label', 'attr:title': 'Tooltip', 'attr:placeholder': 'Form hint', 'attr:data-where': 'Calendar location', 'attr:data-title': 'Calendar title',
+    h1: 'Main heading', h2: 'Section heading', h3: 'Heading', h4: 'Heading', p: 'Paragraph', li: 'List item', a: 'Link', button: 'Button', label: 'Form label',
+    dt: 'Fact label', dd: 'Fact', blockquote: 'Quote', summary: 'Question', figcaption: 'Caption', time: 'Date', js: 'Message shown by the site',
+  };
+  return m[where] ?? 'Text';
+}
+/** Readable page names for "appears on". */
+export function pageLabel(file: string) {
+  if (file === 'index.html') return 'Homepage';
+  if (file === 'main.js') return 'Interactive parts of the site';
+  const m = file.match(/^(project|event|news|opportunity)-(.+)\.html$/);
+  const name = (x: string) => x.replace(/\.html$/, '').replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
+  if (m) return `${{ project: 'Project', event: 'Event', news: 'Story', opportunity: 'Opportunity' }[m[1]]}: ${name(m[2])}`;
+  return `${name(file)} page`;
+}
+
 /** The English segments that belong to one record: text that appears only on its own page (template headings, header,
- *  footer and cards of other records appear on other pages too), plus listing texts made from one of its fields. */
+ *  footer and cards of other records appear on other pages too), plus texts made from one of its fields. */
 export async function recordView(db: DB, cfg: Config, actor: NonNullable<Actor>, raw: unknown) {
   const p = recordBody.safeParse(raw); if (!p.success) throw new AppError(422, 'Invalid request.');
   const segs = segments(cfg);
   const chrome = new Set([...segs.entries()].filter(([, f]) => f.has('404.html')).map(([k]) => k));
   const own = new Set(p.data.files);
-  const needles = [...new Set(p.data.texts.map((t) => plainText(t)).filter((t) => t.length >= 3))];
-  const keys = [...segs.entries()].filter(([k, files]) => {
-    if (chrome.has(k)) return false;
-    if ([...files].every((f) => own.has(f))) return true;
-    const pk = plainText(k);
-    return needles.some((n) => pk === n || (n.length >= 24 && pk.includes(n)));   // short fields (a category, a place) only as exact text
-  }).map(([k]) => k).slice(0, 300);
+  const fields = p.data.fields.map((f, i) => ({ ...f, i, n: plainText(f.value) })).filter((f) => f.n.length >= 2);
+  const items = [...segs.entries()].flatMap(([key, files]) => {
+    const pk = plainText(key);
+    const exact = fields.find((f) => f.n === pk);
+    if (chrome.has(key) && !exact) return [];   // shared site text (menu, footer), unless it is one of this record's fields
+    // longer fields are also recognised inside other texts (a search description that starts with the summary)
+    const inside = exact ? null : fields.find((f) => f.n.length >= 24 && pk.includes(f.n));
+    const onlyHere = [...files].every((f) => own.has(f));
+    if (!exact && !inside && !onlyHere) return [];
+    const where = segs.ctx?.get(key) ?? '';
+    const kind = contextLabel(where, key);
+    const placed = chrome.has(key) ? [...(([...files].some((f) => own.has(f))) ? ['Its own page'] : []), 'Every page (site menu)']
+      : [...files].sort((a, b) => Number(own.has(b)) - Number(own.has(a))).map((f) => (own.has(f) ? 'Its own page' : pageLabel(f)));
+    return [{ key, files: [...files], where: placed, group: exact ? 'field' as const : 'page' as const, order: exact ? exact.i : inside ? 100 + inside.i : 1000,
+      label: exact ? exact.label : inside ? `${kind} · uses ${inside.label.toLowerCase()}` : kind }];
+  }).sort((a, b) => a.order - b.order).slice(0, 300);
   const langs = await Promise.all(LANGS.map(async (lang) => {
     const row = await ensureRow(db, cfg, lang, actor);
     return { lang, row, draft: row.draft as LangData, pub: (row.published as Published | null) ?? { strings: {}, live: false } };
@@ -212,10 +244,9 @@ export async function recordView(db: DB, cfg: Config, actor: NonNullable<Actor>,
   return {
     pageBuilt: p.data.files.some((f) => existsSync(resolve(cfg.siteRoot, f))),
     langs: langs.map(({ lang, row, draft }) => ({ lang, ...LANG_INFO[lang], status: row.status, live: draft.live })),
-    items: keys.map((key) => ({
-      key, files: [...segs.get(key)!], placeholder: PLACEHOLDER.test(key), code: CODE.test(key.replace(/<[^>]+>/g, '').trim()), tags: (key.match(/<[^>]+>/g) ?? []).length,
-      onPage: [...segs.get(key)!].some((f) => own.has(f)),
-      t: Object.fromEntries(langs.map(({ lang, draft, pub }) => { const t = draft.strings[key] ?? ''; const pv = pub.strings[key] ?? ''; return [lang, { text: t, state: !t ? 'missing' : t !== pv ? 'edited' : 'done' }]; })),
+    items: items.map(({ order: _o, ...i }) => ({
+      ...i, placeholder: PLACEHOLDER.test(i.key), code: CODE.test(i.key.replace(/<[^>]+>/g, '').trim()), tags: (i.key.match(/<[^>]+>/g) ?? []).length,
+      t: Object.fromEntries(langs.map(({ lang, draft, pub }) => { const t = draft.strings[i.key] ?? ''; const pv = pub.strings[i.key] ?? ''; return [lang, { text: t, state: !t ? 'missing' : t !== pv ? 'edited' : 'done' }]; })),
     })),
   };
 }

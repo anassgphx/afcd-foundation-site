@@ -59,15 +59,38 @@
 .tr-actions .btn { justify-content: center; }
 
 /* Record editors: Translations tab (RecordTranslations.tsx) */
-.rt { display: flex; flex-direction: column; gap: 14px; }
-.rt-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
-.rt-head p { max-width: 640px; font-size: 13px; }
-.rt-langs { display: flex; gap: 8px; flex-wrap: wrap; }
-.rt-lang { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; }
-.rt-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
-@media (max-width: 1000px) { .rt-grid { grid-template-columns: minmax(0, 1fr); } .rt-h { display: none; } }
-.rt-h { padding: 0 2px 6px; border-bottom: 1px solid var(--line); font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.rt { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.rt-top { display: flex; flex-direction: column; gap: 10px; }
+.rt-langs { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.rt-lang { display: flex; flex-direction: column; gap: 7px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--sunken); font-size: 12px; }
+.rt-lang-h { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.rt-lang-h .badge { margin-inline-start: auto; }
+.rt-help { margin: 0; font-size: 12.5px; color: var(--muted); max-width: 760px; }
+.rt-help a { color: var(--ink); }
+.rt-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 12.5px; }
+.rt-group { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.rt-group > header { padding: 12px 16px; background: var(--sunken); border-bottom: 1px solid var(--line); }
+.rt-group h3 { margin: 0; font-size: 13.5px; }
+.rt-group h3 .muted { font-weight: 500; margin-inline-start: 4px; }
+.rt-group header p { margin: 2px 0 0; font-size: 12px; }
+.rt-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 10px 16px 0; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--faint); }
+.rt-cols span span { text-transform: none; letter-spacing: 0; font-weight: 500; }
 .rt-list { list-style: none; margin: 0; padding: 0; }
-.rt-row { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.rt-row { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
 .rt-row:last-child { border-bottom: 0; }
-.rt-foot { display: flex; align-items: center; gap: 8px; padding-top: 4px; font-size: 12.5px; }
+.rt-label { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.rt-label b { font-size: 12.5px; color: var(--ink); }
+.rt-where { min-width: 0; font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rt-cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.rt-en { min-height: 100%; padding: 9px 12px; border-radius: 8px; background: var(--sunken); border: 1px solid var(--line); font-size: 13.5px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
+.rt-cell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.rt-cell .textarea { resize: vertical; font-size: 13.5px; line-height: 1.55; }
+.rt-cell .textarea[dir="rtl"] { font-family: "IBM Plex Sans Arabic", Tahoma, sans-serif; font-size: 14.5px; line-height: 1.75; }
+.rt-cell.ch .textarea { border-color: #a78bfa; background: #faf5ff; }
+.rt-cell.bad .textarea { border-color: #dc2626; }
+.rt-state { display: flex; align-items: center; gap: 10px; min-height: 20px; font-size: 12px; }
+.rt-state .btn-link { margin-inline-start: auto; font-size: 12px; color: var(--ink-2); }
+.rt-save { position: sticky; bottom: 12px; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-radius: 12px; background: var(--ink); color: #fff; box-shadow: 0 12px 30px -12px rgba(0,0,0,.45); font-size: 13px; }
+.rt-save .btn-ghost { color: #fff; border-color: rgba(255,255,255,.25); background: transparent; }
+.rt-save .btn-primary { background: #fff; color: var(--ink); border-color: #fff; }
+@media (max-width: 1000px) { .rt-cols { display: none; } .rt-cells { grid-template-columns: minmax(0, 1fr); } }

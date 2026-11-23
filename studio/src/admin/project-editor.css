@@ -241,3 +241,28 @@
 .pe-poster-side { flex: 1 1 220px; display: grid; gap: 8px; min-width: 0; }
 .pe-poster-b { display: flex; gap: 6px; flex-wrap: wrap; }
 .pe-warn { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 8px 10px; border-radius: 10px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; font-size: 12.5px; } .pe-warn svg { flex: none; margin-top: 2px; }
+
+/* Partners picker and the facts preview (Summary → Details) */
+.pe-partners { display: grid; gap: 8px; }
+.pe-pchips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.pe-pchips li { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 4px 0 12px; border: 1px solid var(--line); border-radius: 999px; background: #fff; font-size: 13px; }
+.pe-pchip-n { font-weight: 600; } .pe-pchips small { color: var(--muted); font-size: 11.5px; }
+.pe-pchips em { font-style: normal; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: #fef3c7; color: #92400e; }
+.pe-pchips button { display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; font-size: 15px; }
+.pe-pchips button:hover { background: var(--canvas); color: var(--ink); }
+.pe-psearch { position: relative; max-width: 420px; }
+.pe-plist { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px); list-style: none; margin: 0; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: 0 14px 36px -16px rgba(0,0,0,.3); }
+.pe-plist button { display: grid; width: 100%; padding: 7px 9px; border: 0; border-radius: 7px; background: none; text-align: left; cursor: pointer; }
+.pe-plist button:hover, .pe-plist button:focus-visible { background: var(--canvas); }
+.pe-plist b { font-size: 13px; } .pe-plist small { font-size: 11.5px; color: var(--muted); }
+.pe-plink { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; font-size: 12.5px; }
+.pe-plink span { flex: 1 1 260px; }
+.pe-fpreview { display: grid; gap: 8px; margin-top: 4px; padding: 12px; border-radius: 12px; background: var(--sunken); border: 1px solid var(--line); }
+.pe-fp-k { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.pe-fp-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; margin: 0; overflow: hidden; border-radius: 12px; background: var(--line); border: 1px solid var(--line); }
+.pe-fp-bar > div { padding: 10px 12px; background: #fff; min-width: 0; }
+.pe-fp-bar dt, .pe-fp-stats dt { font-size: 10px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.pe-fp-bar dd { margin: 3px 0 0; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.pe-fp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; margin: 0; }
+.pe-fp-stats > div { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; background: #fff; border: 1px solid var(--line); }
+.pe-fp-stats dd { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.02em; }

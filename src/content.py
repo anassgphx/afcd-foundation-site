@@ -855,11 +855,18 @@ def project_details():
             return media_img(gal[i], cls + ' w-full rounded-[24px]', '(min-width:1024px) 50vw, 100vw') if i < len(gal) else ph(d['name'] + ' · gallery', cls + ' w-full rounded-[24px]')
         rev = d.get('revision') or ''
         dot = f'<span class="pj-dot" style="--c:{tone}"></span>'
-        # the bar on the cover: project, partner(s) and duration, all from published data (partners list their projects in Studio)
-        pnames = [n for n, x in PARTNER_DETAILS.items() if any((pr or {}).get('file') == file for pr in (x.get('projects') or []))]
-        years = next((v for k, v in d['facts'] if k in ('Years', 'Duration')), '')
-        bar = [(f'Project', d['name']), ('Partners' if len(pnames) > 1 else 'Partner', ', '.join(pnames)), ('Duration', years)]
+        # the bar on the cover: project, partner(s), duration and location, all from published data.
+        # Partners: the published partners linked in Studio's project editor; else a "Partner" extra fact; else the partners that list this project.
+        fmap = {k: v for k, v in d['facts']}
+        linked = [x.get('name') for x in (d.get('partners') or []) if x.get('name')]
+        typed = next((v for k, v in d['facts'] if k in ('Partner', 'Partners')), '')
+        pnames = linked or ([typed] if typed else [n for n, x in PARTNER_DETAILS.items() if any((pr or {}).get('file') == file for pr in (x.get('projects') or []))])
+        years = fmap.get('Duration') or fmap.get('Years') or ''
+        bar = [('Project', d['name']), ('Partners' if len(pnames) > 1 else 'Partner', ', '.join(pnames)), ('Duration', years), ('Location', fmap.get('Location', ''))]
         bar = [(k, v) for k, v in bar if v]
+        # the other facts from Studio ("Extra facts") become key figures under the cover
+        stats = [(k, v) for k, v in d['facts'] if k not in ('Pillar', 'Category', 'Location', 'Years', 'Duration', 'Partner', 'Partners') and v]
+        stats_html = ('<dl class="pj-stats" style="--n:' + str(len(stats)) + '">' + ''.join(f'<div class="pj-stat"><dd>{v}</dd><dt>{k}</dt></div>' for k, v in stats) + '</dl>') if stats else ''
         facts = ''.join(f'<div class="pj-fact"><dt>{k}</dt><dd>{dot if k == "Project" else ""}{v}</dd></div>' for k, v in bar)
         n_rows = len(d['rows'])
         steps = ''.join(f'''
@@ -937,6 +944,7 @@ def project_details():
       {hero}
       <dl class="pj-facts" style="--f:{len(bar)}">{facts}</dl>
     </div>
+    {stats_html}
   </div>
 </section>
 

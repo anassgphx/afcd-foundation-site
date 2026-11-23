@@ -16,10 +16,16 @@ type Form = {
   extraFacts: { label: string; value: string }[]; context: string; approach: string; activities: string; results: string;
   hasDetailPage: boolean; photoCaption: string; heroMediaId: string | null; galleryMediaIds: string[];
   logoMediaId: string | null; logoStyle: LogoStyle; posterMediaId: string | null;
-  pillarKeys: string[]; primaryPillarKey: string; objectiveRefs: string[]; seoTitle: string; seoDescription: string; sort: number;
+  pillarKeys: string[]; primaryPillarKey: string; objectiveRefs: string[]; partnerSlugs: string[]; seoTitle: string; seoDescription: string; sort: number;
   programObjectives: ProgObjective[]; outcomes: Outcome[]; activityItems: Activity[];
 };
 type ProgObjective = { title: string; text: string };
+type PartnerOpt = { id: string; slug: string; name: string; scope: string; status: string; publishedRevisionId: string | null };
+const MONTH = '(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|june?|july?|aug(ust)?|sep(t(ember)?)?|oct(ober)?|nov(ember)?|dec(ember)?)';
+/** A year, a month and year, or a range of them ("2020 – 2021", "January – November 2026", "Mar 2024 – present"). */
+const durationOk = (v: string) => { const t = v.trim(); if (!t) return true;
+  const part = `(${MONTH}\\.?\\s+)?((19|20)\\d{2})?`; const re = new RegExp(`^${MONTH}?\\s*${part}(\\s*(–|—|-|to|until)?\\s*(${part}|present|today|ongoing))?$`, 'i');
+  return /(19|20)\d{2}/.test(t) && re.test(t.replace(/\s+/g, ' ')); };
 type LogoStyle = { shape: string; fit: 'contain' | 'cover'; bg: 'none' | 'white' | 'light' | 'dark' | 'pillar'; size: 's' | 'm' | 'l' };
 const LOGO_SHAPES: [string, string][] = [['original', 'Original'], ['1:1', '1:1'], ['circle', 'Circle'], ['3:1', '3:1 wide'], ['2:1', '2:1'], ['4:3', '4:3'], ['16:9', '16:9'], ['3:4', '3:4'], ['1:3', '1:3 tall']];
 const LOGO_BGS: [LogoStyle['bg'], string][] = [['none', 'None'], ['white', 'White'], ['light', 'Light'], ['dark', 'Dark'], ['pillar', 'Pillar colour']];
@@ -43,14 +49,14 @@ type Loaded = Form & {
 
 const EMPTY: Form = {
   name: '', slug: '', reference: '', category: '', summary: '', location: '', years: '', extraFacts: [], context: '', approach: '', activities: '', results: '',
-  hasDetailPage: true, photoCaption: '', heroMediaId: null, galleryMediaIds: [], logoMediaId: null, logoStyle: { shape: 'original', fit: 'contain', bg: 'white', size: 'm' }, posterMediaId: null, pillarKeys: [], primaryPillarKey: '', objectiveRefs: [], seoTitle: '', seoDescription: '', sort: 100,
+  hasDetailPage: true, photoCaption: '', heroMediaId: null, galleryMediaIds: [], logoMediaId: null, logoStyle: { shape: 'original', fit: 'contain', bg: 'white', size: 'm' }, posterMediaId: null, pillarKeys: [], primaryPillarKey: '', objectiveRefs: [], partnerSlugs: [], seoTitle: '', seoDescription: '', sort: 100,
   programObjectives: [], outcomes: [], activityItems: [],
 };
 const LIST_MAX = 12;
 // Same order as the project page: Summary · Program objectives · Outcomes · Program activities · Related events
 const TABS = ['Summary', 'Objectives', 'Outcomes', 'Activities', 'Events', 'Relationships', 'Gallery', 'SEO', 'Translations'] as const;
 const TAB_FIELDS: Record<string, string[]> = {
-  Summary: ['name', 'slug', 'reference', 'category', 'summary', 'location', 'years', 'extraFacts', 'sort', 'context', 'approach', 'heroMediaId', 'photoCaption', 'logoMediaId', 'logoStyle', 'posterMediaId'],
+  Summary: ['name', 'slug', 'reference', 'category', 'summary', 'location', 'years', 'partnerSlugs', 'extraFacts', 'sort', 'context', 'approach', 'heroMediaId', 'photoCaption', 'logoMediaId', 'logoStyle', 'posterMediaId'],
   Objectives: ['programObjectives'],
   Outcomes: ['outcomes', 'results'],
   Activities: ['activityItems', 'activities'],
@@ -70,6 +76,7 @@ export function ProjectEditor({ id }: { id: string }) {
   const [form, setForm] = useState<Form>(EMPTY);
   const [media, setMedia] = useState<Record<string, MediaItem>>({});
   const [pillars, setPillars] = useState<Pillar[]>([]); const [objectives, setObjectives] = useState<Objective[]>([]);
+  const [partnersAll, setPartnersAll] = useState<PartnerOpt[]>([]); const [pq, setPq] = useState(''); const [pOpen, setPOpen] = useState(false);
   const [tab, setTab] = useState<(typeof TABS)[number]>('Summary');
   const [errors, setErrors] = useState<Record<string, string>>({}); const [banner, setBanner] = useState<{ kind: string; text: ReactNode } | null>(null);
   const [busy, setBusy] = useState(''); const [dirty, setDirty] = useState(false); const [slugTouched, setSlugTouched] = useState(!isNew);
@@ -85,6 +92,7 @@ export function ProjectEditor({ id }: { id: string }) {
   const load = useCallback(async () => {
     const [p, o] = await Promise.all([api<Pillar[]>('/pillars'), api<Objective[]>('/objectives')]);
     setPillars(p); setObjectives(o);
+    api<PartnerOpt[]>('/partners').then(setPartnersAll).catch(() => setPartnersAll([]));   // partners the project can be linked to
     if (isNew) return;
     const d = await api<Loaded>(`/projects/${id}`);
     const primary = d.pillars.find((x) => x.isPrimary)?.key ?? d.pillars[0]?.key ?? '';
@@ -209,7 +217,7 @@ export function ProjectEditor({ id }: { id: string }) {
   const canFix = can('media.update');
   const goTo = (field: string) => { const t = TABS.find((x) => TAB_FIELDS[x].includes(field)); if (t) setTab(t); setTimeout(() => document.getElementById(`pe-${field}`)?.focus(), 40); };
   const leave = (to: string) => { if (dirty && !confirm('You have unsaved changes. Leave without saving?')) return; navigate(to); };
-  const yearsOk = !form.years.trim() || /^(19|20)\d{2}(\s*[–—-]\s*((19|20)\d{2}|present|today|ongoing))?$/i.test(form.years.trim());
+  const yearsOk = durationOk(form.years);
 
   // the next step in the workflow, shown in the header when there is nothing to save
   type Next = { key: string; label: string; icon: string; run: () => void };
@@ -315,11 +323,36 @@ export function ProjectEditor({ id }: { id: string }) {
               <PeSection title="Details" desc="Shown in the facts bar on the project page.">
                 <div className="row">
                   <Field name="location" label="Location" optional err={errors.location}><input className="input" value={form.location} onChange={(e) => set('location', e.target.value)} maxLength={120} disabled={ro} placeholder="e.g. Ait Ourir" /></Field>
-                  <Field name="years" label="Duration" optional hint={yearsOk ? 'Shown as “Duration” on the project page: a year, or a range like 2020 – 2021.' : undefined} warn={yearsOk ? undefined : 'This doesn’t look like a year or a range (e.g. 2020 – 2021).'} err={errors.years}>
-                    <input className="input" value={form.years} onChange={(e) => set('years', e.target.value)} maxLength={60} disabled={ro} placeholder="e.g. 2020 – 2021" inputMode="numeric" />
+                  <Field name="years" label="Duration" optional hint={yearsOk ? 'A year, a month and year, or a range: 2020 – 2021, January – November 2026, March 2024 – present.' : undefined} warn={yearsOk ? undefined : 'Write it as a year or a range, e.g. 2020 – 2021 or January – November 2026.'} err={errors.years}>
+                    <input className="input" value={form.years} onChange={(e) => set('years', e.target.value)} maxLength={60} disabled={ro} placeholder="e.g. January – November 2026" />
                   </Field>
                 </div>
-                <Field group name="extraFacts" label="Extra facts" optional hint="Short label and value pairs, e.g. “Participants · 120”." aside={<span className="count-hint">{form.extraFacts.length} of 4</span>} err={errors.extraFacts}>
+                <Field group name="partnerSlugs" label="Partners" optional hint="Chosen from Studio → Partners, the same links the partner pages use. Only published partners show on the website." err={errors.partnerSlugs}>
+                  {(() => {
+                    const chosen = form.partnerSlugs.map((sl) => partnersAll.find((x) => x.slug === sl) ?? { slug: sl, name: sl, scope: '', status: '', publishedRevisionId: null, id: sl });
+                    const q = pq.trim().toLowerCase();
+                    const options = partnersAll.filter((x) => !form.partnerSlugs.includes(x.slug) && (!q || x.name.toLowerCase().includes(q))).slice(0, 8);
+                    const add = (sl: string) => { set('partnerSlugs', [...form.partnerSlugs, sl].slice(0, 12)); setPq(''); };
+                    // a partner typed as an extra fact that matches a real partner: offer to link it instead
+                    const typed = form.extraFacts.findIndex((f) => /^partners?$/i.test(f.label.trim()));
+                    const typedMatch = typed >= 0 ? partnersAll.find((x) => !form.partnerSlugs.includes(x.slug) && (form.extraFacts[typed].value.toLowerCase().includes(x.name.toLowerCase()) || x.name.toLowerCase().includes(form.extraFacts[typed].value.trim().toLowerCase()))) : undefined;
+                    return <div className="pe-partners">
+                      {chosen.length > 0 && <ul className="pe-pchips">{chosen.map((x) => <li key={x.slug}><span className="pe-pchip-n">{x.name}</span>
+                        {x.scope && <small>{x.scope}</small>}{!x.publishedRevisionId && <em title="This partner is not published yet, so it isn't shown on the website">not published</em>}
+                        {!ro && <button type="button" aria-label={`Remove ${x.name}`} onClick={() => set('partnerSlugs', form.partnerSlugs.filter((s2) => s2 !== x.slug))}>×</button>}</li>)}</ul>}
+                      {!ro && <div className="pe-psearch" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setPOpen(false); }}>
+                        <input className="input" value={pq} placeholder={partnersAll.length ? 'Add a partner: type to search' : 'No partners yet: add them in Partners'} disabled={!partnersAll.length}
+                          onFocus={() => setPOpen(true)} onChange={(e) => { setPq(e.target.value); setPOpen(true); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && options[0]) { e.preventDefault(); add(options[0].slug); } if (e.key === 'Escape') setPOpen(false); }} aria-label="Add a partner" />
+                        {pOpen && options.length > 0 && <ul className="pe-plist" role="listbox">{options.map((x) => <li key={x.slug}><button type="button" role="option" onMouseDown={(e) => e.preventDefault()} onClick={() => add(x.slug)}>
+                          <b>{x.name}</b><small>{x.scope}{x.publishedRevisionId ? '' : ' · not published'}</small></button></li>)}</ul>}
+                      </div>}
+                      {!ro && typedMatch && <div className="pe-plink"><span>“{form.extraFacts[typed].value}” is typed as an extra fact. Link the partner <b>{typedMatch.name}</b> instead, so it stays in step with the Partners page?</span>
+                        <button type="button" className="btn btn-sm btn-primary" onClick={() => { set('partnerSlugs', [...form.partnerSlugs, typedMatch.slug]); set('extraFacts', form.extraFacts.filter((_, i) => i !== typed)); }}>Link partner</button></div>}
+                    </div>;
+                  })()}
+                </Field>
+                <Field group name="extraFacts" label="Extra facts" optional hint="Short label and value pairs, e.g. “Participants · 120”. Shown as key figures under the cover." aside={<span className="count-hint">{form.extraFacts.length} of 4</span>} err={errors.extraFacts}>
                   <div className="pe-facts">
                     {form.extraFacts.map((f, i) => (
                       <div key={i} className="pe-fact">
@@ -336,6 +369,20 @@ export function ProjectEditor({ id }: { id: string }) {
                     {form.extraFacts.length < 4 && !ro && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => set('extraFacts', [...form.extraFacts, { label: '', value: '' }])}><Icon n="plus" />Add fact</button>}
                   </div>
                 </Field>
+                {(() => {
+                  // what the project page will show: the facts bar on the cover, then the extra facts as key figures (same rules as src/content.py)
+                  const linked = form.partnerSlugs.map((sl) => partnersAll.find((x) => x.slug === sl)).filter((x) => x && x.publishedRevisionId).map((x) => x!.name);
+                  const typed = form.extraFacts.find((f) => /^partners?$/i.test(f.label.trim()))?.value.trim() ?? '';
+                  const pn = linked.length ? linked : typed ? [typed] : [];
+                  const bar = ([['Project', form.name], [pn.length > 1 ? 'Partners' : 'Partner', pn.join(', ')], ['Duration', form.years.trim()], ['Location', form.location.trim()]] as [string, string][]).filter(([, v]) => v);
+                  const stats = form.extraFacts.filter((f) => f.label.trim() && f.value.trim() && !/^partners?$/i.test(f.label.trim()));
+                  return <div className="pe-fpreview" aria-label="Preview of the project page facts">
+                    <span className="pe-fp-k">On the project page</span>
+                    <dl className="pe-fp-bar">{bar.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+                    {stats.length > 0 && <dl className="pe-fp-stats">{stats.map((f, i) => <div key={i}><dd>{f.value}</dd><dt>{f.label}</dt></div>)}</dl>}
+                    {form.partnerSlugs.length > linked.length && <small className="muted">Partners that aren't published yet are left out until they are.</small>}
+                  </div>;
+                })()}
               </PeSection>
 
               <PeSection title="Page" desc="Whether the project has its own page, and where it sits in listings.">
@@ -611,7 +658,7 @@ export function ProjectEditor({ id }: { id: string }) {
 const LABELS: Record<string, string> = {
   name: 'Project name', summary: 'One-line summary', category: 'Category', reference: 'Internal reference', location: 'Location', years: 'Years', extraFacts: 'Extra facts',
   slug: 'Page address', sort: 'Order in listings', context: 'Context', approach: 'Approach', activities: 'Activities', results: 'Results', pillarKeys: 'Strategic pillars',
-  primaryPillarKey: 'Primary pillar', objectiveRefs: 'Strategic objectives', heroMediaId: 'Cover photos', logoMediaId: 'Project logo', logoStyle: 'Logo framing', posterMediaId: 'Poster', galleryMediaIds: 'Gallery', photoCaption: 'Placeholder caption',
+  primaryPillarKey: 'Primary pillar', objectiveRefs: 'Strategic objectives', partnerSlugs: 'Partners', heroMediaId: 'Cover photos', logoMediaId: 'Project logo', logoStyle: 'Logo framing', posterMediaId: 'Poster', galleryMediaIds: 'Gallery', photoCaption: 'Placeholder caption',
   seoTitle: 'SEO title', seoDescription: 'Meta description',
   programObjectives: 'Program objectives', outcomes: 'Outcomes', activityItems: 'Program activities',
 };

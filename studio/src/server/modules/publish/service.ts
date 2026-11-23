@@ -1568,6 +1568,7 @@ export function escapeSnapshot(s: Snapshot): Snapshot {
       ...d, lede: e(String(d.lede ?? '')), photo: e(String(d.photo ?? '')),
       facts: (d.facts ?? []).map(([k, v]) => [e(k), e(v)]),
       rows: (d.rows ?? []).map(([k, v]) => [e(k), e(v)]),
+      ...(Array.isArray(d.partners) ? { partners: (d.partners as { name: string; slug: string }[]).map((x) => ({ name: e(x.name), slug: e(x.slug) })) } : {}),
       // media_img escapes alt itself; keep alt raw here to avoid double escaping
     } : {},
   };

@@ -324,7 +324,15 @@ export async function listProjects(db: DB) {
   const thumbs = new Map((mids.length ? await db.select({ id: media.id, key: media.storageKey }).from(media).where(inArray(media.id, mids)) : []).map((m) => [m.id, `/studio/media-file/${m.key}-480.webp`]));
   const uids = [...new Set(rows.map((r) => r.updatedBy).filter(Boolean) as string[])];
   const names = new Map((uids.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, uids)) : []).map((u) => [u.id, u.name]));
+  // photos used by each project (cover, logo, poster, gallery, activities) and how many still miss alt text or confirmed rights
+  const gal = await db.select({ projectId: projectGallery.projectId, mediaId: projectGallery.mediaId }).from(projectGallery);
+  const used = new Map(rows.map((r) => [r.id, [...new Set([r.heroMediaId, r.logoMediaId, r.posterMediaId, ...gal.filter((g) => g.projectId === r.id).map((g) => g.mediaId),
+    ...((r.activityItems ?? []) as { mediaIds?: string[] }[]).flatMap((a) => a.mediaIds ?? [])].filter(Boolean) as string[])]]));
+  const allIds = [...new Set([...used.values()].flat())];
+  const incomplete = new Set((allIds.length ? await db.select({ id: media.id, alt: media.alt, ok: media.rightsConfirmed }).from(media).where(inArray(media.id, allIds)) : [])
+    .filter((m) => !m.alt.trim() || !m.ok).map((m) => m.id));
   return rows.map((r) => ({ ...r, thumb: r.heroMediaId ? thumbs.get(r.heroMediaId) ?? null : null, updatedByName: r.updatedBy ? names.get(r.updatedBy) ?? null : null,
+    photoCount: used.get(r.id)!.length, photoIssues: used.get(r.id)!.filter((x) => incomplete.has(x)).length,
     pillars: pl.filter((x) => x.projectId === r.id).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)) }));
 }
 

@@ -36,6 +36,8 @@ import { registerMediaLibraryRoutes } from './modules/media/routes.ts';
 import { registerInboxRoutes } from './modules/inbox/routes.ts';
 import { registerSettingsRoutes } from './modules/settings/routes.ts';
 import { registerPublicationRoutes } from './modules/publications/routes.ts';
+import { projectManageRoutes } from './modules/projects/manage.ts';
+import { contentDeleteRoutes } from './modules/content/delete.ts';
 import { documentsDir } from './modules/publications/documents.ts';
 import * as NOTIFY from './modules/settings/notify.ts';
 import * as HM from './modules/home/service.ts';
@@ -209,6 +211,8 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     await P.restoreRevision(db, actor(c), c.req.param('id'), c.req.param('rev'));
     return c.json({ ok: true });
   });
+  projectManageRoutes(api, db, actor);   // duplicate (project.create) and delete (project.archive): modules/projects/manage.ts
+  contentDeleteRoutes(api, db, actor);   // delete drafts/archived stories, events, opportunities, partners, publications: modules/content/delete.ts
 
   // ---------------------------------------------------------------- Media
   registerMediaLibraryRoutes(api);   // library view, replace, original download, bulk edits (modules/media/routes.ts)

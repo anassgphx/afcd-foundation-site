@@ -5,7 +5,7 @@ import { useSite } from '../site.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { EditorHeader, Field, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
-import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
+import { DataTable, EmptyState, ListToolbar, useUrlState, type Column, TableSkeleton, statusFilter, updatedFilter, useListActions } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 
@@ -21,6 +21,12 @@ export function EventsList() {
   const [st, set] = useUrlState({ status: 'upcoming', q: '' });
   const load = () => api<Row[]>('/events').then(setRows).catch(() => setRows([]));
   useEffect(() => { load(); }, []);
+  const me = useMe();
+  const acts = useListActions<Row>({
+    base: '/events', noun: ['event', 'events'], name: (r) => r.title, reload: load,
+    can: { update: can('event.update'), approve: can('event.approve'), publish: can('event.publish'), archive: can('event.update'), delete: can('event.publish') },
+    edit: (r) => `/studio/events/${r.id}`, liveUrl: (r) => me.siteUrl + `event-${r.slug}.html`,
+  });
   const today = todayMa();
   const up = (r: Row) => (r.endDate ?? r.startDate) >= today;
   async function create() {
@@ -32,11 +38,11 @@ export function EventsList() {
   const shown = base.filter((r) => is(st.status, r));
   const tabs: [string, string, number][] = [['upcoming', 'Upcoming'], ['past', 'Past'], ['live', 'Live'], ['draft', 'Drafts'], ['in_review', 'In review'], ['archived', 'Archived']].map(([k, l]) => [k, l, base.filter((r) => is(k, r)).length]);
   const columns: Column<Row>[] = [
-    { key: 'date', header: 'Date', sort: (r) => r.startDate, csv: (r) => r.startDate + (r.endDate ? ` – ${r.endDate}` : ''), render: (r) => { const d = new Date(`${r.startDate}T12:00:00Z`); return <span className="dt-date"><b>{d.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'UTC' })}</b><small>{d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })}</small></span>; }, width: '84px' },
+    { key: 'date', header: 'Date', filter: { type: 'date', title: 'Date', get: (r) => r.startDate }, sort: (r) => r.startDate, csv: (r) => r.startDate + (r.endDate ? ` – ${r.endDate}` : ''), render: (r) => { const d = new Date(`${r.startDate}T12:00:00Z`); return <span className="dt-date"><b>{d.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'UTC' })}</b><small>{d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })}</small></span>; }, width: '84px' },
     { key: 'title', header: 'Event', sort: (r) => r.title, csv: (r) => r.title, render: (r) => <div className="min-w-0"><Link className="title" to={`/studio/events/${r.id}`}>{r.title}</Link><div className="sub">{[r.pillarName, r.online ? (r.location ? `${r.location} · Online` : 'Online') : r.location, r.endDate && r.endDate !== r.startDate ? `until ${dateLabel(r.endDate)}` : ''].filter(Boolean).join(' · ') || 'No pillar or place yet'}</div></div> },
-    { key: 'kind', header: 'Type', sort: (r) => r.kind, csv: (r) => r.kind, hideBelow: 900, render: (r) => <span className="pill">{r.kind}</span> },
-    { key: 'status', header: 'Status', sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} />{!up(r) && <span className="pill">Past</span>}</div> },
-    { key: 'updated', header: 'Updated', align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
+    { key: 'kind', header: 'Type', filter: { type: 'set', title: 'Type', get: (r) => r.kind }, sort: (r) => r.kind, csv: (r) => r.kind, hideBelow: 900, render: (r) => <span className="pill">{r.kind}</span> },
+    { key: 'status', header: 'Status', filter: statusFilter<Row>(), sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} />{!up(r) && <span className="pill">Past</span>}</div> },
+    { key: 'updated', header: 'Updated', filter: updatedFilter<Row>(), align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
   ];
   const live = (rows ?? []).filter((r) => r.publishedRevisionId).length;
   return <>
@@ -45,12 +51,13 @@ export function EventsList() {
     {rows && live === 0 && <div className="notice n-info"><div>The Events page currently shows <b>sample events</b>. They are replaced by your real calendar as soon as the first event is published here.</div></div>}
     <section className="card">
       <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search events or places" />
-      {!rows ? <Loading /> : <DataTable id="events" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-events"
+      {!rows ? <TableSkeleton /> : <DataTable id="events" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-events"
         initialSort={{ key: 'date', dir: st.status === 'upcoming' ? 'asc' : 'desc' }}
-        actions={workflowActions<Row>({ base: '/events', noun: ['event', 'events'], name: (r) => r.title, canUpdate: can('event.update'), reload: load, post, toast })}
+        actions={acts.bulk} rowMenu={acts.rowMenu}
         onOpen={(r) => navigate(`/studio/events/${r.id}`)}
         empty={<EmptyState icon="calendar" text={st.status === 'upcoming' ? 'No upcoming events' : 'No events match these filters'} onClear={st.q ? () => set('q', '') : undefined} />} />}
     </section>
+    {acts.dialog}
   </>;
 }
 

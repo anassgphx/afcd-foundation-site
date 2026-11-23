@@ -4,7 +4,7 @@ import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { EditorHeader, Field, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
-import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
+import { DataTable, EmptyState, ListToolbar, useUrlState, type Column, TableSkeleton, statusFilter, updatedFilter, useListActions } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 
@@ -25,6 +25,12 @@ export function PartnersList() {
   const [adding, setAdding] = useState(false); const [name, setName] = useState(''); const [scope, setScope] = useState('national'); const [err, setErr] = useState('');
   const load = () => api<Row[]>('/partners').then(setRows).catch(() => setRows([]));
   useEffect(() => { load(); }, []);
+  const me = useMe();
+  const acts = useListActions<Row>({
+    base: '/partners', noun: ['partner', 'partners'], name: (r) => r.name, reload: load,
+    can: { update: can('partner.update'), approve: can('partner.approve'), publish: can('partner.publish'), archive: can('partner.update'), delete: can('partner.publish') },
+    edit: (r) => `/studio/partners/${r.id}`, liveUrl: () => me.siteUrl + 'partners.html',
+  });
   async function create() {
     setErr('');
     try { const r = await post<{ id: string }>('/partners', { name: name.trim(), slug: slugify(name) || `partner-${Date.now().toString(36)}`, scope }); navigate(`/studio/partners/${r.id}`); }
@@ -43,10 +49,10 @@ export function PartnersList() {
   const columns: Column<Row>[] = [
     { key: 'name', header: 'Organisation', sort: (r) => r.name, csv: (r) => r.name, render: (r) => <div className="dt-main"><span className="dt-thumb dt-initials">{initials(r.name)}</span><span className="min-w-0">
       <Link className="title" to={`/studio/partners/${r.id}`}>{r.name}</Link><span className="sub">{[r.category, r.current ? '' : 'Past partner', r.logoMediaId ? 'Logo' : 'No logo', r.websiteUrl ? 'Website' : ''].filter(Boolean).join(' · ')}</span></span></div> },
-    { key: 'scope', header: 'Scope', sort: (r) => r.scope, csv: (r) => scopeLabel(r.scope), render: (r) => <span className="pill">{scopeLabel(r.scope)}</span> },
+    { key: 'scope', header: 'Scope', filter: { type: 'set', title: 'Scope', get: (r) => r.scope, label: scopeLabel }, sort: (r) => r.scope, csv: (r) => scopeLabel(r.scope), render: (r) => <span className="pill">{scopeLabel(r.scope)}</span> },
     { key: 'projects', header: 'Projects', sort: (r) => -r.projects, csv: (r) => String(r.projects), align: 'right', hideBelow: 900, render: (r) => <span className="sub">{r.projects || '—'}</span> },
-    { key: 'status', header: 'Status', sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div> },
-    { key: 'updated', header: 'Updated', align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
+    { key: 'status', header: 'Status', filter: statusFilter<Row>(), sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div> },
+    { key: 'updated', header: 'Updated', filter: updatedFilter<Row>(), align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
   ];
   const missingLogo = (rows ?? []).filter((r) => r.publishedRevisionId && !r.logoMediaId).length;
   return <>
@@ -57,8 +63,8 @@ export function PartnersList() {
     {missingLogo > 0 && <div className="notice n-info"><div>{missingLogo} live partners show initials instead of a logo. Add a logo only with the partner’s permission.</div></div>}
     <section className="card">
       <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search partners" />
-      {!rows ? <Loading /> : <DataTable id="partners" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-partners"
-        actions={workflowActions<Row>({ base: '/partners', noun: ['partner', 'partners'], name: (r) => r.name, canUpdate: can('partner.update'), reload: load, post, toast })}
+      {!rows ? <TableSkeleton /> : <DataTable id="partners" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-partners"
+        actions={acts.bulk} rowMenu={acts.rowMenu}
         onOpen={(r) => navigate(`/studio/partners/${r.id}`)}
         empty={<EmptyState icon="partner" text="No partners match these filters" onClear={st.q || st.status !== 'all' ? () => { set('q', ''); set('status', 'all'); } : undefined} />} />}
     </section>
@@ -68,6 +74,7 @@ export function PartnersList() {
         <Fld label="Scope"><select className="select" value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Scope">{SCOPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Fld>
         {err && <div className="notice n-warn" role="alert"><div>{err}</div></div>}
       </div></Modal>}
+    {acts.dialog}
   </>;
 }
 

@@ -5,7 +5,7 @@ import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { EditorHeader, Field, ListEditor, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
-import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
+import { DataTable, EmptyState, ListToolbar, useUrlState, type Column, TableSkeleton, statusFilter, updatedFilter, useListActions } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 import '../publications.css';
@@ -27,37 +27,42 @@ export function PublicationsList() {
   const [st, set] = useUrlState({ status: 'all', type: 'all', q: '' });
   const load = () => api<Row[]>('/publications').then(setRows).catch(() => setRows([]));
   useEffect(() => { load(); }, []);
+  const me = useMe();
+  const acts = useListActions<Row>({
+    base: '/publications', noun: ['publication', 'publications'], name: (r) => r.title, reload: load,
+    can: { update: can('publication.update'), approve: can('publication.approve'), publish: can('publication.publish'), archive: can('publication.update'), delete: can('publication.publish') },
+    edit: (r) => `/studio/publications/${r.id}`, liveUrl: (r) => me.siteUrl + `publication-${r.slug}.html`,
+  });
   async function create() {
     try { const r = await post<{ id: string }>('/publications', { title: 'Untitled publication', slug: `untitled-${Date.now().toString(36)}` }); navigate(`/studio/publications/${r.id}`); }
     catch (err) { toast(err instanceof Error ? err.message : 'Could not create it.', true); }
   }
   const is = (k: string, r: Row) => (k === 'all' ? r.status !== 'archived' : k === 'live' ? !!r.publishedRevisionId : k === 'draft' ? ['draft', 'changes_requested'].includes(r.status) : r.status === k);
-  const base = (rows ?? []).filter((r) => (st.type === 'all' || r.type === st.type) && (!st.q || `${r.title} ${r.pillarNames.join(' ')}`.toLowerCase().includes(st.q.toLowerCase())));
+  const base = (rows ?? []).filter((r) => (!st.q || `${r.title} ${r.pillarNames.join(' ')}`.toLowerCase().includes(st.q.toLowerCase())));
   const shown = base.filter((r) => is(st.status, r));
   const tabs: [string, string, number][] = [['all', 'All'], ['live', 'Live'], ['draft', 'Drafts'], ['in_review', 'In review'], ['approved', 'Approved'], ['archived', 'Archived']].map(([k, l]) => [k, l, base.filter((r) => is(k, r)).length]);
   const fileOf = (r: Row) => (r.documentBytes ? `PDF · ${size(r.documentBytes)}` : r.externalUrl ? 'Online link' : 'No file yet');
   const columns: Column<Row>[] = [
     { key: 'title', header: 'Publication', sort: (r) => r.title, csv: (r) => r.title, render: (r) => <div className="dt-main"><span className="dt-thumb">{r.cover ? <img src={r.cover} alt="" /> : <Icon n="book" />}</span><span className="min-w-0">
       <Link className="title" to={`/studio/publications/${r.id}`}>{r.title}</Link><span className="sub">{r.pillarNames.join(' · ') || '—'}</span></span></div> },
-    { key: 'type', header: 'Type', sort: (r) => typeLabel(r.type), csv: (r) => typeLabel(r.type), hideBelow: 900, render: (r) => <span className="pill">{typeLabel(r.type)}</span> },
-    { key: 'date', header: 'Published', sort: (r) => r.publishedOn ?? '0000', csv: (r) => r.publishedOn ?? '', render: (r) => <span className="sub" style={{ whiteSpace: 'nowrap' }}>{r.publishedOn ? dateLabel(r.publishedOn) : '—'}</span> },
+    { key: 'type', header: 'Type', filter: { type: 'set', title: 'Type', get: (r) => r.type, label: typeLabel }, sort: (r) => typeLabel(r.type), csv: (r) => typeLabel(r.type), hideBelow: 900, render: (r) => <span className="pill">{typeLabel(r.type)}</span> },
+    { key: 'date', header: 'Published', filter: { type: 'date', title: 'Published', get: (r) => r.publishedOn }, sort: (r) => r.publishedOn ?? '0000', csv: (r) => r.publishedOn ?? '', render: (r) => <span className="sub" style={{ whiteSpace: 'nowrap' }}>{r.publishedOn ? dateLabel(r.publishedOn) : '—'}</span> },
     { key: 'file', header: 'File', sort: (r) => r.documentBytes ?? 0, csv: fileOf, hideBelow: 1000, render: (r) => <span className={`pb-file${r.documentBytes || r.externalUrl ? '' : ' none'}`}>{fileOf(r)}</span> },
-    { key: 'status', header: 'Status', sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div> },
-    { key: 'updated', header: 'Updated', align: 'right', hideBelow: 1100, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
+    { key: 'status', header: 'Status', filter: statusFilter<Row>(), sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div> },
+    { key: 'updated', header: 'Updated', filter: updatedFilter<Row>(), align: 'right', hideBelow: 1100, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
   ];
   return <>
     <div className="page-h"><div><h1>Publications</h1><p>Reports, studies, policy briefs, guides and annual reports. Each one gets its own page with a download, and visitors filter the list by type and pillar.</p></div>
       {can('publication.create') && <button className="btn btn-primary" onClick={create}><Icon n="plus" />New publication</button>}</div>
     {rows && !rows.some((r) => r.publishedRevisionId) && <div className="notice n-info"><div>Nothing is published yet, so the website has no Publications page. It appears at <span className="mono">publications.html</span> with the first published publication. Add a link to it in Menus when you are ready.</div></div>}
     <section className="card">
-      <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search publications">
-        <select className="select" value={st.type} onChange={(e) => set('type', e.target.value)} aria-label="Type"><option value="all">All types</option>{PUB_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-      </ListToolbar>
-      {!rows ? <Loading /> : <DataTable id="publications" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-publications" initialSort={{ key: 'date', dir: 'desc' }}
-        actions={workflowActions<Row>({ base: '/publications', noun: ['publication', 'publications'], name: (r) => r.title, canUpdate: can('publication.update'), reload: load, post, toast })}
+      <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search publications" />
+      {!rows ? <TableSkeleton /> : <DataTable id="publications" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-publications" initialSort={{ key: 'date', dir: 'desc' }}
+        actions={acts.bulk} rowMenu={acts.rowMenu}
         onOpen={(r) => navigate(`/studio/publications/${r.id}`)}
         empty={<EmptyState icon="book" text={rows.length ? 'No publications match these filters' : 'No publications yet. Add the first report or study.'} onClear={st.q || st.type !== 'all' || st.status !== 'all' ? () => { set('q', ''); set('type', 'all'); set('status', 'all'); } : undefined} />} />}
     </section>
+    {acts.dialog}
   </>;
 }
 

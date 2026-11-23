@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, post, put, ApiError } from '../api.ts';
 import { useSite } from '../site.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
-import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
+import { DataTable, EmptyState, ListToolbar, useUrlState, type Column, TableSkeleton, statusFilter, updatedFilter, useListActions } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { StoryEditor } from '../story/StoryEditor.tsx';
 import { Loading } from './Dashboard.tsx';
@@ -25,34 +25,39 @@ export function NewsList() {
   const [st, set] = useUrlState({ status: 'all', type: 'all', q: '' });
   const load = () => api<Row[]>('/news').then(setRows).catch(() => setRows([]));
   useEffect(() => { load(); }, []);
+  const me = useMe();
+  const acts = useListActions<Row>({
+    base: '/news', noun: ['story', 'stories'], name: (r) => r.title, reload: load,
+    can: { update: can('news.update'), approve: can('news.approve'), publish: can('news.publish'), archive: can('news.update'), delete: can('news.publish') },
+    edit: (r) => `/studio/news/${r.id}`, liveUrl: (r) => r.externalUrl || me.siteUrl + `news-${r.slug}.html`,
+  });
   async function create() {
     const r = await post<{ id: string }>('/news', { title: 'Untitled story', slug: `story-${Date.now().toString(36)}`, publishDate: today() });
     navigate(`/studio/news/${r.id}`);
   }
   const is = (k: string, r: Row) => (k === 'all' ? r.status !== 'archived' : k === 'live' ? !!r.publishedRevisionId : k === 'draft' ? ['draft', 'changes_requested'].includes(r.status) : r.status === k);
-  const base = (rows ?? []).filter((r) => (st.type === 'all' || r.type === st.type) && (!st.q || `${r.title} ${r.slug}`.toLowerCase().includes(st.q.toLowerCase())));
+  const base = (rows ?? []).filter((r) => (!st.q || `${r.title} ${r.slug}`.toLowerCase().includes(st.q.toLowerCase())));
   const shown = base.filter((r) => is(st.status, r));
   const tabs: [string, string, number][] = [['all', 'All'], ['live', 'Live'], ['draft', 'Drafts'], ['in_review', 'In review'], ['scheduled', 'Scheduled'], ['archived', 'Archived']].map(([k, l]) => [k, l, base.filter((r) => is(k, r)).length]);
   const columns: Column<Row>[] = [
     { key: 'title', header: 'Story', sort: (r) => r.title, csv: (r) => r.title, render: (r) => <div className="dt-main"><span className="dt-thumb"><Icon n="log" /></span><span className="min-w-0">
       <Link className="title" to={`/studio/news/${r.id}`}>{r.title}</Link><span className="sub">{[r.pillars.map((p) => p.name).join(' · ') || 'No pillar yet', r.featured && 'Featured', r.externalUrl && 'Old blog link'].filter(Boolean).join(' · ')}</span></span></div> },
-    { key: 'type', header: 'Type', sort: (r) => typeLabel(r.type), csv: (r) => typeLabel(r.type), hideBelow: 900, render: (r) => <span className="pill">{typeLabel(r.type)}</span> },
-    { key: 'date', header: 'Date', sort: (r) => r.publishDate, csv: (r) => r.publishDate, render: (r) => <span className="sub" style={{ whiteSpace: 'nowrap' }}>{r.publishDate}</span> },
-    { key: 'status', header: 'Status', sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} label={r.status === 'scheduled' && r.scheduledAt ? `Scheduled · ${fmtDate(r.scheduledAt)}` : undefined} /></div> },
-    { key: 'updated', header: 'Updated', align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
+    { key: 'type', header: 'Type', filter: { type: 'set', title: 'Type', get: (r) => r.type, label: typeLabel }, sort: (r) => typeLabel(r.type), csv: (r) => typeLabel(r.type), hideBelow: 900, render: (r) => <span className="pill">{typeLabel(r.type)}</span> },
+    { key: 'date', header: 'Date', filter: { type: 'date', title: 'Date', get: (r) => r.publishDate }, sort: (r) => r.publishDate, csv: (r) => r.publishDate, render: (r) => <span className="sub" style={{ whiteSpace: 'nowrap' }}>{r.publishDate}</span> },
+    { key: 'status', header: 'Status', filter: statusFilter<Row>(), sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} label={r.status === 'scheduled' && r.scheduledAt ? `Scheduled · ${fmtDate(r.scheduledAt)}` : undefined} /></div> },
+    { key: 'updated', header: 'Updated', filter: updatedFilter<Row>(), align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
   ];
   return <>
     <div className="page-h"><div><h1>News & Stories</h1><p>Programme news, participant stories, calls for applications and event recaps.</p></div>
       {can('news.create') && <button className="btn btn-primary" onClick={create}><Icon n="plus" />New story</button>}</div>
     <section className="card">
-      <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search stories">
-        <select className="select" value={st.type} onChange={(e) => set('type', e.target.value)} aria-label="Type"><option value="all">All types</option>{TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-      </ListToolbar>
-      {!rows ? <Loading /> : <DataTable id="news" rows={shown} total={base.filter((r) => is('all', r)).length} rowKey={(r) => r.id} columns={columns} csvName="afcd-stories" initialSort={{ key: 'date', dir: 'desc' }}
-        actions={workflowActions<Row>({ base: '/news', noun: ['story', 'stories'], name: (r) => r.title, canUpdate: can('news.update'), reload: load, post, toast })}
+      <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search stories" />
+      {!rows ? <TableSkeleton /> : <DataTable id="news" rows={shown} total={base.filter((r) => is('all', r)).length} rowKey={(r) => r.id} columns={columns} csvName="afcd-stories" initialSort={{ key: 'date', dir: 'desc' }}
+        actions={acts.bulk} rowMenu={acts.rowMenu}
         onOpen={(r) => navigate(`/studio/news/${r.id}`)}
         empty={<EmptyState icon="log" text="No stories match these filters" onClear={st.q || st.type !== 'all' || st.status !== 'all' ? () => { set('q', ''); set('type', 'all'); set('status', 'all'); } : undefined} />} />}
     </section>
+    {acts.dialog}
   </>;
 }
 

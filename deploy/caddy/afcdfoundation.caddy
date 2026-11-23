@@ -1,0 +1,47 @@
+# AFCD Foundation (afcdfoundation.com + Studio). Lives in /srv/afcd-website/caddy on the VPS, outside AFCD Connect's
+# folder; AFCD Connect's Caddyfile only has:  import /etc/caddy/sites/*.caddy
+# The website files are mounted read-only at /srv/afcd-website; Studio is reached on the "afcd-edge" network.
+
+(afcd_security) {
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+}
+
+afcdfoundation.com {
+	import afcd_security
+	root * /srv/afcd-website
+	encode zstd gzip
+	try_files {path} {path}.html {path}/index.html
+	file_server
+	@html path *.html / /fr/ /ar/
+	header @html Cache-Control "no-cache"
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	handle_errors {
+		@404 expression {err.status_code} == 404
+		rewrite @404 /404.html
+		file_server
+	}
+}
+
+www.afcdfoundation.com {
+	redir https://afcdfoundation.com{uri} permanent
+}
+
+studio.afcdfoundation.com {
+	import afcd_security
+	encode zstd gzip
+	redir / /studio/ 302
+	request_body {
+		max_size 60MB
+	}
+	reverse_proxy studio-app:4400 {
+		header_up X-Forwarded-Proto https
+	}
+}

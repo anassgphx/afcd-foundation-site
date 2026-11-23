@@ -40,6 +40,10 @@ const FIELD_LABEL: Record<string, string> = {
   q1: 'Question 1', a1: 'Answer 1', link1: 'Answer 1 · link', q2: 'Question 2', a2: 'Answer 2', link2: 'Answer 2 · link',
   q3: 'Question 3', a3: 'Answer 3', link3: 'Answer 3 · link', q4: 'Question 4', a4: 'Answer 4', link4: 'Answer 4 · link', access: 'Accessibility text',
   'head.num': 'Header · number', 'head.label': 'Header · label', 'head.meta': 'Header · right-hand caption', 'head.link': 'Header · right-hand link',
+  // "Our purpose": mission, vision and values cards (fields grouped as purpose.mission / purpose.vision / purpose.values)
+  label: 'Card label', tag1: 'Tag 1', tag2: 'Tag 2', tag3: 'Tag 3', link: 'Link (“Read our story”)', meta: 'Caption on the right',
+  '1.name': 'Value 1 · name', '1.text': 'Value 1 · description', '2.name': 'Value 2 · name', '2.text': 'Value 2 · description',
+  '3.name': 'Value 3 · name', '3.text': 'Value 3 · description', '4.name': 'Value 4 · name', '4.text': 'Value 4 · description',
 };
 
 /** The stories of a participant-stories carousel as written in the page (see "stories" in lib/page-fields.mjs). */
@@ -88,7 +92,8 @@ export function readFields(siteRoot: string, file: string): FieldDef[] {
       else if (type === 'stories') def = readStories(inner);
       else def = strip(inner);
     }
-    const dot = key.indexOf('.'); const section = key.startsWith('hero.') ? key.split('.').slice(0, 2).join('.') : key.slice(0, dot);
+    // hero slides and the purpose cards get their own sub-groups in the editor panel
+    const dot = key.indexOf('.'); const section = key.startsWith('hero.') || /^purpose\.(mission|vision|values)\./.test(key) ? key.split('.').slice(0, 2).join('.') : key.slice(0, dot);
     const rest = key.slice(section.length + 1);
     out.set(key, { key, type: (type === 'plain' || type === 'email' ? 'text' : type) as FieldType, section, sectionId: sectionAt(m.index), label: FIELD_LABEL[rest] ?? rest, default: def, tag });
   }

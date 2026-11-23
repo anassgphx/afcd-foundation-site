@@ -259,12 +259,14 @@
   var drawer = $('#drawer'), scrim = $('#drawer-scrim'), openBtn = $('#menu-open');
   function openDrawer() {
     drawer.classList.add('open'); drawer.removeAttribute('inert'); drawer.setAttribute('aria-hidden', 'false');
-    scrim.classList.remove('hidden'); openBtn.setAttribute('aria-expanded', 'true');
-    document.body.style.overflow = 'hidden'; setTimeout(function () { $('#menu-close').focus(); }, 50);
+    scrim.classList.remove('hidden'); requestAnimationFrame(function () { scrim.classList.add('show'); });
+    openBtn.setAttribute('aria-expanded', 'true');
+    // focus the panel itself (screen readers land in the menu; no ring on the close button for mouse and touch users)
+    document.body.style.overflow = 'hidden'; setTimeout(function () { drawer.focus({ preventScroll: true }); }, 50);
   }
   function closeDrawer(focusBack) {
     drawer.classList.remove('open'); drawer.setAttribute('inert', ''); drawer.setAttribute('aria-hidden', 'true');
-    scrim.classList.add('hidden'); openBtn.setAttribute('aria-expanded', 'false');
+    scrim.classList.remove('show'); scrim.classList.add('hidden'); openBtn.setAttribute('aria-expanded', 'false');
     document.body.style.overflow = ''; if (focusBack) openBtn.focus();
   }
   openBtn.addEventListener('click', openDrawer);
@@ -279,6 +281,18 @@
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     }
   });
+  drawer.setAttribute('tabindex', '-1');
+  // the current page: highlighted in the menu, and its group opened
+  (function () {
+    var here = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    $$('nav[aria-label="Mobile"] > *', drawer).forEach(function (el, i) { el.style.setProperty('--i', i); });
+    $$('a.m-link', drawer).forEach(function (a) {
+      var href = (a.getAttribute('href') || '').split('#')[0].split('?')[0].toLowerCase();
+      if (!href || href !== here) return;
+      a.classList.add('is-current'); a.setAttribute('aria-current', 'page');
+      var panel = a.closest('.m-panel'); if (panel) { var acc = panel.previousElementSibling; if (acc) acc.classList.add('is-current'); }
+    });
+  })();
   $$('.m-acc').forEach(function (b) {
     b.addEventListener('click', function () {
       var p = b.nextElementSibling, open = b.getAttribute('aria-expanded') === 'true';

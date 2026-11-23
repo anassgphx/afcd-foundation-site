@@ -51,7 +51,19 @@
         "photo": "Leadership Lab 2.0 · project photo",
         "gallery": [],
         "revision": "424835c6-50fd-44e0-b58b-8ff4599a5837",
-        "objectives": []
+        "objectives": [],
+        "logo": {
+          "src": "assets/brand/afcd-icon.webp",
+          "srcset": "assets/brand/afcd-icon.webp 512w",
+          "w": 512,
+          "h": 512,
+          "alt": "AFCD Foundation",
+          "shape": "1:1",
+          "fit": "contain",
+          "bg": "none",
+          "size": "s",
+          "test": true
+        }
       },
       "pillar": "youth-empowerment",
       "pillars": [
@@ -184,7 +196,19 @@
         "photo": "Eco Citizen · Ait Ourir 2021",
         "gallery": [],
         "revision": "23c144b8-994e-4604-befc-ffab7338c594",
-        "objectives": []
+        "objectives": [],
+        "logo": {
+          "src": "assets/brand/afcd-icon.webp",
+          "srcset": "assets/brand/afcd-icon.webp 512w",
+          "w": 512,
+          "h": 512,
+          "alt": "AFCD Foundation",
+          "shape": "1:1",
+          "fit": "contain",
+          "bg": "none",
+          "size": "s",
+          "test": true
+        }
       },
       "pillar": "green-thumbs",
       "pillars": [
@@ -273,7 +297,19 @@
         "photo": "Youth Green Generation · 2024 call",
         "gallery": [],
         "revision": "9f5b1845-7f3c-4844-be74-68c7c246da0f",
-        "objectives": []
+        "objectives": [],
+        "logo": {
+          "src": "assets/brand/afcd-icon.webp",
+          "srcset": "assets/brand/afcd-icon.webp 512w",
+          "w": 512,
+          "h": 512,
+          "alt": "AFCD Foundation",
+          "shape": "1:1",
+          "fit": "contain",
+          "bg": "none",
+          "size": "s",
+          "test": true
+        }
       },
       "pillar": "green-thumbs",
       "pillars": [

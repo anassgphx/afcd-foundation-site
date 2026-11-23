@@ -1,0 +1,39 @@
+# AFCD Studio on the VPS, in /srv/afcd-studio. Separate from AFCD Connect (/opt/afcd):
+# its own PostgreSQL, data and networks. Only the Studio app joins the small shared "afcd-edge" network,
+# where the front-door Caddy reaches it; Studio cannot see AFCD Connect's app or database.
+name: afcd-studio
+
+services:
+  studio-pg:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file: .env.db
+    volumes:
+      - studio_pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studio -d afcd_studio"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  studio-app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      studio-pg:
+        condition: service_healthy
+    volumes:
+      - ./site:/app            # the website checkout Studio publishes into
+      - ./data:/data           # Studio data folder: media originals, keys, salts
+    networks: [internal, web]
+
+volumes:
+  studio_pgdata:
+
+networks:
+  internal: {}
+  web:
+    external: true
+    name: afcd-edge          # shared only by the front-door Caddy and Studio

@@ -637,7 +637,7 @@
   /* Staff login: links to the AFCD Studio dashboard.
      Set STUDIO_URL once Studio has a live address; until then the link only appears on a local machine. */
   (function () {
-    var STUDIO_URL = '';
+    var STUDIO_URL = /(^|\.)afcdfoundation\.com$/.test(location.hostname) ? 'https://studio.afcdfoundation.com/studio/' : '';   /* the online Studio, on the live site only */
     var local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
     var url = STUDIO_URL || (local ? 'http://localhost:4400/studio/' : '');
     if (!url) return;

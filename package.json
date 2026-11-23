@@ -6,7 +6,8 @@
     "build": "tailwindcss -i input.css -o assets/styles.css --minify && node build.mjs",
     "build:pages": "node build.mjs",
     "build:css": "tailwindcss -i input.css -o assets/styles.css --minify",
-    "build:production": "tailwindcss -i input.css -o assets/styles.css --minify && SITE_ENV=production node build.mjs"
+    "build:production": "tailwindcss -i input.css -o assets/styles.css --minify && SITE_ENV=production node build.mjs",
+    "build:hostinger": "npm run build:production && node deploy/build-dist.mjs"
   },
   "keywords": [],
   "author": "",

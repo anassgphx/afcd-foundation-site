@@ -200,7 +200,7 @@ def share_bar(file, title, label='Share', extra=''):
     from urllib.parse import quote
     import html as _h
     t = _h.unescape(re.sub(r'<[^>]+>', '', title))
-    u = quote('https://afcdfoundation.org/' + file, safe='')
+    u = quote('https://afcdfoundation.com/' + file, safe='')
     tt = quote(t, safe='')
     nets = [('facebook', 'Facebook', f'https://www.facebook.com/sharer/sharer.php?u={u}'),
             ('linkedin', 'LinkedIn', f'https://www.linkedin.com/sharing/share-offsite/?url={u}'),

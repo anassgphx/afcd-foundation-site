@@ -1948,3 +1948,22 @@ html.lbx-open { overflow: hidden; }
 #drawer-scrim.show { opacity: 1; }
 @keyframes m-in { from { opacity: 0; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { #drawer, #drawer *, #drawer-scrim { animation: none !important; transition: none !important; } }
+
+/* Top bar: "Open calls" super button (animated brand-gradient ring, black pill) */
+.tb-mid { align-items: center; gap: 8px; }
+.tb-super { position: relative; display: inline-flex; padding: 1.5px; border-radius: 9999px; isolation: isolate; overflow: hidden; box-shadow: 0 8px 20px -12px rgba(0,0,0,.5); transition: transform .25s ease, box-shadow .25s ease; }
+.tb-super::before { content: ""; position: absolute; inset: -60%; z-index: -1; background: conic-gradient(from 0deg, #4F7DF3, #B35AE6, #F0507A, #F7913D, #F2C744, #5CC26E, #4F7DF3); animation: tbSpin 4s linear infinite; }
+.tb-super-in { display: inline-flex; align-items: center; gap: 8px; height: 27px; padding: 0 12px 0 10px; border-radius: 9999px; background: #0B0B0B; color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.tb-super-pulse { position: relative; width: 7px; height: 7px; border-radius: 9999px; background: #5CC26E; }
+.tb-super-pulse::after { content: ""; position: absolute; inset: -4px; border-radius: 9999px; border: 2px solid #5CC26E; opacity: 0; animation: tbPulse 1.8s ease-out infinite; }
+.tb-super-sep { width: 1px; height: 12px; background: rgba(255,255,255,.25); }
+.tb-super-sub { font-weight: 500; color: rgba(255,255,255,.7); }
+.tb-super-arr { width: 14px; height: 14px; transition: transform .25s ease; }
+.tb-super:hover { transform: translateY(-1px); box-shadow: 0 12px 26px -12px rgba(0,0,0,.55); }
+.tb-super:hover .tb-super-arr { transform: translateX(3px); }
+[dir="rtl"] .tb-super:hover .tb-super-arr { transform: scaleX(-1) translateX(3px); }
+.tb-super:focus-visible { outline: 2px solid #000; outline-offset: 2px; }
+@keyframes tbSpin { to { transform: rotate(1turn); } }
+@keyframes tbPulse { 0% { opacity: .9; transform: scale(.6); } 100% { opacity: 0; transform: scale(1.6); } }
+@media (prefers-reduced-motion: reduce) { .tb-super::before, .tb-super-pulse::after { animation: none; } }
+@media (max-width: 1023px) { .tb-super-sep, .tb-super-sub { display: none; } }

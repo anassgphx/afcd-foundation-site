@@ -15,12 +15,14 @@ const tables = (await q(`select tablename from pg_tables where schemaname = 'pub
 const target = new Set((await db.query(`select tablename from pg_tables where schemaname = 'public'`)).rows.map((r) => r.tablename));
 
 let total = 0;
+// The target is a fresh database: migrations may have pre-filled a few lookup rows, so it is emptied first.
+// Safety: refuse if it already has user accounts (someone has started using it).
+if (target.has('users') && Number((await db.query('select count(*)::int as n from users')).rows[0].n) > 0) throw new Error('target already has users; refusing to overwrite');
 await db.query('begin');
+await db.query(`truncate ${[...target].map((t) => `"${t}"`).join(', ')} cascade`);
 await db.query('set local session_replication_role = replica');   // load in any order; constraints were valid in the source
 for (const t of tables) {
   if (!target.has(t)) { console.log(`skip ${t} (not in target schema)`); continue; }
-  const existing = Number((await db.query(`select count(*)::int as n from "${t}"`)).rows[0].n);
-  if (existing) throw new Error(`target table ${t} is not empty (${existing} rows); refusing to import`);
   const rows = await q(`select to_jsonb(x) as j from "${t}" x`);
   for (const { j } of rows) await db.query(`insert into "${t}" select * from jsonb_populate_record(null::"${t}", $1::jsonb)`, [JSON.stringify(j)]);
   total += rows.length;

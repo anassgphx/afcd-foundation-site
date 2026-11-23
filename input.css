@@ -775,6 +775,10 @@ body.show-notes .note { display: block; }
 .pj-cover { display: grid; gap: 8px; overflow: hidden; border-radius: 28px; }
 .pj-cover-i { position: relative; min-height: 0; overflow: hidden; background: #EDEDEC; }
 .pj-cover-i img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pj-cover-i > .ph { position: absolute; inset: 0; border-radius: 0; }
+.pj-cover-i > .ph .ph-cap { top: 14px; bottom: auto; }
+/* the facts bar is as wide as its facts: one third of the cover per fact */
+@media (min-width: 1024px) { .pj-hero .pj-facts { right: auto; width: min(calc((100% - 40px) * var(--f, 3) / 3), calc(100% - 40px)); } }
 .pj-cover.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); aspect-ratio: 16 / 10; }
 .pj-cover.n3 { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: 1.6fr 1fr; aspect-ratio: 4 / 4.2; }
 .pj-cover.n3 .pj-cover-i:first-child { grid-column: 1 / -1; }
@@ -783,8 +787,7 @@ body.show-notes .note { display: block; }
   .pj-cover.n3 { grid-template-columns: 2fr 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); aspect-ratio: 21 / 9; }
   .pj-cover.n3 .pj-cover-i:first-child { grid-column: auto; grid-row: 1 / -1; }
 }
-/* the placeholder caption sits at the top, clear of the facts bar */
-@media (min-width: 1024px) { .pj-hero > .ph .ph-cap { top: 20px; bottom: auto; } }
+
 .pj-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 12px; overflow: hidden; border-radius: 22px; border: 1px solid var(--light); background: var(--light); }
 .pj-fact { padding: 16px 18px; background: #fff; }
 .pj-fact dt { font-size: 11px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--mid); }
@@ -1801,3 +1804,16 @@ button[type="submit"][aria-busy="true"] { opacity: .6; cursor: progress; }
 
 /* Homepage project cards: real project photo from the project module */
 .pc-photo .pc-img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Project logo in the summary (Studio: Project logo; shape, fit, background, size) */
+.pj-logo { display: grid; place-items: center; margin-top: 22px; overflow: hidden; border-radius: 18px; max-width: 100%; }
+.pj-logo.s-s { height: 64px; } .pj-logo.s-m { height: 96px; } .pj-logo.s-l { height: 136px; }
+.pj-logo.tall.s-s { height: 110px; } .pj-logo.tall.s-m { height: 160px; } .pj-logo.tall.s-l { height: 220px; }
+.pj-logo.round { border-radius: 9999px; }
+.pj-logo .pj-logo-img { display: block; width: 100%; height: 100%; }
+.pj-logo:not(.cover) .pj-logo-img { object-fit: contain !important; padding: 10%; }
+.pj-logo.bg-none:not(.cover) .pj-logo-img { padding: 0; }
+.pj-logo.bg-white { background: #fff; box-shadow: inset 0 0 0 1px #E7E5E4; }
+.pj-logo.bg-light { background: #F5F5F4; } .pj-logo.bg-dark { background: #171717; }
+.pj-logo.bg-pillar { background: var(--pc, #F5F5F4); } .pj-logo.bg-none { background: transparent; border-radius: 0; }
+.pj-logo + .pjs-lede { margin-top: 18px; }

@@ -15,7 +15,7 @@ type Form = {
   name: string; slug: string; reference: string; category: string; summary: string; location: string; years: string;
   extraFacts: { label: string; value: string }[]; context: string; approach: string; activities: string; results: string;
   hasDetailPage: boolean; photoCaption: string; heroMediaId: string | null; galleryMediaIds: string[];
-  logoMediaId: string | null; logoStyle: LogoStyle;
+  logoMediaId: string | null; logoStyle: LogoStyle; posterMediaId: string | null;
   pillarKeys: string[]; primaryPillarKey: string; objectiveRefs: string[]; seoTitle: string; seoDescription: string; sort: number;
   programObjectives: ProgObjective[]; outcomes: Outcome[]; activityItems: Activity[];
 };
@@ -37,20 +37,20 @@ type MediaRow = { id: string; storageKey: string; originalName: string; width: n
 type Loaded = Form & {
   activityMedia?: Record<string, MediaRow>; linkedEvents?: LinkedEvent[];
   id: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; approvedRevisionId: string | null; updatedAt: string;
-  hero: MediaItem | null; logo: MediaItem | null; gallery: MediaItem[]; problems: string[]; pillars: { key: string; isPrimary: boolean }[];
+  hero: MediaItem | null; logo: MediaItem | null; poster: MediaItem | null; gallery: MediaItem[]; problems: string[]; pillars: { key: string; isPrimary: boolean }[];
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] };
 };
 
 const EMPTY: Form = {
   name: '', slug: '', reference: '', category: '', summary: '', location: '', years: '', extraFacts: [], context: '', approach: '', activities: '', results: '',
-  hasDetailPage: true, photoCaption: '', heroMediaId: null, galleryMediaIds: [], logoMediaId: null, logoStyle: { shape: 'original', fit: 'contain', bg: 'white', size: 'm' }, pillarKeys: [], primaryPillarKey: '', objectiveRefs: [], seoTitle: '', seoDescription: '', sort: 100,
+  hasDetailPage: true, photoCaption: '', heroMediaId: null, galleryMediaIds: [], logoMediaId: null, logoStyle: { shape: 'original', fit: 'contain', bg: 'white', size: 'm' }, posterMediaId: null, pillarKeys: [], primaryPillarKey: '', objectiveRefs: [], seoTitle: '', seoDescription: '', sort: 100,
   programObjectives: [], outcomes: [], activityItems: [],
 };
 const LIST_MAX = 12;
 // Same order as the project page: Summary · Program objectives · Outcomes · Program activities · Related events
 const TABS = ['Summary', 'Objectives', 'Outcomes', 'Activities', 'Events', 'Relationships', 'Gallery', 'SEO', 'Translations'] as const;
 const TAB_FIELDS: Record<string, string[]> = {
-  Summary: ['name', 'slug', 'reference', 'category', 'summary', 'location', 'years', 'extraFacts', 'sort', 'context', 'approach', 'heroMediaId', 'photoCaption', 'logoMediaId', 'logoStyle'],
+  Summary: ['name', 'slug', 'reference', 'category', 'summary', 'location', 'years', 'extraFacts', 'sort', 'context', 'approach', 'heroMediaId', 'photoCaption', 'logoMediaId', 'logoStyle', 'posterMediaId'],
   Objectives: ['programObjectives'],
   Outcomes: ['outcomes', 'results'],
   Activities: ['activityItems', 'activities'],
@@ -73,7 +73,7 @@ export function ProjectEditor({ id }: { id: string }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Summary');
   const [errors, setErrors] = useState<Record<string, string>>({}); const [banner, setBanner] = useState<{ kind: string; text: ReactNode } | null>(null);
   const [busy, setBusy] = useState(''); const [dirty, setDirty] = useState(false); const [slugTouched, setSlugTouched] = useState(!isNew);
-  const [dialog, setDialog] = useState<null | 'publish' | 'unpublish' | 'changes' | 'approve' | 'preview' | 'hero' | 'gallery' | 'activity' | 'logo'>(null);
+  const [dialog, setDialog] = useState<null | 'publish' | 'unpublish' | 'changes' | 'approve' | 'preview' | 'hero' | 'gallery' | 'activity' | 'logo' | 'poster'>(null);
   const [actPick, setActPick] = useState(-1);   // which activity is choosing a photo
   const [fixing, setFixing] = useState<MediaItem | null>(null);   // a photo whose alt text / rights are being completed here
   const [previewUrl, setPreviewUrl] = useState(''); const [comment, setComment] = useState('');
@@ -91,7 +91,7 @@ export function ProjectEditor({ id }: { id: string }) {
     setData(d);
     setForm({ ...pick(d), pillarKeys: d.pillars.map((x) => x.key), primaryPillarKey: primary, galleryMediaIds: d.gallery.map((g) => g.id) });
     const act = Object.values(d.activityMedia ?? {}).map((m) => ({ ...m, url: `/studio/media-file/${m.storageKey}-480.webp` }) as unknown as MediaItem);
-    setMedia(Object.fromEntries([d.hero, d.logo, ...d.gallery, ...act].filter(Boolean).map((m) => [m!.id, m!])));
+    setMedia(Object.fromEntries([d.hero, d.logo, d.poster, ...d.gallery, ...act].filter(Boolean).map((m) => [m!.id, m!])));
     setDirty(false); setChanged(new Set());
   }, [id, isNew]);
   useEffect(() => { load().catch((e) => setBanner({ kind: 'n-bad', text: e.message })); }, [load]);
@@ -387,17 +387,37 @@ export function ProjectEditor({ id }: { id: string }) {
                 </Field>
               </PeSection>
 
-              <PeSection title="Cover photos" desc="Up to three photos at the top of the project page: one large, two beside it.">
-              <Field group name="heroMediaId" label="Cover photos" optional hint="The first photo is the large one. Photos 2 and 3 are also the first two of the Gallery tab. Each needs alt text and confirmed rights before publishing." err={errors.heroMediaId}>
+              <PeSection title="Cover photos" desc="Up to five places at the top of the project page: the main photo large, the others beside it. A poster takes one of the places.">
+              <Field group name="heroMediaId" label="Cover photos" optional hint="The first photo is the large one; ★ makes another one the main photo. Photos 2 to 5 are also the first photos of the Gallery tab. Each needs alt text and confirmed rights before publishing." err={errors.heroMediaId}>
                   {(() => {
-                    const cover = [form.heroMediaId, ...form.galleryMediaIds.slice(0, 2)].filter(Boolean) as string[];
+                    const places = form.posterMediaId ? 4 : 5;   // the poster is one of the five cover places
+                    const cover = [form.heroMediaId, ...form.galleryMediaIds].filter(Boolean).slice(0, places) as string[];
                     const removeAt = (k: number) => { if (k === 0) { const [next, ...rest] = form.galleryMediaIds; set('heroMediaId', next ?? null); set('galleryMediaIds', rest); } else set('galleryMediaIds', form.galleryMediaIds.filter((_, x) => x !== k - 1)); };
                     const makeMain = (k: number) => { const g = [...form.galleryMediaIds]; const old = form.heroMediaId!; const neu = g[k - 1]; g[k - 1] = old; set('heroMediaId', neu); set('galleryMediaIds', g); };
+                    const tiles = cover.length + (form.posterMediaId ? 1 : 0);
+                    const layout = tiles <= 1 ? 'one large photo' : tiles === 2 ? 'two photos side by side' : tiles === 3 ? 'the main photo large, two stacked beside it' : tiles === 4 ? 'the main photo large, one wide and two small beside it' : 'the main photo large, four in a 2×2 grid beside it';
                     return <>{cover.length ? <div className="pe-cover">{cover.map((mid, k) => media[mid] && <div key={mid} className={`thumb${k === 0 ? ' main' : ''}`}><img src={media[mid].url} alt={media[mid].alt} />
                       <span className="pe-cover-n">{k === 0 ? 'Main' : k + 1}</span>
                       {!ro && <><button type="button" aria-label={`Remove cover photo ${k + 1}`} onClick={() => removeAt(k)}>×</button>{k > 0 && <span className="mv"><button type="button" aria-label="Make this the main photo" title="Make this the large photo" onClick={() => makeMain(k)}>★</button></span>}</>}</div>)}</div>
                       : <div className="muted">No cover photo. A grey placeholder is shown.</div>}
-                    {!ro && cover.length < 3 && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('hero')}><Icon n="image" />{cover.length ? `Add photo${cover.length === 2 ? '' : 's'} (${3 - cover.length} more)` : 'Choose up to 3 photos'}</button>}</>;
+                    <small className="pe-cover-note">{tiles} of 5 places used{form.posterMediaId ? ' (one is the poster)' : ''}: {layout}. Phones show the main photo on top, the others two per row.</small>
+                    {!ro && cover.length < places && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('hero')}><Icon n="image" />{cover.length ? `Add photos (${places - cover.length} more)` : `Choose up to ${places} photos`}</button>}</>;
+                  })()}
+                </Field>
+                <Field group name="posterMediaId" label="Poster (1:1)" optional hint="A square poster shown whole (never cropped) next to the main photo, with a “Poster” tag. It takes one of the five cover places. Needs alt text and confirmed rights before publishing." err={errors.posterMediaId}>
+                  {(() => {
+                    const m = form.posterMediaId ? media[form.posterMediaId] : null;
+                    const r = m ? m.width / m.height : 1; const square = Math.abs(r - 1) <= 0.08;
+                    return <div className="pe-poster">
+                      {m ? <div className="pe-poster-tile"><img src={m.large ?? m.url} alt={m.alt} /><span className="pe-poster-tag">Poster</span></div> : <div className="pe-poster-tile empty">1:1</div>}
+                      <div className="pe-poster-side">
+                        {m && <small className="muted">{m.width} × {m.height} px · {m.originalName}</small>}
+                        {m && !square && <p className="pe-warn"><Icon n="alert" width={14} height={14} />Not square ({r > 1 ? 'wider' : 'taller'} than 1:1). It will show whole with space around it; a square version looks best.</p>}
+                        {m && (!m.alt || !m.rightsConfirmed) && <p className="pe-warn"><Icon n="alert" width={14} height={14} />{!m.alt ? 'Add alt text' : 'Confirm usage rights'} for this poster in the Media Library before publishing.</p>}
+                        {!ro && <div className="pe-poster-b"><button type="button" className="btn btn-sm" onClick={() => setDialog('poster')}><Icon n="image" />{m ? 'Change poster' : 'Choose poster'}</button>
+                          {m && <button type="button" className="btn btn-ghost btn-sm btn-danger" onClick={() => set('posterMediaId', null)}>Remove</button>}</div>}
+                      </div>
+                    </div>;
                   })()}
                 </Field>
                 <Field name="photoCaption" label="Placeholder caption" optional hint="Shown on the grey placeholder while there is no hero photo."><input className="input" value={form.photoCaption} onChange={(e) => set('photoCaption', e.target.value)} maxLength={160} disabled={ro} /></Field>
@@ -550,13 +570,15 @@ export function ProjectEditor({ id }: { id: string }) {
 
       {dialog === 'logo' && <MediaPicker onClose={() => setDialog(null)} onPick={(items) => { const m = items[0]; if (m) { setMedia((x) => ({ ...x, [m.id]: m })); set('logoMediaId', m.id); } setDialog(null); }} />}
       {dialog === 'hero' && <MediaPicker multiple onClose={() => setDialog(null)} onPick={(items) => {
-        // fill the cover: the main photo first, then the free places among the first two gallery photos
+        // fill the cover: the main photo first, then the free places among the first gallery photos (four, or three with a poster)
         setMedia((x) => ({ ...x, ...Object.fromEntries(items.map((m) => [m.id, m])) }));
-        const ids = items.map((m) => m.id).filter((id) => id !== form.heroMediaId && !form.galleryMediaIds.slice(0, 2).includes(id));
+        const extra = form.posterMediaId ? 3 : 4;
+        const ids = items.map((m) => m.id).filter((id) => id !== form.heroMediaId && !form.galleryMediaIds.slice(0, extra).includes(id));
         const hero = form.heroMediaId ?? ids.shift() ?? null;
-        const front = form.galleryMediaIds.slice(0, 2); const add = ids.slice(0, 2 - front.length);
-        const gallery = [...front, ...add, ...form.galleryMediaIds.slice(2).filter((id) => !add.includes(id))].slice(0, 12);
+        const front = form.galleryMediaIds.slice(0, extra); const add = ids.slice(0, extra - front.length);
+        const gallery = [...front, ...add, ...form.galleryMediaIds.slice(extra).filter((id) => !add.includes(id))].slice(0, 12);
         set('heroMediaId', hero); set('galleryMediaIds', gallery); setDialog(null); }} />}
+      {dialog === 'poster' && <MediaPicker onClose={() => setDialog(null)} onPick={(items) => { const m = items[0]; if (m) { setMedia((x) => ({ ...x, [m.id]: m })); set('posterMediaId', m.id); } setDialog(null); }} />}
       {dialog === 'gallery' && <MediaPicker multiple onClose={() => setDialog(null)} onPick={(items) => { setMedia((x) => ({ ...x, ...Object.fromEntries(items.map((m) => [m.id, m])) })); set('galleryMediaIds', [...new Set([...form.galleryMediaIds, ...items.map((m) => m.id)])].slice(0, 12)); setDialog(null); }} />}
 
       {dialog === 'activity' && actPick >= 0 && <MediaPicker multiple onClose={() => { setDialog(null); setActPick(-1); }} onPick={(items) => {
@@ -589,7 +611,7 @@ export function ProjectEditor({ id }: { id: string }) {
 const LABELS: Record<string, string> = {
   name: 'Project name', summary: 'One-line summary', category: 'Category', reference: 'Internal reference', location: 'Location', years: 'Years', extraFacts: 'Extra facts',
   slug: 'Page address', sort: 'Order in listings', context: 'Context', approach: 'Approach', activities: 'Activities', results: 'Results', pillarKeys: 'Strategic pillars',
-  primaryPillarKey: 'Primary pillar', objectiveRefs: 'Strategic objectives', heroMediaId: 'Cover photos', logoMediaId: 'Project logo', logoStyle: 'Logo framing', galleryMediaIds: 'Gallery', photoCaption: 'Placeholder caption',
+  primaryPillarKey: 'Primary pillar', objectiveRefs: 'Strategic objectives', heroMediaId: 'Cover photos', logoMediaId: 'Project logo', logoStyle: 'Logo framing', posterMediaId: 'Poster', galleryMediaIds: 'Gallery', photoCaption: 'Placeholder caption',
   seoTitle: 'SEO title', seoDescription: 'Meta description',
   programObjectives: 'Program objectives', outcomes: 'Outcomes', activityItems: 'Program activities',
 };

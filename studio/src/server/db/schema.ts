@@ -166,6 +166,8 @@ export const projects = pgTable('projects', {
   // project logo, shown in the project summary: a Media Library image and how it is framed (shape, fit, background, size)
   logoMediaId: uuid('logo_media_id').references(() => media.id, { onDelete: 'set null' }),
   logoStyle: jsonb('logo_style').$type<{ shape: string; fit: string; bg: string; size: string }>().notNull().default({ shape: 'original', fit: 'contain', bg: 'white', size: 'm' }),
+  // a square (1:1) project poster, shown whole as one of the cover tiles
+  posterMediaId: uuid('poster_media_id').references(() => media.id, { onDelete: 'set null' }),
   seoTitle: text('seo_title').notNull().default(''),
   seoDescription: text('seo_description').notNull().default(''),
   sort: integer('sort').notNull().default(100),

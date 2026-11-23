@@ -180,7 +180,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   api.get('/projects', perm('project.read'), async (c) => c.json(await P.listProjects(db)));
   api.get('/projects/:id', perm('project.read'), async (c) => {
     const p = await P.loadProject(db, c.req.param('id'));
-    return c.json({ ...p, hero: p.hero && withUrl(p.hero), logo: p.logo && withUrl(p.logo), gallery: p.gallery.map(withUrl), problems: P.publishProblems(p), history: await P.projectHistory(db, p.id) });
+    return c.json({ ...p, hero: p.hero && withUrl(p.hero), logo: p.logo && withUrl(p.logo), poster: p.poster && withUrl(p.poster), gallery: p.gallery.map(withUrl), problems: P.publishProblems(p), history: await P.projectHistory(db, p.id) });
   });
   api.post('/projects', perm('project.create'), async (c) => c.json(await P.createProject(db, actor(c), await c.req.json()), 201));
   api.put('/projects/:id', async (c) => {

@@ -22,6 +22,8 @@ export async function usage(db: DB, ids: string[]): Promise<Record<string, Use[]
   const add = (id: string | null | undefined, u: Use) => { if (!id || !want.has(id)) return; const l = (out[id] ??= []); if (!l.some((x) => x.href === u.href && x.where === u.where)) l.push(u); };
   for (const r of await db.select({ id: t.projects.id, name: t.projects.name, m: t.projects.heroMediaId }).from(t.projects).where(inArray(t.projects.heroMediaId, ids)))
     add(r.m, { kind: 'Project', title: r.name, href: `/studio/projects/${r.id}`, where: 'Main photo', live: false });
+  for (const r of await db.select({ id: t.projects.id, name: t.projects.name, m: t.projects.posterMediaId }).from(t.projects).where(inArray(t.projects.posterMediaId, ids)))
+    add(r.m, { kind: 'Project', title: r.name, href: `/studio/projects/${r.id}`, where: 'Poster', live: false });
   for (const r of await db.select({ id: t.projects.id, name: t.projects.name, m: t.projects.logoMediaId }).from(t.projects).where(inArray(t.projects.logoMediaId, ids)))
     add(r.m, { kind: 'Project', title: r.name, href: `/studio/projects/${r.id}`, where: 'Logo', live: false });
   for (const r of await db.select({ id: t.projects.id, name: t.projects.name, m: t.projectGallery.mediaId }).from(t.projectGallery).innerJoin(t.projects, eq(t.projects.id, t.projectGallery.projectId)).where(inArray(t.projectGallery.mediaId, ids)))

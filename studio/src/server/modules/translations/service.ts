@@ -208,9 +208,9 @@ export function contextLabel(where: string, key: string) {
 export function pageLabel(file: string) {
   if (file === 'index.html') return 'Homepage';
   if (file === 'main.js') return 'Interactive parts of the site';
-  const m = file.match(/^(project|event|news|opportunity)-(.+)\.html$/);
+  const m = file.match(/^(project|event|news|opportunity|publication)-(.+)\.html$/);
   const name = (x: string) => x.replace(/\.html$/, '').replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
-  if (m) return `${{ project: 'Project', event: 'Event', news: 'Story', opportunity: 'Opportunity' }[m[1]]}: ${name(m[2])}`;
+  if (m) return `${{ project: 'Project', event: 'Event', news: 'Story', opportunity: 'Opportunity', publication: 'Publication' }[m[1]]}: ${name(m[2])}`;
   return `${name(file)} page`;
 }
 

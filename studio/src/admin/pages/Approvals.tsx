@@ -12,7 +12,7 @@ type Change = { path: string; before: string | null; after: string | null };
 type Diff = { kind: 'new' | 'changed' | 'same'; changes: Change[]; note?: string; submitted?: { number: number; at: string }; live?: { number: number; at: string } | null };
 type Tab = 'review' | 'publish' | 'back' | 'mine' | 'all';
 
-const ICON: Record<string, string> = { project: 'folder', story: 'log', event: 'calendar', opportunity: 'spark', partner: 'partner', page: 'layers', homepage: 'home', seo: 'search', translation: 'globe', menu: 'menu', schema: 'search' };
+const ICON: Record<string, string> = { project: 'folder', story: 'log', event: 'calendar', opportunity: 'spark', publication: 'book', partner: 'partner', page: 'layers', homepage: 'home', seo: 'search', translation: 'globe', menu: 'menu', schema: 'search' };
 const hours = (at: string) => (Date.now() - Date.parse(at)) / 36e5;
 const age = (at: string) => { const h = hours(at); return h >= 168 ? 'old' : h >= 48 ? 'late' : ''; };
 const yn = (v: string | null) => (v === 'true' ? 'Yes' : v === 'false' ? 'No' : v);

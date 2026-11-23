@@ -34,6 +34,8 @@ export async function usage(db: DB, ids: string[]): Promise<Record<string, Use[]
     add(r.m, { kind: 'Event', title: r.name, href: `/studio/events/${r.id}`, where: 'Poster', live: false });
   for (const r of await db.select({ id: t.opportunities.id, name: t.opportunities.title, m: t.opportunities.heroMediaId }).from(t.opportunities).where(inArray(t.opportunities.heroMediaId, ids)))
     add(r.m, { kind: 'Opportunity', title: r.name, href: `/studio/opportunities/${r.id}`, where: 'Image', live: false });
+  for (const r of await db.select({ id: t.publications.id, name: t.publications.title, m: t.publications.coverMediaId }).from(t.publications).where(inArray(t.publications.coverMediaId, ids)))
+    add(r.m, { kind: 'Publication', title: r.name, href: `/studio/publications/${r.id}`, where: 'Cover', live: false });
   for (const r of await db.select({ id: t.partners.id, name: t.partners.name, m: t.partners.logoMediaId }).from(t.partners).where(inArray(t.partners.logoMediaId, ids)))
     add(r.m, { kind: 'Partner', title: r.name, href: `/studio/partners/${r.id}`, where: 'Logo', live: false });
   for (const r of await db.select({ id: t.seoOverrides.id, file: t.seoOverrides.file, m: t.seoOverrides.imageMediaId }).from(t.seoOverrides).where(inArray(t.seoOverrides.imageMediaId, ids)))

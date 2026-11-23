@@ -64,7 +64,7 @@ function Palette({ nav, onClose }: { nav: NavLink[]; onClose: () => void }) {
   const pages = nav.filter((n) => !q || n.label.toLowerCase().includes(q.toLowerCase()) || n.group.toLowerCase().includes(q.toLowerCase()));
   const items: { key: string; label: string; sub: string; href: string; icon: string; group: string }[] = [
     ...(!q ? recent.map((h) => nav.find((n) => n.to === h)).filter(Boolean).slice(0, 4).map((n) => ({ key: `r${n!.to}`, label: n!.label, sub: n!.group, href: n!.to, icon: n!.icon, group: 'Recent' })) : []),
-    ...hits.map((h) => ({ key: `h${h.id}`, label: h.title, sub: `${h.kind} · ${h.sub ?? ''} · ${h.status.replace('_', ' ')}`, href: h.href, icon: { Project: 'folder', Story: 'log', Event: 'calendar', Opportunity: 'spark', Partner: 'partner', Page: 'layers' }[h.kind] ?? 'search', group: 'Content' })),
+    ...hits.map((h) => ({ key: `h${h.id}`, label: h.title, sub: `${h.kind} · ${h.sub ?? ''} · ${h.status.replace('_', ' ')}`, href: h.href, icon: { Project: 'folder', Story: 'log', Event: 'calendar', Opportunity: 'spark', Publication: 'book', Partner: 'partner', Page: 'layers' }[h.kind] ?? 'search', group: 'Content' })),
     ...pages.slice(0, q ? 6 : 12).map((n) => ({ key: `n${n.to}`, label: n.label, sub: n.group, href: n.to, icon: n.icon, group: 'Go to' })),
   ];
   useEffect(() => { setI(0); }, [q, hits.length]);

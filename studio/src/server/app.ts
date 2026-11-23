@@ -35,6 +35,8 @@ import { registerReviewRoutes } from './modules/review/routes.ts';
 import { registerMediaLibraryRoutes } from './modules/media/routes.ts';
 import { registerInboxRoutes } from './modules/inbox/routes.ts';
 import { registerSettingsRoutes } from './modules/settings/routes.ts';
+import { registerPublicationRoutes } from './modules/publications/routes.ts';
+import { documentsDir } from './modules/publications/documents.ts';
 import * as NOTIFY from './modules/settings/notify.ts';
 import * as HM from './modules/home/service.ts';
 import * as WS from './modules/workspace/service.ts';
@@ -50,7 +52,7 @@ import { Publisher, type BuildRunner } from './modules/publish/service.ts';
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png',
-  '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.json': 'application/json', '.ico': 'image/x-icon', '.xml': 'application/xml',
+  '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.json': 'application/json', '.ico': 'image/x-icon', '.xml': 'application/xml', '.pdf': 'application/pdf',
 };
 
 // Argon2id hash of a random value, used only to equalize response timing for unknown emails.
@@ -383,6 +385,9 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   });
   api.post('/opportunities/:id/revisions/:rev/restore', perm('opportunity.update'), async (c) => { await OP.restoreOpportunityRevision(db, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
 
+  // ---------------------------------------------------------------- Publications (reports, studies…) and their PDF files
+  registerPublicationRoutes(api);   // modules/publications
+
   // ---------------------------------------------------------------- Inbox: website messages and newsletter list (personal data, forms.read / forms.manage)
   registerInboxRoutes(api);   // modules/inbox
   registerSettingsRoutes(api);   // Settings Center (modules/settings)
@@ -612,6 +617,11 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
       const name = rest.slice('assets/media/'.length);
       if (!/^[0-9a-f]{24}-\d+\.webp$/.test(name)) return c.notFound();
       return sendFile(c, resolve(cfg.mediaDir, name), { private: true });
+    }
+    if (rest.startsWith('assets/documents/')) {   // a publication preview's PDF: Studio's stored copy, never the site's
+      const name = rest.slice('assets/documents/'.length);
+      if (!/^[0-9a-f]{24}\.pdf$/.test(name)) return c.notFound();
+      return sendFile(c, resolve(documentsDir(cfg), name), { private: true });
     }
     if (rest.startsWith('assets/')) {
       const p = resolve(cfg.siteRoot, rest);

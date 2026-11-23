@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./src/**/*.html', './assets/main.js', './studio/src/server/modules/pages/blocks.ts', './studio/src/server/modules/news/render.ts', './studio/src/server/modules/opportunities/render.ts'],  // Studio page-builder blocks
+  content: ['./src/**/*.html', './assets/main.js', './studio/src/server/modules/pages/blocks.ts', './studio/src/server/modules/news/render.ts', './studio/src/server/modules/opportunities/render.ts', './studio/src/server/modules/publications/render.ts'],  // Studio page-builder blocks
   theme: {
     extend: {
       fontFamily: {

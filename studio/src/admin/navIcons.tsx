@@ -1,6 +1,6 @@
 // Sidebar icons: one consistent 24px line set, drawn after Lucide (ISC licence, https://lucide.dev) so every
 // item has the same weight, corner radius and optical size. Each meaning is picked to read at 17px:
-// Opportunities is a briefcase, Pillars a landmark, Media a stack of images, Pages a pair of files.
+// Opportunities is a briefcase, Publications an open book, Pillars a landmark, Media a stack of images, Pages a pair of files.
 import type { ReactNode, SVGProps } from 'react';
 
 const I: Record<string, ReactNode> = {
@@ -9,6 +9,7 @@ const I: Record<string, ReactNode> = {
   log: <><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" /><path d="M18 14h-8M15 18h-5" /><path d="M10 6h8v4h-8z" /></>,
   calendar: <><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" /></>,
   spark: <><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></>,
+  book: <><path d="M12 7v14" /><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" /></>,
   pillars: <><path d="M3 22h18M6 18v-7M10 18v-7M14 18v-7M18 18v-7" /><path d="m12 2 8 5H4z" /></>,
   partner: <><path d="m11 17 2 2a1 1 0 1 0 3-3" /><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4" /><path d="m21 3 1 11h-2M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3M3 4h8" /></>,
   image: <><path d="M18 22H4a2 2 0 0 1-2-2V6" /><path d="m22 13-1.3-1.3a2.4 2.4 0 0 0-3.4 0L11 18" /><circle cx="12" cy="8" r="2" /><rect x="6" y="2" width="16" height="16" rx="2" /></>,

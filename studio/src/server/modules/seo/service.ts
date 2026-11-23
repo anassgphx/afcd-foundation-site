@@ -6,7 +6,7 @@ import { and, desc, eq, isNotNull, max } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
-import { articles, events, media, opportunities, pages, projects, reviewComments, seoAudits, seoOverrides, seoRevisions } from '../../db/schema.ts';
+import { articles, events, media, opportunities, pages, projects, publications, reviewComments, seoAudits, seoOverrides, seoRevisions } from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
@@ -18,7 +18,7 @@ type Status = typeof seoOverrides.$inferSelect['status'];
 const FILE = /^[a-z0-9][a-z0-9-]*\.html$/;
 const plain = (max: number) => z.string().trim().max(max).refine((v) => !/[<>]/.test(v), 'Use plain text without < or >.');
 
-export type Owner = { kind: 'template' | 'project' | 'story' | 'event' | 'sample' | 'opportunity' | 'page'; id?: string; label: string };
+export type Owner = { kind: 'template' | 'project' | 'story' | 'event' | 'sample' | 'opportunity' | 'publication' | 'page'; id?: string; label: string };
 
 /** Who edits a page: a Studio editor, or (for the site's template pages) an SEO override here. */
 export async function owners(db: DB, cfg: Config): Promise<Map<string, Owner>> {
@@ -28,6 +28,8 @@ export async function owners(db: DB, cfg: Config): Promise<Map<string, Owner>> {
   for (const e of await db.select({ id: events.id, slug: events.slug, title: events.title }).from(events).where(isNotNull(events.publishedRevisionId))) map.set(`event-${e.slug}.html`, { kind: 'event', id: e.id, label: e.title });
   for (const o of await db.select({ id: opportunities.id, slug: opportunities.slug, title: opportunities.title }).from(opportunities)) map.set(`opportunity-${o.slug}.html`, { kind: 'opportunity', id: o.id, label: o.title });
   if (await db.select({ id: opportunities.id }).from(opportunities).where(isNotNull(opportunities.publishedRevisionId)).limit(1).then((r) => r.length)) map.set('opportunities.html', { kind: 'opportunity', label: 'Opportunities listing' });
+  for (const p of await db.select({ id: publications.id, slug: publications.slug, title: publications.title }).from(publications)) map.set(`publication-${p.slug}.html`, { kind: 'publication', id: p.id, label: p.title });
+  if (await db.select({ id: publications.id }).from(publications).where(isNotNull(publications.publishedRevisionId)).limit(1).then((r) => r.length)) map.set('publications.html', { kind: 'publication', label: 'Publications listing' });
   for (const p of await db.select({ id: pages.id, slug: pages.slug, title: pages.title }).from(pages)) map.set(`${p.slug}.html`, { kind: 'page', id: p.id, label: p.title });
   // the site's own sample events (no Studio event behind them)
   for (const f of existsSync(cfg.siteRoot) ? readdirSync(cfg.siteRoot) : []) if (/^event-[a-z0-9-]+\.html$/.test(f) && !map.has(f)) map.set(f, { kind: 'sample', label: 'Sample event' });

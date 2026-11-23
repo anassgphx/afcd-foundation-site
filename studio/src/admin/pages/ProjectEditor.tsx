@@ -2,6 +2,7 @@
 import { Children, cloneElement, isValidElement, useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement, type ReactNode } from 'react';
 import { api, patch, post, put, ApiError } from '../api.ts';
 import { useSite } from '../site.ts';
+import { LogoPanel, type LogoStyle } from '../LogoPanel.tsx';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
@@ -20,16 +21,6 @@ type Form = {
   programObjectives: ProgObjective[]; outcomes: Outcome[]; activityItems: Activity[];
 };
 type ProgObjective = { title: string; text: string };
-type LogoStyle = { shape: string; fit: 'contain' | 'cover'; bg: 'none' | 'white' | 'light' | 'dark' | 'pillar'; size: 's' | 'm' | 'l' };
-const LOGO_SHAPES: [string, string][] = [['original', 'Original'], ['1:1', '1:1'], ['circle', 'Circle'], ['3:1', '3:1 wide'], ['2:1', '2:1'], ['4:3', '4:3'], ['16:9', '16:9'], ['3:4', '3:4'], ['1:3', '1:3 tall']];
-const LOGO_BGS: [LogoStyle['bg'], string][] = [['none', 'None'], ['white', 'White'], ['light', 'Light'], ['dark', 'Dark'], ['pillar', 'Pillar colour']];
-/** The logo as the website frames it (same rules as .pj-logo in input.css). */
-function LogoFrame({ m, st, tone }: { m: { url: string; large?: string; alt: string; width: number; height: number; focalX: number; focalY: number }; st: LogoStyle; tone?: string }) {
-  const ratio = st.shape === 'original' ? `${m.width} / ${m.height}` : st.shape === 'circle' ? '1 / 1' : st.shape.replace(':', ' / ');
-  const tall = st.shape === '3:4' || st.shape === '1:3' || (st.shape === 'original' && m.height > m.width);
-  return <span className={`pe-logo s-${st.size} bg-${st.bg}${st.shape === 'circle' ? ' round' : ''}${st.fit === 'cover' ? ' cover' : ''}${tall ? ' tall' : ''}`} style={{ aspectRatio: ratio, ['--pc' as string]: tone ?? '#e7e5e4' }}>
-    <img src={m.large ?? m.url} alt={m.alt} style={{ objectPosition: `${m.focalX}% ${m.focalY}%` }} /></span>;
-}
 type Outcome = { title: string; text: string; figure: string };
 type Activity = { title: string; text: string; mediaIds: string[] };
 type LinkedEvent = { id: string; title: string; startDate: string; status: string; live: boolean };
@@ -73,7 +64,7 @@ export function ProjectEditor({ id }: { id: string }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Summary');
   const [errors, setErrors] = useState<Record<string, string>>({}); const [banner, setBanner] = useState<{ kind: string; text: ReactNode } | null>(null);
   const [busy, setBusy] = useState(''); const [dirty, setDirty] = useState(false); const [slugTouched, setSlugTouched] = useState(!isNew);
-  const [dialog, setDialog] = useState<null | 'publish' | 'unpublish' | 'changes' | 'approve' | 'preview' | 'hero' | 'gallery' | 'activity' | 'logo'>(null);
+  const [dialog, setDialog] = useState<null | 'publish' | 'unpublish' | 'changes' | 'approve' | 'preview' | 'hero' | 'gallery' | 'activity'>(null);
   const [actPick, setActPick] = useState(-1);   // which activity is choosing a photo
   const [fixing, setFixing] = useState<MediaItem | null>(null);   // a photo whose alt text / rights are being completed here
   const [previewUrl, setPreviewUrl] = useState(''); const [comment, setComment] = useState('');
@@ -357,33 +348,13 @@ export function ProjectEditor({ id }: { id: string }) {
                 ))}
               </PeSection>
 
-              <PeSection title="Project logo" desc="Shown in the project summary, next to its title. Choose how it is framed.">
-                <Field group name="logoMediaId" label="Logo" optional hint="Upload it to the Media Library first (PNG or SVG-like images with a transparent background work best). Needs alt text and confirmed rights." err={errors.logoMediaId}>
-                  {(() => {
-                    const m = form.logoMediaId ? media[form.logoMediaId] : null; const st = form.logoStyle;
-                    const setSt = (p: Partial<LogoStyle>) => set('logoStyle', { ...st, ...p });
-                    const tone = pillars.find((x) => x.key === (form.primaryPillarKey || form.pillarKeys[0]))?.colour;
-                    return <div className="pe-logo-ed">
-                      <div className="pe-logo-stage">{m ? <LogoFrame m={m} st={st} tone={tone} /> : <span className="muted">No logo</span>}</div>
-                      {!ro && <div className="pe-logo-ctl">
-                        <div className="pe-logo-row"><button type="button" className="btn btn-sm" onClick={() => setDialog('logo')}><Icon n="image" />{m ? 'Change logo' : 'Choose logo'}</button>
-                          {m && <button type="button" className="btn btn-ghost btn-sm btn-danger" onClick={() => set('logoMediaId', null)}>Remove</button>}</div>
-                        {m && <>
-                          <span className="pe-logo-k">Shape</span>
-                          <div className="seg-btns" role="group" aria-label="Logo shape">{LOGO_SHAPES.map(([k, l]) => <button key={k} type="button" className={st.shape === k ? 'on' : ''} aria-pressed={st.shape === k} onClick={() => setSt({ shape: k })}>{l}</button>)}</div>
-                          <span className="pe-logo-k">Fit</span>
-                          <div className="seg-btns" role="group" aria-label="Logo fit">
-                            <button type="button" className={st.fit === 'contain' ? 'on' : ''} aria-pressed={st.fit === 'contain'} onClick={() => setSt({ fit: 'contain' })} title="The whole logo, with space around it">Whole logo</button>
-                            <button type="button" className={st.fit === 'cover' ? 'on' : ''} aria-pressed={st.fit === 'cover'} onClick={() => setSt({ fit: 'cover' })} title="Fill the shape and crop around the focal point set in the Media Library">Fill and crop</button></div>
-                          <span className="pe-logo-k">Background</span>
-                          <div className="seg-btns" role="group" aria-label="Logo background">{LOGO_BGS.map(([k, l]) => <button key={k} type="button" className={st.bg === k ? 'on' : ''} aria-pressed={st.bg === k} onClick={() => setSt({ bg: k })}>{l}</button>)}</div>
-                          <span className="pe-logo-k">Size</span>
-                          <div className="seg-btns" role="group" aria-label="Logo size">{([['s', 'Small'], ['m', 'Medium'], ['l', 'Large']] as const).map(([k, l]) => <button key={k} type="button" className={st.size === k ? 'on' : ''} aria-pressed={st.size === k} onClick={() => setSt({ size: k })}>{l}</button>)}</div>
-                          {st.fit === 'cover' && <small className="muted">The crop keeps the focal point chosen for this image in the Media Library.</small>}
-                        </>}
-                      </div>}
-                    </div>;
-                  })()}
+              <PeSection title="Project logo" desc="Shown as a badge on the project cover.">
+                <Field group name="logoMediaId" label="Logo" optional hint="The whole logo is shown in the cover's top corner (the other corner in Arabic). It needs alt text and confirmed rights before publishing." err={errors.logoMediaId}>
+                  <LogoPanel logo={form.logoMediaId ? media[form.logoMediaId] ?? null : null} style={form.logoStyle} ro={ro}
+                    onStyle={(st) => set('logoStyle', st)}
+                    onLogo={(m) => { if (m) setMedia((x) => ({ ...x, [m.id]: m })); set('logoMediaId', m ? m.id : null); }}
+                    cover={form.heroMediaId ? media[form.heroMediaId] ?? null : null}
+                    tone={pillars.find((x) => x.key === (form.primaryPillarKey || form.pillarKeys[0]))?.colour ?? '#e7e5e4'} />
                 </Field>
               </PeSection>
 
@@ -548,7 +519,6 @@ export function ProjectEditor({ id }: { id: string }) {
         </aside>
       </div>
 
-      {dialog === 'logo' && <MediaPicker onClose={() => setDialog(null)} onPick={(items) => { const m = items[0]; if (m) { setMedia((x) => ({ ...x, [m.id]: m })); set('logoMediaId', m.id); } setDialog(null); }} />}
       {dialog === 'hero' && <MediaPicker multiple onClose={() => setDialog(null)} onPick={(items) => {
         // fill the cover: the main photo first, then the free places among the first two gallery photos
         setMedia((x) => ({ ...x, ...Object.fromEntries(items.map((m) => [m.id, m])) }));

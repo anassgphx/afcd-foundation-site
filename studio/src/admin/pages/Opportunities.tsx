@@ -5,7 +5,7 @@ import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { EditorHeader, Field, ListEditor, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
-import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
+import { DataTable, EmptyState, ListToolbar, useUrlState, type Column, TableSkeleton, statusFilter, updatedFilter, useListActions } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 
@@ -37,37 +37,42 @@ export function OpportunitiesList() {
   const [st, set] = useUrlState({ status: 'all', type: 'all', q: '' });
   const load = () => api<Row[]>('/opportunities').then(setRows).catch(() => setRows([]));
   useEffect(() => { load(); }, []);
+  const me = useMe();
+  const acts = useListActions<Row>({
+    base: '/opportunities', noun: ['opportunity', 'opportunities'], name: (r) => r.title, reload: load,
+    can: { update: can('opportunity.update'), approve: can('opportunity.approve'), publish: can('opportunity.publish'), archive: can('opportunity.update'), delete: can('opportunity.publish') },
+    edit: (r) => `/studio/opportunities/${r.id}`, liveUrl: (r) => me.siteUrl + `opportunity-${r.slug}.html`,
+  });
   async function create() {
     const r = await post<{ id: string }>('/opportunities', { title: 'Untitled opportunity', slug: `untitled-${Date.now().toString(36)}`, applyMethod: 'contact' });
     navigate(`/studio/opportunities/${r.id}`);
   }
   const is = (k: string, r: Row) => (k === 'all' ? r.status !== 'archived' : k === 'open' ? !!r.publishedRevisionId && stateOf(r) !== 'Closed' : k === 'closed' ? stateOf(r) === 'Closed' && r.status !== 'archived' : k === 'draft' ? ['draft', 'changes_requested'].includes(r.status) : r.status === k);
-  const base = (rows ?? []).filter((r) => (st.type === 'all' || r.type === st.type) && (!st.q || `${r.title} ${r.location}`.toLowerCase().includes(st.q.toLowerCase())));
+  const base = (rows ?? []).filter((r) => (!st.q || `${r.title} ${r.location}`.toLowerCase().includes(st.q.toLowerCase())));
   const shown = base.filter((r) => is(st.status, r));
   const tabs: [string, string, number][] = [['all', 'All'], ['open', 'Live & open'], ['closed', 'Closed'], ['draft', 'Drafts'], ['in_review', 'In review'], ['archived', 'Archived']].map(([k, l]) => [k, l, base.filter((r) => is(k, r)).length]);
   const tone = (s: string) => (s === 'Open' ? '#16a34a' : s === 'Opening soon' ? '#f59e0b' : '#a8a29e');
   const columns: Column<Row>[] = [
     { key: 'title', header: 'Opportunity', sort: (r) => r.title, csv: (r) => r.title, render: (r) => <div className="dt-main"><span className="dt-thumb"><Icon n="spark" /></span><span className="min-w-0">
       <Link className="title" to={`/studio/opportunities/${r.id}`}>{r.title}</Link><span className="sub">{[r.pillarName, r.location].filter(Boolean).join(' · ') || '—'}</span></span></div> },
-    { key: 'type', header: 'Type', sort: (r) => typeLabel(r.type), csv: (r) => typeLabel(r.type), hideBelow: 900, render: (r) => <span className="pill">{typeLabel(r.type)}</span> },
-    { key: 'state', header: 'Applications', sort: (r) => stateOf(r), csv: (r) => stateOf(r), render: (r) => <span className="dt-state"><span className="dot" style={{ ['--c' as string]: tone(stateOf(r)) }} />{stateOf(r)}</span> },
-    { key: 'deadline', header: 'Deadline', sort: (r) => r.deadline ?? '9999', csv: (r) => r.deadline ?? 'rolling', render: (r) => <span className="sub" style={{ whiteSpace: 'nowrap' }}>{r.deadline ? dateLabel(r.deadline) : 'Rolling'}</span> },
-    { key: 'status', header: 'Status', sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div> },
-    { key: 'updated', header: 'Updated', align: 'right', hideBelow: 1100, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
+    { key: 'type', header: 'Type', filter: { type: 'set', title: 'Type', get: (r) => r.type, label: typeLabel }, sort: (r) => typeLabel(r.type), csv: (r) => typeLabel(r.type), hideBelow: 900, render: (r) => <span className="pill">{typeLabel(r.type)}</span> },
+    { key: 'state', header: 'Applications', filter: { type: 'set', title: 'Applications', get: (r) => stateOf(r) }, sort: (r) => stateOf(r), csv: (r) => stateOf(r), render: (r) => <span className="dt-state"><span className="dot" style={{ ['--c' as string]: tone(stateOf(r)) }} />{stateOf(r)}</span> },
+    { key: 'deadline', header: 'Deadline', filter: { type: 'date', title: 'Deadline', get: (r) => r.deadline }, sort: (r) => r.deadline ?? '9999', csv: (r) => r.deadline ?? 'rolling', render: (r) => <span className="sub" style={{ whiteSpace: 'nowrap' }}>{r.deadline ? dateLabel(r.deadline) : 'Rolling'}</span> },
+    { key: 'status', header: 'Status', filter: statusFilter<Row>(), sort: (r) => r.status, csv: (r) => r.status, render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div> },
+    { key: 'updated', header: 'Updated', filter: updatedFilter<Row>(), align: 'right', hideBelow: 1100, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
   ];
   return <>
     <div className="page-h"><div><h1>Opportunities</h1><p>Calls for applications, volunteering, internships, jobs and consultancies. They open and close on the website by their dates.</p></div>
       {can('opportunity.create') && <button className="btn btn-primary" onClick={create}><Icon n="plus" />New opportunity</button>}</div>
     {rows && !rows.some((r) => r.publishedRevisionId) && <div className="notice n-info"><div>Nothing is published yet, so the website has no Opportunities page. It appears at <span className="mono">opportunities.html</span> with the first published opportunity.</div></div>}
     <section className="card">
-      <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search opportunities">
-        <select className="select" value={st.type} onChange={(e) => set('type', e.target.value)} aria-label="Type"><option value="all">All types</option>{OPP_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-      </ListToolbar>
-      {!rows ? <Loading /> : <DataTable id="opportunities" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-opportunities" initialSort={{ key: 'deadline', dir: 'asc' }}
-        actions={workflowActions<Row>({ base: '/opportunities', noun: ['opportunity', 'opportunities'], name: (r) => r.title, canUpdate: can('opportunity.update'), reload: load, post, toast })}
+      <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search opportunities" />
+      {!rows ? <TableSkeleton /> : <DataTable id="opportunities" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-opportunities" initialSort={{ key: 'deadline', dir: 'asc' }}
+        actions={acts.bulk} rowMenu={acts.rowMenu}
         onOpen={(r) => navigate(`/studio/opportunities/${r.id}`)}
         empty={<EmptyState icon="spark" text="No opportunities match these filters" onClear={st.q || st.type !== 'all' || st.status !== 'all' ? () => { set('q', ''); set('type', 'all'); set('status', 'all'); } : undefined} />} />}
     </section>
+    {acts.dialog}
   </>;
 }
 

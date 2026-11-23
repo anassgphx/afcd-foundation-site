@@ -16,6 +16,9 @@ export const PERMISSIONS = [
   'site.rebuild',
   'audit.read',
   'users.read', 'users.manage',
+  // Settings Center: read; edit organization, branding and contact; admin-only fields (canonical domain, environment,
+  // email server, restoring revisions); publish settings to the website (rebuild).
+  'settings.read', 'settings.update', 'settings.admin', 'settings.publish',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -38,9 +41,9 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   super_admin: PERMISSIONS,
   website_admin: PERMISSIONS.filter((p) => p !== 'users.manage'),
   content_editor: [...READ, 'project.create', 'project.update', 'project.seo', 'media.upload', 'media.update', 'page.create', 'page.update', 'news.create', 'news.update', 'partner.create', 'partner.update', 'pillar.create', 'pillar.update', 'event.create', 'event.update', 'opportunity.create', 'opportunity.update', 'seo.update', 'translation.update'],
-  content_reviewer: [...READ, 'project.review', 'project.approve', 'page.approve', 'news.approve', 'partner.approve', 'pillar.approve', 'event.approve', 'opportunity.approve', 'seo.approve', 'translation.approve', 'audit.read'],
+  content_reviewer: [...READ, 'settings.read', 'project.review', 'project.approve', 'page.approve', 'news.approve', 'partner.approve', 'pillar.approve', 'event.approve', 'opportunity.approve', 'seo.approve', 'translation.approve', 'audit.read'],
   media_manager: [...READ, 'media.upload', 'media.update', 'media.delete'],
-  seo_manager: [...READ, 'project.seo', 'seo.update'],
+  seo_manager: [...READ, 'project.seo', 'seo.update', 'settings.read', 'settings.update'],
   read_only: READ,
 };
 

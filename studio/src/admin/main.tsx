@@ -16,7 +16,7 @@ const SCREENS = {
   events: () => import('./pages/Events.tsx'), opportunities: () => import('./pages/Opportunities.tsx'), inbox: () => import('./pages/Inbox.tsx'), seo: () => import('./pages/Seo.tsx'),
   translations: () => import('./pages/Translations.tsx'), menus: () => import('./pages/Menus.tsx'), home: () => import('./pages/Home.tsx'), media: () => import('./pages/Media.tsx'),
   admin: () => import('./pages/Admin.tsx'), approvals: () => import('./pages/Approvals.tsx'),
-  open: () => import('./pages/OpenPage.tsx'),
+  open: () => import('./pages/OpenPage.tsx'), settings: () => import('./pages/Settings.tsx'),
 };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const screen = <K extends keyof typeof SCREENS>(k: K, name: string) => lazy(() => SCREENS[k]().then((m) => ({ default: (m as any)[name] as React.ComponentType<any> })));
@@ -29,6 +29,7 @@ const TranslationsPage = screen('translations', 'TranslationsPage'), MenusPage =
 const MediaLibrary = screen('media', 'MediaLibrary'), Publishing = screen('admin', 'Publishing'), ActivityLog = screen('admin', 'ActivityLog'), Users = screen('admin', 'Users');
 const ApprovalsPage = screen('approvals', 'ApprovalsPage');
 const OpenPage = screen('open', 'OpenPage');
+const SettingsPage = screen('settings', 'SettingsPage');
 let warmed = false;
 function warmScreens() {   // fetch every screen in the background after the first render, so later navigation is instant
   if (warmed) return; warmed = true;
@@ -189,6 +190,7 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   if (path.startsWith('/studio/publishing')) return { title: 'Publishing', el: <Publishing /> };
   if (path.startsWith('/studio/activity')) return { title: 'Activity Log', el: <ActivityLog /> };
   if (path.startsWith('/studio/users')) return { title: 'Users & Roles', el: <Users /> };
+  if (path.startsWith('/studio/settings')) return { title: 'Settings', el: <SettingsPage /> };
   if (path !== '/studio/' && path !== '/studio') { setTimeout(() => navigate('/studio/')); }
   return { title: 'Dashboard', el: <Dashboard /> };
 }

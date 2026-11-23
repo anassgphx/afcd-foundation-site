@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
 import { renderPage, closeIndex } from './lib/page-fields.mjs';
 import { activeLangs, decorateEnglish, buildLanguages } from './lib/i18n.mjs';
 import { renderMenus } from './lib/menu.mjs';
+import { loadSiteSettings, applyHead, applyPage, applyOrg } from './lib/site-settings.mjs';
 import { execSync } from 'node:child_process';
 
 const SRC = 'src';
@@ -22,7 +23,11 @@ const version = (file) => createHash('sha1').update(readFileSync(file)).digest('
 const CSS_V = version('assets/styles.css');
 const JS_V = version('assets/main.js');
 
-const head = partial('head').replace('href="assets/styles.css"', `href="assets/styles.css?v=${CSS_V}"`);
+// Studio website settings (owned by AFCD Studio → Settings): src/data/site-settings.json, or env SITE_SETTINGS_JSON. See
+// lib/site-settings.mjs. Without it the site builds exactly as written.
+const SETTINGS = loadSiteSettings(process.env.SITE_SETTINGS_JSON || join(SRC, 'data', 'site-settings.json'));
+const head0 = partial('head').replace('href="assets/styles.css"', `href="assets/styles.css?v=${CSS_V}"`);
+const head = SETTINGS ? applyHead(head0, SETTINGS) : head0;
 // Studio menus (owned by AFCD Studio): src/data/menu.json, or env MENU_JSON, replaces the main, phone and footer menus of the
 // partials (see lib/menu.mjs). Without it the partials are used exactly as written.
 const MENU_FILE = process.env.MENU_JSON || join(SRC, 'data', 'menu.json');
@@ -104,17 +109,19 @@ function markActive(html, active) {
 
 // ---------------------------------------------------------------- SEO
 // Canonical production domain. Preview builds (the default, e.g. GitHub Pages) are noindex so the
-// preview copy never competes with the real site. Use `npm run build:production` for afcdfoundation.org.
-const SITE = 'https://afcdfoundation.org/';
-const PRODUCTION = process.env.SITE_ENV === 'production';
+// preview copy never competes with the real site. Use `npm run build:production` for afcdfoundation.com.
+// Studio settings may set the canonical domain and the environment; SITE_ENV (e.g. npm run build:production) still wins.
+const SITE = SETTINGS?.canonicalUrl || 'https://afcdfoundation.com/';
+const PRODUCTION = process.env.SITE_ENV ? process.env.SITE_ENV === 'production' : SETTINGS?.environment === 'production';
+const SITE_NAME = SETTINGS?.name || 'AFCD Foundation';
 const FORMS_ENDPOINT = (process.env.FORMS_ENDPOINT || '').trim().replace(/\/+$/, '');
 if (FORMS_ENDPOINT && !/^https?:\/\/[^\s"<>]+$/.test(FORMS_ENDPOINT)) throw new Error(`FORMS_ENDPOINT must be an http(s) URL, got "${FORMS_ENDPOINT}"`);
-const OG_IMAGE = SITE + 'assets/img/og-default.jpg';
+const OG_DEFAULT = SETTINGS?.socialImage ?? { src: 'assets/img/og-default.jpg', w: 1200, h: 630, alt: 'AFCD Leadership Lab panel discussion' };
 const pageUrl = (file) => SITE + (file === 'index.html' ? '' : file);
 
 // Public organization facts only (approved fields from the AFCD Connect profile).
 // The full Marrakech street address is omitted until AFCD confirms it is current.
-const ORG = {
+const ORG0 = {
   '@context': 'https://schema.org',
   '@type': 'NGO',
   '@id': SITE + '#organization',
@@ -132,7 +139,8 @@ const ORG = {
   areaServed: { '@type': 'Country', name: 'Morocco' },
   sameAs: ['https://www.facebook.com/afcd.foundation', 'https://www.instagram.com/afcd.foundation', 'https://www.linkedin.com/company/afcd-foundation'],
 };
-const WEBSITE = { '@context': 'https://schema.org', '@type': 'WebSite', '@id': SITE + '#website', name: 'AFCD Foundation', url: SITE, inLanguage: 'en', publisher: { '@id': SITE + '#organization' } };
+const ORG = SETTINGS ? applyOrg(ORG0, SETTINGS, SITE) : ORG0;
+const WEBSITE = { '@context': 'https://schema.org', '@type': 'WebSite', '@id': SITE + '#website', name: SITE_NAME, url: SITE, inLanguage: 'en', publisher: { '@id': SITE + '#organization' } };
 
 function breadcrumbs(file, meta) {
   if (file === 'index.html' || file === '404.html') return null;
@@ -185,18 +193,19 @@ function seoTags(file, meta) {
     `<link rel="canonical" href="${pageUrl(file)}">`,
     `<meta name="robots" content="${noindex ? 'noindex, nofollow' : 'index, follow, max-image-preview:large'}">`,
     `<meta property="og:type" content="website">`,
-    `<meta property="og:site_name" content="AFCD Foundation">`,
+    `<meta property="og:site_name" content="${escapeAttr(SITE_NAME)}">`,
     `<meta property="og:locale" content="en_GB">`,
     `<meta property="og:title" content="${title}">`,
     `<meta property="og:description" content="${desc}">`,
     `<meta property="og:url" content="${pageUrl(file)}">`,
-    `<meta property="og:image" content="${meta.ogImage ? SITE + meta.ogImage.src : OG_IMAGE}">`,
-    `<meta property="og:image:width" content="${meta.ogImage ? meta.ogImage.w : 1200}">`,
-    `<meta property="og:image:height" content="${meta.ogImage ? meta.ogImage.h : 630}">`,
-    `<meta property="og:image:alt" content="${meta.ogImage ? escapeAttr(escapeText(meta.ogImage.alt)) : 'AFCD Leadership Lab panel discussion'}">`,
+    `<meta property="og:image" content="${SITE + (meta.ogImage ?? OG_DEFAULT).src}">`,
+    `<meta property="og:image:width" content="${(meta.ogImage ?? OG_DEFAULT).w}">`,
+    `<meta property="og:image:height" content="${(meta.ogImage ?? OG_DEFAULT).h}">`,
+    `<meta property="og:image:alt" content="${escapeAttr(escapeText((meta.ogImage ?? OG_DEFAULT).alt))}">`,
     ...(meta.seoRevision ? [`<meta name="studio-seo-rev" content="${meta.seoRevision}">`] : []),
     ...(FIELDS[file]?.revision ? [`<meta name="studio-fields-rev" content="${FIELDS[file].revision}">`] : []),
     ...(MENU?.revision && /^[\w-]{1,64}$/.test(MENU.revision) ? [`<meta name="studio-menu-rev" content="${MENU.revision}">`] : []),
+    ...(SETTINGS?.revision ? [`<meta name="studio-settings-rev" content="${SETTINGS.revision}">`] : []),
     `<meta name="twitter:card" content="summary_large_image">`,
   ];
   // Website forms → AFCD Studio: only when FORMS_ENDPOINT is set (e.g. http://localhost:4400/forms/v1).
@@ -257,7 +266,8 @@ for (const file of pages) {
     '</html>',
     '',
   ].join('\n');
-  writeFileSync(join(OUT_DIR, file), LANGS.length ? decorateEnglish(html, file, { site: SITE, langs: LANGS, pageUrl }) : html);
+  const page = SETTINGS ? applyPage(html, SETTINGS) : html;
+  writeFileSync(join(OUT_DIR, file), LANGS.length ? decorateEnglish(page, file, { site: SITE, langs: LANGS, pageUrl }) : page);
   console.log('built', file);
 }
 if (LANGS.length) {

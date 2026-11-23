@@ -73,22 +73,30 @@ export async function saveMailSettings(db: DB, cfg: Config, me: Me, raw: unknown
   return mailSettings(cfg);
 }
 
+/** Whether the saved SMTP password can be decrypted with the current key (never returns the password). */
+export function passwordState(cfg: Config): 'none' | 'readable' | 'unreadable' {
+  const s = read(cfg);
+  if (!s.passwordBox) return 'none';
+  try { decrypt(key(cfg), s.passwordBox); return 'readable'; } catch { return 'unreadable'; }
+}
+
 // ---------------------------------------------------------------- Transport
 export type SendInput = { from: string; to: string; replyTo?: string; subject: string; text: string; inReplyTo?: string };
-export type Sender = (s: Stored & { password: string }, m: SendInput) => Promise<{ messageId: string }>;
+export type Sender = (s: Stored & { password: string }, m: SendInput) => Promise<{ messageId: string; response?: string }>;
 const smtpSender: Sender = async (s, m) => {
   const t = nodemailer.createTransport({
     host: s.host, port: s.port, secure: s.security === 'tls', requireTLS: s.security === 'starttls', ignoreTLS: s.security === 'none',
     auth: s.user ? { user: s.user, pass: s.password } : undefined,
     connectionTimeout: 15_000, greetingTimeout: 10_000, socketTimeout: 30_000,
   });
-  try { const info = await t.sendMail(m); return { messageId: String(info.messageId ?? '') }; } finally { t.close(); }
+  try { const info = await t.sendMail(m); return { messageId: String(info.messageId ?? ''), response: String(info.response ?? '') }; } finally { t.close(); }
 };
 let sender: Sender = smtpSender;
 /** Tests replace the SMTP connection with a recorder. */
 export const setSender = (s: Sender | null) => { sender = s ?? smtpSender; };
 
-async function deliver(cfg: Config, m: Omit<SendInput, 'from' | 'replyTo'>) {
+/** Sends one message with the saved settings (used by the Inbox and by Settings → Email's test email). */
+export async function deliver(cfg: Config, m: Omit<SendInput, 'from' | 'replyTo'>) {
   const s = read(cfg);
   if (!s.enabled || !complete(s)) throw new AppError(409, 'Email sending isn’t set up. An administrator can set it up in Inbox → Settings.');
   let password = '';

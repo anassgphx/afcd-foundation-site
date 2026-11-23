@@ -34,6 +34,7 @@ export const NAV: { group: string; items: NavItem[] }[] = [
   { group: 'Administration', items: [
     { to: '/studio/users', label: 'Users & roles', icon: 'users', perm: 'users.read', match: /^\/studio\/users/ },
     { to: '/studio/activity', label: 'Activity log', icon: 'history', perm: 'audit.read', match: /^\/studio\/activity/ },
+    { to: '/studio/settings', label: 'Settings', icon: 'settings', perm: 'settings.read', match: /^\/studio\/settings/ },
   ] },
 ];
 

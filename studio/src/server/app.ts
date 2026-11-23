@@ -33,6 +33,8 @@ import { registerMenuRoutes } from './modules/menus/routes.ts';
 import { registerReviewRoutes } from './modules/review/routes.ts';
 import { registerMediaLibraryRoutes } from './modules/media/routes.ts';
 import { registerInboxRoutes } from './modules/inbox/routes.ts';
+import { registerSettingsRoutes } from './modules/settings/routes.ts';
+import * as NOTIFY from './modules/settings/notify.ts';
 import * as HM from './modules/home/service.ts';
 import * as WS from './modules/workspace/service.ts';
 import { overview as dashboardOverview } from './modules/workspace/overview.ts';
@@ -80,7 +82,9 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     if (!(c.req.header('content-type') ?? '').includes('application/json')) return c.json({ error: 'Send JSON.' }, 415);
     const body = await c.req.json().catch(() => null);
     if (!body || typeof body !== 'object') return c.json({ error: 'Send JSON.' }, 400);
-    return c.json(await FM.receive(db, cfg, key, body, clientIp(c)));
+    const received = await FM.receive(db, cfg, key, body, clientIp(c));
+    if (key === 'contact') NOTIFY.afterReceive(db, cfg);   // Settings → Notifications (no-op when off)
+    return c.json(received);
   });
   app.use('/studio/*', loadSession);
   app.use('/studio/api/*', csrfGuard);
@@ -380,6 +384,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
 
   // ---------------------------------------------------------------- Inbox: website messages and newsletter list (personal data, forms.read / forms.manage)
   registerInboxRoutes(api);   // modules/inbox
+  registerSettingsRoutes(api);   // Settings Center (modules/settings)
 
   // ---------------------------------------------------------------- SEO studio
   api.get('/seo/audit', perm('seo.read'), async (c) => c.json({ last: await SEO.lastAudit(db), history: await SEO.auditHistory(db) }));

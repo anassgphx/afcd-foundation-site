@@ -719,3 +719,19 @@ export const apiUsage = pgTable('api_usage', {
   day: text('day').notNull(),
   calls: integer('calls').notNull().default(0),
 }, (t) => [primaryKey({ columns: [t.provider, t.endpoint, t.day] })]);
+
+// ---------------------------------------------------------------- Settings Center history
+// Values live where they always did: seo_settings rows 'settings:<category>' (draft = saved, published = on the website)
+// and, for email, the Inbox mail settings file. Each save or restore adds one row here with the non-secret values only;
+// secrets (the SMTP password) are never copied into a revision, only whether one was set or changed.
+export const settingsRevisions = pgTable('settings_revisions', {
+  id: id(),
+  category: text('category').notNull(),                          // 'general' | 'branding' | 'contact' | 'email'
+  values: jsonb('values').$type<Record<string, unknown>>().notNull(),
+  changed: jsonb('changed').$type<string[]>().notNull().default([]),   // field names that changed in this revision
+  summary: text('summary').notNull().default(''),
+  restoredFrom: uuid('restored_from'),
+  actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+  actorEmail: text('actor_email'),
+  createdAt: createdAt(),
+}, (t) => [index('settings_revisions_cat_idx').on(t.category, t.createdAt)]);

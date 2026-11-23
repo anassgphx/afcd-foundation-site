@@ -376,6 +376,14 @@ function Composer({ m, mail, onCancel, onSent }: { m: Msg; mail: MailInfo; onCan
   useEffect(() => { try { if (dirty) localStorage.setItem(draftKey, JSON.stringify(d)); else localStorage.removeItem(draftKey); } catch { /* private mode */ } }, [d]);
   useEffect(() => { const t = bodyRef.current; if (!t) return; t.focus(); const i = t.value.indexOf('\n\n\n'); if (i > 0) t.setSelectionRange(i + 2, i + 2); }, []);
   const clear = () => { try { localStorage.removeItem(draftKey); } catch { /* private mode */ } };
+  // reply templates (Settings → Email templates), filled in on the server with this message's name and topic
+  const [tpls, setTpls] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => { api<{ templates: { id: string; name: string }[] }>('/settings/templates').then((r) => setTpls(r.templates)).catch(() => {}); }, []);
+  async function applyTemplate(id: string) {
+    if (!id || (dirty && !confirm('Replace your text with this template?'))) return;
+    try { const r = await post<{ subject: string; body: string }>(`/inbox/messages/${m.id}/template/${id}`); setD({ subject: r.subject, body: `${r.body}\n\n---\nOn ${fmtDate(m.createdAt)}, ${m.name} wrote:\n${m.message.slice(0, 4000).split('\n').map((l) => `> ${l}`).join('\n')}` }); bodyRef.current?.focus(); }
+    catch (e) { toast((e as Error).message, true); }
+  }
   async function send() {
     setErr(''); setBusy(true);
     try { await post(`/inbox/messages/${m.id}/send`, { subject: d.subject, body: d.body, markReplied: mark }); clear(); await onSent(mark); }
@@ -384,6 +392,7 @@ function Composer({ m, mail, onCancel, onSent }: { m: Msg; mail: MailInfo; onCan
   return <form className="ix-compose" aria-label="Reply" onSubmit={(e) => { e.preventDefault(); if (!busy) send(); }}>
     <div className="ix-compose-row"><span>From</span><b>{mail.fromName ? `${mail.fromName} <${mail.fromEmail}>` : mail.fromEmail}</b></div>
     <div className="ix-compose-row"><span>To</span><b>{m.name} &lt;{m.email}&gt;</b></div>
+    {tpls.length > 0 && <label className="ix-compose-row"><span>Template</span><select className="select" value="" onChange={(e) => applyTemplate(e.target.value)} aria-label="Use a reply template"><option value="">Use a template…</option>{tpls.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>}
     <label className="ix-compose-row"><span>Subject</span><input className="input" value={d.subject} maxLength={200} onChange={(e) => setD({ ...d, subject: e.target.value })} required /></label>
     <textarea ref={bodyRef} className="textarea ix-compose-body" value={d.body} maxLength={20000} onChange={(e) => setD({ ...d, body: e.target.value })} aria-label="Reply text" required
       onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); if (!busy) send(); } if (e.key === 'Escape' && !dirty) onCancel(); }} />

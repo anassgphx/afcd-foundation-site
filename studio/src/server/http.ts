@@ -26,6 +26,7 @@ export const securityHeaders: MiddlewareHandler = async (c, next) => {
   c.header('X-Frame-Options', 'SAMEORIGIN');
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   c.header('Cross-Origin-Opener-Policy', 'same-origin');
+  if (c.req.url.startsWith('https://')) c.header('Strict-Transport-Security', 'max-age=31536000');
   if (!c.res.headers.has('Content-Security-Policy')) {
     c.header('Content-Security-Policy',
       "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +

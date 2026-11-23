@@ -1,6 +1,6 @@
 # AFCD Foundation website
 
-Multi-page website (English) for the AFCD Foundation, the organisation behind [afcdfoundation.org](https://afcdfoundation.org).
+Multi-page website (English, with draft French and Arabic) for the AFCD Foundation. The production site is [afcdfoundation.com](https://afcdfoundation.com). The previous WordPress site on afcdfoundation.org is mapped to the new pages in `deploy/.htaccess` and `deploy/Caddyfile.website`.
 
 Built with plain HTML, Tailwind CSS 3.4.17 and vanilla JavaScript. Content is planned in English, French and Arabic (RTL).
 
@@ -21,7 +21,8 @@ Built with plain HTML, Tailwind CSS 3.4.17 and vanilla JavaScript. Content is pl
 | News & Stories | `news.html` |
 | Partners | `partners.html` |
 | Get Involved (volunteer, programmes, partner, alumni) | `get-involved.html` |
-| Contact (plus privacy and accessibility notes) | `contact.html` |
+| Contact (office, form, accessibility note) | `contact.html` |
+| Privacy policy | `privacy.html` |
 
 ## Run it
 
@@ -47,32 +48,34 @@ npm run build
 ## Preview vs production builds
 
 - `npm run build` makes a **preview** build (what GitHub Pages serves): every page is `noindex, nofollow` and `robots.txt` disallows crawling, so the preview never competes with the real domain.
-- `npm run build:production` makes the build for **https://afcdfoundation.org/**: pages are indexable and `robots.txt` points to `sitemap.xml`. Run it only when deploying to the real domain.
-- Both builds add a canonical URL on the production domain, Open Graph/Twitter tags (`assets/img/og-default.jpg`), JSON-LD (Organization + WebSite on the homepage, BreadcrumbList on inner pages) and `sitemap.xml` with last-modified dates from git. `404.html` is excluded from the sitemap.
+- `npm run build:production` makes the build for **https://afcdfoundation.com/**: pages are indexable and `robots.txt` points to `sitemap.xml`. `npm run build:hostinger` does that and copies the public files into `dist/`.
+- GitHub Pages stays on the preview build (`noindex`). Do not point the production domain at a preview build.
+- Both builds add a canonical URL on afcdfoundation.com, Open Graph and Twitter card tags (`assets/img/og-default.jpg`), JSON-LD (Organization + WebSite on the homepage, BreadcrumbList on inner pages) and `sitemap.xml` with last-modified dates from git. `404.html` is excluded from the sitemap. French and Arabic are included in the sitemap only after their translations are marked `approved`.
 
 ## Notes
 
 - English is the only live language. FR and AR appear in the language switcher and show a "coming soon" message; they don't switch the page.
 - Grey boxes are photo placeholders. Each caption names the photo planned for that spot.
 - The contact form only checks the fields; it isn't connected to anything and sends nothing.
-- News stories link to the blog on the current afcdfoundation.org until a news feed is connected.
-- A preview is live on GitHub Pages (noindex). The real domain has not been switched over.
-- Page URLs keep the current `page.html` form. Moving to `/about/`-style URLs, and redirecting the old WordPress URLs, needs a hosting decision first.
+- News stories that were first published on the old blog still link to afcdfoundation.org. Once that host is pointed at this site, those links follow the redirects in `deploy/`.
+- A preview can stay on GitHub Pages (noindex). Production is https://afcdfoundation.com/.
+- Page URLs keep the `page.html` form. Old WordPress paths are redirected in the Apache and Caddy deploy configs.
 - The newsletter and contact forms are not connected to a backend yet.
 - The four pillars keep their accent colours (your earlier choice), although the V5 brief asks for no coloured UI accents. Confirm which one wins.
 
 ## To confirm with AFCD before launch
 
-- Impact figures: the current homepage says 400 ambassadors, its FAQ says "over 500". The About band shows 24+ projects completed.
+- Ambassador count: the published pages use **400** (homepage and About). The old WordPress homepage FAQ says “over than 500 ambassadors”. AFCD needs to confirm which figure is current before either number is changed. See `AUDIT.md`.
 - Permission to reuse the testimonial quote.
 - Which partners are current, and their logos.
-- Full street address of the Marrakech main office (the site shows only "Marrakech, Morocco" until confirmed).
+- Full street address of the main office. The site still says Marrakech only. A legacy record says Avenue Hassan 2, Quartier Elbahiya, Ait Ourir 42050; do not publish it until AFCD confirms it.
 - Social accounts.
 - Proposed copy to approve: the value descriptions (Purpose section), the three approach principles (About page) and the Get Involved bullet points.
 - Team names, roles and portraits.
 - Summaries for the 7 projects that only have a name so far, and the remaining projects from the current site (15 in total).
 - Youth Green Generation: approach and results beyond the 2024 call for applications.
-- Privacy policy text.
+- Privacy policy review. A plain policy is now at `privacy.html`; AFCD should confirm it before treating it as final.
+- Project logos. Each project in AFCD Studio has a logo field (Media Library image plus alt text). The homepage cards show that logo, or a monogram until one is uploaded. No logo files are stored in the repo.
 
 ## Validation before launch (V5)
 

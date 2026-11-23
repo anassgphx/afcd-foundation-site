@@ -204,7 +204,7 @@ export function ProjectEditor({ id }: { id: string }) {
   const errCount = (t: string) => TAB_FIELDS[t].filter((f) => errors[f]).length;
   const tabChanged = (t: string) => TAB_FIELDS[t].some((f) => changed.has(f));
   const errorList = Object.entries(errors).filter(([, v]) => v);
-  const usedPhotoIds = [...new Set([form.heroMediaId, ...form.galleryMediaIds, ...form.activityItems.flatMap((a) => a.mediaIds)].filter(Boolean) as string[])];
+  const usedPhotoIds = [...new Set([form.heroMediaId, form.logoMediaId, form.posterMediaId, ...form.galleryMediaIds, ...form.activityItems.flatMap((a) => a.mediaIds)].filter(Boolean) as string[])];
   const toFix = usedPhotoIds.map((x) => media[x]).filter((m) => m && (!m.alt || !m.rightsConfirmed));
   const canFix = can('media.update');
   const goTo = (field: string) => { const t = TABS.find((x) => TAB_FIELDS[x].includes(field)); if (t) setTab(t); setTimeout(() => document.getElementById(`pe-${field}`)?.focus(), 40); };
@@ -270,8 +270,8 @@ export function ProjectEditor({ id }: { id: string }) {
       {errorList.length > 0 && <div className="notice n-bad pe-errors" role="alert"><div><b>{errorList.length === 1 ? '1 field needs' : `${errorList.length} fields need`} attention before saving</b>
         <ul>{errorList.map(([f, m]) => <li key={f}><button type="button" className="pe-link" onClick={() => goTo(f)}>{LABELS[f] ?? f}</button> · {m}</li>)}</ul></div></div>}
       {banner && !(banner.kind === 'n-bad' && errorList.length) && <div className={`notice ${banner.kind}`} style={{ marginBottom: 14 }} role="alert"><div>{banner.text}</div></div>}
-      {toFix.length > 0 && <div className="pe-fixlist" role="region" aria-label="Photos to complete">
-        <p className="pe-fixlist-h"><b>{toFix.length === 1 ? '1 photo needs' : `${toFix.length} photos need`} details before review</b><span>Alt text describes the photo for screen readers; the rights box confirms AFCD may publish it.</span></p>
+      {toFix.length > 0 && <div className="pe-fixlist" role="region" aria-label="Images to complete">
+        <p className="pe-fixlist-h"><b>{toFix.length === 1 ? '1 image needs' : `${toFix.length} images need`} details before review</b><span>Alt text describes the image for screen readers; the rights box confirms AFCD may publish it. This includes the project logo.</span></p>
         <ul>{toFix.map((m) => <li key={m.id}>
           <img src={m.url} alt="" />
           <span className="pe-fix-t"><b title={m.originalName}>{m.originalName}</b><small>{[!m.alt && 'Alt text missing', !m.rightsConfirmed && 'Rights not confirmed'].filter(Boolean).join(' · ')}</small></span>
@@ -357,7 +357,7 @@ export function ProjectEditor({ id }: { id: string }) {
                 ))}
               </PeSection>
 
-              <PeSection title="Project logo" desc="Shown in the project summary, next to its title. Choose how it is framed.">
+              <PeSection title="Project logo" desc="Shown next to the project title on its page and on the homepage case-study card. Upload it in the Media Library. Alt text is required before the project can be published.">
                 <Field group name="logoMediaId" label="Logo" optional hint="Upload it to the Media Library first (PNG or SVG-like images with a transparent background work best). Needs alt text and confirmed rights." err={errors.logoMediaId}>
                   {(() => {
                     const m = form.logoMediaId ? media[form.logoMediaId] : null; const st = form.logoStyle;
@@ -368,6 +368,7 @@ export function ProjectEditor({ id }: { id: string }) {
                       {!ro && <div className="pe-logo-ctl">
                         <div className="pe-logo-row"><button type="button" className="btn btn-sm" onClick={() => setDialog('logo')}><Icon n="image" />{m ? 'Change logo' : 'Choose logo'}</button>
                           {m && <button type="button" className="btn btn-ghost btn-sm btn-danger" onClick={() => set('logoMediaId', null)}>Remove</button>}</div>
+                        {m && <p className="pe-logo-alt">{m.alt ? <>Alt text: <b>{m.alt}</b></> : <b>Alt text is missing.</b>}{!ro && canFix && <button type="button" className="btn btn-sm" onClick={() => setFixing(m)}>{m.alt ? 'Edit alt text' : 'Add alt text'}</button>}</p>}
                         {m && <>
                           <span className="pe-logo-k">Shape</span>
                           <div className="seg-btns" role="group" aria-label="Logo shape">{LOGO_SHAPES.map(([k, l]) => <button key={k} type="button" className={st.shape === k ? 'on' : ''} aria-pressed={st.shape === k} onClick={() => setSt({ shape: k })}>{l}</button>)}</div>

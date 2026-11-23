@@ -140,9 +140,16 @@ const ORG0 = {
   foundingLocation: { '@type': 'Place', name: 'Ait Ourir, Al Haouz, Morocco' },
   address: { '@type': 'PostalAddress', addressLocality: 'Marrakech', postalCode: '40000', addressCountry: 'MA' },
   areaServed: { '@type': 'Country', name: 'Morocco' },
-  sameAs: ['https://www.facebook.com/afcd.foundation', 'https://www.instagram.com/afcd.foundation', 'https://www.linkedin.com/company/afcd-foundation'],
+  sameAs: ['https://www.facebook.com/afcdfoundation', 'https://www.instagram.com/afcd.foundation', 'https://www.linkedin.com/company/afcd-foundation', 'https://x.com/afcd_foundation'],
 };
-const ORG = SETTINGS ? applyOrg(ORG0, SETTINGS, SITE) : ORG0;
+const X_PROFILE = 'https://x.com/afcd_foundation';
+function withProfiles(org) {
+  const same = Array.isArray(org.sameAs) ? org.sameAs.filter(Boolean) : [];
+  if (!same.includes(X_PROFILE)) same.push(X_PROFILE);
+  const facebook = 'https://www.facebook.com/afcdfoundation';
+  return { ...org, sameAs: same.map((u) => u === 'https://www.facebook.com/afcd.foundation' ? facebook : u) };
+}
+const ORG = withProfiles(SETTINGS ? applyOrg(ORG0, SETTINGS, SITE) : ORG0);
 const WEBSITE = { '@context': 'https://schema.org', '@type': 'WebSite', '@id': SITE + '#website', name: SITE_NAME, url: SITE, inLanguage: 'en', publisher: { '@id': SITE + '#organization' } };
 
 function breadcrumbs(file, meta) {
@@ -210,6 +217,11 @@ function seoTags(file, meta) {
     ...(MENU?.revision && /^[\w-]{1,64}$/.test(MENU.revision) ? [`<meta name="studio-menu-rev" content="${MENU.revision}">`] : []),
     ...(SETTINGS?.revision ? [`<meta name="studio-settings-rev" content="${SETTINGS.revision}">`] : []),
     `<meta name="twitter:card" content="summary_large_image">`,
+    `<meta name="twitter:site" content="@afcd_foundation">`,
+    `<meta name="twitter:title" content="${title}">`,
+    `<meta name="twitter:description" content="${desc}">`,
+    `<meta name="twitter:image" content="${SITE + (meta.ogImage ?? OG_DEFAULT).src}">`,
+    `<meta name="twitter:image:alt" content="${escapeAttr(escapeText((meta.ogImage ?? OG_DEFAULT).alt))}">`,
   ];
   // Website forms → AFCD Studio: only when FORMS_ENDPOINT is set (e.g. http://localhost:4400/forms/v1).
   // Without it the contact and newsletter forms keep their "not connected, nothing was sent" behaviour.
@@ -264,7 +276,7 @@ for (const file of pages) {
     '',
     markActive(footer, meta.active).trimEnd(),
     '',
-    `<script src="assets/main.js?v=${JS_V}"></script>`,
+    `<script src="assets/main.js?v=${JS_V}" defer></script>`,
     '</body>',
     '</html>',
     '',

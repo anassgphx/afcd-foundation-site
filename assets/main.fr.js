@@ -567,12 +567,22 @@
     ['National', ['High Atlas Foundation', 'Heinrich Böll Stiftung Rabat', 'Moroccan Institute for Policy Analysis', 'Dar America Casablanca', 'Anoual Association', 'International Youth Council Morocco', 'Student Voice', 'Y-PEER PETRI Morocco']],
     ['Local', ['Commune of Ait Ourir']]
   ];
+  (function () {   /* names come from the page's <template id="partner-data"> so each language version shows its own */
+    var t = document.getElementById('partner-data'); if (!t || !t.content) return;
+    var g = Array.prototype.map.call(t.content.querySelectorAll('ul[data-g]'), function (u) { return [u.dataset.g, Array.prototype.map.call(u.children, function (li) { return li.textContent.trim(); })]; });
+    if (g.length) PARTNER_GROUPS = g;
+  })();
 
   /* Homepage: compact strip with filters */
   (function () {
     var strip = $('#partner-strip'); if (!strip) return;
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function label(key) {   /* the filter button's own (translated) text, without its count */
+      var b = $('.pt-filter[data-g="' + key + '"]'); if (!b) return key;
+      var n = b.firstChild; return (n && n.nodeType === 3 ? n.textContent : b.textContent).trim() || key;
+    }
     function tile(name, group) {
-      return '<li class="pt-tile"><span class="pt-logo">Logo</span><span class="pt-name">' + name + '</span><span class="pt-tag">' + group + '</span></li>';
+      return '<li class="pt-tile"><span class="pt-logo">Logo</span><span class="pt-name">' + esc(name) + '</span><span class="pt-tag">' + esc(label(group)) + '</span></li>';
     }
     function list(groups) {
       var out = [];
@@ -606,7 +616,23 @@
     var local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
     var url = STUDIO_URL || (local ? 'http://localhost:4400/studio/' : '');
     if (!url) return;
-    $$('[data-studio-login]').forEach(function (a) { a.href = url; a.hidden = false; });
+    $$('[data-studio-login]').forEach(function (a) {
+      a.href = url; a.hidden = false;
+      a.addEventListener('click', function () { try { localStorage.setItem('afcd.staff', '1'); } catch (e) { /* storage off */ } });
+    });
+    /* Edit this page: once "Staff login" has been used in this browser, every page shows a small button that opens the
+       Studio editor for that page (Studio still asks to sign in). The x hides it until "Staff login" is used again. */
+    var staff = false; try { staff = localStorage.getItem('afcd.staff') === '1'; } catch (e) { /* storage off */ }
+    if (!staff) return;
+    var file = location.pathname.split('/').pop() || 'index.html';
+    if (!/^[a-z0-9-]+\.html$/i.test(file)) return;
+    var box = document.createElement('div');
+    box.className = 'studio-edit';
+    box.innerHTML = '<a href="' + url + 'open?page=' + encodeURIComponent(file) + '" target="_blank" rel="noopener">'
+      + '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 2.5l3 3L6 13H3v-3z"/><path d="M9 4l3 3"/></svg>'
+      + '<span>Edit this page</span></a><button type="button" aria-label="Hide the edit button">&times;</button>';
+    box.querySelector('button').addEventListener('click', function () { try { localStorage.setItem('afcd.staff', '0'); } catch (e) { /* storage off */ } box.parentNode.removeChild(box); });
+    document.body.appendChild(box);
   })();
 
   /* Article pages: copy the page link */
@@ -617,6 +643,90 @@
       else toast(location.href);
     });
   });
+
+  /* ---------- Participant stories carousel ([data-tm]) ---------- */
+  $$('[data-tm]').forEach(function (root) {
+    var slides = $$('.tm-slide', root), bars = $$('[data-tm-go]', root), cur = $('[data-tm-cur]', root);
+    var n = slides.length, i = 0, D = 8000, t0 = 0, elapsed = 0, raf = 0, paused = reduce, hold = false;
+    if (n < 2) { $('.tm-ctrl', root).hidden = true; $('.tm-bars', root).hidden = true; return; }
+    $$('[data-tm-initials]', root).forEach(function (av) {
+      var nm = av.nextElementSibling && av.nextElementSibling.querySelector('.font-medium');
+      if (nm) { var w = nm.textContent.trim().split(/\s+/); av.textContent = (w[0].charAt(0) + (w.length > 1 ? w[w.length - 1].charAt(0) : '')).toUpperCase(); }
+    });
+    function show(k, user) {
+      i = (k + n) % n; elapsed = 0; t0 = performance.now();
+      slides.forEach(function (s, j) {
+        var on = j === i; s.classList.toggle('is-on', on);
+        if (on) { s.removeAttribute('aria-hidden'); s.inert = false; } else { s.setAttribute('aria-hidden', 'true'); s.inert = true; }
+      });
+      bars.forEach(function (b, j) { b.classList.toggle('is-on', j === i); b.classList.toggle('is-done', j < i); b.style.setProperty('--p', 0); if (j === i) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current'); });
+      if (cur) cur.textContent = String(i + 1).padStart(2, '0');
+      $('.tm-track', root).setAttribute('aria-live', user ? 'polite' : 'off');
+    }
+    function tick(now) {
+      raf = requestAnimationFrame(tick);
+      if (paused || hold) { t0 = now - elapsed; return; }
+      elapsed = now - t0; var p = Math.min(1, elapsed / D);
+      if (bars[i]) bars[i].style.setProperty('--p', p.toFixed(4));
+      if (p >= 1) show(i + 1);
+    }
+    function setPaused(v) {
+      paused = v; root.classList.toggle('is-paused', v);
+      var b = $('[data-tm-pause]', root); if (b) b.setAttribute('aria-label', v ? 'Play stories' : 'Pause stories');
+    }
+    $('[data-tm-next]', root).addEventListener('click', function () { show(i + 1, true); });
+    $('[data-tm-prev]', root).addEventListener('click', function () { show(i - 1, true); });
+    $('[data-tm-pause]', root).addEventListener('click', function () { setPaused(!paused); });
+    bars.forEach(function (b) { b.addEventListener('click', function () { show(+b.dataset.tmGo, true); }); });
+    root.addEventListener('mouseenter', function () { hold = true; });
+    root.addEventListener('mouseleave', function () { hold = false; });
+    root.addEventListener('focusin', function () { hold = true; });
+    root.addEventListener('focusout', function (e) { if (!root.contains(e.relatedTarget)) hold = false; });
+    root.addEventListener('keydown', function (e) {
+      var rtl = document.dir === 'rtl';
+      if (e.key === 'ArrowRight') { show(i + (rtl ? -1 : 1), true); e.preventDefault(); }
+      if (e.key === 'ArrowLeft') { show(i + (rtl ? 1 : -1), true); e.preventDefault(); }
+    });
+    var sx = null;
+    root.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; }, { passive: true });
+    root.addEventListener('touchend', function (e) {
+      if (sx === null) return; var dx = e.changedTouches[0].clientX - sx; sx = null;
+      if (Math.abs(dx) > 40) { var fwd = dx < 0; if (document.dir === 'rtl') fwd = !fwd; show(i + (fwd ? 1 : -1), true); }
+    }, { passive: true });
+    if ('IntersectionObserver' in window) new IntersectionObserver(function (es) { es.forEach(function (e) { hold = !e.isIntersecting; }); }).observe(root);
+    setPaused(paused); show(0); raf = requestAnimationFrame(tick);
+  });
+
+  /* ---------- Pillar pages: highlight the current section in the sticky bar ([data-pl-tabs]) ---------- */
+  (function () {
+    var bar = $('[data-pl-tabs]'); if (!bar || !('IntersectionObserver' in window)) return;
+    var tabs = $$('.pl-tab', bar), map = {};
+    tabs.forEach(function (t) { var id = t.getAttribute('href').slice(1), sec = document.getElementById(id); if (sec) map[id] = t; });
+    var seen = {};
+    function pick() {
+      var best = null;
+      Object.keys(map).forEach(function (id) { var r = document.getElementById(id).getBoundingClientRect(); if (r.top < innerHeight * .45 && r.bottom > 140 && (!best || r.top > best.top)) best = { id: id, top: r.top }; });
+      tabs.forEach(function (t) { t.classList.remove('is-on'); t.removeAttribute('aria-current'); });
+      if (best) { var t = map[best.id]; t.classList.add('is-on'); t.setAttribute('aria-current', 'true'); var box = t.parentNode; if (box.scrollWidth > box.clientWidth) box.scrollTo({ left: t.offsetLeft - 16, behavior: reduce ? 'auto' : 'smooth' }); }
+    }
+    var io = new IntersectionObserver(pick, { threshold: [0, .25, .5, 1] });
+    Object.keys(map).forEach(function (id) { io.observe(document.getElementById(id)); });
+    pick();
+  })();
+
+  /* ---------- Social sharing ([data-shr]): links follow this language's canonical URL; native share where available ---------- */
+  (function () {
+    var bars = $$('[data-shr]'); if (!bars.length) return;
+    var can = document.querySelector('link[rel="canonical"]'), url = (can && can.href) || location.href.split('#')[0];
+    var title = (document.querySelector('h1') || {}).textContent || document.title; title = title.trim();
+    var u = encodeURIComponent(url), t = encodeURIComponent(title);
+    var map = { facebook: 'https://www.facebook.com/sharer/sharer.php?u=' + u, linkedin: 'https://www.linkedin.com/sharing/share-offsite/?url=' + u,
+      x: 'https://twitter.com/intent/tweet?url=' + u + '&text=' + t, whatsapp: 'https://wa.me/?text=' + t + '%20' + u };
+    bars.forEach(function (b) {
+      $$('[data-net]', b).forEach(function (a) { if (map[a.dataset.net]) a.href = map[a.dataset.net]; });
+      if (navigator.share) $$('[data-shr-native]', b).forEach(function (n) { n.hidden = false; });
+    });
+  })();
 
   /* ---------- Count-up numbers ([data-countup]) and gentle parallax ([data-par]) ---------- */
   (function () {

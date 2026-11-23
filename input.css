@@ -560,10 +560,14 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 /* Project card: header, pillar pill, detail tiles */
 .pc-no { display: inline-grid; place-items: center; min-width: 46px; height: 34px; padding: 0 10px; border-radius: 9999px; background: #000; color: #fff; font-size: 14px; font-weight: 600; flex-shrink: 0; }
 .pc-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 16px; }
-.pc-ident { display: flex; align-items: center; gap: 14px; min-width: 0; }
-.pc-mark { display: grid; place-items: center; width: 68px; height: 68px; flex: none; border-radius: 18px; background: #111; color: #fff; overflow: hidden; border: 1px solid rgba(0,0,0,.08); box-shadow: 0 10px 22px -16px rgba(0,0,0,.55); }
+.pc-ident { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.pc-mark { display: grid; place-items: center; width: 90px; height: 90px; flex: none; border-radius: 22px; background: #111; color: #fff; overflow: hidden; border: 1px solid rgba(0,0,0,.08); box-shadow: 0 10px 22px -16px rgba(0,0,0,.55); }
 .pc-mark.has-img { background: #fff; }
-.pc-mark .pc-logo { display: block; width: 100%; height: 100%; object-fit: contain; padding: 7px; box-sizing: border-box; }
+.pc-mark .pc-logo { display: block; width: 100%; height: 100%; object-fit: contain; padding: 8px; box-sizing: border-box; }
+@media (min-width: 768px) {
+  .pc-mark { width: 96px; height: 96px; border-radius: 24px; }
+  .pc-mark .pc-logo { padding: 10px; }
+}
 .pc-mono { font-size: 15px; font-weight: 650; letter-spacing: .04em; line-height: 1; }
 .pc-kicker { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #404040; }
 .pc-kicker-n { display: inline-grid; place-items: center; min-width: 22px; height: 18px; margin-right: 6px; padding: 0 5px; border-radius: 9999px; background: #111; color: #fff; letter-spacing: 0; font-size: 10px; }
@@ -691,9 +695,9 @@ body.mega-open #mega-scrim { opacity: 1; visibility: visible; transition-delay: 
 .pc-spine-face { display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 14px; height: 100%; padding: 22px 10px; border-radius: 0 26px 26px 0; background: #fff; box-shadow: inset 1px 0 0 rgba(0,0,0,.06); }
 [dir="rtl"] .pc-spine-face { border-radius: 26px 0 0 26px; box-shadow: inset -1px 0 0 rgba(0,0,0,.06); }
 .pc-spine-n { font-size: 13px; font-weight: 650; letter-spacing: .08em; color: #111; }
-.pc-spine-mono, .pc-spine-logo { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 12px; background: #111; color: #fff; font-size: 12px; font-weight: 650; letter-spacing: .04em; overflow: hidden; }
+.pc-spine-mono, .pc-spine-logo { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; background: #111; color: #fff; font-size: 13px; font-weight: 650; letter-spacing: .04em; overflow: hidden; }
 .pc-spine-logo { background: #fff; border: 1px solid #E5E5E5; }
-.pc-spine-logo .pc-logo { width: 100%; height: 100%; object-fit: contain; padding: 5px; box-sizing: border-box; }
+.pc-spine-logo .pc-logo { width: 100%; height: 100%; object-fit: contain; padding: 6px; box-sizing: border-box; }
 .pc-spine-name { writing-mode: vertical-rl; transform: rotate(180deg); max-height: 58%; overflow: hidden; font-size: 16px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; color: #111; }
 .pc-spine-go { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9999px; background: #F3F3F3; color: #111; font-size: 16px; }
 .pcard-spine-btn:hover .pc-spine-go, .pcard-spine-btn:focus-visible .pc-spine-go { background: #111; color: #fff; }

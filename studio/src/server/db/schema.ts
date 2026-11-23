@@ -151,6 +151,11 @@ export const projects = pgTable('projects', {
   location: text('location').notNull().default(''),
   years: text('years').notNull().default(''),
   extraFacts: jsonb('extra_facts').$type<{ label: string; value: string }[]>().notNull().default([]),
+  // project page sections (all optional, plain text; images are media ids): the programme's own objectives, outcomes
+  // (optionally a short verified figure) and activities with their photos. Exported as detail.programObjectives/outcomes/activities.
+  programObjectives: jsonb('program_objectives').$type<{ title: string; text: string }[]>().notNull().default([]),
+  outcomes: jsonb('outcomes').$type<{ title: string; text: string; figure: string }[]>().notNull().default([]),
+  activityItems: jsonb('activity_items').$type<{ title: string; text: string; mediaIds: string[] }[]>().notNull().default([]),
   context: text('context').notNull().default(''),
   approach: text('approach').notNull().default(''),
   activities: text('activities').notNull().default(''),

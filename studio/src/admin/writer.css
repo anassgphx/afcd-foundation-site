@@ -59,3 +59,24 @@
 @media (min-width: 961px) { .writer .w-body { grid-template-columns: minmax(0, 1fr) 372px; } }
 /* The side panel stays in view while a long story scrolls */
 @media (min-width: 961px) { .writer .w-side { position: sticky; top: 108px; align-self: start; max-height: calc(100vh - 108px); overflow-y: auto; } }
+
+/* Photos inside the story text (News.tsx: Image button, drop/paste upload, "Photos in this story") */
+.w-text.wr-drop { background: repeating-linear-gradient(-45deg, #fafaf9 0 10px, #f5f5f4 10px 20px); box-shadow: inset 0 0 0 2px var(--ink); border-radius: 10px; }
+.wr-photos { margin: 8px 0 24px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--sunken); }
+.wr-photos-h { display: grid; gap: 2px; margin-bottom: 10px; } .wr-photos-h b { font-size: 13.5px; } .wr-photos-h small { font-size: 12px; color: var(--muted); }
+.wr-photos ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.wr-photos li { display: flex; align-items: center; gap: 12px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.wr-photos li.warn { border-color: #fde68a; }
+.wr-ph-thumb { flex: none; width: 72px; height: 54px; padding: 0; border: 0; border-radius: 8px; overflow: hidden; background: var(--canvas); cursor: pointer; }
+.wr-ph-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; } .wr-ph-thumb span { font-size: 11px; color: var(--bad); }
+.wr-ph-main { flex: 1; min-width: 0; display: grid; gap: 6px; } .wr-ph-main .input { height: 32px; font-size: 13px; }
+.wr-ph-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.wr-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.wr-seg button { height: 26px; padding: 0 10px; border: 0; background: #fff; color: var(--ink-2); font-size: 12px; cursor: pointer; }
+.wr-seg button + button { border-left: 1px solid var(--line); }
+.wr-seg button.on { background: var(--ink); color: #fff; }
+.wr-ph-row { padding: 2px 8px; border-radius: 999px; background: var(--canvas); color: var(--ink-2); font-weight: 500; }
+.wr-ph-issue { padding: 2px 8px; border-radius: 999px; background: #fef3c7; color: #92400e; font-weight: 600; }
+.wr-ph-credit { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wr-ph-acts { display: flex; gap: 2px; }
+@media (max-width: 600px) { .wr-photos li { flex-wrap: wrap; } .wr-ph-acts { margin-left: auto; } }

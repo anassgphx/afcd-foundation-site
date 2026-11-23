@@ -148,6 +148,13 @@
       "when": 1795431350170,
       "tag": "0020_project_sections",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795438901056,
+      "tag": "0021_project_logo",
+      "breakpoints": true
     }
   ]
 }

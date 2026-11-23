@@ -22,6 +22,8 @@ export async function usage(db: DB, ids: string[]): Promise<Record<string, Use[]
   const add = (id: string | null | undefined, u: Use) => { if (!id || !want.has(id)) return; const l = (out[id] ??= []); if (!l.some((x) => x.href === u.href && x.where === u.where)) l.push(u); };
   for (const r of await db.select({ id: t.projects.id, name: t.projects.name, m: t.projects.heroMediaId }).from(t.projects).where(inArray(t.projects.heroMediaId, ids)))
     add(r.m, { kind: 'Project', title: r.name, href: `/studio/projects/${r.id}`, where: 'Main photo', live: false });
+  for (const r of await db.select({ id: t.projects.id, name: t.projects.name, m: t.projects.logoMediaId }).from(t.projects).where(inArray(t.projects.logoMediaId, ids)))
+    add(r.m, { kind: 'Project', title: r.name, href: `/studio/projects/${r.id}`, where: 'Logo', live: false });
   for (const r of await db.select({ id: t.projects.id, name: t.projects.name, m: t.projectGallery.mediaId }).from(t.projectGallery).innerJoin(t.projects, eq(t.projects.id, t.projectGallery.projectId)).where(inArray(t.projectGallery.mediaId, ids)))
     add(r.m, { kind: 'Project', title: r.name, href: `/studio/projects/${r.id}`, where: 'Gallery', live: false });
   for (const r of await db.select({ id: t.articles.id, name: t.articles.title, m: t.articles.heroMediaId }).from(t.articles).where(inArray(t.articles.heroMediaId, ids)))
@@ -36,6 +38,9 @@ export async function usage(db: DB, ids: string[]): Promise<Record<string, Use[]
     add(r.m, { kind: 'Partner', title: r.name, href: `/studio/partners/${r.id}`, where: 'Logo', live: false });
   for (const r of await db.select({ id: t.seoOverrides.id, file: t.seoOverrides.file, m: t.seoOverrides.imageMediaId }).from(t.seoOverrides).where(inArray(t.seoOverrides.imageMediaId, ids)))
     add(r.m, { kind: 'SEO', title: r.file, href: '/studio/seo/pages', where: 'Share image', live: false });
+  // photos placed inside a story's text (drafts; the published versions are covered below)
+  for (const r of await db.select({ id: t.articles.id, name: t.articles.title, body: t.articles.body }).from(t.articles))
+    for (const m of ids.filter((id) => r.body.includes(`media:${id}`))) add(m, { kind: 'Story', title: r.name, href: `/studio/news/${r.id}`, where: 'In the story text', live: false });
   // documents that refer to images by id inside JSON: page blocks and homepage fields
   const inJson = (v: unknown) => { const s = JSON.stringify(v ?? null); return ids.filter((id) => s.includes(id)); };
   for (const r of await db.select({ id: t.pages.id, title: t.pages.title, doc: t.pages.doc }).from(t.pages))

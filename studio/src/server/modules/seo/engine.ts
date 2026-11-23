@@ -15,8 +15,8 @@ export type PageScan = {
 };
 export type BuildAudit = { kind: 'build'; at: string; site: string; production: boolean; pages: PageScan[]; redirects?: { file: string; to: string }[]; findings: Finding[]; scores: Record<Category | 'overall', number>; counts: Record<Severity, number> };
 
-export const SITE = 'https://afcdfoundation.org/';
-const pageUrl = (f: string) => SITE + (f === 'index.html' ? '' : f);
+import { DEFAULT_SITE } from './site.ts';
+const pageUrlFor = (site: string) => (f: string) => site + (f === 'index.html' ? '' : f);
 const ENT: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'", nbsp: ' ' };
 const decode = (s: string) => s.replace(/&(#\d+|#x[0-9a-f]+|[a-z]+\d*);/gi, (m, e: string) => (e[0] === '#' ? String.fromCodePoint(e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : ENT[e.toLowerCase()] ?? m));
 const attr = (tag: string, n: string) => tag.match(new RegExp(`\\s${n}="([^"]*)"`, 'i'))?.[1] ?? null;
@@ -65,7 +65,7 @@ const GENERIC_TITLE = /^(home|page|untitled|new page|title|test|index|welcome|de
 const LISTING = new Set(['contact.html', 'team.html', 'news.html', 'events.html', 'projects.html', 'partners.html', 'opportunities.html', 'pillars.html', 'get-involved.html']);
 const WEIGHT: Record<Severity, number> = { critical: 40, high: 20, medium: 8, low: 3, info: 0 };
 
-function scanPage(root: string, file: string) {
+function scanPage(root: string, file: string, pageUrl: (f: string) => string) {
   const html = readFileSync(resolve(root, file), 'utf8');
   const head = html.match(/<head[\s\S]*?<\/head>/i)?.[0] ?? '';
   const main = html.match(/<main[\s\S]*?<\/main>/i)?.[0] ?? html;
@@ -88,7 +88,9 @@ function scanPage(root: string, file: string) {
 }
 
 /** Runs the build audit over every built page in `root`. */
-export function runBuildAudit(root: string, now = new Date()): BuildAudit {
+/** `site` is the canonical address pages should declare (Settings → General; afcdfoundation.com by default). */
+export function runBuildAudit(root: string, now = new Date(), site = DEFAULT_SITE): BuildAudit {
+  const pageUrl = pageUrlFor(site);
   const all = readdirSync(root).filter((f) => /^[a-z0-9][a-z0-9-]*\.html$/.test(f)).sort();
   // redirect pages are not content: list them separately and leave them out of the page checks
   const redirectsOut: { file: string; to: string }[] = [];
@@ -99,7 +101,7 @@ export function runBuildAudit(root: string, now = new Date()): BuildAudit {
   const production = !/Disallow:\s*\/\s*$/m.test(robotsTxt);
   const sitemapXml = existsSync(resolve(root, 'sitemap.xml')) ? readFileSync(resolve(root, 'sitemap.xml'), 'utf8') : '';
   const sitemap = new Set([...sitemapXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => { const u = m[1].replace(/^https?:\/\/[^/]+\//, ''); return u === '' ? 'index.html' : u; }));
-  const scanned = files.map((f) => scanPage(root, f));
+  const scanned = files.map((f) => scanPage(root, f, pageUrl));
   const byFile = new Map(scanned.map((s) => [s.scan.file, s.scan]));
   for (const s of scanned) { s.scan.inSitemap = sitemap.has(s.scan.file); for (const t of s.scan.linksOut) { const target = byFile.get(t); if (target && t !== s.scan.file && !target.inbound.includes(s.scan.file)) target.inbound.push(s.scan.file); } }
   // links in the shared header and footer count too: pages reachable from navigation are not orphans
@@ -172,5 +174,5 @@ export function runBuildAudit(root: string, now = new Date()): BuildAudit {
     return [c, per.length ? Math.round(per.reduce((a, b) => a + b, 0) / per.length) : 0];
   })) as Record<Category, number>;
   const counts = Object.fromEntries(SEVERITY_ORDER.map((s) => [s, findings.filter((f) => f.severity === s).length])) as Record<Severity, number>;
-  return { kind: 'build', at: now.toISOString(), site: SITE, production, pages, redirects: redirectsOut, findings, scores: { ...scores, overall: scores.technical }, counts };
+  return { kind: 'build', at: now.toISOString(), site, production, pages, redirects: redirectsOut, findings, scores: { ...scores, overall: scores.technical }, counts };
 }

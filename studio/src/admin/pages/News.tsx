@@ -1,6 +1,7 @@
 // News & Stories: list + distraction-free writing workspace with details, links, media, SEO and publishing.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
+import { useSite } from '../site.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
@@ -61,6 +62,7 @@ export function ArticleEditor({ id }: { id: string }) {
   const can = useCan(); const me = useMe(); const toast = useToast();
   const [a, setA] = useState<Loaded | null>(null); const [f, setF] = useState<Form | null>(null);
   const [media, setMedia] = useState<Record<string, MediaItem>>({});
+  const site = useSite();
   const [pillars, setPillars] = useState<{ key: string; name: string; colour: string }[]>([]);
   const [projects, setProjects] = useState<{ slug: string; name: string }[]>([]);
   const [tab, setTab] = useState<'details' | 'links' | 'media' | 'seo' | 'translations' | 'publish'>('details');
@@ -203,7 +205,7 @@ export function ArticleEditor({ id }: { id: string }) {
           {tab === 'seo' && <>
             <Fld label="SEO title" hint={`${f.seoTitle.length} / 70 · empty = story title`}><input className="input" maxLength={70} value={f.seoTitle} onChange={(e) => set('seoTitle', e.target.value)} aria-label="SEO title" /></Fld>
             <Fld label="Meta description" hint={`${f.seoDescription.length} / 170 · empty = summary`}><textarea className="textarea" maxLength={170} value={f.seoDescription} onChange={(e) => set('seoDescription', e.target.value)} aria-label="Meta description" /></Fld>
-            <div className="card" style={{ padding: 12, background: 'var(--sunken)' }}><small className="muted">Search result preview</small><div style={{ color: '#1a0dab', fontSize: 16 }}>{f.seoTitle || f.title} · AFCD Foundation</div><div style={{ color: '#006621', fontSize: 12 }}>afcdfoundation.org › {file ?? 'news.html'}</div><div style={{ fontSize: 12.5 }}>{(f.seoDescription || f.excerpt).slice(0, 160)}</div></div>
+            <div className="card" style={{ padding: 12, background: 'var(--sunken)' }}><small className="muted">Search result preview</small><div style={{ color: '#1a0dab', fontSize: 16 }}>{f.seoTitle || f.title} · AFCD Foundation</div><div style={{ color: '#006621', fontSize: 12 }}>{site.host} › {file ?? 'news.html'}</div><div style={{ fontSize: 12.5 }}>{(f.seoDescription || f.excerpt).slice(0, 160)}</div></div>
           </>}
           {tab === 'translations' && <>
             <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>French and Arabic of this story: its title, summary and text as the website shows them. Reviewed and published on the Translations screen.</p>

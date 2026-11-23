@@ -11,6 +11,7 @@ import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
 import { runBuildAudit, RULES as AUDIT_RULES, SEVERITY_ORDER } from './engine.ts';
+import { siteUrl } from './site.ts';
 import { seoIssues, users } from '../../db/schema.ts';
 
 type Status = typeof seoOverrides.$inferSelect['status'];
@@ -43,7 +44,7 @@ export async function templateFiles(db: DB, cfg: Config) {
  *  resolved (verified by this audit), reviewed ones stay reviewed while still detected. Critical issues cannot be
  *  marked reviewed, and no status changes a score: scores come only from what the audit finds. */
 export async function runAudit(db: DB, cfg: Config, actor: Actor) {
-  const a = runBuildAudit(cfg.siteRoot);
+  const a = runBuildAudit(cfg.siteRoot, new Date(), await siteUrl(db));
   const own = await owners(db, cfg);
   const now = new Date(a.at);
   const existing = await db.select().from(seoIssues);

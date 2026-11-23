@@ -635,7 +635,7 @@ export const googleConnections = pgTable('google_connections', {
   status: text('status').notNull().default('connected'),        // connected | error (needs reconnect)
   accountEmail: text('account_email'),
   scopes: text('scopes').notNull().default(''),
-  property: text('property'),                                    // e.g. 'sc-domain:afcdfoundation.org' (chosen by an admin)
+  property: text('property'),                                    // e.g. 'sc-domain:afcdfoundation.com' (chosen by an admin)
   permissionLevel: text('permission_level'),
   refreshTokenEnc: text('refresh_token_enc').notNull(),
   accessTokenEnc: text('access_token_enc'),

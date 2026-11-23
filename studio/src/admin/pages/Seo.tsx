@@ -2,6 +2,7 @@
 // settings for the site's template pages. Pages managed elsewhere in Studio link to their own editor.
 import { useCallback, useEffect, useState } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
+import { useSite } from '../site.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
@@ -384,6 +385,7 @@ type Detail = { file: string; defaults: { title: string; description: string; no
 type Form = { title: string; description: string; noindex: boolean; imageMediaId: string | null };
 
 function SeoEditor({ file }: { file: string }) {
+  const site = useSite();
   const can = useCan(); const me = useMe(); const toast = useToast();
   const [d, setD] = useState<Detail | null>(null); const [f, setF] = useState<Form>({ title: '', description: '', noindex: false, imageMediaId: null });
   const [img, setImg] = useState<MediaItem | null>(null); const [dirty, setDirty] = useState(false); const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
@@ -432,7 +434,7 @@ function SeoEditor({ file }: { file: string }) {
         </section>
         <section className="card stack" style={{ padding: 20 }}>
           <small className="muted">Search result preview</small>
-          <div className="serp"><div className="serp-url">afcdfoundation.org › {file === 'index.html' ? '' : file}</div><div className="serp-title">{title.length > 65 ? title.slice(0, 63) + '…' : title}</div><div className="serp-desc">{desc.length > 160 ? desc.slice(0, 157) + '…' : desc}</div></div>
+          <div className="serp"><div className="serp-url">{site.host} › {file === 'index.html' ? '' : file}</div><div className="serp-title">{title.length > 65 ? title.slice(0, 63) + '…' : title}</div><div className="serp-desc">{desc.length > 160 ? desc.slice(0, 157) + '…' : desc}</div></div>
           <small className="muted">Link preview</small>
           <div className="og-card">{img && f.imageMediaId ? <img src={img.url} alt="" /> : <div className="og-ph">Default share image</div>}<div className="og-body"><small>AFCDFOUNDATION.ORG</small><b>{title}</b><span>{desc}</span></div></div>
         </section>

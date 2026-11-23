@@ -37,6 +37,7 @@ import { derivativeFiles } from '../media/service.ts';
 import { loadProject, toSnapshot, type Snapshot } from '../projects/service.ts';
 import { redirects } from '../../db/schema.ts';
 import { checkRedirect, redirectsFile, stubHtml, STUB_MARK, REDIRECTS_HEADER } from '../seo/redirects.ts';
+import { siteUrl } from '../seo/site.ts';
 import type { Role } from '../../rbac.ts';
 import { seoSettings } from '../../db/schema.ts';
 import { buildSchemaFile, KEY as SCHEMA_KEY, settingsSchema, type LiveForSchema, type SchemaSettings } from '../seo/schema.ts';
@@ -1151,7 +1152,7 @@ export class Publisher {
     return { rows, want };
   }
   private async writeRedirects(pending: boolean) {
-    const root = this.cfg.siteRoot; const { rows, want } = await this.redirectSet(pending);
+    const root = this.cfg.siteRoot; const { rows, want } = await this.redirectSet(pending); const site = await siteUrl(this.db);
     const keep = new Set(want.map((r) => r.source));
     const candidates = new Set([...readdirSync(root).filter((f) => f.endsWith('.html')), ...rows.map((r) => r.source), ...rows.flatMap((r) => (r.published ? [r.published.source] : []))]);
     for (const f of candidates) {
@@ -1162,7 +1163,7 @@ export class Publisher {
       const file = resolve(root, r.source);
       if (existsSync(file) && !readFileSync(file, 'utf8').includes(STUB_MARK)) throw new Error(`${r.source} is a real page on the site; the redirect was not written over it.`);
       mkdirSync(resolve(file, '..'), { recursive: true });
-      const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`; writeFileSync(tmp, stubHtml(r)); renameSync(tmp, file);
+      const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`; writeFileSync(tmp, stubHtml(r, site)); renameSync(tmp, file);
     }
     const rf = resolve(root, '_redirects');
     const ours = !existsSync(rf) || readFileSync(rf, 'utf8').startsWith(REDIRECTS_HEADER);
@@ -1233,7 +1234,7 @@ export class Publisher {
       cur = pub?._revision ? { settings: settingsSchema.parse({ organization: pub.organization, articles: pub.articles, events: pub.events }), revision: pub._revision } : null;
     }
     if (!cur) { if (existsSync(this.schemaFile)) rmSync(this.schemaFile); return null; }
-    const out = buildSchemaFile(cur.settings, await this.schemaLive(article, event), cur.revision);
+    const out = buildSchemaFile(cur.settings, await this.schemaLive(article, event), cur.revision, await siteUrl(this.db));
     const tmp = `${this.schemaFile}.${randomBytes(4).toString('hex')}.tmp`;
     mkdirSync(resolve(this.schemaFile, '..'), { recursive: true });
     writeFileSync(tmp, JSON.stringify(out, null, 2) + '\n'); renameSync(tmp, this.schemaFile);

@@ -3,6 +3,7 @@
 // (no zeroes standing in for missing data). Studio's own checks are labelled as build-audit results.
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
+import { useSite } from '../site.ts';
 import { Icon, Link, Modal, ago, fmtDate, navigate, useCan, useToast } from '../ui.tsx';
 import { Loading } from './Dashboard.tsx';
 import { DataTable, EmptyState, ListToolbar } from '../DataTable.tsx';
@@ -103,6 +104,7 @@ function RangeBar({ rs, countries, showFilters = true }: { rs: ReturnType<typeof
 
 // ---------------------------------------------------------------- Master dashboard (Overview)
 export function MasterOverview({ a, issues, history }: { a: AuditV2; issues: Issue[]; history: { at: string; scores: Record<string, number> | null }[] }) {
+  const site = useSite();
   const { s } = useGoogle(); const rs = useRange(s?.coverage ?? null);
   const [ov, setOv] = useState<Ov | null>(null); const [mv, setMv] = useState<{ pages: Movers; queries: Movers } | null>(null);
   const [pagesRows, setPagesRows] = useState<Row[] | null>(null); const [insp, setInsp] = useState<Inspection[] | null>(null); const [jobs, setJobs] = useState<Job[] | null>(null);
@@ -142,7 +144,7 @@ export function MasterOverview({ a, issues, history }: { a: AuditV2; issues: Iss
     setup: ['Google is not set up on this Studio', 'An administrator adds the Google OAuth client to Studio’s settings, then connects Search Console.'],
     off: ['Search Console is not connected', 'Connect it in Integrations to see clicks, impressions and positions from Google.'],
     error: ['Search Console needs to be reconnected', 'Google stopped accepting Studio’s access. Reconnect it in Integrations.'],
-    property: ['Choose a Search Console property', 'The Google account is connected; pick the afcdfoundation.org property in Integrations.'],
+    property: ['Choose a Search Console property', `The Google account is connected; pick the ${site.host} property in Integrations.`],
     syncing: ['Waiting for the first import', 'Studio is importing Search Console data in the background.'],
   };
 
@@ -308,8 +310,9 @@ function PageHistory({ url, from, to, onClose }: { url: string; from: string; to
 }
 
 function IndexStatus({ usage }: { usage?: { used: number; limit: number } }) {
+  const site = useSite();
   const can = useCan(); const toast = useToast();
-  const [rows, setRows] = useState<Inspection[] | null>(null); const [url, setUrl] = useState('https://afcdfoundation.org/'); const [busy, setBusy] = useState(false); const [q, setQ] = useState('');
+  const [rows, setRows] = useState<Inspection[] | null>(null); const [url, setUrl] = useState(''); useEffect(() => { setUrl((u) => u || site.url); }, [site.url]); const [busy, setBusy] = useState(false); const [q, setQ] = useState('');
   const load = () => api<Inspection[]>('/seo/gsc/inspections').then(setRows);
   useEffect(() => { load(); }, []);
   async function run() { setBusy(true); try { await post('/seo/gsc/inspect', { url }); await load(); toast('Inspected: Google’s last known version'); } catch (e) { toast((e as Error).message, true); } finally { setBusy(false); } }
@@ -334,6 +337,7 @@ function IndexStatus({ usage }: { usage?: { used: number; limit: number } }) {
 
 // ---------------------------------------------------------------- Integrations (Google connection center)
 export function Integrations() {
+  const site = useSite();
   const can = useCan(); const toast = useToast(); const { s, load } = useGoogle();
   const [props, setProps] = useState<{ siteUrl: string; permissionLevel: string; usable: boolean }[] | null>(null); const [busy, setBusy] = useState(''); const [confirm, setConfirm] = useState(false);
   const [form, setForm] = useState<GStatus['settings'] | null>(null);
@@ -362,7 +366,7 @@ export function Integrations() {
           </ol>
           {s.setup.keyError && <div className="notice n-bad"><div>{s.setup.keyError}</div></div>}
         </div> : !c ? <div className="between" style={{ gap: 12, flexWrap: 'wrap' }}>
-          <p style={{ margin: 0, maxWidth: 620 }}>Connect with a Google account that has access to the afcdfoundation.org property. Studio asks only for read-only Search Console access and your email address; it stores the access encrypted on the server.</p>
+          <p style={{ margin: 0, maxWidth: 620 }}>Connect with a Google account that has access to the {site.host} property. Studio asks only for read-only Search Console access and your email address; it stores the access encrypted on the server.</p>
           {can('seo.publish') ? <button className="btn btn-primary" disabled={!!busy} onClick={() => act('connect', async () => { const r = await post<{ url: string }>('/seo/google/connect'); location.href = r.url; })}><Icon n="globe" />Connect with Google</button>
             : <span className="muted">An administrator connects Google.</span>}
         </div> : <>

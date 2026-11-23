@@ -12,6 +12,7 @@ import { redirects, users } from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import { can, type Role } from '../../rbac.ts';
+import { DEFAULT_SITE, siteUrl, siteHost } from './site.ts';
 
 export const STUB_MARK = '<!-- studio-redirect -->';
 const PROTECTED = new Set(['index.html', '404.html', 'sitemap.xml', 'robots.txt', '_redirects']);
@@ -40,7 +41,9 @@ export async function checkRedirect(db: DB, cfg: Config, r: z.infer<typeof redir
   if (destPath === r.source) errors.push('A redirect cannot point to itself.');
   const external = EXTERNAL.test(r.destination);
   if (external && !can(role, 'seo.publish')) errors.push('Only administrators can redirect to another website.');
-  if (external && /^https:\/\/(www\.)?afcdfoundation\.org\//i.test(r.destination)) warnings.push('Use the page name (e.g. projects.html) for pages of this site.');
+  // a full address of this very site (the canonical domain, or the old .org/.com names) should be a page name instead
+  const host = siteHost(await siteUrl(db)).replace(/^www\./, '');
+  if (external && (() => { const h = new URL(r.destination).hostname.replace(/^www\./, ''); return h === host || /^afcdfoundation\.(org|com)$/.test(h); })()) warnings.push('Use the page name (e.g. projects.html) for pages of this site.');
   if (!external) {
     // follow the chain: a destination that is itself redirected makes a chain (or a loop)
     let cur = destPath; const seen = new Set([r.source]);
@@ -93,7 +96,7 @@ export async function deleteRedirect(db: DB, actor: NonNullable<Actor>, id: stri
 
 const escAttr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 /** The redirect page written at the old address. No scripts: a meta refresh, a canonical and a plain link. */
-export function stubHtml(r: { source: string; destination: string }, site = 'https://afcdfoundation.org/') {
+export function stubHtml(r: { source: string; destination: string }, site = DEFAULT_SITE) {
   const abs = EXTERNAL.test(r.destination) ? r.destination : site + r.destination;
   const rel = EXTERNAL.test(r.destination) ? r.destination : r.destination;
   return `<!doctype html>\n${STUB_MARK}\n<html lang="en"><head><meta charset="utf-8"><title>Moved · AFCD Foundation</title>\n<meta http-equiv="refresh" content="0; url=${escAttr(rel)}">\n<link rel="canonical" href="${escAttr(abs)}">\n<meta name="robots" content="noindex, follow">\n</head><body><p>This page has moved to <a href="${escAttr(rel)}">${escAttr(abs)}</a>.</p></body></html>\n`;

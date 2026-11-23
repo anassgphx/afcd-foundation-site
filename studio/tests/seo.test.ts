@@ -8,7 +8,7 @@ let h: Awaited<ReturnType<typeof makeApp>>;
 afterEach(async () => { await h?.close(); });
 
 const page = (title: string, desc: string, main: string, extra = '') =>
-  `<!doctype html><html><head><title>${title}</title><meta name="description" content="${desc}"><link rel="canonical" href="https://afcdfoundation.org/x"><meta name="robots" content="index, follow, max-image-preview:large">${extra}</head><body><main>${main}</main></body></html>`;
+  `<!doctype html><html><head><title>${title}</title><meta name="description" content="${desc}"><link rel="canonical" href="https://afcdfoundation.com/x"><meta name="robots" content="index, follow, max-image-preview:large">${extra}</head><body><main>${main}</main></body></html>`;
 const words = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ');
 
 describe('SEO audit', () => {
@@ -16,7 +16,7 @@ describe('SEO audit', () => {
     const dir = join(process.env.TMPDIR ?? '/tmp', `seo-audit-${Date.now()}`); mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'good.html'), page('A good page title for the AFCD Foundation site', 'A clear description of what this page is about, long enough for search results to show it well.', `<h1>Good</h1><p>${words(200)}</p><img src="a.webp" alt="A photo"><a href="other.html">x</a>`));
     writeFileSync(join(dir, 'other.html'), page('A good page title for the AFCD Foundation site', 'Short.', `<h1>One</h1><h1>Two</h1><p>Lorem ipsum dolor sit amet</p><img src="b.webp"><a href="missing.html#top">broken</a>`, '<meta property="og:title" content="Mission &amp;amp; Values">'));
-    writeFileSync(join(dir, 'sitemap.xml'), '<urlset><url><loc>https://afcdfoundation.org/good.html</loc></url></urlset>');
+    writeFileSync(join(dir, 'sitemap.xml'), '<urlset><url><loc>https://afcdfoundation.com/good.html</loc></url></urlset>');
     const r = auditSite(dir);
     const good = r.pages.find((p) => p.file === 'good.html')!, other = r.pages.find((p) => p.file === 'other.html')!;
     expect(good.issues.map((i) => i.code)).toEqual(['dup-title']);

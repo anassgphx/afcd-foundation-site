@@ -1,6 +1,7 @@
 // Project workspace: tabs for content, an inspector with status, readiness, workflow actions and history.
 import { Children, cloneElement, isValidElement, useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement, type ReactNode } from 'react';
 import { api, patch, post, put, ApiError } from '../api.ts';
+import { useSite } from '../site.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
@@ -61,6 +62,7 @@ export function ProjectEditor({ id }: { id: string }) {
   const [busy, setBusy] = useState(''); const [dirty, setDirty] = useState(false); const [slugTouched, setSlugTouched] = useState(!isNew);
   const [dialog, setDialog] = useState<null | 'publish' | 'unpublish' | 'changes' | 'approve' | 'preview' | 'hero' | 'gallery' | 'activity'>(null);
   const [actPick, setActPick] = useState(-1);   // which activity is choosing a photo
+  const site = useSite();
   const [fixing, setFixing] = useState<MediaItem | null>(null);   // a photo whose alt text / rights are being completed here
   const [previewUrl, setPreviewUrl] = useState(''); const [comment, setComment] = useState('');
   const [changed, setChanged] = useState<Set<string>>(new Set());   // fields edited since the last save (tab dots)
@@ -457,7 +459,7 @@ export function ProjectEditor({ id }: { id: string }) {
               <div className="card" style={{ padding: 14, background: 'var(--sunken)' }}>
                 <small className="muted">Search result preview</small>
                 <div style={{ marginTop: 6, color: '#1a0dab', fontSize: 17 }}>{(form.seoTitle || form.name || 'Project name')} · AFCD Foundation</div>
-                <div style={{ color: '#006621', fontSize: 12.5 }}>afcdfoundation.org › {fileName ?? 'projects.html'}</div>
+                <div style={{ color: '#006621', fontSize: 12.5 }}>{site.host} › {fileName ?? 'projects.html'}</div>
                 <div style={{ color: 'var(--ink-2)' }}>{(form.seoDescription || form.summary || 'The summary appears here.').slice(0, 160)}</div>
               </div>
               <div className="notice n-info">The current site builder still sets page titles and descriptions from the project name and summary. These SEO fields are stored and versioned now, and are used once the SEO Studio phase connects them to the build.</div>

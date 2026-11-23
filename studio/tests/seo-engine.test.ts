@@ -11,16 +11,16 @@ afterEach(async () => { await h?.close(); });
 
 const page = (file: string, o: { title?: string; desc?: string; canonical?: string; main: string; robots?: string; lang?: boolean; ld?: string }) =>
   `<!doctype html><html${o.lang === false ? '' : ' lang="en"'}><head><title>${o.title ?? 'A clear page title · AFCD Foundation'}</title><meta name="description" content="${o.desc ?? `A clear description of what ${file} offers, long enough to be useful in results.`}">` +
-  `<link rel="canonical" href="${o.canonical ?? `https://afcdfoundation.org/${file === 'index.html' ? '' : file}`}"><meta name="robots" content="${o.robots ?? 'index, follow'}">` +
+  `<link rel="canonical" href="${o.canonical ?? `https://afcdfoundation.com/${file === 'index.html' ? '' : file}`}"><meta name="robots" content="${o.robots ?? 'index, follow'}">` +
   `<meta property="og:title" content="t"><meta property="og:description" content="d"><meta property="og:image" content="i">${o.ld ?? ''}</head><body><header><a href="index.html">Home</a></header><main>${o.main}</main></body></html>`;
 const words = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ');
 
 function site(dir: string, production: boolean) {
   rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'robots.txt'), production ? 'User-agent: *\nAllow: /\n' : 'User-agent: *\nDisallow: /\n');
-  writeFileSync(join(dir, 'sitemap.xml'), '<urlset><url><loc>https://afcdfoundation.org/</loc></url><url><loc>https://afcdfoundation.org/a.html</loc></url><url><loc>https://afcdfoundation.org/gone.html</loc></url></urlset>');
+  writeFileSync(join(dir, 'sitemap.xml'), '<urlset><url><loc>https://afcdfoundation.com/</loc></url><url><loc>https://afcdfoundation.com/a.html</loc></url><url><loc>https://afcdfoundation.com/gone.html</loc></url></urlset>');
   writeFileSync(join(dir, 'index.html'), page('index.html', { main: `<h1>Home</h1><p>${words(200)}</p><a href="a.html">A</a>`, ld: '<script type="application/ld+json">{"@type":"NGO"}</script>' }));
-  writeFileSync(join(dir, 'a.html'), page('a.html', { title: 'A', robots: 'noindex, nofollow', canonical: 'https://afcdfoundation.org/other.html', lang: false, main: `<h1>One</h1><h1>Two</h1><h4>Deep</h4><p>Lorem ipsum dolor sit amet</p><img src="x.webp"><a href="missing.html">x</a>`, ld: '<script type="application/ld+json">{broken</script>' }));
+  writeFileSync(join(dir, 'a.html'), page('a.html', { title: 'A', robots: 'noindex, nofollow', canonical: 'https://afcdfoundation.com/other.html', lang: false, main: `<h1>One</h1><h1>Two</h1><h4>Deep</h4><p>Lorem ipsum dolor sit amet</p><img src="x.webp"><a href="missing.html">x</a>`, ld: '<script type="application/ld+json">{broken</script>' }));
   writeFileSync(join(dir, 'b.html'), page('b.html', { title: 'A', main: `<h1>B</h1><p>${words(200)}</p>` }));
 }
 

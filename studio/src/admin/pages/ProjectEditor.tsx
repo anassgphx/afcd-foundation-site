@@ -1,7 +1,7 @@
 // Project workspace: tabs for content, an inspector with status, readiness, workflow actions and history.
 import { Children, cloneElement, isValidElement, useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement, type ReactNode } from 'react';
-import { api, post, put, ApiError } from '../api.ts';
-import { Badge, Icon, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import { api, patch, post, put, ApiError } from '../api.ts';
+import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
@@ -14,8 +14,15 @@ type Form = {
   extraFacts: { label: string; value: string }[]; context: string; approach: string; activities: string; results: string;
   hasDetailPage: boolean; photoCaption: string; heroMediaId: string | null; galleryMediaIds: string[];
   pillarKeys: string[]; primaryPillarKey: string; objectiveRefs: string[]; seoTitle: string; seoDescription: string; sort: number;
+  programObjectives: ProgObjective[]; outcomes: Outcome[]; activityItems: Activity[];
 };
+type ProgObjective = { title: string; text: string };
+type Outcome = { title: string; text: string; figure: string };
+type Activity = { title: string; text: string; mediaIds: string[] };
+type LinkedEvent = { id: string; title: string; startDate: string; status: string; live: boolean };
+type MediaRow = { id: string; storageKey: string; originalName: string; width: number; height: number; alt: string; rightsConfirmed: boolean; focalX: number; focalY: number };
 type Loaded = Form & {
+  activityMedia?: Record<string, MediaRow>; linkedEvents?: LinkedEvent[];
   id: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; approvedRevisionId: string | null; updatedAt: string;
   hero: MediaItem | null; gallery: MediaItem[]; problems: string[]; pillars: { key: string; isPrimary: boolean }[];
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] };
@@ -24,13 +31,19 @@ type Loaded = Form & {
 const EMPTY: Form = {
   name: '', slug: '', reference: '', category: '', summary: '', location: '', years: '', extraFacts: [], context: '', approach: '', activities: '', results: '',
   hasDetailPage: true, photoCaption: '', heroMediaId: null, galleryMediaIds: [], pillarKeys: [], primaryPillarKey: '', objectiveRefs: [], seoTitle: '', seoDescription: '', sort: 100,
+  programObjectives: [], outcomes: [], activityItems: [],
 };
-const TABS = ['Overview', 'Content', 'Relationships', 'Media', 'SEO', 'Translations'] as const;
+const LIST_MAX = 12;
+// Same order as the project page: Summary · Program objectives · Outcomes · Program activities · Related events
+const TABS = ['Summary', 'Objectives', 'Outcomes', 'Activities', 'Events', 'Relationships', 'Gallery', 'SEO', 'Translations'] as const;
 const TAB_FIELDS: Record<string, string[]> = {
-  Overview: ['name', 'slug', 'reference', 'category', 'summary', 'location', 'years', 'extraFacts', 'sort'],
-  Content: ['context', 'approach', 'activities', 'results'],
+  Summary: ['name', 'slug', 'reference', 'category', 'summary', 'location', 'years', 'extraFacts', 'sort', 'context', 'approach', 'heroMediaId', 'photoCaption'],
+  Objectives: ['programObjectives'],
+  Outcomes: ['outcomes', 'results'],
+  Activities: ['activityItems', 'activities'],
+  Events: [],
   Relationships: ['pillarKeys', 'primaryPillarKey', 'objectiveRefs'],
-  Media: ['heroMediaId', 'galleryMediaIds', 'photoCaption'],
+  Gallery: ['galleryMediaIds'],
   SEO: ['seoTitle', 'seoDescription'],
   Translations: [],
 };
@@ -43,10 +56,12 @@ export function ProjectEditor({ id }: { id: string }) {
   const [form, setForm] = useState<Form>(EMPTY);
   const [media, setMedia] = useState<Record<string, MediaItem>>({});
   const [pillars, setPillars] = useState<Pillar[]>([]); const [objectives, setObjectives] = useState<Objective[]>([]);
-  const [tab, setTab] = useState<(typeof TABS)[number]>('Overview');
+  const [tab, setTab] = useState<(typeof TABS)[number]>('Summary');
   const [errors, setErrors] = useState<Record<string, string>>({}); const [banner, setBanner] = useState<{ kind: string; text: ReactNode } | null>(null);
   const [busy, setBusy] = useState(''); const [dirty, setDirty] = useState(false); const [slugTouched, setSlugTouched] = useState(!isNew);
-  const [dialog, setDialog] = useState<null | 'publish' | 'unpublish' | 'changes' | 'approve' | 'preview' | 'hero' | 'gallery'>(null);
+  const [dialog, setDialog] = useState<null | 'publish' | 'unpublish' | 'changes' | 'approve' | 'preview' | 'hero' | 'gallery' | 'activity'>(null);
+  const [actPick, setActPick] = useState(-1);   // which activity is choosing a photo
+  const [fixing, setFixing] = useState<MediaItem | null>(null);   // a photo whose alt text / rights are being completed here
   const [previewUrl, setPreviewUrl] = useState(''); const [comment, setComment] = useState('');
   const [changed, setChanged] = useState<Set<string>>(new Set());   // fields edited since the last save (tab dots)
   const [categories, setCategories] = useState<string[]>([]);       // categories already used by projects (suggestions)
@@ -61,7 +76,8 @@ export function ProjectEditor({ id }: { id: string }) {
     const primary = d.pillars.find((x) => x.isPrimary)?.key ?? d.pillars[0]?.key ?? '';
     setData(d);
     setForm({ ...pick(d), pillarKeys: d.pillars.map((x) => x.key), primaryPillarKey: primary, galleryMediaIds: d.gallery.map((g) => g.id) });
-    setMedia(Object.fromEntries([d.hero, ...d.gallery].filter(Boolean).map((m) => [m!.id, m!])));
+    const act = Object.values(d.activityMedia ?? {}).map((m) => ({ ...m, url: `/studio/media-file/${m.storageKey}-480.webp` }) as unknown as MediaItem);
+    setMedia(Object.fromEntries([d.hero, ...d.gallery, ...act].filter(Boolean).map((m) => [m!.id, m!])));
     setDirty(false); setChanged(new Set());
   }, [id, isNew]);
   useEffect(() => { load().catch((e) => setBanner({ kind: 'n-bad', text: e.message })); }, [load]);
@@ -92,12 +108,15 @@ export function ProjectEditor({ id }: { id: string }) {
 
   async function save(quiet = false): Promise<string | null> {
     setBusy('save'); setBanner(null); setErrors({});
+    // empty section lists are left out: the server defaults them to [] (and a server not yet restarted still accepts the save)
+    const { programObjectives, outcomes, activityItems, ...base } = form;
+    const body = { ...base, ...(programObjectives.length ? { programObjectives } : {}), ...(outcomes.length ? { outcomes } : {}), ...(activityItems.length ? { activityItems } : {}) };
     try {
       if (isNew) {
-        const p = await post<{ id: string }>('/projects', form);
+        const p = await post<{ id: string }>('/projects', body);
         setDirty(false); toast('Draft created'); navigate(`/studio/projects/${p.id}`); return p.id;
       }
-      await put(`/projects/${id}`, form);
+      await put(`/projects/${id}`, body);
       await load(); if (!quiet) toast(live ? 'Draft saved. The live page is unchanged until you publish.' : 'Draft saved');
       return id;
     } catch (e) { showError(e); return null; } finally { setBusy(''); }
@@ -171,6 +190,9 @@ export function ProjectEditor({ id }: { id: string }) {
   const errCount = (t: string) => TAB_FIELDS[t].filter((f) => errors[f]).length;
   const tabChanged = (t: string) => TAB_FIELDS[t].some((f) => changed.has(f));
   const errorList = Object.entries(errors).filter(([, v]) => v);
+  const usedPhotoIds = [...new Set([form.heroMediaId, ...form.galleryMediaIds, ...form.activityItems.flatMap((a) => a.mediaIds)].filter(Boolean) as string[])];
+  const toFix = usedPhotoIds.map((x) => media[x]).filter((m) => m && (!m.alt || !m.rightsConfirmed));
+  const canFix = can('media.update');
   const goTo = (field: string) => { const t = TABS.find((x) => TAB_FIELDS[x].includes(field)); if (t) setTab(t); setTimeout(() => document.getElementById(`pe-${field}`)?.focus(), 40); };
   const leave = (to: string) => { if (dirty && !confirm('You have unsaved changes. Leave without saving?')) return; navigate(to); };
   const yearsOk = !form.years.trim() || /^(19|20)\d{2}(\s*[–—-]\s*((19|20)\d{2}|present|today|ongoing))?$/i.test(form.years.trim());
@@ -234,6 +256,14 @@ export function ProjectEditor({ id }: { id: string }) {
       {errorList.length > 0 && <div className="notice n-bad pe-errors" role="alert"><div><b>{errorList.length === 1 ? '1 field needs' : `${errorList.length} fields need`} attention before saving</b>
         <ul>{errorList.map(([f, m]) => <li key={f}><button type="button" className="pe-link" onClick={() => goTo(f)}>{LABELS[f] ?? f}</button> · {m}</li>)}</ul></div></div>}
       {banner && !(banner.kind === 'n-bad' && errorList.length) && <div className={`notice ${banner.kind}`} style={{ marginBottom: 14 }} role="alert"><div>{banner.text}</div></div>}
+      {toFix.length > 0 && <div className="pe-fixlist" role="region" aria-label="Photos to complete">
+        <p className="pe-fixlist-h"><b>{toFix.length === 1 ? '1 photo needs' : `${toFix.length} photos need`} details before review</b><span>Alt text describes the photo for screen readers; the rights box confirms AFCD may publish it.</span></p>
+        <ul>{toFix.map((m) => <li key={m.id}>
+          <img src={m.url} alt="" />
+          <span className="pe-fix-t"><b title={m.originalName}>{m.originalName}</b><small>{[!m.alt && 'Alt text missing', !m.rightsConfirmed && 'Rights not confirmed'].filter(Boolean).join(' · ')}</small></span>
+          {canFix ? <button type="button" className="btn btn-sm btn-primary" onClick={() => setFixing(m)}>Fix</button> : <small className="muted">Ask a media manager</small>}
+        </li>)}</ul>
+      </div>}
 
       <div className="editor pe-body">
         <section className="card pe-main">
@@ -248,9 +278,12 @@ export function ProjectEditor({ id }: { id: string }) {
             fields={[{ label: 'Project name', value: form.name }, { label: 'One-line summary', value: form.summary }, { label: 'Category', value: form.category }, { label: 'Location', value: form.location }, { label: 'Years', value: form.years },
               ...form.extraFacts.flatMap((x) => [{ label: 'Fact label', value: x.label }, { label: `Fact · ${x.label || 'value'}`, value: x.value }]),
               { label: 'Context', value: form.context }, { label: 'Approach', value: form.approach }, { label: 'Activities', value: form.activities }, { label: 'Results', value: form.results },
+              ...form.programObjectives.flatMap((o, i) => [{ label: `Programme objective ${i + 1}`, value: o.title }, { label: `Programme objective ${i + 1} · text`, value: o.text }]),
+              ...form.outcomes.flatMap((o, i) => [{ label: `Outcome ${i + 1} · figure`, value: o.figure }, { label: `Outcome ${i + 1}`, value: o.title }, { label: `Outcome ${i + 1} · text`, value: o.text }]),
+              ...form.activityItems.flatMap((a, i) => [{ label: `Activity ${i + 1}`, value: a.title }, { label: `Activity ${i + 1} · text`, value: a.text }]),
               { label: 'Photo caption', value: form.photoCaption }, { label: 'SEO title', value: form.seoTitle }, { label: 'Meta description', value: form.seoDescription }]} /></div>}
           <fieldset disabled={!editable} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
-            {tab === 'Overview' && <div className="pe-form">
+            {tab === 'Summary' && <div className="pe-form">
               <PeSection title="Basics" desc="How the project is named and introduced on cards, listings and its page.">
                 <Field name="name" label="Project name" err={errors.name}><input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} maxLength={160} disabled={ro} /></Field>
                 <Field name="summary" label="One-line summary" hint="Shown on project cards, the listing and as the page intro." err={errors.summary} count={[form.summary.length, 400]}>
@@ -303,13 +336,80 @@ export function ProjectEditor({ id }: { id: string }) {
                 </div>
                 {liveUrl && <a className="pe-url" href={liveUrl} target="_blank" rel="noopener"><Icon n="globe" />{liveUrl}<Icon n="ext" /></a>}
               </PeSection>
+
+              <PeSection title="Story" desc="The project page opens with this, after the summary.">
+                {([['context', 'Context', 'What need or situation did the project respond to?'], ['approach', 'Approach', 'How did AFCD and its partners work?']] as const).map(([k, l, h]) => (
+                  <Field key={k} name={k} label={l} hint={h} err={errors[k]} count={[form[k].length, 2000]}><textarea className="textarea" value={form[k]} onChange={(e) => set(k, e.target.value)} maxLength={2000} disabled={ro} /></Field>
+                ))}
+              </PeSection>
+
+              <PeSection title="Hero photo" desc="Shown full width at the top of the project page.">
+              <Field group name="heroMediaId" label="Hero photo" optional hint="Shown full width at the top of the project page. Needs alt text and confirmed rights before publishing." err={errors.heroMediaId}>
+                  {form.heroMediaId && media[form.heroMediaId] ? (
+                    <div className="thumbs"><div className="thumb" style={{ width: 260 }}><img src={media[form.heroMediaId].url} alt={media[form.heroMediaId].alt} />{!ro && <button type="button" aria-label="Remove hero photo" onClick={() => set('heroMediaId', null)}>×</button>}</div></div>
+                  ) : <div className="muted">No hero photo. A grey placeholder is shown.</div>}
+                  {!ro && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('hero')}><Icon n="image" />{form.heroMediaId ? 'Change' : 'Choose'} hero photo</button>}
+                </Field>
+                <Field name="photoCaption" label="Placeholder caption" optional hint="Shown on the grey placeholder while there is no hero photo."><input className="input" value={form.photoCaption} onChange={(e) => set('photoCaption', e.target.value)} maxLength={160} disabled={ro} /></Field>
+              </PeSection>
             </div>}
 
-            {tab === 'Content' && <div className="form">
-              {!form.hasDetailPage && <div className="notice n-warn">These sections appear on the project page. Turn on “Give this project its own page” in Overview to publish them.</div>}
-              {([['context', 'Context', 'What need or situation did the project respond to?'], ['approach', 'Approach', 'How did AFCD and its partners work?'], ['activities', 'Activities', 'What actually happened?'], ['results', 'Results', 'What changed? Use verified facts only.']] as const).map(([k, l, h]) => (
-                <Field key={k} name={k} label={l} hint={h} err={errors[k]} count={[form[k].length, 2000]}><textarea className="textarea" value={form[k]} onChange={(e) => set(k, e.target.value)} maxLength={2000} disabled={ro} /></Field>
-              ))}
+            {tab === 'Objectives' && <div className="pe-form">
+              {!form.hasDetailPage && <div className="notice n-warn" style={{ margin: '18px 20px 0' }}>These sections appear on the project page. Turn on “Give this project its own page” in Summary to publish them.</div>}
+              <PeSection title="Program objectives" desc="What the programme itself sets out to achieve. Separate from AFCD’s strategic objectives (Relationships tab).">
+                <ListEditor items={form.programObjectives} max={LIST_MAX} ro={ro} noun="objective" err={errors.programObjectives}
+                  blank={{ title: '', text: '' }} onChange={(v) => set('programObjectives', v)}
+                  render={(o, upd, i) => <>
+                    <input className="input" aria-label={`Objective ${i + 1} title`} placeholder="Objective, e.g. Train young people in civic leadership" value={o.title} maxLength={160} disabled={ro} onChange={(e) => upd({ ...o, title: e.target.value })} />
+                    <textarea className="textarea" style={{ minHeight: 56 }} aria-label={`Objective ${i + 1} details`} placeholder="Details (optional)" value={o.text} maxLength={600} disabled={ro} onChange={(e) => upd({ ...o, text: e.target.value })} />
+                  </>} />
+              </PeSection>
+            </div>}
+
+            {tab === 'Outcomes' && <div className="pe-form">
+              {!form.hasDetailPage && <div className="notice n-warn" style={{ margin: '18px 20px 0' }}>These sections appear on the project page. Turn on “Give this project its own page” in Summary to publish them.</div>}
+              <PeSection title="Outcomes" desc="What changed. Use real, verified results only. A figure is optional, e.g. “120 participants”.">
+                <ListEditor items={form.outcomes} max={LIST_MAX} ro={ro} noun="outcome" err={errors.outcomes}
+                  blank={{ title: '', text: '', figure: '' }} onChange={(v) => set('outcomes', v)}
+                  render={(o, upd, i) => <>
+                    <div className="pe-li-row">
+                      <input className="input pe-li-fig" aria-label={`Outcome ${i + 1} figure`} placeholder="Figure (optional)" value={o.figure} maxLength={40} disabled={ro} onChange={(e) => upd({ ...o, figure: e.target.value })} />
+                      <input className="input" aria-label={`Outcome ${i + 1} title`} placeholder="Outcome, e.g. Youth-led initiatives launched" value={o.title} maxLength={160} disabled={ro} onChange={(e) => upd({ ...o, title: e.target.value })} />
+                    </div>
+                    <textarea className="textarea" style={{ minHeight: 56 }} aria-label={`Outcome ${i + 1} details`} placeholder="Details (optional)" value={o.text} maxLength={600} disabled={ro} onChange={(e) => upd({ ...o, text: e.target.value })} />
+                  </>} />
+              </PeSection>
+              <PeSection title="Results text" desc="The earlier free-text results. The page uses it while there are no outcome cards above.">
+                <Field name="results" label="Results" optional hint="What changed? Use verified facts only." err={errors.results} count={[form.results.length, 2000]}><textarea className="textarea" value={form.results} onChange={(e) => set('results', e.target.value)} maxLength={2000} disabled={ro} /></Field>
+              </PeSection>
+            </div>}
+
+            {tab === 'Activities' && <div className="pe-form">
+              {!form.hasDetailPage && <div className="notice n-warn" style={{ margin: '18px 20px 0' }}>These sections appear on the project page. Turn on “Give this project its own page” in Summary to publish them.</div>}
+              <PeSection title="Program activities" desc="What actually happened, each with its photos from the Media Library. The page shows up to 3 photos per activity, with “+N” for more. Photos need alt text and confirmed rights before review.">
+                <ListEditor items={form.activityItems} max={LIST_MAX} ro={ro} noun="activity" err={errors.activityItems}
+                  blank={{ title: '', text: '', mediaIds: [] }} onChange={(v) => set('activityItems', v)}
+                  render={(a, upd, i) => <div className="pe-act">
+                    <div className="pe-act-t">
+                      <input className="input" aria-label={`Activity ${i + 1} title`} placeholder="Activity, e.g. Leadership bootcamp in Marrakech" value={a.title} maxLength={160} disabled={ro} onChange={(e) => upd({ ...a, title: e.target.value })} />
+                      <textarea className="textarea" style={{ minHeight: 72 }} aria-label={`Activity ${i + 1} description`} placeholder="What happened (optional)" value={a.text} maxLength={800} disabled={ro} onChange={(e) => upd({ ...a, text: e.target.value })} />
+                    </div>
+                    <PhotoStrip ids={a.mediaIds} media={media} ro={ro} label={`Activity ${i + 1}`} onChange={(ids) => upd({ ...a, mediaIds: ids })} onAdd={() => { setActPick(i); setDialog('activity'); }} />
+                  </div>} />
+              </PeSection>
+              <PeSection title="Activities text" desc="The earlier free-text activities. The page uses it while there are no activity cards above.">
+                <Field name="activities" label="Activities" optional hint="What actually happened?" err={errors.activities} count={[form.activities.length, 2000]}><textarea className="textarea" value={form.activities} onChange={(e) => set('activities', e.target.value)} maxLength={2000} disabled={ro} /></Field>
+              </PeSection>
+            </div>}
+
+            {tab === 'Events' && <div className="pe-form">
+              <PeSection title="Related events" desc="Events linked to this project appear at the end of its page. Link an event to the project from the event itself.">
+                {!data?.linkedEvents?.length ? <p className="pe-empty">No events are linked to this project yet.</p>
+                  : <ul className="pe-events">{data.linkedEvents.map((ev) => <li key={ev.id}><Link to={`/studio/events/${ev.id}`} className="pe-event">
+                    <span className="pe-event-d">{fmtDay(ev.startDate)}</span><span className="pe-event-t"><b>{ev.title}</b><small>{ev.live ? 'On the website' : 'Not published'}</small></span>
+                    <span className="pills">{ev.live && ev.status !== 'published' && <LiveBadge />}<Badge s={ev.status} /></span></Link></li>)}</ul>}
+                {can('event.read') && <Link to="/studio/events" className="btn btn-sm" style={{ justifySelf: 'start' }}><Icon n="calendar" />Open Events</Link>}
+              </PeSection>
             </div>}
 
             {tab === 'Relationships' && <div className="form">
@@ -338,14 +438,7 @@ export function ProjectEditor({ id }: { id: string }) {
               </Field>
             </div>}
 
-            {tab === 'Media' && <div className="form">
-              <Field group name="heroMediaId" label="Hero photo" optional hint="Shown full width at the top of the project page. Needs alt text and confirmed rights before publishing." err={errors.heroMediaId}>
-                {form.heroMediaId && media[form.heroMediaId] ? (
-                  <div className="thumbs"><div className="thumb" style={{ width: 260 }}><img src={media[form.heroMediaId].url} alt={media[form.heroMediaId].alt} />{!ro && <button type="button" aria-label="Remove hero photo" onClick={() => set('heroMediaId', null)}>×</button>}</div></div>
-                ) : <div className="muted">No hero photo. A grey placeholder is shown.</div>}
-                {!ro && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('hero')}><Icon n="image" />{form.heroMediaId ? 'Change' : 'Choose'} hero photo</button>}
-              </Field>
-              <Field name="photoCaption" label="Placeholder caption" optional hint="Shown on the grey placeholder while there is no hero photo."><input className="input" value={form.photoCaption} onChange={(e) => set('photoCaption', e.target.value)} maxLength={160} disabled={ro} /></Field>
+            {tab === 'Gallery' && <div className="form">
               <Field group name="galleryMediaIds" label="Gallery" optional hint="The first three photos appear in the gallery section of the page.">
                 <div className="thumbs">{form.galleryMediaIds.map((mid, i) => media[mid] && (
                   <div key={mid} className="thumb"><img src={media[mid].url} alt={media[mid].alt} />
@@ -414,6 +507,11 @@ export function ProjectEditor({ id }: { id: string }) {
       {dialog === 'hero' && <MediaPicker onClose={() => setDialog(null)} onPick={(items) => { const m = items[0]; if (m) { setMedia((x) => ({ ...x, [m.id]: m })); set('heroMediaId', m.id); } setDialog(null); }} />}
       {dialog === 'gallery' && <MediaPicker multiple onClose={() => setDialog(null)} onPick={(items) => { setMedia((x) => ({ ...x, ...Object.fromEntries(items.map((m) => [m.id, m])) })); set('galleryMediaIds', [...new Set([...form.galleryMediaIds, ...items.map((m) => m.id)])].slice(0, 12)); setDialog(null); }} />}
 
+      {dialog === 'activity' && actPick >= 0 && <MediaPicker multiple onClose={() => { setDialog(null); setActPick(-1); }} onPick={(items) => {
+        setMedia((x) => ({ ...x, ...Object.fromEntries(items.map((m) => [m.id, m])) }));
+        set('activityItems', form.activityItems.map((a, j) => j === actPick ? { ...a, mediaIds: [...new Set([...a.mediaIds, ...items.map((m) => m.id)])].slice(0, 12) } : a));
+        setDialog(null); setActPick(-1); }} />}
+      {fixing && <PhotoFix item={fixing} onClose={() => setFixing(null)} onSaved={(m) => { setMedia((x) => ({ ...x, [m.id]: { ...x[m.id], ...m } })); setFixing(null); toast('Photo details saved'); if (!isNew && !dirty) load().catch(() => {}); }} />}
       {dialog === 'preview' && <PreviewModal url={previewUrl} onClose={() => setDialog(null)} />}
 
       {dialog === 'approve' && <Modal size="sm" title="Approve this project?" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={!!busy} onClick={() => act('approve', { comment })}>{busy ? 'Approving…' : 'Approve'}</button></>}>
@@ -441,7 +539,78 @@ const LABELS: Record<string, string> = {
   slug: 'Page address', sort: 'Order in listings', context: 'Context', approach: 'Approach', activities: 'Activities', results: 'Results', pillarKeys: 'Strategic pillars',
   primaryPillarKey: 'Primary pillar', objectiveRefs: 'Strategic objectives', heroMediaId: 'Hero photo', galleryMediaIds: 'Gallery', photoCaption: 'Placeholder caption',
   seoTitle: 'SEO title', seoDescription: 'Meta description',
+  programObjectives: 'Program objectives', outcomes: 'Outcomes', activityItems: 'Program activities',
 };
+
+/** Complete a photo's alt text and usage rights without leaving the project. Saves to the Media Library. */
+function PhotoFix({ item, onClose, onSaved }: { item: MediaItem; onClose: () => void; onSaved: (m: MediaItem) => void }) {
+  const [alt, setAlt] = useState(item.alt ?? ''); const [rights, setRights] = useState(!!item.rightsConfirmed);
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const ok = alt.trim().length >= 3 && rights;
+  async function save() {
+    setBusy(true); setErr('');
+    try { const m = await patch<MediaItem>(`/media/${item.id}`, { alt: alt.trim(), rightsConfirmed: rights }); onSaved(m); }
+    catch (e) { setErr((e as Error).message); setBusy(false); }
+  }
+  return <Modal size="sm" title="Photo details" onClose={() => !busy && onClose()} footer={<><button className="btn" disabled={busy} onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={!ok || busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button></>}>
+    <div className="modal-b stack">
+      <img src={item.url} alt="" className="pe-fix-img" />
+      <small className="muted" style={{ overflowWrap: 'anywhere' }}>{item.originalName}</small>
+      <label className="field"><span className="pe-label">Alt text</span>
+        <textarea className="textarea" style={{ minHeight: 64 }} value={alt} onChange={(e) => setAlt(e.target.value)} maxLength={250} autoFocus placeholder="Describe what the photo shows, e.g. Young people working in groups at a leadership workshop" />
+        <span className="between"><small>Say what matters in the photo. No “image of…”.</small><small className="count-hint">{alt.length} / 250</small></span>
+      </label>
+      <label className="check"><input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} /><span><b>AFCD has the right to publish this photo</b><br /><small className="muted">and the people shown agreed to appear on the website.</small></span></label>
+      {err && <div className="notice n-bad" role="alert">{err}</div>}
+    </div>
+  </Modal>;
+}
+
+const fmtDay = (d: string) => { const t = new Date(`${d.slice(0, 10)}T12:00:00Z`); return isNaN(+t) ? d : t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }); };
+
+/** An activity's photos: thumbnails in page order, move earlier/later, remove, add from the Media Library. */
+function PhotoStrip({ ids, media, ro, label, onChange, onAdd }: { ids: string[]; media: Record<string, MediaItem>; ro: boolean; label: string; onChange: (ids: string[]) => void; onAdd: () => void }) {
+  const move = (i: number, d: number) => { const a = [...ids]; [a[i], a[i + d]] = [a[i + d], a[i]]; onChange(a); };
+  const missingAlt = ids.filter((x) => media[x] && !media[x].alt).length, noRights = ids.filter((x) => media[x] && media[x].alt && !media[x].rightsConfirmed).length;
+  return <div className="pe-photos" role="group" aria-label={`${label} photos`}>
+    <div className="pe-photos-h"><span>Photos</span><small className="count-hint">{ids.length} of 12{ids.length > 3 ? ` · the page shows 3, then +${ids.length - 3}` : ''}</small></div>
+    {ids.length > 0 && <ol className="pe-photos-list">{ids.map((mid, i) => { const m = media[mid]; return <li key={mid} className={i >= 3 ? 'is-extra' : undefined}>
+      {m ? <img src={m.url} alt={m.alt || ''} /> : <span className="pe-act-ph">Photo</span>}
+      {m && !m.alt && <span className="pe-photo-flag" title="No alt text yet">Alt</span>}
+      {!ro && <span className="pe-photo-tools">
+        <button type="button" aria-label={`Move photo ${i + 1} earlier`} disabled={i === 0} onClick={() => move(i, -1)}>‹</button>
+        <button type="button" aria-label={`Move photo ${i + 1} later`} disabled={i === ids.length - 1} onClick={() => move(i, 1)}>›</button>
+        <button type="button" aria-label={`Remove photo ${i + 1}`} onClick={() => onChange(ids.filter((x) => x !== mid))}>×</button>
+      </span>}
+    </li>; })}</ol>}
+    {!ro && ids.length < 12 && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={onAdd}><Icon n="image" />{ids.length ? 'Add more photos' : 'Add photos'}</button>}
+    {missingAlt > 0 && <small className="pe-warn">{missingAlt === 1 ? '1 photo needs' : `${missingAlt} photos need`} alt text in the Media Library before review.</small>}
+    {noRights > 0 && <small className="pe-warn">{noRights === 1 ? '1 photo needs' : `${noRights} photos need`} confirmed usage rights in the Media Library.</small>}
+  </div>;
+}
+
+/** A reorderable list of small cards: add, edit, move up/down, remove (with confirm when the item has content). */
+function ListEditor<T extends object>({ items, max, ro, noun, blank, onChange, render, err }: {
+  items: T[]; max: number; ro: boolean; noun: string; blank: T; err?: string;
+  onChange: (v: T[]) => void; render: (item: T, update: (v: T) => void, i: number) => ReactNode;
+}) {
+  const move = (i: number, d: number) => { const a = [...items]; [a[i], a[i + d]] = [a[i + d], a[i]]; onChange(a); };
+  const filled = (x: T) => Object.values(x).some((v) => typeof v === 'string' ? v.trim() : v);
+  return <div className="pe-list" role="group" aria-label={`${noun[0].toUpperCase()}${noun.slice(1)}s`}>
+    {items.length === 0 && <p className="pe-empty">None yet. The page shows its usual sections until you add some.</p>}
+    {items.map((it, i) => <div key={i} className="pe-li">
+      <span className="pe-fact-n" aria-hidden="true">{i + 1}</span>
+      <div className="pe-li-body">{render(it, (v) => onChange(items.map((x, j) => (j === i ? v : x))), i)}</div>
+      {!ro && <span className="pe-fact-tools pe-li-tools">
+        <button type="button" className="btn btn-ghost icon-btn btn-sm" aria-label={`Move ${noun} ${i + 1} up`} disabled={i === 0} onClick={() => move(i, -1)}><Icon n="chev" style={{ transform: 'rotate(-90deg)' }} /></button>
+        <button type="button" className="btn btn-ghost icon-btn btn-sm" aria-label={`Move ${noun} ${i + 1} down`} disabled={i === items.length - 1} onClick={() => move(i, 1)}><Icon n="chev" style={{ transform: 'rotate(90deg)' }} /></button>
+        <button type="button" className="btn btn-ghost icon-btn btn-sm" aria-label={`Remove ${noun} ${i + 1}`} onClick={() => { if (!filled(it) || confirm(`Remove this ${noun}?`)) onChange(items.filter((_, j) => j !== i)); }}><Icon n="x" /></button>
+      </span>}
+    </div>)}
+    {err && <small className="err" role="alert">{err}</small>}
+    {!ro && <div className="pe-li-add">{items.length < max ? <button type="button" className="btn btn-sm" onClick={() => onChange([...items, { ...blank }])}><Icon n="plus" />Add {noun}</button> : <small className="muted">Maximum {max} reached.</small>}<small className="count-hint">{items.length} of {max}</small></div>}
+  </div>;
+}
 
 function PeSection({ title, desc, children }: { title: string; desc?: string; children: ReactNode }) {
   const id = `pe-sec-${title.toLowerCase()}`;

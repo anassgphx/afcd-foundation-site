@@ -1,13 +1,469 @@
-// Media library: upload (validated on the server), metadata, rights and consent, focal point, reuse count. Plus the picker modal.
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, del, patch, ApiError } from '../api.ts';
-import { Icon, Modal, fmtDate, useCan, useToast } from '../ui.tsx';
+// Media Library: every image of the website with where it is used, what it still needs (alt text, credit, rights),
+// duplicates, an upload queue, replace-in-place, bulk edits and a detail panel with a focal-point picker.
+// The picker modal (MediaPicker) used by the editors is at the bottom and keeps its own lighter list.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { api, del, patch, post, ApiError } from '../api.ts';
+import { Icon, Modal, fmtDate, ago, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import '../media.css';
 
 export type MediaItem = {
   id: string; originalName: string; url: string; large?: string; width: number; height: number; bytes: number; mime: string;
   alt: string; caption: string; credit: string; rightsConfirmed: boolean; focalX: number; focalY: number; createdAt: string; usedBy?: number;
 };
+type Use = { kind: string; title: string; href: string; where: string; live: boolean };
+type LibItem = MediaItem & {
+  tags: string[]; storageKey: string; updatedAt: string; uploadedByName: string | null; licence: string; rightsExpiresOn: string | null;
+  usedOn: Use[]; issues: ('alt' | 'credit' | 'rights' | 'expired')[]; duplicateOf: { ids: string[]; exact: boolean } | null;
+};
 
+const ACCEPT = 'image/jpeg,image/png,image/webp,image/avif,image/tiff';
+const ready = (m: MediaItem) => !!m.alt && m.rightsConfirmed;
+const mb = (b: number) => b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
+const fmt = (mime: string) => mime.replace('image/', '').replace('jpeg', 'JPEG').toUpperCase();
+/** "IMG_2041-final (1).JPG" → "IMG 2041 final (1)": no extension, separators as spaces. */
+const cleanName = (n: string) => n.replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim() || n;
+const orient = (m: MediaItem) => Math.abs(m.width - m.height) / Math.max(m.width, m.height) < 0.06 ? 'square' : m.width > m.height ? 'landscape' : 'portrait';
+const pages = (m: LibItem) => new Set(m.usedOn.map((u) => u.href)).size;
+/** A replaced file keeps its name, so the address carries a version and the browser does not show the old one from its cache. */
+const stamp = (m: LibItem): LibItem => { const v = `?v=${Date.parse(m.updatedAt)}`; return { ...m, url: m.url + v, large: m.large ? m.large + v : m.large }; };
+const fileOf = (m: MediaItem) => (m.large ?? m.url).split('?')[0].split('/').pop();
+const ISSUE: Record<string, string> = { alt: 'Needs alt text', credit: 'Needs credit', rights: 'Needs rights', expired: 'Rights expired' };
+const today = () => new Date().toISOString().slice(0, 10);
+const store = { get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
+
+// small icons this screen needs that the shared set does not have
+const P: Record<string, string> = {
+  copy: 'M7 7h9v9H7zM4 13V4h9', download: 'M10 3v10M6 9l4 4 4-4M4 16h12', replace: 'M4 8a6 6 0 0 1 11-2M16 3v3h-3M16 12a6 6 0 0 1-11 2M4 17v-3h3',
+  trash: 'M4 6h12M8 6V4h4v2M6 6l1 10h6l1-10', grid: 'M4 4h5v5H4zM11 4h5v5h-5zM4 11h5v5H4zM11 11h5v5h-5z', list: 'M4 5h12M4 10h12M4 15h12',
+  tag: 'M3 10V3h7l7 7-7 7zM7 7h.01', dup: 'M6 6h10v10H6zM4 14V4h10', back: 'M12 4l-6 6 6 6', link: 'M8 12l4-4M7 9l-2 2a3 3 0 0 0 4 4l2-2M13 11l2-2a3 3 0 0 0-4-4L9 7',
+};
+const MI = ({ n, size = 16 }: { n: string; size?: number }) => <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={P[n]} /></svg>;
+
+/** Sends one file with upload progress (fetch has none). */
+function sendFile(url: string, file: File, csrf: string, onProgress: (p: number) => void) {
+  return new Promise<any>((res, rej) => {
+    const x = new XMLHttpRequest(); const fd = new FormData(); fd.append('file', file);
+    x.open('POST', url); x.withCredentials = true; x.setRequestHeader('X-CSRF-Token', csrf);
+    x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+    x.onload = () => { let d: any = {}; try { d = JSON.parse(x.responseText); } catch { /* not json */ } x.status < 300 ? res(d) : rej(new ApiError(x.status, d.error || 'Upload failed')); };
+    x.onerror = () => rej(new ApiError(0, 'Network error. Check the connection and retry.'));
+    x.send(fd);
+  });
+}
+
+async function copy(text: string) { try { await navigator.clipboard.writeText(text); return true; } catch { return false; } }
+
+// ================================================================= Library
+type Job = { id: string; file: File; p: number; state: 'wait' | 'up' | 'done' | 'err'; error?: string; replaceOf?: string };
+type Filter = 'all' | 'needs' | 'used' | 'unused' | 'dupes';
+type Sort = 'new' | 'name' | 'size' | 'used';
+
+export function MediaLibrary() {
+  const can = useCan(); const toast = useToast(); const me = useMe();
+  const [items, setItems] = useState<LibItem[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [q, setQ] = useState(''); const [filter, setFilter] = useState<Filter>('all');
+  const [type, setType] = useState('all'); const [shape, setShape] = useState('all');
+  const [sort, setSort] = useState<Sort>((store.get('media.sort') as Sort) || 'new');
+  const [view, setView] = useState<'grid' | 'list'>(store.get('media.view') === 'list' ? 'list' : 'grid');
+  const [size, setSize] = useState<'s' | 'm' | 'l'>((store.get('media.size') as 's') || 'm');
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [openId, setOpenId] = useState<string | null>(() => new URLSearchParams(location.search).get('id'));
+  const [cursor, setCursor] = useState(0);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [drag, setDrag] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<LibItem[] | null>(null);
+  const dirty = useRef(false);
+  const fileInput = useRef<HTMLInputElement>(null); const replaceInput = useRef<HTMLInputElement>(null); const replaceTarget = useRef<string | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  const load = useCallback(() => api<{ items: LibItem[] }>('/media/library').then((r) => { setItems(r.items.map(stamp)); setFailed(false); }).catch(() => { setFailed(true); setItems((x) => x ?? []); }), []);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { store.set('media.sort', sort); store.set('media.view', view); store.set('media.size', size); }, [sort, view, size]);
+  useEffect(() => { const u = new URL(location.href); if (openId) u.searchParams.set('id', openId); else u.searchParams.delete('id'); history.replaceState(null, '', u); }, [openId]);
+
+  const types = useMemo(() => [...new Set((items ?? []).map((m) => m.mime))].sort(), [items]);
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    const l = (items ?? []).filter((m) =>
+      (!s || [m.originalName, m.alt, m.caption, m.credit, ...m.tags].some((x) => x.toLowerCase().includes(s)))
+      && (filter === 'all' || (filter === 'needs' ? m.issues.length > 0 : filter === 'used' ? m.usedOn.length > 0 : filter === 'unused' ? m.usedOn.length === 0 : !!m.duplicateOf))
+      && (type === 'all' || m.mime === type) && (shape === 'all' || orient(m) === shape));
+    const by: Record<Sort, (a: LibItem, b: LibItem) => number> = {
+      new: (a, b) => b.createdAt.localeCompare(a.createdAt), name: (a, b) => cleanName(a.originalName).localeCompare(cleanName(b.originalName), undefined, { numeric: true }),
+      size: (a, b) => b.bytes - a.bytes, used: (a, b) => pages(b) - pages(a) || b.createdAt.localeCompare(a.createdAt),
+    };
+    return l.sort(by[sort]);
+  }, [items, q, filter, type, shape, sort]);
+  const counts = useMemo(() => { const l = items ?? []; return { all: l.length, needs: l.filter((m) => m.issues.length).length, used: l.filter((m) => m.usedOn.length).length, unused: l.filter((m) => !m.usedOn.length).length, dupes: l.filter((m) => m.duplicateOf).length }; }, [items]);
+  const open = items?.find((m) => m.id === openId) ?? null;
+  const filtered = !!q || filter !== 'all' || type !== 'all' || shape !== 'all';
+
+  function openItem(id: string | null) {
+    if (id === openId) return;
+    if (dirty.current && !confirm('Discard the unsaved changes to this image?')) return;
+    dirty.current = false; setOpenId(id);
+  }
+  const toggle = (id: string) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  // ---- uploads: a queue with progress, two at a time, retry on failure
+  const enqueue = (files: FileList | File[], replaceOf?: string) => {
+    const list = [...files].filter((f) => f.type === '' || ACCEPT.includes(f.type) || /\.(jpe?g|png|webp|avif|tiff?)$/i.test(f.name));
+    const skipped = files.length - list.length;
+    if (skipped) toast(`${skipped} file${skipped > 1 ? 's are' : ' is'} not an image Studio accepts (JPEG, PNG, WebP, AVIF or TIFF).`, true);
+    setJobs((j) => [...j.filter((x) => x.state !== 'done'), ...list.slice(0, replaceOf ? 1 : 50).map((file) => ({ id: crypto.randomUUID(), file, p: 0, state: 'wait' as const, replaceOf }))]);
+  };
+  useEffect(() => {
+    const running = jobs.filter((j) => j.state === 'up').length;
+    const next = jobs.filter((j) => j.state === 'wait').slice(0, Math.max(0, 2 - running));
+    if (!next.length) return;
+    setJobs((js) => js.map((j) => next.some((n) => n.id === j.id) ? { ...j, state: 'up' } : j));
+    for (const j of next) {
+      const url = j.replaceOf ? `/studio/api/media/${j.replaceOf}/replace` : '/studio/api/media';
+      sendFile(url, j.file, me.csrf, (p) => setJobs((js) => js.map((x) => x.id === j.id ? { ...x, p } : x)))
+        .then((row) => {
+          setJobs((js) => js.map((x) => x.id === j.id ? { ...x, p: 1, state: 'done' } : x));
+          if (j.replaceOf) toast('File replaced. Every page keeps using this image and shows the new file from its next publish. Confirm the rights again for the new file.');
+          else if (row?.id) setOpenId((o) => o ?? row.id);
+          load();
+        })
+        .catch((e) => setJobs((js) => js.map((x) => x.id === j.id ? { ...x, state: 'err', error: (e as Error).message } : x)));
+    }
+  }, [jobs, me.csrf, load, toast]);
+  const doneCount = jobs.filter((j) => j.state === 'done' && !j.replaceOf).length;
+  useEffect(() => { if (jobs.length && jobs.every((j) => j.state === 'done') && doneCount) { toast(`${doneCount} image${doneCount > 1 ? 's' : ''} uploaded. Add alt text, credit and rights before using ${doneCount > 1 ? 'them' : 'it'} on the website.`); } }, [jobs, doneCount, toast]);
+
+  // ---- page-wide drop target
+  useEffect(() => {
+    if (!can('media.upload')) return;
+    let depth = 0;
+    const hasFiles = (e: DragEvent) => !!e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+    const enter = (e: DragEvent) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; setDrag(true); };
+    const over = (e: DragEvent) => { if (hasFiles(e)) e.preventDefault(); };
+    const leave = (e: DragEvent) => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (!depth) setDrag(false); };
+    const drop = (e: DragEvent) => { if (!hasFiles(e)) return; e.preventDefault(); depth = 0; setDrag(false); if (e.dataTransfer?.files.length) enqueue(e.dataTransfer.files); };
+    window.addEventListener('dragenter', enter); window.addEventListener('dragover', over); window.addEventListener('dragleave', leave); window.addEventListener('drop', drop);
+    return () => { window.removeEventListener('dragenter', enter); window.removeEventListener('dragover', over); window.removeEventListener('dragleave', leave); window.removeEventListener('drop', drop); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [can]);
+
+  // ---- actions shared by cards, rows and the panel
+  const act = {
+    copy: async (m: LibItem) => {
+      const file = fileOf(m);
+      const live = m.usedOn.some((u) => u.live);
+      const url = live ? `${me.siteUrl.replace(/\/$/, '')}/assets/media/${file}` : new URL(`/studio/media-file/${file}`, location.origin).href;
+      toast(await copy(url) ? (live ? 'Website address of the image copied.' : 'Studio link copied. It works for signed-in staff; the website address exists once a published page uses the image.') : 'Could not copy. Your browser blocked the clipboard.');
+    },
+    download: (m: LibItem) => { const a = document.createElement('a'); a.href = `/studio/api/media/${m.id}/original`; a.download = ''; document.body.append(a); a.click(); a.remove(); },
+    replace: (m: LibItem) => { replaceTarget.current = m.id; replaceInput.current?.click(); },
+    remove: (l: LibItem[]) => setConfirmDel(l),
+  };
+
+  // ---- keyboard: arrows move, Space selects, Enter opens
+  function columns() { const g = gridRef.current; if (!g || view === 'list') return 1; return getComputedStyle(g).gridTemplateColumns.split(' ').length || 1; }
+  function onKey(e: React.KeyboardEvent) {
+    if ((e.target as HTMLElement).closest('button:not(.ml-card), input, a')) return;
+    const n = shown.length; if (!n) return;
+    const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: columns(), ArrowUp: -columns(), Home: -n, End: n }[e.key];
+    if (step !== undefined) { e.preventDefault(); const i = Math.min(n - 1, Math.max(0, cursor + step)); setCursor(i); (gridRef.current?.querySelectorAll<HTMLElement>('[data-card]')[i])?.focus(); return; }
+    const m = shown[cursor]; if (!m) return;
+    if (e.key === ' ') { e.preventDefault(); toggle(m.id); }
+    else if (e.key === 'Enter') { e.preventDefault(); openItem(m.id); }
+    else if (e.key === 'Escape') { setSel(new Set()); }
+  }
+
+  useEffect(() => {
+    if (!sel.size) return;
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.overlay') && !(e.target as HTMLElement).closest('input, textarea')) setSel(new Set()); };
+    window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
+  }, [sel.size]);
+  const selItems = (items ?? []).filter((m) => sel.has(m.id));
+  return (
+    <div className={`ml${open ? ' has-panel' : ''}`}>
+      <div className="page-h">
+        <div><h1>Media Library</h1><p>Every image of the website with its alt text, credit, usage rights and where it appears.</p></div>
+        {can('media.upload') && <button className="btn btn-primary" onClick={() => fileInput.current?.click()}><Icon n="upload" /> Upload</button>}
+        <input ref={fileInput} type="file" accept={ACCEPT} multiple hidden onChange={(e) => { if (e.target.files) enqueue(e.target.files); e.target.value = ''; }} />
+        <input ref={replaceInput} type="file" accept={ACCEPT} hidden onChange={(e) => { const f = e.target.files?.[0]; if (f && replaceTarget.current) enqueue([f], replaceTarget.current); e.target.value = ''; }} />
+      </div>
+
+      <div className="ml-filters" role="tablist" aria-label="Show">
+        {([['all', 'All'], ['needs', 'Needs info'], ['used', 'In use'], ['unused', 'Unused'], ['dupes', 'Duplicates']] as [Filter, string][]).map(([k, l]) =>
+          (k !== 'dupes' || counts.dupes > 0) && <button key={k} role="tab" aria-selected={filter === k} className={`ml-chip${filter === k ? ' on' : ''}${k === 'needs' && counts.needs ? ' warn' : ''}`} onClick={() => setFilter(k)}>{l}<b>{counts[k]}</b></button>)}
+      </div>
+
+      <div className="ml-body">
+        <section className="card ml-main">
+          <div className="ml-tools">
+            <label className="search"><Icon n="search" /><span className="sr-only">Search media</span><input className="input" placeholder="Search name, alt text, credit or tag" value={q} onChange={(e) => setQ(e.target.value)} /></label>
+            <select className="select" aria-label="File type" value={type} onChange={(e) => setType(e.target.value)}><option value="all">All types</option>{types.map((t) => <option key={t} value={t}>{fmt(t)}</option>)}</select>
+            <select className="select" aria-label="Orientation" value={shape} onChange={(e) => setShape(e.target.value)}><option value="all">Any shape</option><option value="landscape">Landscape</option><option value="portrait">Portrait</option><option value="square">Square</option></select>
+            <select className="select" aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)}><option value="new">Newest first</option><option value="name">Name</option><option value="size">Largest files</option><option value="used">Most used</option></select>
+            <span className="ml-count">{items ? <>{filtered ? `${shown.length} of ${items.length}` : `${items.length} image${items.length === 1 ? '' : 's'}`}{counts.needs > 0 && <> · <button className="ml-count-l" onClick={() => setFilter('needs')}>{counts.needs} need{counts.needs === 1 ? 's' : ''} info</button></>}</> : '…'}</span>
+            <div className="ml-seg" role="group" aria-label="Layout">
+              <button className={view === 'grid' ? 'on' : ''} aria-pressed={view === 'grid'} onClick={() => setView('grid')} title="Grid"><MI n="grid" /></button>
+              <button className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} onClick={() => setView('list')} title="List"><MI n="list" /></button>
+            </div>
+            {view === 'grid' && <div className="ml-seg ml-size" role="group" aria-label="Thumbnail size">
+              {(['s', 'm', 'l'] as const).map((s) => <button key={s} className={size === s ? 'on' : ''} aria-pressed={size === s} onClick={() => setSize(s)} title={{ s: 'Small', m: 'Medium', l: 'Large' }[s]}>{s.toUpperCase()}</button>)}
+            </div>}
+          </div>
+
+          {sel.size > 0 && <BulkBar items={selItems} onClear={() => setSel(new Set())} onSelectAll={() => setSel(new Set(shown.map((m) => m.id)))} allSelected={shown.every((m) => sel.has(m.id))} onDone={load} onDelete={() => act.remove(selItems)} />}
+
+          {failed && <div className="ml-err">Could not load the library. <button className="btn btn-sm" onClick={load}>Try again</button></div>}
+          {!items ? <Skeleton size={size} />
+            : items.length === 0 ? <EmptyLibrary onPick={() => fileInput.current?.click()} canUpload={can('media.upload')} />
+            : shown.length === 0 ? <div className="ml-empty"><div className="ml-empty-i"><Icon n="search" /></div><b>No images match</b><p>Try another search or clear the filters.</p><button className="btn btn-sm" onClick={() => { setQ(''); setFilter('all'); setType('all'); setShape('all'); }}>Clear filters</button></div>
+            : <div ref={gridRef} className={view === 'grid' ? `ml-grid sz-${size}` : 'ml-list'} role="listbox" aria-multiselectable="true" aria-label="Images" onKeyDown={onKey}>
+              {view === 'list' && <div className="ml-lh" aria-hidden="true"><span /><span>Image</span><span>Size</span><span>Used on</span><span>Needs</span><span>Uploaded</span><span /></div>}
+              {shown.map((m, i) => <Card key={m.id} m={m} list={view === 'list'} on={open?.id === m.id} picked={sel.has(m.id)} tab={i === cursor}
+                onFocus={() => setCursor(i)} onOpen={() => openItem(m.id)} onPick={() => toggle(m.id)} act={act} can={can} />)}
+            </div>}
+          {items && items.length > 0 && <div className="ml-keys muted"><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Space</kbd> select · <kbd>Enter</kbd> open · drop files anywhere to upload</div>}
+        </section>
+
+        {open && <aside className="ml-side">
+          <Detail key={open.id} m={open} all={items ?? []} onClose={() => openItem(null)} onOpen={openItem} onDirty={(d) => { dirty.current = d; }}
+            onSaved={(r) => { setItems((x) => x?.map((i) => i.id === r.id ? { ...i, ...r } : i) ?? null); load(); }} act={act} />
+        </aside>}
+      </div>
+
+      {jobs.length > 0 && <UploadQueue jobs={jobs} onRetry={(id) => setJobs((js) => js.map((j) => j.id === id ? { ...j, state: 'wait', p: 0, error: undefined } : j))}
+        onDismiss={() => setJobs((js) => js.filter((j) => j.state === 'up' || j.state === 'wait'))} onOpen={() => { /* newest upload is opened when it finishes */ }} />}
+      {drag && <div className="ml-drop-over" aria-hidden="true"><div><MI n="download" size={30} /><b>Drop to upload</b><small>JPEG, PNG, WebP, AVIF or TIFF. Location data is removed.</small></div></div>}
+      {confirmDel && <DeleteDialog list={confirmDel} onClose={() => setConfirmDel(null)} onDone={(ids) => { setConfirmDel(null); setSel((s) => { const n = new Set(s); ids.forEach((x) => n.delete(x)); return n; }); if (openId && ids.includes(openId)) { dirty.current = false; setOpenId(null); } load(); }} />}
+    </div>
+  );
+}
+
+type Acts = { copy: (m: LibItem) => void; download: (m: LibItem) => void; replace: (m: LibItem) => void; remove: (l: LibItem[]) => void };
+
+function Badges({ m, max = 3 }: { m: LibItem; max?: number }) {
+  // most useful first: missing alt text and rights, then duplicates, then a missing credit
+  const b: { k: string; l: string; c: string }[] = [
+    ...m.issues.filter((i) => i !== 'credit').map((i) => ({ k: i, l: ISSUE[i], c: 'warn' })),
+    ...(m.duplicateOf ? [{ k: 'dup', l: m.duplicateOf.exact ? 'Duplicate' : 'Looks similar', c: 'info' }] : []),
+    ...(m.issues.includes('credit') ? [{ k: 'credit', l: ISSUE.credit, c: 'soft' }] : []),
+  ];
+  const n = pages(m);
+  b.push(n ? { k: 'use', l: `Used on ${n} page${n > 1 ? 's' : ''}`, c: m.usedOn.some((u) => u.live) ? 'ok' : 'plain' } : { k: 'unused', l: 'Unused', c: 'plain' });
+  return <>{b.slice(0, max).map((x) => <span key={x.k} className={`ml-b ${x.c}`}>{x.l}</span>)}{b.length > max && <span className="ml-b plain">+{b.length - max}</span>}</>;
+}
+
+function Card({ m, list, on, picked, tab, onFocus, onOpen, onPick, act, can }: { m: LibItem; list: boolean; on: boolean; picked: boolean; tab: boolean; onFocus: () => void; onOpen: () => void; onPick: () => void; act: Acts; can: (p: string) => boolean }) {
+  const name = cleanName(m.originalName);
+  const tools = <div className="ml-acts" onClick={(e) => e.stopPropagation()}>
+    <button title="Copy URL" aria-label={`Copy URL of ${name}`} onClick={() => act.copy(m)}><MI n="copy" /></button>
+    <button title="Download original" aria-label={`Download ${name}`} onClick={() => act.download(m)}><MI n="download" /></button>
+    {can('media.update') && <button title="Replace file" aria-label={`Replace the file of ${name}`} onClick={() => act.replace(m)}><MI n="replace" /></button>}
+    {can('media.delete') && <button className="bad" title={m.usedOn.length ? 'In use: remove it from its pages first' : 'Delete'} aria-label={`Delete ${name}`} onClick={() => act.remove([m])}><MI n="trash" /></button>}
+  </div>;
+  const check = <label className="ml-pick" onClick={(e) => e.stopPropagation()} title="Select"><input type="checkbox" checked={picked} onChange={onPick} tabIndex={-1} aria-label={`Select ${name}`} /></label>;
+  const common = { 'data-card': '', role: 'option', 'aria-selected': picked, tabIndex: tab ? 0 : -1, onFocus, onClick: onOpen, title: m.originalName } as const;
+  if (list) return <div {...common} className={`ml-row${on ? ' on' : ''}${picked ? ' picked' : ''}`}>
+    {check}
+    <span className="ml-row-n"><img src={m.url} alt="" loading="lazy" style={{ objectPosition: `${m.focalX}% ${m.focalY}%` }} /><span><b>{name}</b><small>{m.alt || <em>No alt text</em>}</small></span></span>
+    <span className="ml-dim">{m.width}×{m.height}<small>{mb(m.bytes)} · {fmt(m.mime)}</small></span>
+    <span className="ml-dim">{pages(m) ? `${pages(m)} page${pages(m) > 1 ? 's' : ''}` : <span className="muted">Unused</span>}{m.usedOn.some((u) => u.live) && <small className="ok">Live</small>}</span>
+    <span className="ml-row-b">{m.issues.length ? m.issues.map((i) => <span key={i} className={`ml-b ${i === 'credit' ? 'soft' : 'warn'}`}>{ISSUE[i].replace('Needs ', '').replace(/^./, (c) => c.toUpperCase())}</span>) : <span className="ml-b ok">Ready</span>}</span>
+    <span className="ml-dim muted">{ago(m.createdAt)}</span>
+    {tools}
+  </div>;
+  return <div {...common} className={`ml-card${on ? ' on' : ''}${picked ? ' picked' : ''}`}>
+    <div className="ml-thumb"><img src={m.url} alt="" loading="lazy" style={{ objectPosition: `${m.focalX}% ${m.focalY}%` }} />{check}{tools}</div>
+    <div className="ml-meta"><b>{name}</b><small>{m.width}×{m.height} · {mb(m.bytes)}</small><div className="ml-badges"><Badges m={m} /></div></div>
+  </div>;
+}
+
+function Skeleton({ size }: { size: string }) {
+  return <div className={`ml-grid sz-${size}`} aria-busy="true" aria-label="Loading images">{Array.from({ length: 12 }, (_, i) => <div key={i} className="ml-card ml-sk"><div className="ml-thumb skeleton" /><div className="ml-meta"><div className="skeleton" style={{ width: '70%' }} /><div className="skeleton" style={{ width: '40%', height: 10 }} /></div></div>)}</div>;
+}
+
+function EmptyLibrary({ onPick, canUpload }: { onPick: () => void; canUpload: boolean }) {
+  return <div className="ml-empty">
+    <div className="ml-empty-i"><Icon n="image" /></div><b>No images yet</b>
+    <p>Photos uploaded here can be used on projects, stories, events, partners and pages. Studio resizes them for the website and removes location data.</p>
+    {canUpload && <button className="ml-dropzone" onClick={onPick}><Icon n="upload" /><span><b>Drop images here or choose files</b><small>JPEG, PNG, WebP, AVIF or TIFF</small></span></button>}
+  </div>;
+}
+
+function UploadQueue({ jobs, onRetry, onDismiss }: { jobs: Job[]; onRetry: (id: string) => void; onDismiss: () => void; onOpen: () => void }) {
+  const [min, setMin] = useState(false);
+  const active = jobs.filter((j) => j.state === 'up' || j.state === 'wait').length; const errs = jobs.filter((j) => j.state === 'err').length;
+  return <div className="ml-queue" role="status" aria-live="polite">
+    <div className="ml-q-h"><b>{active ? `Uploading ${active} of ${jobs.length}…` : errs ? `${errs} upload${errs > 1 ? 's' : ''} failed` : 'Uploads finished'}</b>
+      <button className="btn btn-ghost btn-sm" onClick={() => setMin(!min)}>{min ? 'Show' : 'Hide'}</button>
+      {!active && <button className="btn btn-ghost icon-btn btn-sm" aria-label="Close" onClick={onDismiss}><Icon n="x" /></button>}</div>
+    {!min && <ul>{jobs.map((j) => <li key={j.id} className={j.state}>
+      <span className="ml-q-n" title={j.file.name}>{j.replaceOf ? 'Replace: ' : ''}{j.file.name}<small>{j.state === 'err' ? j.error : j.state === 'done' ? 'Done' : j.state === 'wait' ? 'Waiting' : j.p >= 1 ? 'Processing…' : `${Math.round(j.p * 100)}%`} · {mb(j.file.size)}</small></span>
+      {j.state === 'err' ? <button className="btn btn-sm" onClick={() => onRetry(j.id)}>Retry</button> : j.state === 'done' ? <Icon n="check" /> : null}
+      <i style={{ width: `${(j.state === 'done' ? 1 : j.p) * 100}%` }} />
+    </li>)}</ul>}
+  </div>;
+}
+
+// ================================================================= Bulk
+function BulkBar({ items, allSelected, onClear, onSelectAll, onDone, onDelete }: { items: LibItem[]; allSelected: boolean; onClear: () => void; onSelectAll: () => void; onDone: () => void; onDelete: () => void }) {
+  const can = useCan(); const toast = useToast();
+  const [mode, setMode] = useState<null | 'tags' | 'credit' | 'licence'>(null); const [v, setV] = useState(''); const [until, setUntil] = useState(''); const [busy, setBusy] = useState(false);
+  const unused = items.filter((m) => !m.usedOn.length).length;
+  async function run(body: Record<string, unknown>, msg: string) {
+    setBusy(true);
+    try { const r = await post<{ updated: number }>('/media/bulk', { ids: items.map((m) => m.id), ...body }); toast(`${msg} on ${r.updated} image${r.updated === 1 ? '' : 's'}.`); setMode(null); setV(''); onDone(); }
+    catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
+  }
+  return <div className="ml-bulk" role="region" aria-label="Bulk actions">
+    <button className="btn btn-ghost icon-btn btn-sm" aria-label="Clear selection" title="Clear selection (Esc)" onClick={onClear}><Icon n="x" /></button>
+    <b>{items.length} selected</b>
+    {!allSelected && <button className="btn btn-ghost btn-sm" onClick={onSelectAll}>Select all shown</button>}
+    <span className="ml-bulk-sp" />
+    <div className="ml-bulk-a">
+    {mode ? <form className="ml-bulk-f" onSubmit={(e) => { e.preventDefault(); if (mode === 'tags') { const tags = v.split(',').map((x) => x.trim()).filter(Boolean); if (tags.length) run({ addTags: tags }, `Added ${tags.length > 1 ? 'tags' : `tag “${tags[0]}”`}`); } else if (mode === 'licence') run({ licence: v.trim(), rightsExpiresOn: until || null }, v.trim() ? `Licence “${v.trim()}”${until ? ` until ${until}` : ''} set` : 'Licence cleared'); else run({ credit: v.trim() }, v.trim() ? 'Credit set' : 'Credit cleared'); }}>
+      <input className="input" autoFocus value={v} onChange={(e) => setV(e.target.value)} maxLength={mode === 'tags' ? 200 : 200} list={mode === 'licence' ? 'ml-licences-b' : undefined} placeholder={mode === 'tags' ? 'Tags, separated by commas' : mode === 'licence' ? 'Licence, e.g. Used with permission' : 'Photographer or source'} aria-label={mode === 'tags' ? 'Tags to add' : mode === 'licence' ? 'Licence' : 'Credit'} />
+      {mode === 'licence' && <><datalist id="ml-licences-b">{['AFCD own photo', 'Used with permission', 'CC BY 4.0', 'CC BY-SA 4.0', 'CC0 / public domain', 'Partner photo'].map((x) => <option key={x} value={x} />)}</datalist>
+        <input className="input ml-bulk-d" type="date" value={until} onChange={(e) => setUntil(e.target.value)} aria-label="Rights end (optional)" title="Rights end (optional)" /></>}
+      <button className="btn btn-primary btn-sm" disabled={busy}>{mode === 'tags' ? 'Add' : 'Set'}</button><button type="button" className="btn btn-ghost btn-sm" onClick={() => setMode(null)}>Cancel</button>
+    </form> : can('media.update') && <>
+      <button className="btn btn-sm" onClick={() => { setMode('tags'); setV(''); }}><MI n="tag" size={14} /> Add tags</button>
+      <button className="btn btn-sm" onClick={() => { setMode('credit'); setV(''); }}>Set credit</button>
+      <button className="btn btn-sm" onClick={() => { setMode('licence'); setV(''); setUntil(''); }}>Set licence</button>
+      <button className="btn btn-sm" disabled={busy} onClick={() => { if (confirm(`Confirm usage rights and consent for ${items.length} image${items.length > 1 ? 's' : ''}? Only do this if AFCD may publish all of them and the people shown agreed.`)) run({ rightsConfirmed: true }, 'Rights confirmed'); }}>Confirm rights</button>
+    </>}
+    {!mode && can('media.delete') && <button className="btn btn-sm btn-danger" disabled={!unused} title={unused ? '' : 'Every selected image is in use'} onClick={onDelete}><MI n="trash" size={14} /> Delete unused{unused ? ` (${unused})` : ''}</button>}
+    </div>
+  </div>;
+}
+
+function DeleteDialog({ list, onClose, onDone }: { list: LibItem[]; onClose: () => void; onDone: (ids: string[]) => void }) {
+  const toast = useToast(); const [busy, setBusy] = useState(false);
+  const inUse = list.filter((m) => m.usedOn.length); const free = list.filter((m) => !m.usedOn.length);
+  async function go() {
+    setBusy(true); const gone: string[] = [];
+    for (const m of free) { try { await del(`/media/${m.id}`); gone.push(m.id); } catch (e) { toast(`${cleanName(m.originalName)}: ${(e as Error).message}`, true); } }
+    setBusy(false); if (gone.length) toast(`${gone.length} image${gone.length > 1 ? 's' : ''} deleted.`); onDone(gone);
+  }
+  const one = list.length === 1;
+  return <Modal size="sm" title={!free.length ? 'This image is in use' : one ? 'Delete this image?' : `Delete ${free.length} unused image${free.length > 1 ? 's' : ''}?`} onClose={onClose} footer={<>
+    <button className="btn" onClick={onClose}>{free.length ? 'Cancel' : 'Close'}</button>
+    {free.length > 0 && <button className="btn ml-del-btn" disabled={busy} onClick={go}>{busy ? 'Deleting…' : `Delete${one ? '' : ` ${free.length}`}`}</button>}</>}>
+    <div className="modal-b stack">
+      {free.length > 0 && <p style={{ margin: 0 }}>{one ? <><b>{cleanName(free[0].originalName)}</b> and its resized copies are removed for good.</> : `The originals and resized copies are removed for good.`} This cannot be undone; download the original first if you may need it.</p>}
+      {inUse.length > 0 && <div className="ml-warn"><b>{inUse.length === list.length && one ? 'Remove it from these places first:' : `${inUse.length} selected image${inUse.length > 1 ? 's are' : ' is'} in use and will be kept:`}</b>
+        <ul>{inUse.slice(0, 6).flatMap((m) => m.usedOn.slice(0, one ? 8 : 2).map((u, i) => <li key={m.id + i}>{!one && <>{cleanName(m.originalName)} → </>}{u.kind === u.title ? u.title : `${u.kind}: ${u.title}`} <span className="muted">({u.where})</span></li>))}</ul></div>}
+    </div>
+  </Modal>;
+}
+
+// ================================================================= Detail panel
+function Detail({ m, all, onClose, onOpen, onDirty, onSaved, act }: { m: LibItem; all: LibItem[]; onClose: () => void; onOpen: (id: string) => void; onDirty: (d: boolean) => void; onSaved: (m: Partial<LibItem> & { id: string }) => void; act: Acts }) {
+  const can = useCan(); const toast = useToast();
+  const init = { alt: m.alt, caption: m.caption, credit: m.credit, rightsConfirmed: m.rightsConfirmed, licence: m.licence ?? '', rightsExpiresOn: m.rightsExpiresOn ?? null, focalX: m.focalX, focalY: m.focalY, tags: m.tags };
+  const [f, setF] = useState(init); const [busy, setBusy] = useState(false); const [tag, setTag] = useState('');
+  const ro = !can('media.update');
+  const dirty = JSON.stringify(f) !== JSON.stringify(init);
+  useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
+  useEffect(() => () => onDirty(false), [onDirty]);
+  const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
+  async function save() {
+    setBusy(true);
+    try { const r = await patch<MediaItem>(`/media/${m.id}`, f); onDirty(false); onSaved({ ...r, tags: f.tags, licence: f.licence, rightsExpiresOn: f.rightsExpiresOn }); toast('Image details saved.'); }
+    catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
+  }
+  useEffect(() => { const k = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key === 's' && dirty && !ro) { e.preventDefault(); save(); } }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); });
+  const addTag = (raw: string) => { const l = raw.split(',').map((x) => x.trim().slice(0, 40)).filter(Boolean); if (l.length) set('tags', [...new Set([...f.tags, ...l])].slice(0, 20)); setTag(''); };
+  const altWarn = /^(an? )?(image|photo|picture|photograph) of\b/i.test(f.alt.trim()) ? 'Screen readers already say it is an image: start with what it shows.' : f.alt.trim() && f.alt.trim().length < 8 ? 'Very short. Say who or what is in the photo, and where if it matters.' : '';
+  const dups = (m.duplicateOf?.ids ?? []).map((id) => all.find((x) => x.id === id)).filter(Boolean) as LibItem[];
+  const groups = Object.entries(m.usedOn.reduce<Record<string, Use[]>>((a, u) => { (a[u.href] ??= []).push(u); return a; }, {}));
+
+  return <section className="card ml-panel" aria-label={`Details of ${cleanName(m.originalName)}`}>
+    <div className="ml-p-h">
+      <button className="btn btn-ghost icon-btn ml-back" onClick={onClose} aria-label="Back to the library"><MI n="back" /></button>
+      <div className="ml-p-t"><h2 title={m.originalName}>{cleanName(m.originalName)}</h2><small>{m.width}×{m.height} · {mb(m.bytes)} · {fmt(m.mime)}</small></div>
+      <button className="btn btn-ghost icon-btn ml-close" onClick={onClose} aria-label="Close details"><Icon n="x" /></button>
+    </div>
+
+    <Focal m={m} x={f.focalX} y={f.focalY} ro={ro} onChange={(x, y) => setF((v) => ({ ...v, focalX: x, focalY: y }))} />
+
+    <div className="ml-quick">
+      <button className="btn btn-sm" onClick={() => act.copy(m)}><MI n="copy" size={14} /> Copy URL</button>
+      <button className="btn btn-sm" onClick={() => act.download(m)}><MI n="download" size={14} /> Original</button>
+      {!ro && <button className="btn btn-sm" onClick={() => act.replace(m)} title="Upload a new file in its place. Every page keeps using it."><MI n="replace" size={14} /> Replace</button>}
+    </div>
+
+    {m.issues.length > 0 && <div className="ml-todo"><b>Before this image goes on the website</b><ul>
+      {m.issues.includes('alt') && <li className={f.alt.trim() ? 'done' : ''}>Describe it in the alt text</li>}
+      {m.issues.includes('credit') && <li className={f.credit.trim() ? 'done' : ''}>Credit the photographer or source</li>}
+      {m.issues.includes('rights') && <li className={f.rightsConfirmed ? 'done' : ''}>Confirm usage rights and consent</li>}
+      {m.issues.includes('expired') && <li className={!f.rightsExpiresOn || f.rightsExpiresOn >= today() ? 'done' : ''}>The usage right ended on {fmtDate(m.rightsExpiresOn!)}: renew it or stop using the image</li>}
+    </ul></div>}
+
+    <div className="ml-fields">
+      <label className="field"><span>Alt text <em className="muted">· {f.alt.length}/250</em></span>
+        <textarea className="textarea" rows={3} value={f.alt} maxLength={250} disabled={ro} onChange={(e) => set('alt', e.target.value)} placeholder="Who or what the photo shows, and where if it matters" />
+        <small className={altWarn ? 'ml-hint warn' : 'ml-hint'}>{altWarn || 'What someone who cannot see the photo needs to know. Required before publishing.'}</small></label>
+      <label className="field"><span>Caption <em className="muted">· optional, shown under the photo</em></span><input className="input" value={f.caption} maxLength={500} disabled={ro} onChange={(e) => set('caption', e.target.value)} /></label>
+      <label className="field"><span>Credit</span><input className="input" value={f.credit} maxLength={200} disabled={ro} onChange={(e) => set('credit', e.target.value)} placeholder="Photographer or source" /></label>
+      <label className={`check ml-rights${f.rightsConfirmed ? ' on' : ''}`}><input type="checkbox" checked={f.rightsConfirmed} disabled={ro} onChange={(e) => set('rightsConfirmed', e.target.checked)} />
+        <span><b>Usage rights and consent confirmed</b><small className="muted">AFCD may publish this image, and people who can be identified agreed to appear in it.</small></span></label>
+      <div className="ml-two">
+        <label className="field"><span>Licence <em className="muted">· optional</em></span><input className="input" list="ml-licences" value={f.licence} maxLength={120} disabled={ro} onChange={(e) => set('licence', e.target.value)} placeholder="e.g. AFCD own photo" />
+          <datalist id="ml-licences">{['AFCD own photo', 'Used with permission', 'CC BY 4.0', 'CC BY-SA 4.0', 'CC0 / public domain', 'Partner photo'].map((x) => <option key={x} value={x} />)}</datalist></label>
+        <label className="field"><span>Rights end <em className="muted">· optional</em></span><input className="input" type="date" value={f.rightsExpiresOn ?? ''} disabled={ro} onChange={(e) => set('rightsExpiresOn', e.target.value || null)} />
+          {f.rightsExpiresOn && f.rightsExpiresOn < today() && <small className="ml-hint warn">This date has passed.</small>}</label>
+      </div>
+      <div className="field"><span>Tags</span>
+        <div className="ml-tags">{f.tags.map((t) => <span key={t} className="ml-tag">{t}{!ro && <button aria-label={`Remove tag ${t}`} onClick={() => set('tags', f.tags.filter((x) => x !== t))}><Icon n="x" width={12} height={12} /></button>}</span>)}
+          {!ro && <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder={f.tags.length ? 'Add…' : 'Add tags, e.g. event, school'} aria-label="Add a tag"
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(tag); } else if (e.key === 'Backspace' && !tag && f.tags.length) set('tags', f.tags.slice(0, -1)); }} onBlur={() => tag && addTag(tag)} />}</div></div>
+    </div>
+
+    <div className="ml-sec"><h3>Used on {groups.length > 0 && <span className="muted">· {groups.length} page{groups.length > 1 ? 's' : ''}</span>}</h3>
+      {groups.length ? <ul className="ml-uses">{groups.map(([href, l]) => <li key={href}><a href={href} onClick={(e) => { e.preventDefault(); navigate(href); }}><b>{l[0].title}</b><small>{l[0].kind} · {[...new Set(l.map((u) => u.where))].join(', ')}</small></a>{l.some((u) => u.live) && <span className="ml-b ok">Live</span>}</li>)}</ul>
+        : <p className="muted ml-none">Not used anywhere yet. Choose it from a project, story, event or page editor.</p>}</div>
+
+    {dups.length > 0 && <div className="ml-sec"><h3>{m.duplicateOf!.exact ? 'Same file uploaded again' : 'Looks like'}</h3>
+      <p className="muted ml-none">{m.duplicateOf!.exact ? 'These are byte-for-byte copies. Keep one and delete the unused copies.' : 'These look nearly identical (resized or recompressed). Check before keeping both.'}</p>
+      <div className="ml-dups">{dups.map((d) => <button key={d.id} onClick={() => onOpen(d.id)} title={d.originalName}><img src={d.url} alt="" /><small>{d.usedOn.length ? `In use` : 'Unused'}</small></button>)}</div></div>}
+
+    <dl className="ml-kv">
+      <dt>Dimensions</dt><dd>{m.width} × {m.height} px ({orient(m)})</dd>
+      <dt>File</dt><dd>{fmt(m.mime)} · {mb(m.bytes)}</dd>
+      {(m.licence || m.rightsExpiresOn) && <><dt>Rights</dt><dd>{[m.licence, m.rightsExpiresOn ? `until ${fmtDate(m.rightsExpiresOn)}` : ''].filter(Boolean).join(' · ')}</dd></>}
+      <dt>Uploaded</dt><dd>{fmtDate(m.createdAt)}{m.uploadedByName ? ` by ${m.uploadedByName}` : ''}</dd>
+      {m.updatedAt !== m.createdAt && <><dt>Last changed</dt><dd>{fmtDate(m.updatedAt)}</dd></>}
+    </dl>
+
+    <div className="ml-p-f">
+      {can('media.delete') && <button className="btn btn-ghost btn-danger btn-sm" onClick={() => act.remove([m])} title={m.usedOn.length ? 'In use: remove it from its pages first' : ''}><MI n="trash" size={14} /> Delete</button>}
+      <span style={{ flex: 1 }} />
+      {!ro && <>{dirty && <button className="btn btn-ghost btn-sm" onClick={() => setF(init)}>Discard</button>}
+        <button className="btn btn-primary" disabled={!dirty || busy} onClick={save}>{busy ? 'Saving…' : dirty ? 'Save details' : 'Saved'}</button></>}
+    </div>
+  </section>;
+}
+
+/** Click, drag or use the arrow keys to set the point the website keeps in view when it crops the image (object-position). */
+function Focal({ m, x, y, ro, onChange }: { m: LibItem; x: number; y: number; ro: boolean; onChange: (x: number, y: number) => void }) {
+  const box = useRef<HTMLDivElement>(null); const dragging = useRef(false);
+  const at = (e: React.PointerEvent) => { const r = box.current!.getBoundingClientRect(); onChange(Math.round(Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100))), Math.round(Math.min(100, Math.max(0, ((e.clientY - r.top) / r.height) * 100)))); };
+  const src = m.large ?? m.url;
+  return <div className="ml-focal-w">
+    <div ref={box} className={`ml-focal${ro ? ' ro' : ''}`} style={{ aspectRatio: `${m.width} / ${m.height}` }}
+      tabIndex={ro ? -1 : 0} role={ro ? undefined : 'slider'} aria-label="Focal point" aria-valuetext={`${x}% from the left, ${y}% from the top`}
+      onPointerDown={(e) => { if (ro) return; dragging.current = true; e.currentTarget.setPointerCapture(e.pointerId); at(e); }}
+      onPointerMove={(e) => { if (dragging.current) at(e); }} onPointerUp={() => { dragging.current = false; }}
+      onKeyDown={(e) => { if (ro) return; const d = e.shiftKey ? 10 : 2; const v = { ArrowLeft: [-d, 0], ArrowRight: [d, 0], ArrowUp: [0, -d], ArrowDown: [0, d] }[e.key]; if (v) { e.preventDefault(); onChange(Math.min(100, Math.max(0, x + v[0])), Math.min(100, Math.max(0, y + v[1]))); } }}>
+      <img src={src} alt="" draggable={false} />
+      <i style={{ left: `${x}%`, top: `${y}%` }} />
+    </div>
+    <div className="ml-crops" aria-hidden="true">{[['16 / 9', 'Wide'], ['4 / 3', 'Card'], ['1 / 1', 'Square'], ['4 / 5', 'Tall']].map(([r, l]) => <figure key={r}><div style={{ aspectRatio: r }}><img src={m.url} alt="" style={{ objectPosition: `${x}% ${y}%` }} /></div><figcaption>{l}</figcaption></figure>)}</div>
+    <small className="muted">{ro ? 'Focal point used when the website crops this photo.' : 'Click or drag on the photo to choose what stays in view when the website crops it.'}</small>
+  </div>;
+}
+
+// ================================================================= Picker (used by the editors)
 async function upload(file: File): Promise<MediaItem> {
   const fd = new FormData(); fd.append('file', file);
   const csrf = (await api<{ csrf: string }>('/me')).csrf;
@@ -40,64 +496,8 @@ function Uploader({ onDone }: { onDone: (m: MediaItem[]) => void }) {
     <Icon n="upload" width={22} height={22} />
     <b>{busy ? `Uploading ${busy}…` : 'Drop images here or click to upload'}</b>
     <small>JPEG, PNG, WebP, AVIF or TIFF, up to 15 MB. Metadata such as GPS location is removed.</small>
-    <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/tiff" multiple hidden onChange={(e) => { if (e.target.files) go(e.target.files); e.target.value = ''; }} />
+    <input ref={input} type="file" accept={ACCEPT} multiple hidden onChange={(e) => { if (e.target.files) go(e.target.files); e.target.value = ''; }} />
   </div>;
-}
-
-const ready = (m: MediaItem) => !!m.alt && m.rightsConfirmed;
-
-export function MediaLibrary() {
-  const { items, setItems, q, setQ } = useMedia();
-  const [sel, setSel] = useState<MediaItem | null>(null);
-  return (
-    <>
-      <div className="page-h"><div><h1>Media Library</h1><p>Every image used on the website, with alt text, credits and usage rights.</p></div></div>
-      <div className="editor">
-        <section className="card">
-          <div className="card-h"><label className="search"><Icon n="search" /><span className="sr-only">Search media</span><input className="input" placeholder="Search by name, alt text or caption" value={q} onChange={(e) => setQ(e.target.value)} /></label><span className="muted">{items?.length ?? 0} items</span></div>
-          <div className="card-b stack">
-            <Uploader onDone={(m) => { setItems((x) => [...m, ...(x ?? [])]); setSel(m[0]); }} />
-            {items && items.length === 0 && <div className="empty">No images yet.</div>}
-            <div className="media-grid">{items?.map((m) => (
-              <button key={m.id} className={`tile${sel?.id === m.id ? ' on' : ''}`} onClick={() => setSel(m)}>
-                <img src={m.url} alt="" loading="lazy" />
-                {!ready(m) && <span className="flag badge b-changes_requested">Needs info</span>}
-                <div><b>{m.originalName}</b><small>{m.width}×{m.height} · used {m.usedBy ?? 0}×</small></div>
-              </button>))}</div>
-          </div>
-        </section>
-        <aside className="inspector">
-          {sel ? <MediaDetails key={sel.id} m={sel} onSaved={(m) => { setSel(m); setItems((x) => x?.map((i) => i.id === m.id ? { ...i, ...m } : i) ?? null); }} onDeleted={() => { setItems((x) => x?.filter((i) => i.id !== sel.id) ?? null); setSel(null); }} />
-            : <section className="card"><div className="card-b muted">Select an image to edit its details.</div></section>}
-        </aside>
-      </div>
-    </>
-  );
-}
-
-function MediaDetails({ m, onSaved, onDeleted }: { m: MediaItem; onSaved: (m: MediaItem) => void; onDeleted: () => void }) {
-  const can = useCan(); const toast = useToast();
-  const [f, setF] = useState({ alt: m.alt, caption: m.caption, credit: m.credit, rightsConfirmed: m.rightsConfirmed, focalX: m.focalX, focalY: m.focalY });
-  const [busy, setBusy] = useState(false);
-  const ro = !can('media.update');
-  const dirty = JSON.stringify(f) !== JSON.stringify({ alt: m.alt, caption: m.caption, credit: m.credit, rightsConfirmed: m.rightsConfirmed, focalX: m.focalX, focalY: m.focalY });
-  async function save() { setBusy(true); try { const r = await patch<MediaItem>(`/media/${m.id}`, f); onSaved({ ...m, ...r }); toast('Image details saved'); } catch (e) { toast((e as Error).message, true); } finally { setBusy(false); } }
-  async function remove() { if (!confirm('Delete this image permanently? This cannot be undone.')) return; try { await del(`/media/${m.id}`); toast('Image deleted'); onDeleted(); } catch (e) { toast((e as Error).message, true); } }
-  return <section className="card">
-    <div className="card-h"><h2 style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.originalName}</h2></div>
-    <div className="card-b stack">
-      <div className="focal" onClick={(e) => { if (ro) return; const r = e.currentTarget.getBoundingClientRect(); setF({ ...f, focalX: Math.round(((e.clientX - r.left) / r.width) * 100), focalY: Math.round(((e.clientY - r.top) / r.height) * 100) }); }} title="Click to set the focal point">
-        <img src={m.large ?? m.url} alt="" /><i style={{ left: `${f.focalX}%`, top: `${f.focalY}%` }} />
-      </div>
-      <small className="muted">Click the image to set the focal point used when it is cropped.</small>
-      <label className="field"><span>Alt text</span><textarea className="textarea" style={{ minHeight: 60 }} value={f.alt} maxLength={250} disabled={ro} onChange={(e) => setF({ ...f, alt: e.target.value })} placeholder="Describe what the photo shows" /><small className="muted">Required before publishing. Describe the content, not “photo of”.</small></label>
-      <label className="field"><span>Caption <em>· optional</em></span><input className="input" value={f.caption} maxLength={500} disabled={ro} onChange={(e) => setF({ ...f, caption: e.target.value })} /></label>
-      <label className="field"><span>Credit <em>· optional</em></span><input className="input" value={f.credit} maxLength={200} disabled={ro} onChange={(e) => setF({ ...f, credit: e.target.value })} placeholder="Photographer or source" /></label>
-      <label className="check"><input type="checkbox" checked={f.rightsConfirmed} disabled={ro} onChange={(e) => setF({ ...f, rightsConfirmed: e.target.checked })} /><span><b>Usage rights and consent confirmed</b><br /><small className="muted">AFCD may publish this image, and people who can be identified agreed to appear in it.</small></span></label>
-      <dl className="kv"><dt>Size</dt><dd>{m.width}×{m.height} · {(m.bytes / 1024 / 1024).toFixed(1)} MB</dd><dt>Type</dt><dd>{m.mime}</dd><dt>Uploaded</dt><dd>{fmtDate(m.createdAt)}</dd><dt>Used by</dt><dd>{m.usedBy ?? 0} item(s)</dd></dl>
-      {!ro && <div className="between"><button className="btn btn-ghost btn-danger btn-sm" onClick={remove} disabled={!can('media.delete')}>Delete</button><button className="btn btn-primary" disabled={!dirty || busy} onClick={save}>{busy ? 'Saving…' : 'Save details'}</button></div>}
-    </div>
-  </section>;
 }
 
 export function MediaPicker({ multiple, onPick, onClose }: { multiple?: boolean; onPick: (m: MediaItem[]) => void; onClose: () => void }) {

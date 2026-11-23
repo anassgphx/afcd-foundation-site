@@ -11,6 +11,7 @@ import { inArray } from 'drizzle-orm';
 import { media } from '../../db/schema.ts';
 import { publicRef } from '../media/service.ts';
 import { pageBody, partId } from './fields.ts';
+import { valueMediaIds } from './service.ts';
 import { layoutBlocks, type LayoutEntry } from './layout.ts';
 
 /** Layout as build.mjs reads it: sections by id, blocks as HTML from the registry (hidden blocks left out). */
@@ -50,17 +51,26 @@ img[data-sf],[data-sf] img{cursor:pointer}
 [data-sf].sf-on{outline:2px solid #2563EB;outline-offset:3px;background-color:rgba(37,99,235,.06)}
 </style>`;
 
-/** Field values for lib/page-fields.mjs: chosen photos ({ mediaId }) become { src, srcset, w, h, alt, fx, fy }. */
+/** Field values for lib/page-fields.mjs: chosen photos ({ mediaId }, in image fields and in participant stories) become
+ *  { src, srcset, w, h, alt, fx, fy }, with the alt text and focal point kept in the Media Library. Used by the canvas,
+ *  previews and publishing alike. */
 export async function resolveFieldValues(db: DB, values: Record<string, unknown>) {
-  const ids = Object.values(values).flatMap((v) => (v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId] : []));
+  const ids = valueMediaIds(values);
   const rows = ids.length ? await db.select().from(media).where(inArray(media.id, ids)) : [];
+  const photo = (id: string) => {
+    const m = rows.find((r) => r.id === id); if (!m) return undefined;
+    const ref = publicRef(m, 'assets/media/');
+    return { src: ref.src, srcset: ref.srcset, w: ref.w, h: ref.h, alt: m.alt, fx: m.focalX ?? 50, fy: m.focalY ?? 50 };
+  };
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(values)) {
-    if (v && typeof v === 'object' && 'mediaId' in v) {
-      const m = rows.find((r) => r.id === (v as { mediaId: string }).mediaId); if (!m) continue;
-      const ref = publicRef(m, 'assets/media/');
-      out[k] = { src: ref.src, srcset: ref.srcset, w: ref.w, h: ref.h, alt: m.alt, fx: m.focalX, fy: m.focalY };
-    } else out[k] = v;
+    if (v && typeof v === 'object' && 'mediaId' in v) { const p = photo((v as { mediaId: string }).mediaId); if (p) out[k] = p; }
+    else if (Array.isArray(v)) out[k] = v.map((s) => {
+      if (!(s && typeof s === 'object' && s.image && typeof s.image === 'object' && 'mediaId' in s.image)) return s;
+      const { image, ...rest } = s; const p = photo(String(image.mediaId));
+      return p ? { ...rest, image: p } : rest;   // a deleted photo falls back to the placeholder (review reports it)
+    });
+    else out[k] = v;
   }
   return out;
 }

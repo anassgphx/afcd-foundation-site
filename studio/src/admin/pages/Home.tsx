@@ -36,7 +36,7 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
   const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
   const [media, setMedia] = useState<Record<string, MediaItem>>({});
   const [links, setLinks] = useState<string[]>([]);
-  const [dialog, setDialog] = useState<null | { kind: 'image'; key: string } | { kind: 'library'; at?: number } | { kind: 'preview' | 'publish' | 'unpublish' | 'changes' | 'history' }>(null);
+  const [dialog, setDialog] = useState<null | { kind: 'image'; key: string; story?: number } | { kind: 'library'; at?: number } | { kind: 'preview' | 'publish' | 'unpublish' | 'changes' | 'history' }>(null);
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);   // ⋯ actions menu of a section
   const [url, setUrl] = useState(''); const [comment, setComment] = useState('');
   const [html, setHtml] = useState('');
@@ -291,7 +291,7 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
             {selEntry.kind === 'block' && <p className="muted" style={{ fontSize: 12.5, margin: '4px 0 0' }}>{defs.get(selEntry.type)?.description}</p>}</div>
           {layoutOn && <label className="check"><input type="checkbox" checked={!selEntry.hidden} onChange={() => toggle(selEntry.id)} /><span>Show on the homepage</span></label>}
           {selEntry.kind === 'section'
-            ? <SectionFields fields={d.fields.filter((f) => f.sectionId === selEntry.id)} values={st.values} media={media} editable={editable} onChange={setField} onPickImage={(key) => setDialog({ kind: 'image', key })} />
+            ? <SectionFields fields={d.fields.filter((f) => f.sectionId === selEntry.id)} values={st.values} media={media} editable={editable} onChange={setField} onPickImage={(key, story) => setDialog({ kind: 'image', key, story })} />
             : <>
               <div className="seg ds-tabs" role="tablist">{(['content', 'design'] as const).map((t) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t === 'content' ? 'Content' : 'Design'}</button>)}</div>
               {tab === 'design' ? <DesignFields value={selEntry.design} onChange={(d) => setLayout(st.layout.map((x) => (x.id === selEntry.id && x.kind === 'block' ? { ...x, design: d } : x)))} />
@@ -302,7 +302,10 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
 
     {dialog?.kind === 'library' && <SectionLibrary catalog={d.catalog} onPick={(t) => addBlock(t, dialog.at)} onClose={() => setDialog(null)} />}
     {menu && <ActionMenu x={menu.x} y={menu.y} acts={actionsFor(menu.id)} onRun={(a) => { setMenu(null); runAct(menu.id, a); }} onClose={() => setMenu(null)} />}
-    {dialog?.kind === 'image' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { const f = d.fields.find((x) => x.key === dialog.key)!; if (m[0]) { setMedia((x) => ({ ...x, [m[0].id]: m[0] })); setField(f, { mediaId: m[0].id }); } setDialog(null); }} />}
+    {dialog?.kind === 'image' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { const f = d.fields.find((x) => x.key === dialog.key)!; if (m[0]) { setMedia((x) => ({ ...x, [m[0].id]: m[0] }));
+      // a participant story's photo, or a whole image field
+      if (dialog.story !== undefined) { const list = [...(st.values[f.key] ?? f.default)]; list[dialog.story] = { ...list[dialog.story], image: { mediaId: m[0].id } }; setField(f, list); }
+      else setField(f, { mediaId: m[0].id }); } setDialog(null); }} />}
     {dialog?.kind === 'preview' && <Modal wide title="Preview · built by the real website build" onClose={() => setDialog(null)}><div className="preview-wrap"><iframe title={`${P.label} preview`} src={url} style={{ width: Math.min(device, window.innerWidth - 80) }} /></div></Modal>}
     {dialog?.kind === 'history' && <Modal title={`${P.label} history`} onClose={() => setDialog(null)}><div className="modal-b">
       {!d.content ? <p className="muted">No versions yet.</p> : <ol className="timeline">{d.history.revisions.map((r) => <li key={r.id}><b>Revision {r.number} · {r.reason}{r.id === d.content!.publishedRevisionId ? ' · live' : ''}</b><small>{fmtDate(r.createdAt)}</small>
@@ -317,7 +320,7 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
 // same limits as the server (modules/home/service.ts HEAD_MAX) for the numbered section headers
 const HEAD_MAX: Record<string, number> = { num: 4, label: 60, meta: 60 };
 
-function SectionFields({ fields, values, media, editable, onChange, onPickImage }: { fields: FieldDef[]; values: Record<string, any>; media: Record<string, MediaItem>; editable: boolean; onChange: (f: FieldDef, v: any) => void; onPickImage: (key: string) => void }) {
+function SectionFields({ fields, values, media, editable, onChange, onPickImage }: { fields: FieldDef[]; values: Record<string, any>; media: Record<string, MediaItem>; editable: boolean; onChange: (f: FieldDef, v: any) => void; onPickImage: (key: string, story?: number) => void }) {
   if (!fields.length) return <p className="muted" style={{ fontSize: 13 }}>This section’s content comes from Studio records or the website’s design, so there is nothing to type here. You can move or hide it.</p>;
   // the hero has several slides: show each slide's fields together, under its own heading
   const groups = [...new Set(fields.map((f) => f.section))];
@@ -330,7 +333,7 @@ function SectionFields({ fields, values, media, editable, onChange, onPickImage 
     else if (f.type === 'link') control = <><input className="input" maxLength={40} value={v.label} onChange={(e) => onChange(f, { ...v, label: e.target.value })} aria-label={`${f.label} text`} /><input className="input mono" maxLength={300} value={v.href} onChange={(e) => onChange(f, { ...v, href: e.target.value.trim() })} aria-label={`${f.label} link`} /></>;
     else if (f.type === 'image') { const m = v.mediaId ? media[v.mediaId] : null; control = <><div className="thumb" style={{ width: '100%' }}><img src={m ? m.url : '/studio/site/' + v.src} alt={m ? m.alt : v.alt} /></div>
       <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} disabled={!editable} onClick={() => onPickImage(f.key)}><Icon n="image" />Choose photo</button></>; }
-    else if (f.type === 'stories') control = <StoriesField value={v} editable={editable} onChange={(x) => onChange(f, x)} />;
+    else if (f.type === 'stories') control = <StoriesField value={v} media={media} editable={editable} onChange={(x) => onChange(f, x)} onPickImage={(i) => onPickImage(f.key, i)} />;
     else if (f.type === 'rich' || String(v).length > 60) control = <textarea className="textarea" maxLength={f.type === 'rich' ? 700 : 300} value={v} onChange={(e) => onChange(f, e.target.value.replace(/\n/g, ' '))} aria-label={f.label} />;
     else control = <input className="input" maxLength={HEAD_MAX[f.key.match(/\.head\.(num|label|meta)$/)?.[1] ?? ''] ?? (f.key.endsWith('.value') ? 24 : 240)} value={v} onChange={(e) => onChange(f, e.target.value)} aria-label={f.label} />;
     return <div key={f.key} data-field={f.key} className={`field${changed ? ' hp-changed' : ''}`}><span>{f.label}{changed && <em className="hp-dot">edited</em>}</span>{control}
@@ -340,10 +343,11 @@ function SectionFields({ fields, values, media, editable, onChange, onPickImage 
   })}</>;
 }
 
-type Story = { quote: string; name: string; role: string; caption: string; sample?: boolean };
+type StoryImage = { mediaId: string } | { src: string; alt: string; w: number; h: number; fx: number; fy: number };
+type Story = { quote: string; name: string; role: string; caption: string; image?: StoryImage; sample?: boolean };
 const STORIES_MAX = 8;   // same limit as the server (modules/home/service.ts)
 /** Participant stories: one card per story, in carousel order. Add, edit, move and delete; at least one stays. */
-function StoriesField({ value, editable, onChange }: { value: Story[]; editable: boolean; onChange: (v: Story[]) => void }) {
+function StoriesField({ value, media, editable, onChange, onPickImage }: { value: Story[]; media: Record<string, MediaItem>; editable: boolean; onChange: (v: Story[]) => void; onPickImage: (i: number) => void }) {
   const set = (i: number, patch: Partial<Story>) => onChange(value.map((s, j) => {
     if (j !== i) return s;
     const n = { ...s, ...patch };
@@ -365,10 +369,31 @@ function StoriesField({ value, editable, onChange }: { value: Story[]; editable:
       <textarea className="textarea" maxLength={300} value={s.quote} onChange={(e) => set(i, { quote: e.target.value.replace(/\n/g, ' ') })} aria-label={`Story ${i + 1} quote`} placeholder="Quote" />
       <input className="input" maxLength={80} value={s.name} onChange={(e) => set(i, { name: e.target.value })} aria-label={`Story ${i + 1} name`} placeholder="Name" />
       <input className="input" maxLength={120} value={s.role} onChange={(e) => set(i, { role: e.target.value })} aria-label={`Story ${i + 1} programme and date`} placeholder="Programme · date (optional)" />
-      <input className="input" maxLength={80} value={s.caption} onChange={(e) => set(i, { caption: e.target.value })} aria-label={`Story ${i + 1} photo note`} placeholder="Photo note (optional)" />
+      <StoryPhoto story={s} i={i} media={media} editable={editable} onPick={() => onPickImage(i)} onRemove={() => { const n = { ...s }; delete n.image; onChange(value.map((x, j) => (j === i ? n : x))); }} />
+      {!s.image && <input className="input" maxLength={80} value={s.caption} onChange={(e) => set(i, { caption: e.target.value })} aria-label={`Story ${i + 1} photo note`} placeholder="Photo note on the placeholder (optional)" />}
     </div>)}
     <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} disabled={!editable || value.length >= STORIES_MAX} title={value.length >= STORIES_MAX ? `At most ${STORIES_MAX} stories` : undefined}
       onClick={() => onChange([...value, { quote: '', name: '', role: '', caption: '' }])}><Icon n="plus" />Add story</button>
+  </div>;
+}
+
+/** A story's photo: a Media Library pick (its alt text and focal point are edited there, once, for every page that uses
+ *  it) or the photo written in the page. Without one the slide shows the grey placeholder. */
+function StoryPhoto({ story, i, media, editable, onPick, onRemove }: { story: Story; i: number; media: Record<string, MediaItem>; editable: boolean; onPick: () => void; onRemove: () => void }) {
+  const im = story.image;
+  const m = im && 'mediaId' in im ? media[im.mediaId] : null;
+  const src = m ? m.url : im && 'src' in im ? '/studio/site/' + im.src : null;
+  const alt = m ? m.alt : im && 'alt' in im ? im.alt : '';
+  const pos = m ? [m.focalX, m.focalY] : im && 'fx' in im ? [im.fx, im.fy] : [50, 50];
+  return <div style={{ display: 'grid', gap: 6 }}>
+    {src ? <>
+      <div className="thumb" style={{ width: '100%', aspectRatio: '4 / 3', overflow: 'hidden' }}><img src={src} alt={alt} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${pos[0]}% ${pos[1]}%` }} /></div>
+      <small className="muted">{alt ? <>Alt text: “{alt}”</> : <b>No alt text yet.</b>} · Focus {Math.round(pos[0])}% {Math.round(pos[1])}%{m ? ' · edit both in the Media Library' : ' · photo from the website'}</small>
+    </> : <small className="muted">No photo: the slide shows a grey placeholder.</small>}
+    <span style={{ display: 'flex', gap: 6 }}>
+      <button type="button" className="btn btn-sm" disabled={!editable} onClick={onPick} aria-label={`Choose a photo for story ${i + 1}`}><Icon n="image" />{src ? 'Change photo' : 'Choose photo'}</button>
+      {src && <button type="button" className="btn btn-ghost btn-sm" disabled={!editable} onClick={onRemove} aria-label={`Remove the photo of story ${i + 1}`}>Remove photo</button>}
+    </span>
   </div>;
 }
 

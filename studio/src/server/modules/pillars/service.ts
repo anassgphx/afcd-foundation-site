@@ -44,6 +44,8 @@ export const pillarSchema = z.object({
   view: plain(500).default(''),
   principles: z.array(need(40, 'Remove empty principles.')).max(6).default([]),
   steps: z.array(z.object({ title: plain(40), text: plain(200) }).strict()).max(6).default([]),
+  // this pillar's own objectives (AFCD-wide SO-01…SO-06 stay separate); entered by AFCD, never imported or invented
+  objectives: z.array(z.object({ title: plain(140), text: plain(400).default('') }).strict()).max(6, 'Up to 6 objectives.').default([]),
   activities: z.array(z.number().int().min(0).max(50)).max(8).refine((a) => new Set(a).size === a.length, 'Each activity once.').default([]),
   groups: z.array(z.number().int().min(0).max(50)).max(8).refine((a) => new Set(a).size === a.length, 'Each group once.').default([]),
   mediaId: z.string().uuid().nullable().default(null),
@@ -95,7 +97,8 @@ async function linkedProjects(db: DB, id: string) {
 export async function loadPillar(db: DB, id: string): Promise<FullPillar> {
   const [p] = await db.select().from(pillars).where(eq(pillars.id, id));
   if (!p) throw new AppError(404, 'Pillar not found.');
-  const content = p.draft ? { ...(p.draft as unknown as PillarInput), mediaId: p.mediaId, provenance: p.provenance } : null;
+  const d = p.draft as unknown as PillarInput | null;
+  const content = d ? { ...d, objectives: d.objectives ?? [], mediaId: p.mediaId, provenance: p.provenance } : null;   // drafts from before objectives existed have none
   return { ...p, content, projects: await linkedProjects(db, id), usage: await pillarUsage(db, id) };
 }
 
@@ -118,6 +121,7 @@ export async function pillarProblems(db: DB, p: FullPillar) {
   if (!c.principles.length) out.push('Add at least one guiding principle.');
   if (!c.steps.length) out.push('Add at least one approach step.');
   if (c.steps.some((s) => !s.title || !s.text)) out.push('Give every approach step a title and a text.');
+  if ((c.objectives ?? []).some((o) => !o.title)) out.push('Give every objective a title, or remove the empty one.');
   if (p.mediaId) {
     const [m] = await db.select().from(media).where(eq(media.id, p.mediaId));
     if (!m) out.push('The photo no longer exists in the media library.');
@@ -249,7 +253,7 @@ export async function createPillar(db: DB, cfg: Config, actor: NonNullable<Actor
     const colour = COLOURS.find((c) => !used.has(c.value))?.value ?? COLOURS[all.length % COLOURS.length].value;
     const sort = Math.max(-1, ...all.map((x) => x.sort)) + 1;
     const draft: Omit<PillarInput, 'provenance' | 'mediaId'> = { name, short: name.split(/\s+/)[0].slice(0, 20), summary: '', intro: '', colour, brand: '', highlights: [],
-      approachTitle: '', approachSoft: '', view: '', principles: [], steps: [], activities: [], groups: [] };
+      approachTitle: '', approachSoft: '', view: '', principles: [], steps: [], objectives: [], activities: [], groups: [] };
     const [p] = await t.insert(pillars).values({ key, number: String(all.length + 1).padStart(2, '0'), name, description: '', colour, publicFile: file, sort,
       draft: draft as unknown as Record<string, unknown>, provenance: 'Added in Studio', status: 'draft', updatedBy: actor.id }).returning();
     await audit(tx, actor, 'pillar.create', { type: 'pillar', id: p.id }, `Added pillar “${name}” (${file})`);
@@ -336,7 +340,7 @@ export function contentFromSite(s: SitePillar): PillarInput {
   return parse({
     name: unescape(s.name), short: unescape(s.short), summary: unescape(s.summary), intro: unescape(s.intro), colour: s.colour, brand: unescape(s.brand),
     highlights: s.highlights.map(unescape), approachTitle, approachSoft, view: unescape(s.approach.view), principles: s.approach.principles.map(unescape),
-    steps: s.approach.steps.map(([title, text]) => ({ title: unescape(title), text: unescape(text) })), activities: s.activities, groups: s.groups,
+    steps: s.approach.steps.map(([title, text]) => ({ title: unescape(title), text: unescape(text) })), objectives: [], activities: s.activities, groups: s.groups,
     mediaId: null, provenance: 'Imported from the current pillar pages (src/content.py)',
   });
 }

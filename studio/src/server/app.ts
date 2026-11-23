@@ -31,7 +31,10 @@ import * as JOBS from './modules/jobs/service.ts';
 import * as TR from './modules/translations/service.ts';
 import { registerMenuRoutes } from './modules/menus/routes.ts';
 import { registerReviewRoutes } from './modules/review/routes.ts';
+import { registerMediaLibraryRoutes } from './modules/media/routes.ts';
 import { registerInboxRoutes } from './modules/inbox/routes.ts';
+import { registerSettingsRoutes } from './modules/settings/routes.ts';
+import * as NOTIFY from './modules/settings/notify.ts';
 import * as HM from './modules/home/service.ts';
 import * as WS from './modules/workspace/service.ts';
 import { overview as dashboardOverview } from './modules/workspace/overview.ts';
@@ -79,7 +82,9 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     if (!(c.req.header('content-type') ?? '').includes('application/json')) return c.json({ error: 'Send JSON.' }, 415);
     const body = await c.req.json().catch(() => null);
     if (!body || typeof body !== 'object') return c.json({ error: 'Send JSON.' }, 400);
-    return c.json(await FM.receive(db, cfg, key, body, clientIp(c)));
+    const received = await FM.receive(db, cfg, key, body, clientIp(c));
+    if (key === 'contact') NOTIFY.afterReceive(db, cfg);   // Settings → Notifications (no-op when off)
+    return c.json(received);
   });
   app.use('/studio/*', loadSession);
   app.use('/studio/api/*', csrfGuard);
@@ -203,6 +208,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   });
 
   // ---------------------------------------------------------------- Media
+  registerMediaLibraryRoutes(api);   // library view, replace, original download, bulk edits (modules/media/routes.ts)
   api.get('/media', perm('media.read'), async (c) => c.json(await M.listMedia(db, c.req.query('q')?.slice(0, 80), 60, Number(c.req.query('offset') || 0))));
   api.post('/media', perm('media.upload'), bodyLimit({ maxSize: cfg.maxUploadBytes + 64 * 1024, onError: () => { throw new AppError(422, 'The file is too large.'); } }), async (c) => {
     const form = await c.req.parseBody();
@@ -378,6 +384,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
 
   // ---------------------------------------------------------------- Inbox: website messages and newsletter list (personal data, forms.read / forms.manage)
   registerInboxRoutes(api);   // modules/inbox
+  registerSettingsRoutes(api);   // Settings Center (modules/settings)
 
   // ---------------------------------------------------------------- SEO studio
   api.get('/seo/audit', perm('seo.read'), async (c) => c.json({ last: await SEO.lastAudit(db), history: await SEO.auditHistory(db) }));
@@ -520,7 +527,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     api.get(prefix, perm('page.read'), async (c) => {
       const fields = readFields(cfg.siteRoot, file);
       const content = await HM.loadContent(db, file);
-      const ids = Object.values(content?.values ?? {}).flatMap((v) => (v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId] : []));
+      const ids = HM.valueMediaIds(content?.values ?? {});   // image fields and participant-story photos
       const mediaRows = ids.length ? await db.select().from(t.media).where(inArray(t.media.id, ids)) : [];
       // a page without a layout lists its sections that have fields, in page order (selection only)
       const sections = page.layout ? siteSections(cfg.siteRoot, file) : fieldSections(cfg.siteRoot, file);

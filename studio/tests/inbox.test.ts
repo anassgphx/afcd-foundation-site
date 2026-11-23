@@ -205,6 +205,9 @@ describe('0015_inbox migration', () => {
     expect((await pg.query<{ body: string }>(`select body from submission_events where kind = 'note'`)).rows).toEqual([{ body: 'Fake legacy note' }]);
     await expect(pg.exec(`update form_submissions set status = 'done'`)).rejects.toThrow();   // CHECK constraint
 
+    await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0020_project_sections_down.sql'), 'utf8'));   // newer migrations are undone first
+    await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0019_settings_down.sql'), 'utf8'));   // newer migrations are undone first
+    await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0018_media_rights_down.sql'), 'utf8'));   // newer migrations are undone first
     await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0017_pillar_removal_down.sql'), 'utf8'));   // newer migrations are undone first
     await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0016_pillars_down.sql'), 'utf8'));   // newer migrations are undone first
     await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0015_inbox_down.sql'), 'utf8'));

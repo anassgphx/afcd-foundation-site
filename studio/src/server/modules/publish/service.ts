@@ -18,8 +18,8 @@ import { loadArticle, toArticleSnapshot } from '../news/service.ts';
 import { partners, partnerRevisions, events, eventRevisions, opportunities, opportunityRevisions, seoOverrides, seoRevisions } from '../../db/schema.ts';
 import type { OverrideSnapshot } from '../seo/service.ts';
 import { pageContents, pageContentRevisions } from '../../db/schema.ts';
-import { HOME, TEXT_PAGES } from '../home/service.ts';
-import { exportLayout } from '../home/render.ts';
+import { HOME, TEXT_PAGES, valueMediaIds } from '../home/service.ts';
+import { exportLayout, resolveFieldValues } from '../home/render.ts';
 import { currentLayout, layoutBlocks, type LayoutEntry } from '../home/layout.ts';
 import { publicRef } from '../media/service.ts';
 import { detailSource, listingSource, oppCtx, oppState, opportunityFile, type LiveOpp } from '../opportunities/render.ts';
@@ -42,6 +42,7 @@ import { seoSettings } from '../../db/schema.ts';
 import { buildSchemaFile, KEY as SCHEMA_KEY, settingsSchema, type LiveForSchema, type SchemaSettings } from '../seo/schema.ts';
 import * as TR from '../translations/service.ts';
 import * as MENU from '../menus/service.ts';
+import * as SET from '../settings/service.ts';
 
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
@@ -272,17 +273,7 @@ export class Publisher {
 
   /** Resolves stored values for build.mjs: images become { src, srcset, w, h, alt, fx, fy }. Returns [values, media ids]. */
   private async resolveFields(values: Record<string, unknown>): Promise<[Record<string, unknown>, string[]]> {
-    const ids = Object.values(values).flatMap((v) => (v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId] : []));
-    const rows = ids.length ? await this.db.select().from(media).where(inArray(media.id, ids)) : [];
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(values)) {
-      if (v && typeof v === 'object' && 'mediaId' in v) {
-        const m = rows.find((r) => r.id === (v as { mediaId: string }).mediaId); if (!m) continue;
-        const ref = publicRef(m, 'assets/media/');
-        out[k] = { src: ref.src, srcset: ref.srcset, w: ref.w, h: ref.h, alt: m.alt, fx: m.focalX ?? 50, fy: m.focalY ?? 50 };
-      } else out[k] = v;
-    }
-    return [out, ids];
+    return [await resolveFieldValues(this.db, values), valueMediaIds(values)];
   }
 
   /** page-fields.json (read by build.mjs) exists only while edited text of a Studio-edited page (TEXT_PAGES) is live.
@@ -309,7 +300,7 @@ export class Publisher {
     return ids;
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; pillar?: { pillarId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { file?: string; revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string } } = {}) {
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; pillar?: { pillarId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { file?: string; revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string }; settings?: { values: SET.Values; revision: string } } = {}) {
     const entries = await this.liveEntries(o.project);
     await this.writeRedirects(o.redirects === 'pending');
     this.writeData(this.dataFile, entries);
@@ -320,6 +311,7 @@ export class Publisher {
     await this.writeSchema(o.schema, o.article, o.event);
     await this.writeTranslations(o.translations);
     await this.writeMenus(o.menus);
+    const settingsMedia = await this.writeSiteSettings(o.settings);
     const pending = { article: o.article, event: o.event, opportunity: o.opportunity, partner: o.partner };
     const homeMedia = await this.writeFields(o.home, { projectOverride: o.project, pending });
     const oppMedia = await this.writeOpportunities(resolve(this.cfg.siteRoot, 'src/pages'), [this.cfg.siteRoot], await this.liveOpportunities(o.opportunity), o.project);
@@ -333,7 +325,7 @@ export class Publisher {
       const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
       writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
     }
-    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...eventMedia, ...oppMedia, ...seoMedia, ...homeMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...eventMedia, ...oppMedia, ...seoMedia, ...homeMedia, ...settingsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
     return { entries, live };
   }
 
@@ -482,7 +474,7 @@ export class Publisher {
       const msg = (e as Error).message;
       try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
       await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
-      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('pillar') ? 'pillar' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
+      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('settings') ? 'settings' : kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('pillar') ? 'pillar' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
       throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
     }
     return { job, log };
@@ -1374,6 +1366,51 @@ export class Publisher {
         await tx.update(seoSettings).set({ status: 'published', published: { ...menu, _revision: revision } as unknown as Record<string, unknown>, publishedAt: new Date(), updatedAt: new Date() }).where(eq(seoSettings.key, MENU.KEY));
         await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
         await audit(tx, actor, 'menu.publish', { type: 'menu', id: MENU.KEY }, 'Published the website menus', { jobId: job.id, revision });
+      });
+      return { jobId: job.id, revision };
+    });
+  }
+
+  // ---------------------------------------------------------------- Settings Center (src/data/site-settings.json)
+  get siteSettingsFile() { return resolve(this.cfg.siteRoot, 'src/data/site-settings.json'); }
+  /** Writes the published (or the given) website settings; removes the file when settings were never published. */
+  private async writeSiteSettings(override?: { values: SET.Values; revision: string }) {
+    const v = override ? { ...override.values, revision: override.revision } : await SET.publishedValues(this.db);
+    const f = this.siteSettingsFile;
+    if (!v) { if (existsSync(f)) rmSync(f); return []; }
+    const { content, mediaIds } = await SET.siteFile(this.db, v, v.revision);
+    if (!existsSync(f) || readFileSync(f, 'utf8') !== content) {
+      mkdirSync(resolve(f, '..'), { recursive: true });
+      const tmp = `${f}.${randomBytes(4).toString('hex')}.tmp`;
+      writeFileSync(tmp, content); renameSync(tmp, f);
+    }
+    return mediaIds;
+  }
+  /** Every built page carries the new settings revision. */
+  private verifySiteSettings(revision: string) {
+    const pages = readdirSync(resolve(this.cfg.siteRoot, 'src/pages')).filter((f) => f.endsWith('.html'));
+    const stale = pages.filter((f) => { const p = resolve(this.cfg.siteRoot, f); return !existsSync(p) || !readFileSync(p, 'utf8').includes(`<meta name="studio-settings-rev" content="${revision}">`); });
+    if (stale.length) throw new Error(`${stale.length} page${stale.length === 1 ? '' : 's'} do not carry the new settings (e.g. ${stale[0]}). build.mjs must apply src/data/site-settings.json.`);
+  }
+  /** Publishes the saved General, Branding and Contact settings: writes the file, rebuilds, verifies, then records it. */
+  async publishSiteSettings(actor: NonNullable<Actor>) {
+    return this.locked(async () => {
+      const values = await SET.draftValues(this.db); const revision = randomUUID();
+      const { job, log } = await this.deliver('publish_settings', actor, null, null, async (log) => {
+        await this.writeSite({ settings: { values, revision } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifySiteSettings(revision);
+      }, 'Publishing the settings failed');
+      await this.db.transaction(async (tx) => {
+        for (const c of SET.SITE_CATEGORIES) {
+          const published = { ...values[c], _revision: revision } as unknown as Record<string, unknown>;
+          const key = SET.rowKey(c); const now = new Date();
+          const [row] = await tx.select({ key: seoSettings.key }).from(seoSettings).where(eq(seoSettings.key, key));
+          if (row) await tx.update(seoSettings).set({ published, status: 'published', publishedAt: now, updatedAt: now }).where(eq(seoSettings.key, key));
+          else await tx.insert(seoSettings).values({ key, draft: values[c] as unknown as Record<string, unknown>, published, status: 'published', publishedAt: now, updatedBy: actor.id });
+        }
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'settings.publish', { type: 'settings', id: 'site' }, 'Published the website settings', { jobId: job.id, revision });
       });
       return { jobId: job.id, revision };
     });

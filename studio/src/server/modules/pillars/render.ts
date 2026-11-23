@@ -29,6 +29,8 @@ export async function pillarEntries(db: DB, live: { id: string; snap: PillarSnap
       name: esc(s.name), short: esc(s.short), summary: esc(s.summary), intro: esc(s.intro), colour: s.colour, brand: esc(s.brand),
       highlights: s.highlights.map(esc),
       approach: { title: approachTitleHtml(s), view: esc(s.view), principles: s.principles.map(esc), steps: s.steps.map((x) => [esc(x.title), esc(x.text)]) },
+      // objectives go out as plain text: content.py escapes them itself (empty titles are skipped there too)
+      objectives: (s.objectives ?? []).filter((o) => o.title).map((o) => ({ title: o.title, text: o.text ?? '' })),
       activities: s.activities, groups: s.groups, image: image(s.mediaId),
     }));
 }

@@ -127,6 +127,27 @@
       "when": 1795377292754,
       "tag": "0017_pillar_removal",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795387164690,
+      "tag": "0018_media_rights",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795399244955,
+      "tag": "0019_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795431350170,
+      "tag": "0020_project_sections",
+      "breakpoints": true
     }
   ]
 }

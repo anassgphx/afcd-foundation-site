@@ -1,7 +1,7 @@
 // AFCD Studio — PostgreSQL schema (Drizzle). SQL migrations are generated into ./drizzle with `npm run db:generate`.
 import { sql } from 'drizzle-orm';
 import {
-  pgTable, text, integer, boolean, timestamp, jsonb, uuid, primaryKey, uniqueIndex, index, pgEnum,
+  pgTable, text, integer, boolean, timestamp, date, jsonb, uuid, primaryKey, uniqueIndex, index, pgEnum,
 } from 'drizzle-orm/pg-core';
 
 const id = () => uuid('id').primaryKey().default(sql`gen_random_uuid()`);
@@ -128,6 +128,8 @@ export const media = pgTable('media', {
   caption: text('caption').notNull().default(''),
   credit: text('credit').notNull().default(''),
   rightsConfirmed: boolean('rights_confirmed').notNull().default(false),  // usage rights + consent of people shown
+  licence: text('licence').notNull().default(''),                         // e.g. "CC BY 4.0", "AFCD own photo", "Used with permission"
+  rightsExpiresOn: date('rights_expires_on', { mode: 'string' }),          // optional end of the usage right (YYYY-MM-DD)
   focalX: integer('focal_x').notNull().default(50),
   focalY: integer('focal_y').notNull().default(50),
   tags: jsonb('tags').$type<string[]>().notNull().default([]),
@@ -149,6 +151,11 @@ export const projects = pgTable('projects', {
   location: text('location').notNull().default(''),
   years: text('years').notNull().default(''),
   extraFacts: jsonb('extra_facts').$type<{ label: string; value: string }[]>().notNull().default([]),
+  // project page sections (all optional, plain text; images are media ids): the programme's own objectives, outcomes
+  // (optionally a short verified figure) and activities with their photos. Exported as detail.programObjectives/outcomes/activities.
+  programObjectives: jsonb('program_objectives').$type<{ title: string; text: string }[]>().notNull().default([]),
+  outcomes: jsonb('outcomes').$type<{ title: string; text: string; figure: string }[]>().notNull().default([]),
+  activityItems: jsonb('activity_items').$type<{ title: string; text: string; mediaIds: string[] }[]>().notNull().default([]),
   context: text('context').notNull().default(''),
   approach: text('approach').notNull().default(''),
   activities: text('activities').notNull().default(''),
@@ -717,3 +724,19 @@ export const apiUsage = pgTable('api_usage', {
   day: text('day').notNull(),
   calls: integer('calls').notNull().default(0),
 }, (t) => [primaryKey({ columns: [t.provider, t.endpoint, t.day] })]);
+
+// ---------------------------------------------------------------- Settings Center history
+// Values live where they always did: seo_settings rows 'settings:<category>' (draft = saved, published = on the website)
+// and, for email, the Inbox mail settings file. Each save or restore adds one row here with the non-secret values only;
+// secrets (the SMTP password) are never copied into a revision, only whether one was set or changed.
+export const settingsRevisions = pgTable('settings_revisions', {
+  id: id(),
+  category: text('category').notNull(),                          // 'general' | 'branding' | 'contact' | 'email'
+  values: jsonb('values').$type<Record<string, unknown>>().notNull(),
+  changed: jsonb('changed').$type<string[]>().notNull().default([]),   // field names that changed in this revision
+  summary: text('summary').notNull().default(''),
+  restoredFrom: uuid('restored_from'),
+  actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+  actorEmail: text('actor_email'),
+  createdAt: createdAt(),
+}, (t) => [index('settings_revisions_cat_idx').on(t.category, t.createdAt)]);

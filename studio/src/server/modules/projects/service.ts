@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, max, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
 import {
-  projects, projectPillars, projectObjectives, projectGallery, projectRevisions, pillars, objectives, media, reviewComments, users,
+  projects, projectPillars, projectObjectives, projectGallery, projectRevisions, pillars, objectives, media, reviewComments, users, events
 } from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
@@ -24,6 +24,11 @@ export const projectInputSchema = z.object({
   location: text(120).default(''),
   years: text(60).default(''),
   extraFacts: z.array(z.object({ label: text(40).min(1), value: text(120).min(1) })).max(4).default([]),
+  // project page sections: plain text only, all optional
+  programObjectives: z.array(z.object({ title: text(160).min(1, 'Give each programme objective a title.'), text: text(600).default('') }).strict()).max(12).default([]),
+  outcomes: z.array(z.object({ title: text(160).default(''), text: text(600).default(''), figure: text(40).default('') }).strict()
+    .refine((o) => !!(o.title || o.text), { message: 'Give each outcome a title or a description.' })).max(12).default([]),
+  activityItems: z.array(z.object({ title: text(160).min(1, 'Give each activity a title.'), text: text(800).default(''), mediaIds: z.array(z.string().uuid()).max(12, 'Use at most 12 photos per activity.').default([]) }).strict()).max(12).default([]),
   context: text(2000).default(''),
   approach: text(2000).default(''),
   activities: text(2000).default(''),
@@ -47,7 +52,7 @@ export function publishProblems(p: FullProject): string[] {
   if (!p.summary) out.push('Add a one-line summary.');
   if (!p.pillars.length) out.push('Link at least one pillar.');
   if (p.hasDetailPage && !(p.context || p.activities)) out.push('Add the context or the activities for the project page.');
-  for (const m of [p.hero, ...p.gallery].filter(Boolean) as MediaRow[]) {
+  for (const m of [p.hero, ...p.gallery, ...Object.values(p.activityMedia)].filter(Boolean) as MediaRow[]) {
     if (!m.alt) out.push(`Add alt text to “${m.originalName}”.`);
     if (!m.rightsConfirmed) out.push(`Confirm usage rights and consent for “${m.originalName}”.`);
   }
@@ -60,6 +65,8 @@ export type FullProject = typeof projects.$inferSelect & {
   objectiveRefs: string[];
   hero: MediaRow | null;
   gallery: MediaRow[];
+  activityMedia: Record<string, MediaRow>;   // photos used by activityItems, by id
+  linkedEvents: { id: string; title: string; startDate: string; status: string; live: boolean }[];   // Studio events linked to this project (read-only here)
 };
 
 export async function loadProject(db: DB, id: string): Promise<FullProject> {
@@ -73,7 +80,12 @@ export async function loadProject(db: DB, id: string): Promise<FullProject> {
   const hero = p.heroMediaId ? (await db.select().from(media).where(eq(media.id, p.heroMediaId)))[0] ?? null : null;
   const gallery = await db.select({ m: media }).from(projectGallery).innerJoin(media, eq(media.id, projectGallery.mediaId))
     .where(eq(projectGallery.projectId, id)).orderBy(asc(projectGallery.sort));
-  return { ...p, pillars: pls.map(({ sort: _s, ...r }) => r), objectiveRefs: objs.map((o) => o.ref), hero, gallery: gallery.map((g) => g.m) };
+  const actIds = [...new Set((p.activityItems ?? []).flatMap((a) => a.mediaIds ?? []))];
+  const actRows = actIds.length ? await db.select().from(media).where(inArray(media.id, actIds)) : [];
+  return { ...p, pillars: pls.map(({ sort: _s, ...r }) => r), objectiveRefs: objs.map((o) => o.ref), hero, gallery: gallery.map((g) => g.m),
+    activityMedia: Object.fromEntries(actRows.map((m) => [m.id, m])),
+    linkedEvents: await db.select({ id: events.id, title: events.title, startDate: events.startDate, status: events.status, live: sql<boolean>`${events.publishedRevisionId} is not null` })
+      .from(events).where(eq(events.projectId, id)).orderBy(desc(events.startDate)) };
 }
 
 // ---------------------------------------------------------------- Public snapshot (exact entry written to src/data/projects.json)
@@ -98,13 +110,19 @@ export function toSnapshot(p: FullProject): Snapshot {
     hero: p.hero ? publicRef(p.hero) : null,
     gallery: p.gallery.map((m) => publicRef(m)),
     objectives: p.objectiveRefs,
+    ...(p.programObjectives?.length ? { programObjectives: p.programObjectives.map((o) => ({ title: o.title, ...(o.text ? { text: o.text } : {}) })) } : {}),
+    ...(p.outcomes?.length ? { outcomes: p.outcomes.map((o) => ({ ...(o.title ? { title: o.title } : {}), ...(o.text ? { text: o.text } : {}), ...(o.figure ? { figure: o.figure } : {}) })) } : {}),
+    ...(p.activityItems?.length ? { activities: p.activityItems.map((a) => {
+      const imgs = (a.mediaIds ?? []).map((mid) => p.activityMedia[mid]).filter(Boolean).map((m) => publicRef(m));
+      return { title: a.title, ...(a.text ? { text: a.text } : {}), ...(imgs.length ? { images: imgs } : {}) };
+    }) } : {}),
     revision: '',
   } : {};
   return {
     slug: p.slug, file: p.hasDetailPage ? `project-${p.slug}.html` : null, name: p.name,
     pillar: primary?.key ?? '', pillars: p.pillars.map((x) => x.key), category: p.category, summary: p.summary, sort: p.sort,
     seo: { title: p.seoTitle, description: p.seoDescription },
-    media: [p.hero, ...p.gallery].filter(Boolean).map((m) => (m as MediaRow).id),
+    media: [...new Set([p.hero, ...p.gallery, ...(p.hasDetailPage ? p.activityItems.flatMap((a) => (a.mediaIds ?? []).map((mid) => p.activityMedia[mid])) : [])].filter(Boolean).map((m) => (m as MediaRow).id))],
     detail,
   };
 }
@@ -123,7 +141,7 @@ async function writeRelations(db: DB, id: string, input: ProjectInput) {
   if (pl.length !== new Set(input.pillarKeys).size) throw new AppError(422, 'Unknown pillar.');
   const ob = input.objectiveRefs.length ? await db.select().from(objectives).where(inArray(objectives.ref, input.objectiveRefs)) : [];
   if (ob.length !== new Set(input.objectiveRefs).size) throw new AppError(422, 'Unknown strategic objective.');
-  const mediaIds = [...new Set([input.heroMediaId, ...input.galleryMediaIds].filter(Boolean) as string[])];
+  const mediaIds = [...new Set([input.heroMediaId, ...input.galleryMediaIds, ...input.activityItems.flatMap((a) => a.mediaIds)].filter(Boolean) as string[])];
   if (mediaIds.length) {
     const found = await db.select({ id: media.id }).from(media).where(inArray(media.id, mediaIds));
     if (found.length !== mediaIds.length) throw new AppError(422, 'An image no longer exists in the media library.');
@@ -246,7 +264,8 @@ export async function restoreRevision(db: DB, actor: NonNullable<Actor>, id: str
     const [rev] = await t.select().from(projectRevisions).where(and(eq(projectRevisions.id, revisionId), eq(projectRevisions.projectId, id)));
     if (!rev) throw new AppError(404, 'Revision not found.');
     const s = rev.snapshot as unknown as Snapshot;
-    const d = s.detail as Record<string, unknown> & { facts?: [string, string][]; rows?: [string, string][]; hero?: { id: string } | null; gallery?: { id: string }[]; objectives?: string[]; photo?: string };
+    const d = s.detail as Record<string, unknown> & { facts?: [string, string][]; rows?: [string, string][]; hero?: { id: string } | null; gallery?: { id: string }[]; objectives?: string[]; photo?: string;
+      programObjectives?: { title: string; text?: string }[]; outcomes?: { title?: string; text?: string; figure?: string }[]; activities?: { title: string; text?: string; images?: { id: string }[]; image?: { id: string } }[] };
     const row = (k: string) => d.rows?.find((r) => r[0] === k)?.[1] ?? '';
     const fact = (k: string) => d.facts?.find((r) => r[0] === k)?.[1] ?? '';
     const input: ProjectInput = projectInputSchema.parse({
@@ -256,6 +275,9 @@ export async function restoreRevision(db: DB, actor: NonNullable<Actor>, id: str
       context: row('Context'), approach: row('Approach'), activities: row('Activities'), results: row('Results'),
       hasDetailPage: !!s.file, photoCaption: d.photo ?? '', heroMediaId: d.hero?.id ?? null, galleryMediaIds: (d.gallery ?? []).map((g) => g.id),
       pillarKeys: s.pillars, primaryPillarKey: s.pillar, objectiveRefs: d.objectives ?? [],
+      programObjectives: (d.programObjectives ?? []).map((o) => ({ title: o.title, text: o.text ?? '' })),
+      outcomes: (d.outcomes ?? []).map((o) => ({ title: o.title ?? '', text: o.text ?? '', figure: o.figure ?? '' })),
+      activityItems: (d.activities ?? []).map((a) => ({ title: a.title, text: a.text ?? '', mediaIds: (a.images ?? (a.image ? [a.image] : [])).map((m) => m.id) })),
       seoTitle: s.seo?.title ?? '', seoDescription: s.seo?.description ?? '',
     });
     const [cur] = await t.select().from(projects).where(eq(projects.id, id)).for('update');

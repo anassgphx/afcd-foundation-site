@@ -826,12 +826,15 @@ def project_details():
             objs = [(ref, text) for ref, text, _desc, _l in OBJECTIVES if ref in d['objectives']]
         else:
             objs = [(ref, text) for ref, text, _desc, links in OBJECTIVES if any(sl == d['slug'] for _n, sl in links)]
-        # cover: up to three photos (main photo + first two gallery photos from Studio), else the main photo or a placeholder
-        cover = [m for m in (d.get('cover') or []) if m][:3]
-        if len(cover) > 1:
-            hero = f'<div class="pj-cover n{len(cover)}">' + ''.join(f'<div class="pj-cover-i">{media_img(m, "h-full w-full", "(min-width:1024px) 60vw, 100vw" if i == 0 else "(min-width:1024px) 30vw, 50vw", eager=i == 0)}</div>' for i, m in enumerate(cover)) + '</div>'
-        else:
-            hero = media_img(d.get('hero'), 'aspect-[16/10] w-full rounded-[28px] md:aspect-[21/9]', eager=True) or ph(d['photo'], 'aspect-[16/10] w-full rounded-[28px] md:aspect-[21/9]')
+        # cover: always three places (main photo + first two gallery photos from Studio); places without a photo show a placeholder
+        cover = [m for m in (d.get('cover') or ([d['hero']] if d.get('hero') else [])) if m][:3]
+        slots = []
+        for i in range(3):
+            if i < len(cover):
+                slots.append(media_img(cover[i], 'h-full w-full', '(min-width:1024px) 60vw, 100vw' if i == 0 else '(min-width:1024px) 30vw, 50vw', eager=i == 0))
+            else:
+                slots.append(ph(d['photo'] if i == 0 else f'{d["name"]} · photo {i + 1}', 'h-full w-full', '#D4D4D4' if i == 0 else '#E2E2E1'))
+        hero = '<div class="pj-cover n3">' + ''.join(f'<div class="pj-cover-i">{x}</div>' for x in slots) + '</div>'
         gal = d.get('gallery') or []
         def g(i, cls):
             return media_img(gal[i], cls + ' w-full rounded-[24px]', '(min-width:1024px) 50vw, 100vw') if i < len(gal) else ph(d['name'] + ' · gallery', cls + ' w-full rounded-[24px]')
@@ -892,6 +895,16 @@ def project_details():
         else:
             act_block = empty('Programme activities will be added soon.', 'Each activity will have a short description and photos.')
         summ_html = ''.join(f'<div class="pjs-row"><dt>{k}</dt><dd>{v}</dd></div>' for k, v in summ_rows)
+        # project logo (Studio): its own shape or a frame (1:1, circle, 3:1, 2:1, 4:3, 16:9, 3:4, 1:3), whole or cropped, on a background
+        lg = d.get('logo'); logo_html = ''
+        if lg and lg.get('src'):
+            shape = lg.get('shape') if lg.get('shape') in ('original', '1:1', 'circle', '3:1', '2:1', '4:3', '16:9', '3:4', '1:3') else 'original'
+            ratio = f'{lg["w"]} / {lg["h"]}' if shape == 'original' else '1 / 1' if shape == 'circle' else shape.replace(':', ' / ')
+            bg = lg.get('bg') if lg.get('bg') in ('none', 'white', 'light', 'dark', 'pillar') else 'white'
+            size = lg.get('size') if lg.get('size') in ('s', 'm', 'l') else 'm'
+            tall = shape in ('3:4', '1:3') or (shape == 'original' and lg['h'] > lg['w'])
+            cls = f'pj-logo s-{size} bg-{bg}' + (' round' if shape == 'circle' else '') + (' cover' if lg.get('fit') == 'cover' else '') + (' tall' if tall else '')
+            logo_html = f'<span class="{cls}" style="aspect-ratio:{ratio}">{media_img(lg, "pj-logo-img", "240px")}</span>'
         n_ev = len(pevents)
         body = page_header([('Projects', 'projects.html'), (d['name'], file)], f'{d["pillar"]} · {d["cat"]}', d['name'], d['lede']) + f"""
 <div class="pl-page" style="--pc:{tone}">
@@ -915,6 +928,7 @@ def project_details():
     <div class="pjs">
       <div class="pjs-side">
         <div class="sh-top"><span class="sh-num">01</span><span class="sh-label">Project Summary</span></div>
+        {logo_html}
         <p class="pjs-lede">{d['lede']}</p>
         <a href="{PILLAR_FILE.get(d['slug'], 'pillars.html')}" class="pjs-pillar"><span class="pjs-pillar-dot" aria-hidden="true"></span><span><span class="block text-[11px] font-medium uppercase tracking-[.16em] text-ink-mid">Part of the pillar</span><span class="mt-1 block text-[16px] font-semibold tracking-[-0.015em]">{d['pillar']}</span></span><span class="ml-auto" aria-hidden="true">↗</span></a>
         {share_bar(file, d['name'], 'Share this project', 'mt-6')}

@@ -490,6 +490,17 @@
         ['Activities', 'دعوة للترشح لفوج 2024.']
       ] }
   ];
+  (function () {   /* cards come from the project module (Studio) via <template id="home-projects-data"> when present */
+    var t = document.getElementById('home-projects-data'); if (!t || !t.content) return;
+    var list = Array.prototype.map.call(t.content.querySelectorAll('article'), function (a) {
+      var q = function (s) { var e = a.querySelector(s); return e ? e.innerHTML : ''; };
+      var img = a.querySelector('img');
+      return { n: a.dataset.n, name: q('h3'), dot: a.dataset.dot, href: a.dataset.href, pillar: q('.pp'), kind: q('.pk'), cat: q('.pc'),
+        surface: a.dataset.surface, phTone: a.dataset.ph, photo: q('.ph'), img: img ? img.outerHTML : '', lede: q('.pl'),
+        rows: Array.prototype.map.call(a.querySelectorAll('dl > div'), function (r) { return [r.querySelector('dt').innerHTML, r.querySelector('dd').innerHTML]; }) };
+    });
+    if (list.length) PROJECTS = list;
+  })();
   var stack = $('#stack'), dotsWrap = $('#stack-dots'), sCur = 0;
   PROJECTS.forEach(function (p, i) {
     var card = document.createElement('article');
@@ -510,10 +521,10 @@
           '</div>' +
           '<span class="pc-pillar"><span class="pc-pillar-dot" style="--c:' + p.dot + '" aria-hidden="true"></span>' + p.pillar + '</span>' +
         '</header>' +
-        '<div class="mt-5 flex flex-wrap gap-2"><span class="pc-pill">Case study</span><span class="pc-pill">' + p.cat + '</span></div>' +
+        '<div class="mt-5 flex flex-wrap gap-2"><span class="pc-pill">' + (p.kind || 'Case study') + '</span>' + (p.cat ? '<span class="pc-pill">' + p.cat + '</span>' : '') + '</div>' +
         '<div class="mt-6 grid min-h-0 flex-1 gap-5 md:grid-cols-12 md:gap-6">' +
           '<div class="pc-inner flex min-h-[280px] flex-col rounded-[24px] p-4 md:col-span-5 md:p-5">' +
-            '<div class="ph aspect-[4/3] w-full rounded-[18px] md:aspect-auto md:flex-1" style="--ph:' + p.phTone + ';--ph-line:rgba(0,0,0,.08)"><span class="ph-cap"><b>Photo</b> · ' + p.photo + '</span></div>' +
+            (p.img ? '<div class="pc-photo aspect-[4/3] w-full overflow-hidden rounded-[18px] md:aspect-auto md:flex-1">' + p.img + '</div>' : '<div class="ph aspect-[4/3] w-full rounded-[18px] md:aspect-auto md:flex-1" style="--ph:' + p.phTone + ';--ph-line:rgba(0,0,0,.08)"><span class="ph-cap"><b>Photo</b> · ' + p.photo + '</span></div>') +
             '<p class="mt-4 px-1 text-[17px] font-medium leading-snug tracking-[-0.01em] md:text-[19px]">' + p.lede + '</p>' +
           '</div>' +
           '<div class="flex min-w-0 flex-col md:col-span-7">' +
@@ -712,6 +723,11 @@
     var io = new IntersectionObserver(pick, { threshold: [0, .25, .5, 1] });
     Object.keys(map).forEach(function (id) { io.observe(document.getElementById(id)); });
     pick();
+    // "is-stuck" once the bar sits under the header: it then gets its full-width background
+    var raf = 0;
+    function stuck() { raf = 0; var top = parseFloat(getComputedStyle(bar).top) || 0; bar.classList.toggle('is-stuck', bar.getBoundingClientRect().top <= top + 1 && window.scrollY > 0); }
+    window.addEventListener('scroll', function () { if (!raf) raf = requestAnimationFrame(stuck); }, { passive: true });
+    window.addEventListener('resize', stuck); stuck();
   })();
 
   /* ---------- Social sharing ([data-shr]): links follow this language's canonical URL; native share where available ---------- */

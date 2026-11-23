@@ -946,6 +946,48 @@ def project_details():
         page(file, f'{d["name"]} · AFCD Foundation', f'{d["name"]}: {d["lede"]}', 'projects', body)
 
 
+
+# ---------------------------------------------------------------- Homepage project cards (from the project module)
+def home_projects():
+    """Writes the featured project cards' data into src/pages/index.html (between the home-projects markers)."""
+    idx = Path(__file__).parent / 'pages' / 'index.html'
+    if not idx.exists():
+        return
+    html = idx.read_text(encoding='utf-8')
+    a, b = '<!-- home-projects:start -->', '<!-- home-projects:end -->'
+    if a not in html or b not in html:
+        return
+    items = [x for x in _PROJECT_DATA if x.get('file') and x.get('detail')][:3]   # the first three by Studio order
+    cards = []
+    for i, x in enumerate(items):
+        d = x['detail']
+        rows = {k: v for k, v in (d.get('rows') or [])}
+        acts = [y for y in (d.get('activities') or []) if (y.get('title') or '').strip()]
+        outs = [y for y in (d.get('outcomes') or []) if (y.get('title') or y.get('text') or '').strip()]
+        tiles = []
+        for k in ('Context', 'Approach'):
+            if rows.get(k):
+                tiles.append((k, rows[k]))
+        if acts:
+            tiles.append(('Activities', ' · '.join(_esc(y['title']) for y in acts[:3])))
+        elif rows.get('Activities'):
+            tiles.append(('Activities', rows['Activities']))
+        if outs:
+            tiles.append(('Outcomes', ' · '.join(_esc(((y.get('figure') or '') + ' ' + (y.get('title') or y.get('text') or '')).strip()) for y in outs[:2])))
+        elif rows.get('Results'):
+            tiles.append(('Results', rows['Results']))
+        hero = d.get('hero')
+        img = media_img(hero, 'pc-img', '(min-width:1024px) 40vw, 100vw') if hero else ''
+        cards.append(
+            f'<article data-n="{i + 1:02d}" data-href="{x["file"]}" data-dot="{PILLAR_TONE.get(x.get("pillar"), "#111")}" data-surface="pc-{i % 3 + 1}" data-ph="{["#E2E2E2", "#E6E6E6", "#DADADA"][i % 3]}">'
+            f'<h3>{_esc(x["name"])}</h3><span class="pp">{_PILLAR_NAMES.get(x.get("pillar"), "")}</span><span class="pk">Case study</span><span class="pc">{_esc(x.get("category") or "")}</span>'
+            f'<p class="pl">{_esc(d.get("lede") or x.get("summary") or "")}</p><p class="ph">{_esc(d.get("photo") or (x["name"] + " · project photo"))}</p>{img}'
+            '<dl>' + ''.join(f'<div><dt>{k}</dt><dd>{v}</dd></div>' for k, v in tiles) + '</dl></article>')
+    block = f'{a}\n    <template id="home-projects-data">{"".join(cards)}</template>\n    {b}'
+    new = html[:html.index(a)] + block + html[html.index(b) + len(b):]
+    if new != html:
+        idx.write_text(new, encoding='utf-8')
+
 # ---------------------------------------------------------------- News
 NEWS = [
     ('Youth Empowerment', '2023-11-02', 'November 2, 2023', 'Solutions to Climate Change: The Youth Green Generation Project 2024',
@@ -1872,5 +1914,5 @@ def studio_contact_fields(s):
 
 
 if __name__ == '__main__':
-    about(); pillars(); projects(); project_details(); news(); news_articles(); events(); partners(); involved(); contact()
+    about(); pillars(); projects(); project_details(); home_projects(); news(); news_articles(); events(); partners(); involved(); contact()
     print('pages written to', OUT)

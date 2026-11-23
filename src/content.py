@@ -637,8 +637,6 @@ def pillars():
                 return f'<li><a href="{href}" class="nw-card group"><div class="relative">{inner}</div>{body_}</a></li>'
             return f'<li><div class="nw-card is-ph"><div class="relative">{inner}</div>{body_}</div></li>'
         proj_html = ''.join(pcard(p) for p in projs)
-        for k in range(max(0, 3 - len(projs))):
-            proj_html += f'''<li><div class="nw-card is-ph"><div class="relative">{ph('Upcoming project', 'aspect-[16/10] w-full rounded-[20px]', '#E6E6E6')}<span class="nw-type">Placeholder</span></div><span class="mt-5 block px-2.5 text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">Lorem ipsum dolor sit amet</span><span class="mt-2 block px-2.5 text-[14.5px] leading-relaxed text-ink-dark">Consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus.</span><span class="nw-read px-2.5">Coming soon <span aria-hidden="true">↗</span></span></div></li>'''
         acts = ''.join(f'''<li class="wd-card" style="--c:{tone}"><span class="flex items-start justify-between"><span class="wd-ico"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{ACT_ICONS[a]}</svg></span><span class="wd-n">{j:02d}</span></span><span class="mt-8 block text-[16.5px] font-medium leading-[1.45] tracking-[-0.01em]">{ACTIVITIES[a]}</span></li>''' for j, a in enumerate(PILLAR_ACTS[slug], 1))
         groups = ''.join(f'<li class="wd-person"><span class="wd-av" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="7" r="3"/><path d="M4 16.5c.8-3 3.2-4.6 6-4.6s5.2 1.6 6 4.6"/></svg></span><span>{BENEFICIARIES[g]}</span></li>' for g in PILLAR_GROUPS[slug])
         ap = PILLAR_APPROACH[slug]
@@ -1068,13 +1066,6 @@ NEWS = [
 NEWS_PILLAR = {'Youth Empowerment': '#FFB2B9', 'Women’s Empowerment': '#A8DDFB', 'Environment and Climate': '#82E591', 'Digital Inclusion and Innovation': '#FBE38A'}
 NEWS_PILLAR.update({p['name']: p['colour'] for p in STUDIO_PILLARS})
 NEWS_TYPES = {0: 'Call for applications', 1: 'Participant story', 2: 'Participant story'}
-# Clearly marked placeholder posts (lorem ipsum) to show the layout until the news feed is connected.
-NEWS_PLACEHOLDERS = [
-    ('Environment and Climate', 'Programme news', 'Lorem ipsum dolor sit amet, consectetur adipiscing', 'Integer posuere erat a ante venenatis dapibus posuere velit aliquet. Donec ullamcorper nulla non metus.'),
-    ('Digital Inclusion and Innovation', 'Programme news', 'Vestibulum id ligula porta felis euismod semper', 'Cras mattis consectetur purus sit amet fermentum. Maecenas faucibus mollis interdum.'),
-    ('Women’s Empowerment', 'Participant story', 'Aenean lacinia bibendum nulla sed consectetur', 'Curabitur blandit tempus porttitor. Etiam porta sem malesuada magna mollis euismod.'),
-    ('Youth Empowerment', 'Programme news', 'Nulla vitae elit libero, a pharetra augue', 'Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh, ut fermentum massa.'),
-]
 
 
 # Stories come from src/data/news.json (written by AFCD Studio). Without it, the legacy NEWS list above is used.
@@ -1087,69 +1078,82 @@ def news_items():
         return _j.loads(_NEWS_FILE.read_text(encoding='utf-8'))['articles']
     blog = 'https://afcdfoundation.org/blog/'
     return [dict(slug=f'legacy-{i}', url=blog, external=True, title=n[3], excerpt=n[4], type=NEWS_TYPES[i], pillar=n[0], colour=NEWS_PILLAR[n[0]],
-                 date=n[1], dateLabel=n[2], hero=None, photo=n[5], featured=(i == 0)) for i, n in enumerate(NEWS)]
+                 date=n[1], dateLabel=n[2], hero=None, photo=n[5], featured=(i == 0), bodyHtml='') for i, n in enumerate(NEWS)]
+
+
+def story_destination(x):
+    """Where a story card may link.
+
+    A story with a body has its own page. A URL already stored on the record is used only when it
+    points at a specific page. The blog index (for example https://afcdfoundation.org/blog/) is not
+    one, so those stories show their excerpt and do not link out.
+    Returns (href, external) or (None, False).
+    """
+    from urllib.parse import urlparse
+    if (x.get('bodyHtml') or '').strip():
+        return (x.get('file') or f'news-{x["slug"]}.html'), False
+    url = (x.get('url') or '').strip()
+    if x.get('external') and url.startswith(('http://', 'https://')):
+        path = urlparse(url).path.rstrip('/') or '/'
+        if path not in ('/', '/blog'):
+            return url, True
+    return None, False
 
 
 def news():
     items = news_items()
     lead = next((x for x in items if x.get('featured')), items[0] if items else None)
     rest = [x for x in items if x is not lead]
-    blog = 'https://afcdfoundation.org/blog/'
 
-    def link(x):
-        # every story has its own page; stories first published on the old blog link to the original from that page
-        return f'href="{x.get("file") or "news-" + x["slug"] + ".html"}"'
-
-    def card(x=None, placeholder=None):
-        if placeholder:
-            pillar, typ, title, excerpt = placeholder
-            return f'''
-      <li class="nw-item" data-type="{typ}">
-        <a href="#" class="nw-card group is-ph" aria-disabled="true" tabindex="-1">
-          <div class="relative">{ph('Story photo', 'aspect-[16/10] w-full rounded-[20px]')}<span class="nw-type">{typ}</span></div>
-          <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{NEWS_PILLAR[pillar]}"></span>{pillar}</span><span aria-hidden="true">·</span><span>Placeholder</span></span>
-          <span class="mt-3 block text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">{title}</span>
-          <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{excerpt}</span>
-          <span class="nw-read">Coming soon <span aria-hidden="true">↗</span></span>
-        </a>
-      </li>'''
+    def card(x):
         pic = media_img(x.get('hero'), 'aspect-[16/10] w-full rounded-[20px]', '(min-width:1024px) 33vw, 100vw') or ph(x.get('photo') or x['title'], 'aspect-[16/10] w-full rounded-[20px]')
-        return f'''
-      <li class="nw-item" data-type="{x['type']}">
-        <a {link(x)} class="nw-card group">
+        body = f'''
           <div class="relative">{pic}<span class="nw-type">{x['type']}</span></div>
           <span class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{x['colour']}"></span>{x['pillar']}</span><span aria-hidden="true">·</span><time datetime="{x['date']}">{x['dateLabel']}</time></span>
           <span class="mt-3 block text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">{x['title']}</span>
-          <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{x['excerpt']}</span>
+          <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{x['excerpt']}</span>'''
+        href, external = story_destination(x)
+        if not href:
+            return f'''
+      <li class="nw-item" data-type="{x['type']}">
+        <article class="nw-card is-ph">{body}
+        </article>
+      </li>'''
+        rel = ' target="_blank" rel="noopener"' if external else ''
+        return f'''
+      <li class="nw-item" data-type="{x['type']}">
+        <a href="{href}"{rel} class="nw-card group">{body}
           <span class="nw-read">Read the story <span aria-hidden="true">↗</span></span>
         </a>
       </li>'''
 
-    # Placeholders (clearly marked) only fill the grid up to six cards; real stories replace them.
-    fill = NEWS_PLACEHOLDERS[:max(0, 6 - len(rest))]
-    cards = ''.join(card(x) for x in rest) + ''.join(card(placeholder=p) for p in fill)
-    present = [x['type'] for x in rest] + [p[1] for p in fill]
+    cards = ''.join(card(x) for x in rest)
+    present = [x['type'] for x in rest]
     types = ['All stories'] + [t for t in ['Call for applications', 'Participant story', 'Programme news', 'Event recap'] if t in present]
     chips = ''.join(f'<button type="button" class="nw-chip" data-news-filter="{"all" if i == 0 else t}" aria-pressed="{"true" if i == 0 else "false"}">{t}</button>' for i, t in enumerate(types))
     topics = ''.join(f'<li><a class="os-area" href="pillars.html#{sl}"><span class="os-area-dot" style="--c:{NEWS_PILLAR[n]}" aria-hidden="true"></span><span class="flex-1">{n}</span><span class="os-area-arr" aria-hidden="true">↗</span></a></li>'
                      for n, sl in [('Youth Empowerment', 'youth-empowerment'), ('Women’s Empowerment', 'women-empowerment'), ('Environment and Climate', 'green-thumbs'), ('Digital Inclusion and Innovation', 'digital-empowerment')])
-    note = ('Some stories were first published on the afcdfoundation.org blog; their pages link to the original. ' if any(x.get('external') for x in items) else '') + \
-           ('Lorem ipsum cards are placeholders until more stories are published.' if fill else '')
     feat = ''
     if lead:
         lpic = media_img(lead.get('hero'), 'aspect-[16/10] w-full rounded-[24px] lg:aspect-auto lg:h-full lg:min-h-[420px]', '(min-width:1024px) 60vw, 100vw', eager=True) or ph(lead.get('photo') or lead['title'], 'aspect-[16/10] w-full rounded-[24px] lg:aspect-auto lg:h-full lg:min-h-[420px]')
-        feat = f'''
-<section id="featured" class="pt-8 lg:pt-10">
-  <div class="wrap">
-    <a {link(lead)} class="nw-feat group">
+        href, external = story_destination(lead)
+        inner = f'''
       <div class="relative lg:col-span-7">{lpic}<span class="nw-type">Featured · {lead['type']}</span></div>
       <div class="flex flex-col p-2 lg:col-span-5 lg:p-6">
         <span class="flex flex-wrap items-center gap-x-3 text-[13px] text-ink-mid"><span class="inline-flex items-center gap-2 font-medium text-ink-pure"><span class="pj-dot" style="--c:{lead['colour']}"></span>{lead['pillar']}</span><span aria-hidden="true">·</span><time datetime="{lead['date']}">{lead['dateLabel']}</time></span>
         <h2 class="mt-5 text-[30px] font-semibold leading-[1.06] tracking-[-0.04em] md:text-[42px]">{lead['title']}</h2>
         <p class="mt-5 text-[16px] leading-relaxed text-ink-dark">{lead['excerpt']}</p>
-        <span class="btn-dark btn-cta mt-8 min-h-[48px] self-start px-6 text-[14px] lg:mt-auto">Read the story <span class="arr" aria-hidden="true">↗</span></span>
-      </div>
-    </a>
+        {('<span class="btn-dark btn-cta mt-8 min-h-[48px] self-start px-6 text-[14px] lg:mt-auto">Read the story <span class="arr" aria-hidden="true">↗</span></span>' if href else '')}
+      </div>'''
+        if href:
+            rel = ' target="_blank" rel="noopener"' if external else ''
+            shell = f'<a href="{href}"{rel} class="nw-feat group">{inner}</a>'
+        else:
+            shell = f'<article class="nw-feat">{inner}</article>'
+        feat = f'''
+<section id="featured" class="pt-8 lg:pt-10">
+  <div class="wrap">
+    {shell}
   </div>
 </section>
 '''
@@ -1158,12 +1162,11 @@ def news():
                        'Stories from <span class="text-ink-mid">our communities.</span>',
                        'News, calls for applications and participant stories from AFCD’s programmes.') + feat + f'''
 <section id="stories" class="py-14 lg:py-16">
-  <div class="wrap">{sec_head('01 / All Stories', 'Latest from <span class="sh-soft">AFCD.</span>', ('Current blog', blog))}
+  <div class="wrap">{sec_head('01 / All Stories', 'Latest from <span class="sh-soft">AFCD.</span>')}
     <div class="nw-chips mt-8" role="group" aria-label="Filter stories">{chips}</div>
     <ul class="nw-grid mt-6" id="news-grid">{cards}
     </ul>
     <p class="nw-empty mt-6 hidden text-[15px] text-ink-mid" role="status">No stories in this category yet.</p>
-    {placeholder_note(note) if note else ''}
   </div>
 </section>
 
@@ -1189,22 +1192,20 @@ def news():
 
 # ---------------------------------------------------------------- News article pages (template owned by the website session)
 def news_articles():
-    """One article page per Studio story (news-<slug>.html). External items link to the old blog and get no page.
+    """One article page per story that has a body (news-<slug>.html).
+    A story with no body is not given a page: the listing shows its excerpt, and any earlier page is removed.
     Field values from news_items() are already HTML-escaped; bodyHtml is already safe HTML."""
-    all_items = news_items()
-    # Studio stories have their own file; older stories that link to the old blog get a details page too.
     items = []
-    for x in all_items:
+    for x in news_items():
+        body = (x.get('bodyHtml') or '').strip()
+        if not body:
+            continue
         if not x.get('file'):
             x = dict(x, file=f"news-{x['slug']}.html")
         items.append(x)
-    all_items = items
+    written = set()
     for i, it in enumerate(items):
-        body = it.get('bodyHtml') or ''
-        sample = not body.strip()
-        if sample:
-            body = ('<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus, posuere velit aliquet.</p>'
-                    '<p>Sed posuere consectetur est at lobortis. Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.</p>')
+        body = (it.get('bodyHtml') or '').strip()
         hero = (media_img(it['hero'], 'aspect-[16/9] w-full rounded-[28px]', '(min-width:1280px) 1200px, 100vw', eager=True) if it.get('hero')
                 else ph(it['title'], 'aspect-[16/9] w-full rounded-[28px]', '#E2E2E2'))
         pills = it.get('pillars') or []
@@ -1219,7 +1220,7 @@ def news_articles():
         ghtml = (f'<div class="na-gallery">{"".join(media_img(m, "aspect-[4/3] w-full rounded-[18px]", "(min-width:768px) 33vw, 50vw") for m in gallery)}</div>' if gallery else '')
         projects = it.get('projects') or []
         phtml = ''.join(f'<li><a href="{p["file"]}" class="na-proj"><span class="min-w-0 flex-1"><span class="block text-[15px] font-semibold">{p["name"]}</span><span class="block text-[13px] text-ink-mid">{p.get("category") or ""}</span></span><span aria-hidden="true">↗</span></a></li>' for p in projects if p.get('file'))
-        related = [x for x in all_items if x is not it][:3]
+        related = [x for x in items if x is not it][:3]
         def card(x):
             href = x['file']
             return f'''
@@ -1256,10 +1257,8 @@ def news_articles():
     </aside>
 
     <div class="na-body">
-      {'<p class="na-sample">Sample article text: the full story will replace this.</p>' if sample else ''}
       <p class="na-lead">{it.get('excerpt', '')}</p>
       <div class="na-prose">{body}</div>
-      {f'<div class="na-callout"><p class="text-[15px] font-semibold">First published on the AFCD blog</p><p class="mt-1 text-[14px] leading-relaxed text-ink-dark">Read the full original post on afcdfoundation.org.</p><a href="{it["url"]}" class="btn-dark btn-cta mt-4 min-h-[44px] px-5 text-[13.5px]">Read the original {ARR}</a></div>' if it.get('external') and it.get('url') else ''}
       {ghtml}
       {f'<div class="na-related-proj"><p class="label text-ink-mid">Related projects</p><ul class="mt-3 grid gap-2">{phtml}</ul></div>' if phtml else ''}
       {pn}
@@ -1276,6 +1275,10 @@ def news_articles():
 ''' + cta_band('Have a story to share?', 'Alumni, volunteers and partners: tell us about the change you’ve seen.',
                ('Contact us', 'contact.html'), ('Get Involved', 'get-involved.html'))
         page(it['file'], f"{it.get('seoTitle') or it['title']} · News · AFCD Foundation", (it.get('seoDescription') or it.get('excerpt', ''))[:155], 'news', body_html, parent=('News &amp; Stories', 'news.html'))
+        written.add(it['file'])
+    for old in OUT.glob('news-*.html'):
+        if old.name not in written:
+            old.unlink()
 
 
 # ---------------------------------------------------------------- Events

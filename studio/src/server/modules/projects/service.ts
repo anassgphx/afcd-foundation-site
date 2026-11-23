@@ -13,6 +13,8 @@ import type { Role } from '../../rbac.ts';
 export type Status = typeof projects.$inferSelect['status'];
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const text = (max: number) => z.string().trim().max(max);
+/** Frames for the project logo: the image's own shape, square, circle, wide, landscape and tall. */
+export const LOGO_SHAPES = ['original', '1:1', 'circle', '3:1', '2:1', '4:3', '16:9', '3:4', '1:3'] as const;
 
 // ---------------------------------------------------------------- Validation (server-side, every write)
 export const projectInputSchema = z.object({
@@ -36,6 +38,11 @@ export const projectInputSchema = z.object({
   hasDetailPage: z.boolean().default(true),
   photoCaption: text(160).default(''),
   heroMediaId: z.string().uuid().nullable().default(null),
+  logoMediaId: z.string().uuid().nullable().default(null),
+  logoStyle: z.object({
+    shape: z.enum(LOGO_SHAPES).default('original'), fit: z.enum(['contain', 'cover']).default('contain'),
+    bg: z.enum(['none', 'white', 'light', 'dark', 'pillar']).default('white'), size: z.enum(['s', 'm', 'l']).default('m'),
+  }).strict().default({ shape: 'original', fit: 'contain', bg: 'white', size: 'm' }),
   galleryMediaIds: z.array(z.string().uuid()).max(12).default([]),
   pillarKeys: z.array(z.string()).min(1, 'Link the project to at least one pillar.').max(4),
   primaryPillarKey: z.string(),
@@ -52,7 +59,7 @@ export function publishProblems(p: FullProject): string[] {
   if (!p.summary) out.push('Add a one-line summary.');
   if (!p.pillars.length) out.push('Link at least one pillar.');
   if (p.hasDetailPage && !(p.context || p.activities)) out.push('Add the context or the activities for the project page.');
-  for (const m of [p.hero, ...p.gallery, ...Object.values(p.activityMedia)].filter(Boolean) as MediaRow[]) {
+  for (const m of [p.hero, p.logo, ...p.gallery, ...Object.values(p.activityMedia)].filter(Boolean) as MediaRow[]) {
     if (!m.alt) out.push(`Add alt text to “${m.originalName}”.`);
     if (!m.rightsConfirmed) out.push(`Confirm usage rights and consent for “${m.originalName}”.`);
   }
@@ -64,6 +71,7 @@ export type FullProject = typeof projects.$inferSelect & {
   pillars: { key: string; name: string; isPrimary: boolean }[];
   objectiveRefs: string[];
   hero: MediaRow | null;
+  logo: MediaRow | null;
   gallery: MediaRow[];
   activityMedia: Record<string, MediaRow>;   // photos used by activityItems, by id
   linkedEvents: { id: string; title: string; startDate: string; status: string; live: boolean }[];   // Studio events linked to this project (read-only here)
@@ -78,11 +86,12 @@ export async function loadProject(db: DB, id: string): Promise<FullProject> {
   const objs = await db.select({ ref: objectives.ref }).from(projectObjectives)
     .innerJoin(objectives, eq(objectives.id, projectObjectives.objectiveId)).where(eq(projectObjectives.projectId, id)).orderBy(asc(objectives.sort));
   const hero = p.heroMediaId ? (await db.select().from(media).where(eq(media.id, p.heroMediaId)))[0] ?? null : null;
+  const logo = p.logoMediaId ? (await db.select().from(media).where(eq(media.id, p.logoMediaId)))[0] ?? null : null;
   const gallery = await db.select({ m: media }).from(projectGallery).innerJoin(media, eq(media.id, projectGallery.mediaId))
     .where(eq(projectGallery.projectId, id)).orderBy(asc(projectGallery.sort));
   const actIds = [...new Set((p.activityItems ?? []).flatMap((a) => a.mediaIds ?? []))];
   const actRows = actIds.length ? await db.select().from(media).where(inArray(media.id, actIds)) : [];
-  return { ...p, pillars: pls.map(({ sort: _s, ...r }) => r), objectiveRefs: objs.map((o) => o.ref), hero, gallery: gallery.map((g) => g.m),
+  return { ...p, pillars: pls.map(({ sort: _s, ...r }) => r), objectiveRefs: objs.map((o) => o.ref), hero, logo, gallery: gallery.map((g) => g.m),
     activityMedia: Object.fromEntries(actRows.map((m) => [m.id, m])),
     linkedEvents: await db.select({ id: events.id, title: events.title, startDate: events.startDate, status: events.status, live: sql<boolean>`${events.publishedRevisionId} is not null` })
       .from(events).where(eq(events.projectId, id)).orderBy(desc(events.startDate)) };
@@ -108,6 +117,8 @@ export function toSnapshot(p: FullProject): Snapshot {
     lede: p.summary, facts: facts.filter(([, v]) => v), rows,
     photo: p.photoCaption || `${p.name} · project photo`,
     hero: p.hero ? publicRef(p.hero) : null,
+    logo: p.logo ? { ...publicRef(p.logo), ...p.logoStyle } : null,   // the logo and how it is framed in the project summary
+    cover: [p.hero, ...p.gallery.slice(0, 2)].filter(Boolean).map((m) => publicRef(m as MediaRow)),   // up to three cover photos: the main photo, then the first two gallery photos
     gallery: p.gallery.map((m) => publicRef(m)),
     objectives: p.objectiveRefs,
     ...(p.programObjectives?.length ? { programObjectives: p.programObjectives.map((o) => ({ title: o.title, ...(o.text ? { text: o.text } : {}) })) } : {}),
@@ -122,7 +133,7 @@ export function toSnapshot(p: FullProject): Snapshot {
     slug: p.slug, file: p.hasDetailPage ? `project-${p.slug}.html` : null, name: p.name,
     pillar: primary?.key ?? '', pillars: p.pillars.map((x) => x.key), category: p.category, summary: p.summary, sort: p.sort,
     seo: { title: p.seoTitle, description: p.seoDescription },
-    media: [...new Set([p.hero, ...p.gallery, ...(p.hasDetailPage ? p.activityItems.flatMap((a) => (a.mediaIds ?? []).map((mid) => p.activityMedia[mid])) : [])].filter(Boolean).map((m) => (m as MediaRow).id))],
+    media: [...new Set([p.hero, p.logo, ...p.gallery, ...(p.hasDetailPage ? p.activityItems.flatMap((a) => (a.mediaIds ?? []).map((mid) => p.activityMedia[mid])) : [])].filter(Boolean).map((m) => (m as MediaRow).id))],
     detail,
   };
 }
@@ -141,7 +152,7 @@ async function writeRelations(db: DB, id: string, input: ProjectInput) {
   if (pl.length !== new Set(input.pillarKeys).size) throw new AppError(422, 'Unknown pillar.');
   const ob = input.objectiveRefs.length ? await db.select().from(objectives).where(inArray(objectives.ref, input.objectiveRefs)) : [];
   if (ob.length !== new Set(input.objectiveRefs).size) throw new AppError(422, 'Unknown strategic objective.');
-  const mediaIds = [...new Set([input.heroMediaId, ...input.galleryMediaIds, ...input.activityItems.flatMap((a) => a.mediaIds)].filter(Boolean) as string[])];
+  const mediaIds = [...new Set([input.heroMediaId, input.logoMediaId, ...input.galleryMediaIds, ...input.activityItems.flatMap((a) => a.mediaIds)].filter(Boolean) as string[])];
   if (mediaIds.length) {
     const found = await db.select({ id: media.id }).from(media).where(inArray(media.id, mediaIds));
     if (found.length !== mediaIds.length) throw new AppError(422, 'An image no longer exists in the media library.');
@@ -264,7 +275,7 @@ export async function restoreRevision(db: DB, actor: NonNullable<Actor>, id: str
     const [rev] = await t.select().from(projectRevisions).where(and(eq(projectRevisions.id, revisionId), eq(projectRevisions.projectId, id)));
     if (!rev) throw new AppError(404, 'Revision not found.');
     const s = rev.snapshot as unknown as Snapshot;
-    const d = s.detail as Record<string, unknown> & { facts?: [string, string][]; rows?: [string, string][]; hero?: { id: string } | null; gallery?: { id: string }[]; objectives?: string[]; photo?: string;
+    const d = s.detail as Record<string, unknown> & { facts?: [string, string][]; rows?: [string, string][]; hero?: { id: string } | null; logo?: { id: string; shape: string; fit: string; bg: string; size: string } | null; gallery?: { id: string }[]; objectives?: string[]; photo?: string;
       programObjectives?: { title: string; text?: string }[]; outcomes?: { title?: string; text?: string; figure?: string }[]; activities?: { title: string; text?: string; images?: { id: string }[]; image?: { id: string } }[] };
     const row = (k: string) => d.rows?.find((r) => r[0] === k)?.[1] ?? '';
     const fact = (k: string) => d.facts?.find((r) => r[0] === k)?.[1] ?? '';
@@ -273,7 +284,9 @@ export async function restoreRevision(db: DB, actor: NonNullable<Actor>, id: str
       location: fact('Location'), years: fact('Years'),
       extraFacts: (d.facts ?? []).filter((f) => !['Pillar', 'Category', 'Location', 'Years'].includes(f[0])).map(([label, value]) => ({ label, value })),
       context: row('Context'), approach: row('Approach'), activities: row('Activities'), results: row('Results'),
-      hasDetailPage: !!s.file, photoCaption: d.photo ?? '', heroMediaId: d.hero?.id ?? null, galleryMediaIds: (d.gallery ?? []).map((g) => g.id),
+      hasDetailPage: !!s.file, photoCaption: d.photo ?? '', heroMediaId: d.hero?.id ?? null,
+      logoMediaId: d.logo?.id ?? null, ...(d.logo ? { logoStyle: { shape: d.logo.shape, fit: d.logo.fit, bg: d.logo.bg, size: d.logo.size } } : {}),
+      galleryMediaIds: (d.gallery ?? []).map((g) => g.id),
       pillarKeys: s.pillars, primaryPillarKey: s.pillar, objectiveRefs: d.objectives ?? [],
       programObjectives: (d.programObjectives ?? []).map((o) => ({ title: o.title, text: o.text ?? '' })),
       outcomes: (d.outcomes ?? []).map((o) => ({ title: o.title ?? '', text: o.text ?? '', figure: o.figure ?? '' })),

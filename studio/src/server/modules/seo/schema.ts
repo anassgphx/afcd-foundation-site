@@ -18,9 +18,9 @@ import { articleFile, type ArticleSnapshot } from '../news/render.ts';
 import { eventFile } from '../events/render.ts';
 import type { EventSnapshot } from '../events/service.ts';
 
-export const SITE = 'https://afcdfoundation.org/';
+import { DEFAULT_SITE, siteUrl } from './site.ts';
 export const KEY = 'organization';
-const ORG_ID = SITE + '#organization';
+const orgId = (site: string) => site + '#organization';
 const plain = (n: number) => z.string().trim().max(n).refine((v) => !/[<>]/.test(v), 'Use plain text.');
 const HTTPS = /^https:\/\/[a-z0-9.-]+\.[a-z]{2,}(\/[^\s"'<>]*)?$/i;
 /** The foundation's public addresses. Any other address (personal, administrative) never goes into public markup. */
@@ -55,19 +55,21 @@ export function orgOverrides(s: SchemaSettings) {
 }
 
 type Img = { src: string; w: number; h: number } | null;
-const abs = (p: string) => (/^https?:/.test(p) ? p : SITE + p.replace(/^\/+/, ''));
+const absFor = (site: string) => (p: string) => (/^https?:/.test(p) ? p : site + p.replace(/^\/+/, ''));
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
 
-export function articleLd(a: ArticleSnapshot, img: Img) {
+export function articleLd(a: ArticleSnapshot, img: Img, site = DEFAULT_SITE) {
+  const abs = absFor(site);
   const file = articleFile(a); if (!file) return null;
   return { '@context': 'https://schema.org', '@type': 'Article', headline: clip(a.seo?.title || a.title, 110), description: a.seo?.description || a.excerpt || undefined,
     datePublished: a.publishDate, inLanguage: 'en', mainEntityOfPage: abs(file), url: abs(file),
     ...(img ? { image: [abs(img.src)] } : {}),
-    author: a.authorName ? { '@type': 'Person', name: a.authorName } : { '@id': ORG_ID },
-    publisher: { '@id': ORG_ID } };
+    author: a.authorName ? { '@type': 'Person', name: a.authorName } : { '@id': orgId(site) },
+    publisher: { '@id': orgId(site) } };
 }
 
-export function eventLd(e: EventSnapshot, img: Img) {
+export function eventLd(e: EventSnapshot, img: Img, site = DEFAULT_SITE) {
+  const abs = absFor(site);
   const file = eventFile(e.slug);
   const place = e.location ? { '@type': 'Place', name: e.location, address: { '@type': 'PostalAddress', addressCountry: 'MA', addressLocality: e.location } } : null;
   const virtual = e.online ? { '@type': 'VirtualLocation', url: e.registration === 'external' && e.registrationUrl ? e.registrationUrl : abs(file) } : null;
@@ -77,7 +79,7 @@ export function eventLd(e: EventSnapshot, img: Img) {
     eventStatus: 'https://schema.org/EventScheduled',
     eventAttendanceMode: `https://schema.org/${place && virtual ? 'Mixed' : virtual ? 'Online' : 'Offline'}EventAttendanceMode`,
     ...(location ? { location } : {}), ...(img ? { image: [abs(img.src)] } : {}),
-    organizer: { '@id': ORG_ID } };
+    organizer: { '@id': orgId(site) } };
 }
 
 /** Checks generated objects against what search engines document as required or recommended. Not a guarantee of rich results. */
@@ -103,11 +105,11 @@ export function validateLd(obj: Record<string, unknown>) {
 
 export type LiveForSchema = { articles: { snap: ArticleSnapshot; img: Img }[]; events: { snap: EventSnapshot; img: Img }[] };
 /** schema.json for build.mjs: organization overrides plus extra JSON-LD per page. Objects with errors are left out. */
-export function buildSchemaFile(s: SchemaSettings, live: LiveForSchema, revision: string) {
+export function buildSchemaFile(s: SchemaSettings, live: LiveForSchema, revision: string, site = DEFAULT_SITE) {
   const pages: Record<string, Record<string, unknown>[]> = {};
   const add = (file: string, obj: Record<string, unknown> | null) => { if (obj && !validateLd(obj).errors.length) (pages[file] ??= []).push(JSON.parse(JSON.stringify(obj))); };
-  if (s.articles) for (const a of live.articles) add(articleFile(a.snap) ?? '', articleLd(a.snap, a.img));
-  if (s.events) for (const e of live.events) add(eventFile(e.snap.slug), eventLd(e.snap, e.img));
+  if (s.articles) for (const a of live.articles) add(articleFile(a.snap) ?? '', articleLd(a.snap, a.img, site));
+  if (s.events) for (const e of live.events) add(eventFile(e.snap.slug), eventLd(e.snap, e.img, site));
   return { version: 1, source: 'AFCD Studio', revision, organization: orgOverrides(s), pages };
 }
 
@@ -159,14 +161,15 @@ export async function transitionSettings(db: DB, actor: NonNullable<Actor>, role
 }
 
 export async function settingsView(db: DB, cfg: Config, live: LiveForSchema) {
+  const site = await siteUrl(db);
   const row = await loadSettings(db);
   const [by] = row?.updatedBy ? await db.select({ name: users.name }).from(users).where(eq(users.id, row.updatedBy)) : [];
   const draft = (row?.draft as SchemaSettings | null) ?? EMPTY;
   const published = (row?.published as SchemaSettings | null) ?? null;
   const built = builtOrganization(cfg);
   const generated = [
-    ...live.articles.map((a) => ({ kind: 'Article', file: articleFile(a.snap), title: a.snap.title, ld: articleLd(a.snap, a.img) })).filter((x) => x.file),
-    ...live.events.map((e) => ({ kind: 'Event', file: eventFile(e.snap.slug), title: e.snap.title, ld: eventLd(e.snap, e.img) })),
+    ...live.articles.map((a) => ({ kind: 'Article', file: articleFile(a.snap), title: a.snap.title, ld: articleLd(a.snap, a.img, site) })).filter((x) => x.file),
+    ...live.events.map((e) => ({ kind: 'Event', file: eventFile(e.snap.slug), title: e.snap.title, ld: eventLd(e.snap, e.img, site) })),
   ].map((g) => ({ ...g, check: validateLd(g.ld as Record<string, unknown>) }));
   // the website build applies src/data/schema.json only once build.mjs has the Studio hook; until then publishing is off
   const buildFile = resolve(cfg.siteRoot, 'build.mjs');

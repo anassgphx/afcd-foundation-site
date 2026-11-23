@@ -6,7 +6,8 @@ import { articles, articlePillars, articleProjects, articleGallery, articleRevis
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
-import type { ArticleSnapshot } from './render.ts';
+import { bodyMediaIds, bodyText, type ArticleSnapshot } from './render.ts';
+export { bodyMediaIds };
 
 type Status = typeof articles.$inferSelect['status'];
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -61,9 +62,9 @@ export const toArticleSnapshot = (a: FullArticle): ArticleSnapshot => ({
 export async function articleProblems(db: DB, a: FullArticle) {
   const out: string[] = [];
   if (!a.excerpt) out.push('Add a short summary (excerpt) for cards and search results.');
-  if (!a.externalUrl && a.body.trim().split(/\s+/).filter(Boolean).length < 30) out.push('Write the story (at least 30 words), or link to where it is published.');
+  if (!a.externalUrl && bodyText(a.body).trim().split(/\s+/).filter(Boolean).length < 30) out.push('Write the story (at least 30 words), or link to where it is published.');
   if (!a.pillarKeys.length) out.push('Link the story to at least one pillar.');
-  const ids = [a.heroMediaId, ...a.galleryMediaIds].filter(Boolean) as string[];
+  const ids = [...new Set([a.heroMediaId, ...a.galleryMediaIds, ...bodyMediaIds(a.body)].filter(Boolean) as string[])];
   if (ids.length) {
     for (const m of await db.select().from(media).where(inArray(media.id, ids))) {
       if (!m.alt) out.push(`Add alt text to “${m.originalName}”.`);
@@ -78,8 +79,8 @@ async function writeRelations(db: DB, id: string, input: ArticleInput) {
   if (pl.length !== new Set(input.pillarKeys).size) throw new AppError(422, 'Unknown pillar.');
   const pr = input.projectSlugs.length ? await db.select().from(projects).where(inArray(projects.slug, input.projectSlugs)) : [];
   if (pr.length !== new Set(input.projectSlugs).size) throw new AppError(422, 'Unknown project.');
-  const mids = [...new Set([input.heroMediaId, ...input.galleryMediaIds].filter(Boolean) as string[])];
-  if (mids.length && (await db.select({ id: media.id }).from(media).where(inArray(media.id, mids))).length !== mids.length) throw new AppError(422, 'An image no longer exists in the media library.');
+  const mids = [...new Set([input.heroMediaId, ...input.galleryMediaIds, ...bodyMediaIds(input.body)].filter(Boolean) as string[])];
+  if (mids.length && (await db.select({ id: media.id }).from(media).where(inArray(media.id, mids))).length !== mids.length) throw new AppError(422, 'An image in this story no longer exists in the Media Library. Remove it from the text or choose another one.');
   await db.delete(articlePillars).where(eq(articlePillars.articleId, id));
   if (pl.length) await db.insert(articlePillars).values(pl.map((p) => ({ articleId: id, pillarId: p.id, isPrimary: p.key === input.pillarKeys[0] })));
   await db.delete(articleProjects).where(eq(articleProjects.articleId, id));

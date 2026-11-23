@@ -36,14 +36,14 @@ function fakeGoogle() {
     }
     if (url === 'https://oauth2.googleapis.com/revoke') { g.revoked = true; return json(200, {}); }
     if (!auth?.startsWith('Bearer at-')) return json(401, { error: { status: 'UNAUTHENTICATED', message: 'Invalid credentials' } });
-    if (url.endsWith('/webmasters/v3/sites')) return json(200, { siteEntry: [{ siteUrl: 'sc-domain:afcdfoundation.org', permissionLevel: 'siteOwner' }, { siteUrl: 'https://other.example/', permissionLevel: 'siteUnverifiedUser' }] });
+    if (url.endsWith('/webmasters/v3/sites')) return json(200, { siteEntry: [{ siteUrl: 'sc-domain:afcdfoundation.com', permissionLevel: 'siteOwner' }, { siteUrl: 'https://other.example/', permissionLevel: 'siteUnverifiedUser' }] });
     if (url.includes('/searchAnalytics/query')) {
       g.calls.sa++;
       const b = JSON.parse(String(init!.body)); const dims: string[] = b.dimensions;
       if (b.startRow > 0) return json(200, {});
       const rows = days(b.startDate, b.endDate).flatMap((d) => {
         if (dims[0] === 'date') return [{ keys: [d], clicks: 10 + dayN(d), impressions: 200 + dayN(d), ctr: (10 + dayN(d)) / (200 + dayN(d)), position: 8.5 }];
-        const pages = ['https://afcdfoundation.org/', 'https://afcdfoundation.org/about.html'];
+        const pages = ['https://afcdfoundation.com/', 'https://afcdfoundation.com/about.html'];
         const qs = ['afcd foundation', 'ait ourir association', 'youth morocco'];
         if (dims.join() === 'query') return qs.map((q, i) => ({ keys: [q], clicks: i === 0 ? dayN(d) : 2, impressions: 50, ctr: 0.1, position: 3 + i }));
         if (dims.join() === 'page') return pages.map((p, i) => ({ keys: [p], clicks: i === 0 ? 8 : dayN(d) > 15 ? 1 : 4, impressions: 120, ctr: 0.05, position: 5 }));
@@ -56,7 +56,7 @@ function fakeGoogle() {
     }
     if (url.includes('urlInspection/index:inspect')) {
       g.calls.inspect++;
-      return json(200, { inspectionResult: { inspectionResultLink: 'https://search.google.com/search-console/inspect?x', indexStatusResult: { verdict: 'PASS', coverageState: 'Submitted and indexed', indexingState: 'INDEXING_ALLOWED', lastCrawlTime: '2026-11-18T08:00:00Z', googleCanonical: 'https://afcdfoundation.org/about.html', userCanonical: 'https://afcdfoundation.org/about.html' } } });
+      return json(200, { inspectionResult: { inspectionResultLink: 'https://search.google.com/search-console/inspect?x', indexStatusResult: { verdict: 'PASS', coverageState: 'Submitted and indexed', indexingState: 'INDEXING_ALLOWED', lastCrawlTime: '2026-11-18T08:00:00Z', googleCanonical: 'https://afcdfoundation.com/about.html', userCanonical: 'https://afcdfoundation.com/about.html' } } });
     }
     return json(404, { error: { message: `fake google: no route ${url}` } });
   }) as typeof fetch;
@@ -128,10 +128,10 @@ describe('Search Console connection and sync', () => {
   it('chooses a verified property, syncs final days without duplicates and reports only stored Google rows', async () => {
     const admin = await client(h.app, 'admin@afcd.test'), seo = await client(h.app, 'seo@afcd.test');
     await authorize(admin);
-    expect((await admin.get('/seo/google/properties')).body.map((p: any) => [p.siteUrl, p.usable])).toEqual([['https://other.example/', false], ['sc-domain:afcdfoundation.org', true]]);
+    expect((await admin.get('/seo/google/properties')).body.map((p: any) => [p.siteUrl, p.usable])).toEqual([['https://other.example/', false], ['sc-domain:afcdfoundation.com', true]]);
     expect((await admin.put('/seo/google/property', { siteUrl: 'https://other.example/' })).status).toBe(422);
     expect((await admin.put('/seo/google/settings', { backfillDays: 10, retentionDays: 486, autoSync: true })).status).toBe(200);
-    expect((await admin.put('/seo/google/property', { siteUrl: 'sc-domain:afcdfoundation.org' })).status).toBe(200);   // queues the first sync
+    expect((await admin.put('/seo/google/property', { siteUrl: 'sc-domain:afcdfoundation.com' })).status).toBe(200);   // queues the first sync
     expect((await seo.post('/seo/google/sync')).status).toBe(200);                    // already queued: no second job
     expect((await h.db.select().from(seoJobs)).length).toBe(1);
 
@@ -154,29 +154,29 @@ describe('Search Console connection and sync', () => {
 
     const q = (await seo.get('/seo/gsc/queries?from=2026-11-10&to=2026-11-19')).body;
     expect(q[0]).toMatchObject({ key: 'afcd foundation', clicks: 145, impressions: 500 });
-    const pg = (await seo.get(`/seo/gsc/page?url=${encodeURIComponent('https://afcdfoundation.org/')}&from=2026-11-10&to=2026-11-19`)).body;
+    const pg = (await seo.get(`/seo/gsc/page?url=${encodeURIComponent('https://afcdfoundation.com/')}&from=2026-11-10&to=2026-11-19`)).body;
     expect(pg.series).toHaveLength(10); expect(pg.queries[0]).toMatchObject({ key: 'afcd foundation', clicks: 50 });
 
     // winners/losers: second half vs first half; about.html dropped from 4 to 1 click a day after the 15th
     const m = (await seo.get('/seo/gsc/movers?from=2026-11-15&to=2026-11-19&min=20')).body;
-    expect(m.pages.losers[0]).toMatchObject({ key: 'https://afcdfoundation.org/about.html', clicks: 8, prevClicks: 20 })   // 4 on the 15th, then 1 a day;
+    expect(m.pages.losers[0]).toMatchObject({ key: 'https://afcdfoundation.com/about.html', clicks: 8, prevClicks: 20 })   // 4 on the 15th, then 1 a day;
     expect(m.queries.winners[0].key).toBe('afcd foundation');
     expect(m.pages.method).toMatch(/at least 20 impressions/);
   });
 
   it('inspects only addresses of the property, within quota, and records Google’s indexed-version answer', async () => {
     const admin = await client(h.app, 'admin@afcd.test'), seo = await client(h.app, 'seo@afcd.test');
-    await authorize(admin); await admin.put('/seo/google/property', { siteUrl: 'sc-domain:afcdfoundation.org' });
+    await authorize(admin); await admin.put('/seo/google/property', { siteUrl: 'sc-domain:afcdfoundation.com' });
     expect((await seo.post('/seo/gsc/inspect', { url: 'https://evil.example/x' })).status).toBe(422);
-    const r = await seo.post('/seo/gsc/inspect', { url: 'https://afcdfoundation.org/about.html' });
+    const r = await seo.post('/seo/gsc/inspect', { url: 'https://afcdfoundation.com/about.html' });
     expect(r.status).toBe(200); expect(r.body).toMatchObject({ verdict: 'PASS', coverageState: 'Submitted and indexed' });
-    expect((await seo.get('/seo/gsc/inspections')).body[0]).toMatchObject({ url: 'https://afcdfoundation.org/about.html', link: expect.stringContaining('search.google.com') });
+    expect((await seo.get('/seo/gsc/inspections')).body[0]).toMatchObject({ url: 'https://afcdfoundation.com/about.html', link: expect.stringContaining('search.google.com') });
     expect((await seo.get('/seo/google/status')).body.usage.urlInspection).toMatchObject({ used: 1, limit: 1800 });
   });
 
   it('marks a revoked grant as needing reconnection, and disconnect revokes and deletes tokens', async () => {
     const admin = await client(h.app, 'admin@afcd.test');
-    await authorize(admin); await admin.put('/seo/google/property', { siteUrl: 'sc-domain:afcdfoundation.org' });
+    await authorize(admin); await admin.put('/seo/google/property', { siteUrl: 'sc-domain:afcdfoundation.com' });
     // the access token expires and Google has revoked the grant meanwhile
     await h.db.update(googleConnections).set({ accessExpiresAt: new Date(0) });
     fake.g.revoked = true;

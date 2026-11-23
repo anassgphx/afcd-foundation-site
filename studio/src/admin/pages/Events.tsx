@@ -1,6 +1,7 @@
 // Events: the public calendar. Real events only; each gets its own page and appears on Events (upcoming or past).
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
+import { useSite } from '../site.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { EditorHeader, Field, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
@@ -59,6 +60,7 @@ type Loaded = Form & { id: string; status: string; publishedRevisionId: string |
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] } };
 
 export function EventEditor({ id }: { id: string }) {
+  const site = useSite();
   const can = useCan(); const me = useMe(); const toast = useToast();
   const [e, setE] = useState<Loaded | null>(null); const [f, setF] = useState<Form | null>(null);
   const [poster, setPoster] = useState<MediaItem | null>(null);
@@ -175,7 +177,7 @@ export function EventEditor({ id }: { id: string }) {
           <Field label="SEO title" span={2} count={[f.seoTitle.length, 70]}><input className="input" maxLength={70} value={f.seoTitle} onChange={(x) => set('seoTitle', x.target.value)} aria-label="SEO title" placeholder={f.title} /></Field>
           <Field label="Page address" hint={live ? 'A live event’s address cannot change.' : undefined}><div className="ed-slug"><span>event-</span><input className="input mono" aria-label="Page address" disabled={live} value={f.slug} onChange={(x) => { setSlugTouched(true); set('slug', slugify(x.target.value)); }} /></div></Field>
           <Field label="Meta description" span={3} count={[f.seoDescription.length, 170]}><textarea className="textarea" rows={2} maxLength={170} value={f.seoDescription} onChange={(x) => set('seoDescription', x.target.value)} aria-label="Meta description" placeholder={f.summary} /></Field>
-          <div className="serp s3"><div className="serp-url">afcdfoundation.org › {file}</div><div className="serp-title">{(f.seoTitle || f.title || 'Event title').slice(0, 65)} · Events · AFCD Foundation</div><div className="serp-desc">{(f.seoDescription || f.summary || 'Short description of the event.').slice(0, 160)}</div></div>
+          <div className="serp s3"><div className="serp-url">{site.host} › {file}</div><div className="serp-title">{(f.seoTitle || f.title || 'Event title').slice(0, 65)} · Events · AFCD Foundation</div><div className="serp-desc">{(f.seoDescription || f.summary || 'Short description of the event.').slice(0, 160)}</div></div>
         </Section>
       </fieldset>
       <Section id="translations" title="Translations" desc="French and Arabic of this event. Reviewed and published on the Translations screen.">

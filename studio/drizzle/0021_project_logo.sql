@@ -1,0 +1,3 @@
+ALTER TABLE "projects" ADD COLUMN "logo_media_id" uuid;--> statement-breakpoint
+ALTER TABLE "projects" ADD COLUMN "logo_style" jsonb DEFAULT '{"shape":"original","fit":"contain","bg":"white","size":"m"}'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "projects" ADD CONSTRAINT "projects_logo_media_id_media_id_fk" FOREIGN KEY ("logo_media_id") REFERENCES "public"."media"("id") ON DELETE set null ON UPDATE no action;

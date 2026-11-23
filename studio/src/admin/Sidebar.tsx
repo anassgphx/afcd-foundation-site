@@ -2,7 +2,8 @@
 // Counts come from the server only: the review queue (items waiting on this user) and the Inbox unread total.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { api } from './api.ts';
-import { Icon, Link, navigate, useCan, useMe } from './ui.tsx';
+import { Link, navigate, useCan, useMe } from './ui.tsx';
+import { NavIcon } from './navIcons.tsx';
 import './sidebar.css';
 
 export type NavItem = { to: string; label: string; icon: string; perm: string; match?: RegExp; key?: string };
@@ -103,17 +104,17 @@ export function Sidebar({ path, collapsed, onToggle, unread, onCloseMobile }: { 
       {groups.map((g) => <div className="nav-group sb-group" key={g.group} role="group" aria-labelledby={`sb-${g.group}`}>
         {g.group !== 'Overview' && <span className="nav-label sb-label" id={`sb-${g.group}`}>{g.group}</span>}
         {g.items.map((i) => { const on = isOn(i); return <Link key={i.to} to={i.to} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined} title={collapsed ? i.label : undefined}>
-          <Icon n={i.icon} /><span className="nav-text">{i.label}</span>{badge(i)}
+          <NavIcon n={i.icon} /><span className="nav-text">{i.label}</span>{badge(i)}
         </Link>; })}
       </div>)}
     </nav>
 
     <div className="side-foot sb-foot">
       <a href={me.siteUrl} target="_blank" rel="noopener" className="sb-foot-btn" title={collapsed ? 'View website (opens in a new tab)' : undefined}>
-        <Icon n="globe" /><span className="nav-text">View website</span><Icon n="ext" className="sb-ext" /><span className="sr-only"> (opens in a new tab)</span>
+        <NavIcon n="globe" /><span className="nav-text">View website</span><NavIcon n="ext" className="sb-ext" /><span className="sr-only"> (opens in a new tab)</span>
       </a>
       <button type="button" className="sb-foot-btn sb-toggle" onClick={onToggle} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : undefined} aria-pressed={collapsed}>
-        <Icon n="side" /><span className="nav-text">Collapse sidebar</span>
+        <NavIcon n={collapsed ? 'sideOpen' : 'side'} /><span className="nav-text">Collapse sidebar</span>
       </button>
     </div>
   </aside></>;

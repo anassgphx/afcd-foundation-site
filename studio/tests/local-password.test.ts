@@ -14,7 +14,7 @@ describe('local-only passwords', () => {
   it('knows which addresses are this computer', () => {
     expect(isLocalOrigin('http://localhost:4400')).toBe(true);
     expect(isLocalOrigin('http://127.0.0.1:4400')).toBe(true);
-    expect(isLocalOrigin('https://studio.afcdfoundation.org')).toBe(false);
+    expect(isLocalOrigin('https://studio.afcdfoundation.com')).toBe(false);
     expect(isLocalOrigin('not a url')).toBe(false);
   });
 
@@ -23,8 +23,8 @@ describe('local-only passwords', () => {
     await h.db.insert(users).values({ email: 'local@afcd.local', name: 'Local admin', role: 'super_admin', passwordHash: await hashPassword('123456'), localOnlyPassword: true });
     expect((await login(h.app, h.cfg.origin, '123456')).status).toBe(200);
     expect((await login(h.app, h.cfg.origin, '654321')).status).toBe(401);
-    const online = createApp(h.db, { ...h.cfg, origin: 'https://studio.afcdfoundation.org', secureCookies: true }, { runner: fakeRunner() }).app;
-    const r = await login(online, 'https://studio.afcdfoundation.org', '123456');
+    const online = createApp(h.db, { ...h.cfg, origin: 'https://studio.afcdfoundation.com', secureCookies: true }, { runner: fakeRunner() }).app;
+    const r = await login(online, 'https://studio.afcdfoundation.com', '123456');
     expect(r.status).toBe(403);
     expect(r.headers.get('set-cookie')).toBeNull();
   });

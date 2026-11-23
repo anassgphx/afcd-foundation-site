@@ -163,6 +163,9 @@ export const projects = pgTable('projects', {
   hasDetailPage: boolean('has_detail_page').notNull().default(true),
   photoCaption: text('photo_caption').notNull().default(''),        // placeholder caption until a hero photo is set
   heroMediaId: uuid('hero_media_id').references(() => media.id, { onDelete: 'set null' }),
+  // project logo, shown in the project summary: a Media Library image and how it is framed (shape, fit, background, size)
+  logoMediaId: uuid('logo_media_id').references(() => media.id, { onDelete: 'set null' }),
+  logoStyle: jsonb('logo_style').$type<{ shape: string; fit: string; bg: string; size: string }>().notNull().default({ shape: 'original', fit: 'contain', bg: 'white', size: 'm' }),
   seoTitle: text('seo_title').notNull().default(''),
   seoDescription: text('seo_description').notNull().default(''),
   sort: integer('sort').notNull().default(100),
@@ -635,7 +638,7 @@ export const googleConnections = pgTable('google_connections', {
   status: text('status').notNull().default('connected'),        // connected | error (needs reconnect)
   accountEmail: text('account_email'),
   scopes: text('scopes').notNull().default(''),
-  property: text('property'),                                    // e.g. 'sc-domain:afcdfoundation.org' (chosen by an admin)
+  property: text('property'),                                    // e.g. 'sc-domain:afcdfoundation.com' (chosen by an admin)
   permissionLevel: text('permission_level'),
   refreshTokenEnc: text('refresh_token_enc').notNull(),
   accessTokenEnc: text('access_token_enc'),

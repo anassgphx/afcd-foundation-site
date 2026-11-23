@@ -1817,6 +1817,15 @@ button[type="submit"][aria-busy="true"] { opacity: .6; cursor: progress; }
 .pj-logo.bg-light { background: #F5F5F4; } .pj-logo.bg-dark { background: #171717; }
 .pj-logo.bg-pillar { background: var(--pc, #F5F5F4); } .pj-logo.bg-none { background: transparent; border-radius: 0; }
 .pj-logo + .pjs-lede { margin-top: 18px; }
+/* in the Project Summary column: sized by its height, as wide as its shape needs */
+.pjs-side .pj-logo { display: inline-block; vertical-align: top; }
+.pjs-side .pj-logo .pj-logo-img { width: 100%; height: 100%; }
+.pjs-side .pj-logo:not(.cover) .pj-logo-img { padding: 12% 16px; }   /* % padding follows the width; keep wide logos readable */
+.pjs-side .pj-logo.s-s:not(.cover) .pj-logo-img { padding: 8px 12px; }
+.pjs-side .pj-logo.s-m:not(.cover) .pj-logo-img { padding: 12px 16px; }
+.pjs-side .pj-logo.s-l:not(.cover) .pj-logo-img { padding: 16px 20px; }
+.pjs-side .pj-logo.bg-none:not(.cover) .pj-logo-img { padding: 0; }
+.pjs-side .pj-logo + .pjs-lede { margin-top: 20px; }
 
 /* Activity photo galleries: tiles open a full-screen viewer */
 .pja-pi { position: relative; display: block; width: 100%; min-height: 0; padding: 0; border: 0; background: none; cursor: zoom-in; }

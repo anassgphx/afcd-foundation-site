@@ -27,6 +27,7 @@ import * as SEO from './modules/seo/service.ts';
 import * as RD from './modules/seo/redirects.ts';
 import * as SCH from './modules/seo/schema.ts';
 import * as GSC from './modules/google/gsc.ts';
+import * as SITE from './modules/seo/site.ts';
 import * as JOBS from './modules/jobs/service.ts';
 import * as TR from './modules/translations/service.ts';
 import { registerMenuRoutes } from './modules/menus/routes.ts';
@@ -177,7 +178,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   api.get('/projects', perm('project.read'), async (c) => c.json(await P.listProjects(db)));
   api.get('/projects/:id', perm('project.read'), async (c) => {
     const p = await P.loadProject(db, c.req.param('id'));
-    return c.json({ ...p, hero: p.hero && withUrl(p.hero), gallery: p.gallery.map(withUrl), problems: P.publishProblems(p), history: await P.projectHistory(db, p.id) });
+    return c.json({ ...p, hero: p.hero && withUrl(p.hero), logo: p.logo && withUrl(p.logo), gallery: p.gallery.map(withUrl), problems: P.publishProblems(p), history: await P.projectHistory(db, p.id) });
   });
   api.post('/projects', perm('project.create'), async (c) => c.json(await P.createProject(db, actor(c), await c.req.json()), 201));
   api.put('/projects/:id', async (c) => {
@@ -270,7 +271,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   api.post('/news', perm('news.create'), async (c) => c.json(await N.createArticle(db, actor(c), await c.req.json()), 201));
   api.get('/news/:id', perm('news.read'), async (c) => {
     const a = await N.loadArticle(db, c.req.param('id'));
-    const ids = [a.heroMediaId, ...a.galleryMediaIds].filter(Boolean) as string[];
+    const ids = [...new Set([a.heroMediaId, ...a.galleryMediaIds, ...N.bodyMediaIds(a.body)].filter(Boolean) as string[])];   // + photos placed in the story text
     const mediaRows = ids.length ? await db.select().from(t.media).where(inArray(t.media.id, ids)) : [];
     return c.json({ ...a, media: mediaRows.map(withUrl), problems: await N.articleProblems(db, a), history: await N.articleHistory(db, a.id) });
   });
@@ -446,6 +447,8 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   // Admins (seo.publish) connect, choose the property, change sync settings and disconnect; SEO editors (seo.update)
   // start syncs and URL inspections; everyone with seo.read sees the stored Google data.
   const http = opts.googleHttp ?? fetch;
+  // the public website's canonical address (Settings → General, else afcdfoundation.com), for previews in any editor
+  api.get('/seo/site', async (c) => { requireUser(c); const url = await SITE.siteUrl(db); return c.json({ url, host: SITE.siteHost(url) }); });
   api.get('/seo/google/status', perm('seo.read'), async (c) => c.json({ ...(await GSC.status(db, cfg)), coverage: await GSC.coverage(db), jobs: await JOBS.listJobs(db, ['gsc_sync'], 8) }));
   api.post('/seo/google/connect', perm('seo.publish'), async (c) => c.json(await GSC.startConnect(db, cfg, actor(c))));
   api.get('/seo/google/callback', async (c) => {
@@ -495,7 +498,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     return c.json({ pages: await GSC.movers(db, 'page', r, min), queries: await GSC.movers(db, 'query', r, min) }); });
   api.get('/seo/gsc/inspections', perm('seo.read'), async (c) => c.json(await GSC.inspections(db)));
   api.post('/seo/gsc/inspect', perm('seo.update'), async (c) => {
-    const b = z.object({ url: z.string().url().max(2000) }).safeParse(await c.req.json()); if (!b.success) throw new AppError(422, 'Enter a full address, like https://afcdfoundation.org/about.html');
+    const b = z.object({ url: z.string().url().max(2000) }).safeParse(await c.req.json()); if (!b.success) throw new AppError(422, `Enter a full address, like ${await SITE.siteUrl(db)}about.html`);
     return c.json(await GSC.inspect(db, cfg, http, actor(c), b.data.url));
   });
 

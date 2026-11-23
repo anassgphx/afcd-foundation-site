@@ -464,7 +464,7 @@ function Focal({ m, x, y, ro, onChange }: { m: LibItem; x: number; y: number; ro
 }
 
 // ================================================================= Picker (used by the editors)
-async function upload(file: File): Promise<MediaItem> {
+export async function upload(file: File): Promise<MediaItem> {
   const fd = new FormData(); fd.append('file', file);
   const csrf = (await api<{ csrf: string }>('/me')).csrf;
   const res = await fetch('/studio/api/media', { method: 'POST', body: fd, headers: { 'X-CSRF-Token': csrf }, credentials: 'same-origin' });

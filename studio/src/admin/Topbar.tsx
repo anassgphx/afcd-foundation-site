@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom';
 import { api } from './api.ts';
 import { Icon, Link, ago, initials, navigate, useCan, useMe } from './ui.tsx';
 import './account-menu.css';
+import './topbar.css';
+import { NavIcon } from './navIcons.tsx';
 import { NAV_SHORTCUTS } from './Sidebar.tsx';
 
 export type NavLink = { to: string; label: string; icon: string; perm: string; group: string };
@@ -29,8 +31,8 @@ function usePopover() {
 export function Breadcrumbs({ path, title, nav }: { path: string; title: string; nav: NavLink[] }) {
   const parent = nav.find((n) => n.to !== '/studio/' && path.startsWith(n.to) && path !== n.to && n.label !== title);
   return <nav className="crumbs" aria-label="Breadcrumb">
-    <Link to="/studio/">Studio</Link><Icon n="chev" width={14} height={14} />
-    {parent && <><Link to={parent.to}>{parent.label}</Link><Icon n="chev" width={14} height={14} /></>}
+    <Link to="/studio/">Studio</Link><NavIcon n="chevRight" width={14} height={14} className="tb-crumb-sep" />
+    {parent && <><Link to={parent.to}>{parent.label}</Link><NavIcon n="chevRight" width={14} height={14} className="tb-crumb-sep" /></>}
     <b aria-current="page">{title}</b>
   </nav>;
 }
@@ -43,7 +45,7 @@ export function SearchButton({ nav }: { nav: NavLink[] }) {
     window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
   }, []);
   return <>
-    <button className="tb-search" onClick={() => setOpen(true)} aria-label="Search Studio" aria-haspopup="dialog"><Icon n="search" /><span>Search projects, stories, pages…</span><kbd>{isMac ? '⌘' : 'Ctrl'} K</kbd></button>
+    <button className="tb-search" onClick={() => setOpen(true)} aria-label="Search Studio" aria-haspopup="dialog"><NavIcon n="find" /><span>Search projects, stories, pages…</span><kbd>{isMac ? '⌘' : 'Ctrl'} K</kbd></button>
     {open && <Palette nav={nav} onClose={() => setOpen(false)} />}
   </>;
 }
@@ -112,7 +114,7 @@ export function Notifications({ path }: { path: string }) {
   const markRead = () => { const now = new Date().toISOString(); store.set(seenKey, now); setSeen(now); };
   return <div className="tb-pop" ref={ref}>
     <button className="btn btn-ghost icon-btn tb-bell" onClick={() => { setOpen(!open); load(); }} aria-expanded={open} aria-haspopup="true" aria-label={unread ? `Notifications, ${unread} new` : 'Notifications'} title="Notifications">
-      <Icon n="bell" />{unread > 0 && <em className="tb-dot">{unread > 9 ? '9+' : unread}</em>}</button>
+      <NavIcon n="bell" />{unread > 0 && <em className="tb-dot">{unread > 9 ? '9+' : unread}</em>}</button>
     {open && <div className="tb-panel tb-notes" role="dialog" aria-label="Notifications">
       <div className="tb-panel-h"><b>Notifications</b>{unread > 0 && <button className="btn btn-ghost btn-sm" onClick={markRead}>Mark all as read</button>}</div>
       {!notes ? <p className="muted" style={{ padding: 16 }}>Loading…</p> : notes.length === 0
@@ -179,7 +181,7 @@ export function UserMenu({ onLogout }: { onLogout: () => void }) {
   return <div className="tb-pop am" ref={wrap} onKeyDown={onKey}>
     <button ref={trigger} className="user-chip am-trigger" onClick={() => setOpen(!open)} onKeyDown={(e) => { if (e.key === 'ArrowDown' && !open) { e.preventDefault(); e.stopPropagation(); setOpen(true); } }}
       aria-expanded={open} aria-haspopup="menu" aria-controls={open ? 'am-menu' : undefined} aria-label={`Account menu for ${me.user.name}`}>
-      <span className="avatar">{initials(me.user.name)}</span><span className="user-chip-t">{me.user.name}<small>{me.user.roleLabel}</small></span><Icon n="chev" width={14} height={14} className="am-caret" /></button>
+      <span className="avatar">{initials(me.user.name)}</span><span className="user-chip-t">{me.user.name}<small>{me.user.roleLabel}</small></span><NavIcon n="chevDown" width={15} height={15} className="am-caret" /></button>
     {open && (sheet ? (x: React.ReactNode) => createPortal(<div className="am-sheet">{x}</div>, document.body) : (x: React.ReactNode) => x)(<>
       <div className="am-scrim" aria-hidden="true" onMouseDown={() => close(false)} />
       <div className="am-menu" id="am-menu" role="menu" aria-label="Account" ref={menu}>

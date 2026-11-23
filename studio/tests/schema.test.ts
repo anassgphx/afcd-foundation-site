@@ -23,7 +23,7 @@ describe('structured data builders', () => {
     expect(settingsSchema.parse({ organization: { email: 'Akaya@afcdteam.com' } }).organization.email).toBe('akaya@afcdteam.com');
     expect(validateLd({ '@type': 'Event', name: 'Sample event', startDate: '2027-01-01', location: { '@type': 'Place', name: 'x' } }).errors[0]).toMatch(/placeholder/);
     const art = articleLd({ ...story, seo: { title: '', description: '' }, type: 'Event recap' } as never, null)!;
-    expect(art).toMatchObject({ '@type': 'Article', headline: 'Climate camp in Ait Ourir', datePublished: '2026-11-20', url: 'https://afcdfoundation.org/news-climate-camp.html' });
+    expect(art).toMatchObject({ '@type': 'Article', headline: 'Climate camp in Ait Ourir', datePublished: '2026-11-20', url: 'https://afcdfoundation.com/news-climate-camp.html' });
     expect(validateLd(art)).toEqual({ errors: [], warnings: ['No image: add a cover photo to the story.'] });
     const ev = eventLd({ title: 'Bootcamp', slug: 'bootcamp', summary: '', startDate: '2027-01-20', endDate: null, location: '', online: false, registration: 'none', registrationUrl: '' } as never, null);
     expect(validateLd(ev).errors).toContain('No location: add a place, or mark the event as online.');

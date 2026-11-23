@@ -514,7 +514,7 @@
         surface: a.dataset.surface, phTone: a.dataset.ph, photo: q('.ph'), img: img ? img.outerHTML : '', logo: logo ? logo.outerHTML : '', lede: q('.pl'),
         rows: Array.prototype.map.call(a.querySelectorAll('dl > div'), function (r) { return [r.querySelector('dt').innerHTML, r.querySelector('dd').innerHTML]; }) };
     });
-    if (list.length) PROJECTS = list;
+    PROJECTS = list;   /* Studio is the source: no projects published means no cards */
   })();
   function plainText(html) { return String(html || '').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&rsquo;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>'); }
   function attrText(html) { return plainText(html).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
@@ -523,6 +523,7 @@
     if (!parts.length) return '•';
     return ((parts[0][0] || '') + (parts[1] ? parts[1][0] : (parts[0][1] || ''))).toUpperCase();
   }
+  if (!PROJECTS.length) { var sec = $('#projects'); if (sec) sec.hidden = true; return; }
   var stack = $('#stack'), dotsWrap = $('#stack-dots'), sCur = 0;
   PROJECTS.forEach(function (p, i) {
     var card = document.createElement('article');

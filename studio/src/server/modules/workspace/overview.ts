@@ -1,7 +1,7 @@
 // Dashboard overview: one read across every module, filtered by the user's permissions. Only real counts and records.
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
-import { articles, events, formSubmissions, media, opportunities, pageContents, pages, partners, pillars, projects, publishJobs, seoAudits } from '../../db/schema.ts';
+import { articles, events, formSubmissions, media, opportunities, publications, pageContents, pages, partners, pillars, projects, publishJobs, seoAudits } from '../../db/schema.ts';
 import { can, type Role } from '../../rbac.ts';
 import { TEXT_PAGES } from '../home/service.ts';
 import { todayMorocco } from '../events/render.ts';
@@ -14,7 +14,7 @@ const JOB_LABEL: Record<string, string> = {
   publish_project: 'Published a project', unpublish_project: 'Removed a project', publish_page: 'Published a page', unpublish_page: 'Removed a page',
   publish_article: 'Published a story', publish_article_scheduled: 'Published a scheduled story', unpublish_article: 'Removed a story',
   publish_partner: 'Published a partner', publish_pillar: 'Published a pillar', unpublish_partner: 'Removed a partner', publish_event: 'Published an event', unpublish_event: 'Removed an event',
-  publish_opportunity: 'Published an opportunity', unpublish_opportunity: 'Removed an opportunity', publish_seo: 'Published SEO settings', unpublish_seo: 'Restored a page’s own SEO',
+  publish_opportunity: 'Published an opportunity', unpublish_opportunity: 'Removed an opportunity', publish_publication: 'Published a publication', unpublish_publication: 'Removed a publication', publish_seo: 'Published SEO settings', unpublish_seo: 'Restored a page’s own SEO',
   publish_home: 'Published the homepage', unpublish_home: 'Restored the original homepage', rebuild: 'Rebuilt the website',
   publish_redirects: 'Published redirects', publish_seo_schema: 'Published structured data', unpublish_seo_schema: 'Removed structured data',
   publish_translations: 'Published translations',
@@ -22,7 +22,7 @@ const JOB_LABEL: Record<string, string> = {
 
 export async function overview(db: DB, user: { id: string; role: Role }) {
   const role = user.role; const today = todayMorocco();
-  const statusCounts = async (table: typeof projects | typeof articles | typeof events | typeof opportunities | typeof partners | typeof pages | typeof pillars) => {
+  const statusCounts = async (table: typeof projects | typeof articles | typeof events | typeof opportunities | typeof publications | typeof partners | typeof pages | typeof pillars) => {
     const t = table as typeof projects;
     const rows = await db.select({ status: t.status, live: sql<boolean>`${t.publishedRevisionId} is not null`, n: count() }).from(t).groupBy(t.status, sql`${t.publishedRevisionId} is not null`);
     const sum = (f: (r: typeof rows[number]) => boolean) => rows.filter(f).reduce((a, r) => a + r.n, 0);
@@ -42,6 +42,7 @@ export async function overview(db: DB, user: { id: string; role: Role }) {
     const [{ n }] = await db.select({ n: count() }).from(opportunities).where(and(isNotNull(opportunities.publishedRevisionId), sql`(${opportunities.deadline} is null or ${opportunities.deadline} >= ${today})`, sql`(${opportunities.opensOn} is null or ${opportunities.opensOn} <= ${today})`));
     modules.push({ key: 'opportunities', label: 'Opportunities', href: '/studio/opportunities', icon: 'spark', ...(await statusCounts(opportunities)), note: `${n} open now` });
   }
+  if (can(role, 'publication.read')) modules.push({ key: 'publications', label: 'Publications', href: '/studio/publications', icon: 'book', ...(await statusCounts(publications)) });
   if (can(role, 'pillar.read')) modules.push({ key: 'pillars', label: 'Pillars', href: '/studio/pillars', icon: 'pillars', ...(await statusCounts(pillars)) });
   if (can(role, 'partner.read')) modules.push({ key: 'partners', label: 'Partners', href: '/studio/partners', icon: 'partner', ...(await statusCounts(partners)) });
   if (can(role, 'page.read')) modules.push({ key: 'pages', label: 'Custom pages', href: '/studio/pages', icon: 'layers', ...(await statusCounts(pages)) });
@@ -54,6 +55,7 @@ export async function overview(db: DB, user: { id: string; role: Role }) {
   if (can(role, 'news.read')) await take('Story', (id) => `/studio/news/${id}`, q(articles as never, articles.title as never));
   if (can(role, 'event.read')) await take('Event', (id) => `/studio/events/${id}`, q(events as never, events.title as never));
   if (can(role, 'opportunity.read')) await take('Opportunity', (id) => `/studio/opportunities/${id}`, q(opportunities as never, opportunities.title as never));
+  if (can(role, 'publication.read')) await take('Publication', (id) => `/studio/publications/${id}`, q(publications as never, publications.title as never));
   if (can(role, 'partner.read')) await take('Partner', (id) => `/studio/partners/${id}`, q(partners as never, partners.name as never));
   if (can(role, 'pillar.read')) await take('Pillar', (id) => `/studio/pillars/${id}`, db.select({ id: pillars.id, title: pillars.name, status: pillars.status, live: sql<boolean>`${pillars.publishedRevisionId} is not null`, at: pillars.updatedAt }).from(pillars).where(isNotNull(pillars.draft)).orderBy(desc(pillars.updatedAt)).limit(6));
   if (can(role, 'page.read')) {
@@ -103,7 +105,7 @@ export async function overview(db: DB, user: { id: string; role: Role }) {
   const ids = jobs.map((j) => j.entityId).filter(Boolean) as string[];
   const names = new Map<string, string>();
   if (ids.length) {
-    for (const [t, col] of [[projects, projects.name], [articles, articles.title], [events, events.title], [opportunities, opportunities.title], [partners, partners.name], [pillars, pillars.name], [pages, pages.title]] as const) {
+    for (const [t, col] of [[projects, projects.name], [articles, articles.title], [events, events.title], [opportunities, opportunities.title], [publications, publications.title], [partners, partners.name], [pillars, pillars.name], [pages, pages.title]] as const) {
       for (const r of await db.select({ id: (t as typeof projects).id, n: col as typeof projects.name }).from(t as typeof projects).where(inArray((t as typeof projects).id, ids))) names.set(r.id, r.n);
     }
   }

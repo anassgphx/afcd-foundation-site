@@ -25,6 +25,7 @@ export const RECORDS: RecordSrc[] = [
   R('story', 'Story', 'news', t.articles, t.articles.title, t.articleRevisions, 'articleId', (id) => `/studio/news/${id}`, (id) => `/news/${id}`),
   R('event', 'Event', 'event', t.events, t.events.title, t.eventRevisions, 'eventId', (id) => `/studio/events/${id}`, (id) => `/events/${id}`),
   R('opportunity', 'Opportunity', 'opportunity', t.opportunities, t.opportunities.title, t.opportunityRevisions, 'opportunityId', (id) => `/studio/opportunities/${id}`, (id) => `/opportunities/${id}`),
+  R('publication', 'Publication', 'publication', t.publications, t.publications.title, t.publicationRevisions, 'publicationId', (id) => `/studio/publications/${id}`, (id) => `/publications/${id}`),
   R('partner', 'Partner', 'partner', t.partners, t.partners.name, t.partnerRevisions, 'partnerId', (id) => `/studio/partners/${id}`, (id) => `/partners/${id}`),
   R('pillar', 'Pillar', 'pillar', t.pillars, t.pillars.name, t.pillarRevisions, 'pillarId', (id) => `/studio/pillars/${id}`, (id) => `/pillars/${id}`),
   R('page', 'Page', 'page', t.pages, t.pages.title, t.pageRevisions, 'pageId', (id) => `/studio/pages/${id}`, (id) => `/pages/${id}`),

@@ -155,6 +155,20 @@
       "when": 1795438901056,
       "tag": "0021_project_logo",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1795447258895,
+      "tag": "0022_publications",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1795454187906,
+      "tag": "0023_project_poster",
+      "breakpoints": true
     }
   ]
 }

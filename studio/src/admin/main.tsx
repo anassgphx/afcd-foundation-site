@@ -13,7 +13,7 @@ import { NAV, Sidebar } from './Sidebar.tsx';
 const SCREENS = {
   projects: () => import('./pages/Projects.tsx'), projectEditor: () => import('./pages/ProjectEditor.tsx'), pagesList: () => import('./pages/PagesList.tsx'),
   builder: () => import('./pages/Builder.tsx'), news: () => import('./pages/News.tsx'), partners: () => import('./pages/Partners.tsx'), pillars: () => import('./pages/Pillars.tsx'),
-  events: () => import('./pages/Events.tsx'), opportunities: () => import('./pages/Opportunities.tsx'), inbox: () => import('./pages/Inbox.tsx'), seo: () => import('./pages/Seo.tsx'),
+  events: () => import('./pages/Events.tsx'), opportunities: () => import('./pages/Opportunities.tsx'), publications: () => import('./pages/Publications.tsx'), inbox: () => import('./pages/Inbox.tsx'), seo: () => import('./pages/Seo.tsx'),
   translations: () => import('./pages/Translations.tsx'), menus: () => import('./pages/Menus.tsx'), home: () => import('./pages/Home.tsx'), media: () => import('./pages/Media.tsx'),
   admin: () => import('./pages/Admin.tsx'), approvals: () => import('./pages/Approvals.tsx'),
   open: () => import('./pages/OpenPage.tsx'), settings: () => import('./pages/Settings.tsx'),
@@ -28,6 +28,7 @@ const OpportunityEditor = screen('opportunities', 'OpportunityEditor'), InboxPag
 const TranslationsPage = screen('translations', 'TranslationsPage'), MenusPage = screen('menus', 'MenusPage'), HomeEditor = screen('home', 'HomeEditor');
 const MediaLibrary = screen('media', 'MediaLibrary'), Publishing = screen('admin', 'Publishing'), ActivityLog = screen('admin', 'ActivityLog'), Users = screen('admin', 'Users');
 const ApprovalsPage = screen('approvals', 'ApprovalsPage');
+const PublicationsList = screen('publications', 'PublicationsList'), PublicationEditor = screen('publications', 'PublicationEditor');
 const OpenPage = screen('open', 'OpenPage');
 const SettingsPage = screen('settings', 'SettingsPage');
 let warmed = false;
@@ -167,6 +168,9 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   const op = path.match(/^\/studio\/opportunities\/([0-9a-f-]{36})$/);
   if (op) return { title: 'Opportunity', el: <OpportunityEditor key={op[1]} id={op[1]} /> };
   if (path.startsWith('/studio/opportunities')) return { title: 'Opportunities', el: <OpportunitiesList /> };
+  const pb = path.match(/^\/studio\/publications\/([0-9a-f-]{36})$/);
+  if (pb) return { title: 'Publication', el: <PublicationEditor key={pb[1]} id={pb[1]} /> };
+  if (path.startsWith('/studio/publications')) return { title: 'Publications', el: <PublicationsList /> };
   const ev = path.match(/^\/studio\/events\/([0-9a-f-]{36})$/);
   if (ev) return { title: 'Event', el: <EventEditor key={ev[1]} id={ev[1]} /> };
   if (path.startsWith('/studio/events')) return { title: 'Events', el: <EventsList /> };

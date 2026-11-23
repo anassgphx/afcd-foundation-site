@@ -22,6 +22,7 @@ async function resolve(file: string, can: (p: string) => boolean): Promise<Found
   const tries: [string, string, string, string][] = [
     ['project-', '/projects', 'project.read', '/studio/projects'], ['news-', '/news', 'news.read', '/studio/news'],
     ['event-', '/events', 'event.read', '/studio/events'], ['opportunity-', '/opportunities', 'opportunity.read', '/studio/opportunities'],
+    ['publication-', '/publications', 'publication.read', '/studio/publications'],
   ];
   for (const t of tries) { const to = await bySlug(...t).catch(() => null); if (to) return { to }; }
   if (can('pillar.read')) {

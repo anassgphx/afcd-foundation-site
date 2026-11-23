@@ -15,6 +15,7 @@ export const NAV: { group: string; items: NavItem[] }[] = [
     { to: '/studio/news', label: 'News & stories', icon: 'log', perm: 'news.read', match: /^\/studio\/news/, key: 'n' },
     { to: '/studio/events', label: 'Events', icon: 'calendar', perm: 'event.read', match: /^\/studio\/events/, key: 'e' },
     { to: '/studio/opportunities', label: 'Opportunities', icon: 'spark', perm: 'opportunity.read', match: /^\/studio\/opportunities/, key: 'o' },
+    { to: '/studio/publications', label: 'Publications', icon: 'book', perm: 'publication.read', match: /^\/studio\/publications/ },
     { to: '/studio/pillars', label: 'Pillars', icon: 'pillars', perm: 'pillar.read', match: /^\/studio\/pillars/ },
     { to: '/studio/partners', label: 'Partners', icon: 'partner', perm: 'partner.read', match: /^\/studio\/partners/ },
     { to: '/studio/media', label: 'Media library', icon: 'image', perm: 'media.read', match: /^\/studio\/media/, key: 'm' },

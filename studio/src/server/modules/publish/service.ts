@@ -24,6 +24,10 @@ import { currentLayout, layoutBlocks, type LayoutEntry } from '../home/layout.ts
 import { publicRef } from '../media/service.ts';
 import { detailSource, listingSource, oppCtx, oppState, opportunityFile, type LiveOpp } from '../opportunities/render.ts';
 import type { OpportunitySnapshot } from '../opportunities/service.ts';
+import { publications, publicationRevisions } from '../../db/schema.ts';
+import { detailSource as pubDetailSource, listingSource as pubListingSource, pubAssets, pubCtx, publicationFile, PUBLIC_DOC_DIR, type LivePub } from '../publications/render.ts';
+import { DOC_FILE, documentFile, documentPath, type DocumentRow } from '../publications/documents.ts';
+import type { PublicationSnapshot } from '../publications/service.ts';
 import { eventEntries, eventFile, isUpcoming } from '../events/render.ts';
 import type { EventSnapshot } from '../events/service.ts';
 import { partnerEntries } from '../partners/render.ts';
@@ -240,6 +244,45 @@ export class Publisher {
     return live.map((o) => o.snap.heroMediaId).filter(Boolean) as string[];
   }
 
+  /** Live publications (optionally overriding one). */
+  async livePublications(override?: { publicationId: string; revisionId: string | null }): Promise<LivePub[]> {
+    const live = await this.db.select({ id: publications.id, rev: publications.publishedRevisionId }).from(publications).where(isNotNull(publications.publishedRevisionId));
+    const map = new Map(live.map((r) => [r.id, r.rev as string]));
+    if (override) { if (override.revisionId) map.set(override.publicationId, override.revisionId); else map.delete(override.publicationId); }
+    if (!map.size) return [];
+    const revs = await this.db.select().from(publicationRevisions).where(inArray(publicationRevisions.id, [...map.values()]));
+    return revs.map((r) => ({ id: r.id, snap: r.snapshot as unknown as PublicationSnapshot }));
+  }
+
+  /** Writes publications.html and one page per publication into `pagesDir`, like opportunities: with nothing live the
+   *  pages are removed (also from `outDirs`), and stale publication pages are always removed. Returns the files they need. */
+  private async writePublications(pagesDir: string, outDirs: string[], live: LivePub[], projectOverride?: { projectId: string; revisionId: string | null }) {
+    const keep = new Set(live.length ? ['publications.html', ...live.map((p) => publicationFile(p.snap.slug))] : []);
+    for (const dir of [pagesDir, ...outDirs]) {
+      if (existsSync(dir)) for (const f of readdirSync(dir)) if ((f === 'publications.html' || /^publication-[a-z0-9-]+\.html$/.test(f)) && !keep.has(f)) rmSync(resolve(dir, f));
+    }
+    if (!live.length) return { mediaIds: [] as string[], docs: [] as DocumentRow[] };
+    const ctx = await pubCtx(this.db, live.map((p) => p.snap), { projectOverride });
+    mkdirSync(pagesDir, { recursive: true });
+    const write = (f: string, src: string) => { const file = resolve(pagesDir, f); const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`; writeFileSync(tmp, src); renameSync(tmp, file); };
+    write('publications.html', pubListingSource(live, ctx));
+    for (const p of live) write(publicationFile(p.snap.slug), pubDetailSource(p, ctx));
+    return pubAssets(live, ctx);
+  }
+
+  /** Copies the PDFs of live publications to assets/documents/ (prune: removes PDFs no live publication uses). */
+  private copyDocuments(docs: DocumentRow[], destDir: string, prune: boolean) {
+    const keep = new Set<string>();
+    if (docs.length) mkdirSync(destDir, { recursive: true });
+    for (const d of docs) {
+      const src = documentPath(this.cfg, d);
+      if (!existsSync(src)) throw new Error(`Missing PDF file for “${d.originalName}”. Upload it again.`);
+      keep.add(documentFile(d));
+      copyFileSync(src, resolve(destDir, documentFile(d)));
+    }
+    if (prune && existsSync(destDir)) for (const f of readdirSync(destDir)) if (DOC_FILE.test(f) && !keep.has(f)) rmSync(resolve(destDir, f));
+  }
+
   get seoFile() { return resolve(this.cfg.siteRoot, 'src/data/seo.json'); }
 
   async liveSeo(override?: { overrideId: string; revisionId: string | null }) {
@@ -301,7 +344,7 @@ export class Publisher {
     return ids;
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; pillar?: { pillarId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { file?: string; revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string }; settings?: { values: SET.Values; revision: string } } = {}) {
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; pillar?: { pillarId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; publication?: { publicationId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { file?: string; revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string }; settings?: { values: SET.Values; revision: string } } = {}) {
     const entries = await this.liveEntries(o.project);
     await this.writeRedirects(o.redirects === 'pending');
     this.writeData(this.dataFile, entries);
@@ -316,6 +359,9 @@ export class Publisher {
     const pending = { article: o.article, event: o.event, opportunity: o.opportunity, partner: o.partner };
     const homeMedia = await this.writeFields(o.home, { projectOverride: o.project, pending });
     const oppMedia = await this.writeOpportunities(resolve(this.cfg.siteRoot, 'src/pages'), [this.cfg.siteRoot], await this.liveOpportunities(o.opportunity), o.project);
+    // the language copies (fr/, ar/) are removed with the English page: build.mjs only writes pages, it never deletes them
+    const pub = await this.writePublications(resolve(this.cfg.siteRoot, 'src/pages'), [this.cfg.siteRoot, ...TR.LANGS.map((l) => resolve(this.cfg.siteRoot, l))], await this.livePublications(o.publication), o.project);
+    this.copyDocuments(pub.docs, resolve(this.cfg.siteRoot, PUBLIC_DOC_DIR), true);
     const newsMedia = await this.writeNews(this.newsFile, resolve(this.cfg.siteRoot, 'src/pages'), await this.liveArticles(o.article), o.project);
     const live = await this.livePages(o.page);
     const ctx = await buildCtx(this.db, live.map((x) => x.snap.doc), { projectOverride: o.project, pending });
@@ -326,7 +372,7 @@ export class Publisher {
       const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
       writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
     }
-    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...eventMedia, ...oppMedia, ...seoMedia, ...homeMedia, ...settingsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...eventMedia, ...oppMedia, ...pub.mediaIds, ...seoMedia, ...homeMedia, ...settingsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
     return { entries, live };
   }
 
@@ -475,7 +521,7 @@ export class Publisher {
       const msg = (e as Error).message;
       try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
       await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
-      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('settings') ? 'settings' : kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('pillar') ? 'pillar' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
+      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('settings') ? 'settings' : kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('pillar') ? 'pillar' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('publication') ? 'publication' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
       throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
     }
     return { job, log };
@@ -1016,6 +1062,92 @@ export class Publisher {
     await this.locked(async () => { const log: string[] = []; await this.rebuildFromDb(log); });
     await audit(this.db, null, 'opportunity.refresh', { type: 'opportunity' }, 'Rebuilt opportunities because one has opened or closed');
     return true;
+  }
+
+  // ---------------------------------------------------------------- Publications
+  private verifyPublication(snap: PublicationSnapshot, revisionId: string, removed: boolean, docKey: string | null) {
+    const root = this.cfg.siteRoot;
+    const file = publicationFile(snap.slug);
+    const page = resolve(root, file), listing = resolve(root, 'publications.html');
+    if (removed) {
+      for (const p of [page, ...TR.LANGS.map((l) => resolve(root, l, file))]) if (existsSync(p)) throw new Error(`${p.slice(root.length + 1)} is still on the site.`);
+      if (existsSync(listing) && readFileSync(listing, 'utf8').includes(`data-studio-publication="${revisionId}"`)) throw new Error('The publication is still listed on publications.html.');
+      return;
+    }
+    if (!existsSync(page) || !readFileSync(page, 'utf8').includes(`data-studio-publication-rev="${revisionId}"`)) throw new Error(`${file} does not contain the published revision.`);
+    if (!existsSync(listing) || !readFileSync(listing, 'utf8').includes(`data-studio-publication="${revisionId}"`)) throw new Error('The publication is missing from publications.html.');
+    if (docKey && !existsSync(resolve(root, PUBLIC_DOC_DIR, `${docKey}.pdf`))) throw new Error('The PDF was not copied to the website.');
+    const sitemap = resolve(root, 'sitemap.xml');
+    if (!existsSync(sitemap) || !readFileSync(sitemap, 'utf8').includes(file)) throw new Error(`${file} is missing from sitemap.xml.`);
+  }
+
+  private async docKeyOf(snap: PublicationSnapshot) {
+    if (!snap.documentId) return null;
+    const ctx = await pubCtx(this.db, [snap]);
+    const d = ctx.doc(snap.documentId);
+    if (!d) throw new AppError(409, 'The PDF of this publication no longer exists. Upload it again and resubmit.');
+    return d.storageKey;
+  }
+
+  async publishPublication(actor: NonNullable<Actor>, publicationId: string) {
+    return this.locked(async () => {
+      const [p] = await this.db.select().from(publications).where(eq(publications.id, publicationId));
+      if (!p) throw new AppError(404, 'Publication not found.');
+      if (p.status !== 'approved' || !p.approvedRevisionId) throw new AppError(409, 'Only an approved publication can be published.');
+      const [rev] = await this.db.select().from(publicationRevisions).where(eq(publicationRevisions.id, p.approvedRevisionId));
+      const snap = rev.snapshot as unknown as PublicationSnapshot;
+      const docKey = await this.docKeyOf(snap);
+      const { job, log } = await this.deliver('publish_publication', actor, publicationId, rev.id, async (log) => {
+        await this.writeSite({ publication: { publicationId, revisionId: rev.id } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyPublication(snap, rev.id, false, docKey);
+      }, `Publishing “${p.title}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(publications).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, updatedAt: new Date() }).where(eq(publications.id, publicationId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'publication.publish', { type: 'publication', id: publicationId }, `Published publication “${p.title}” (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file: publicationFile(snap.slug) };
+    });
+  }
+
+  async unpublishPublication(actor: NonNullable<Actor>, publicationId: string) {
+    return this.locked(async () => {
+      const [p] = await this.db.select().from(publications).where(eq(publications.id, publicationId));
+      if (!p) throw new AppError(404, 'Publication not found.');
+      if (!p.publishedRevisionId) throw new AppError(409, 'This publication is not on the live site.');
+      const [rev] = await this.db.select().from(publicationRevisions).where(eq(publicationRevisions.id, p.publishedRevisionId));
+      const snap = rev.snapshot as unknown as PublicationSnapshot;
+      const { job, log } = await this.deliver('unpublish_publication', actor, publicationId, rev.id, async (log) => {
+        await this.writeSite({ publication: { publicationId, revisionId: null } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyPublication(snap, rev.id, true, null);
+      }, `Removing “${p.title}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(publications).set({ status: 'draft', publishedRevisionId: null, publishedAt: null, updatedAt: new Date() }).where(eq(publications.id, publicationId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'publication.unpublish', { type: 'publication', id: publicationId }, `Removed publication “${p.title}” from the website`, { jobId: job.id });
+      });
+      return { jobId: job.id };
+    });
+  }
+
+  /** Builds the listing and the publication page with the saved working copy in an isolated folder. The PDF is served
+   *  from Studio's own copy (signed-in only), never copied to the site. */
+  async previewPublication(publicationId: string, snap: PublicationSnapshot) {
+    return this.locked(async () => {
+      this.cleanupPreviews();
+      const token = randomBytes(16).toString('hex');
+      const dir = resolve(this.cfg.previewDir, token);
+      const pagesDir = resolve(dir, 'pages'), outDir = resolve(dir, 'site'), dataFile = resolve(dir, 'projects.json');
+      mkdirSync(pagesDir, { recursive: true }); mkdirSync(outDir, { recursive: true });
+      this.writeData(dataFile, await this.liveEntries());
+      await this.writePublications(pagesDir, [], (await this.livePublications({ publicationId, revisionId: null })).concat({ id: 'preview', snap }));
+      await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, only: 'pages' });
+      const file = publicationFile(snap.slug);
+      if (!existsSync(resolve(outDir, file))) throw new AppError(409, 'The preview could not be generated.');
+      return { token, file };
+    });
   }
 
   // ---------------------------------------------------------------- SEO overrides

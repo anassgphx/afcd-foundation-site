@@ -2,7 +2,7 @@
 // (nothing is stored). Every query is filtered by the signed-in user's permissions; form messages are never searched.
 import { and, count, desc, eq, gte, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
-import { articles, events, formSubmissions, opportunities, pageContents, pages, partners, pillars, projects, publishJobs, seoOverrides } from '../../db/schema.ts';
+import { articles, events, formSubmissions, opportunities, pageContents, pages, partners, pillars, projects, publications, publishJobs, seoOverrides } from '../../db/schema.ts';
 import { can, type Role } from '../../rbac.ts';
 import { TEXT_PAGES } from '../home/service.ts';
 
@@ -19,6 +19,7 @@ export async function search(db: DB, role: Role, raw: string): Promise<Hit[]> {
   if (can(role, 'news.read')) for (const r of await db.select({ id: articles.id, t: articles.title, s: articles.publishDate, st: articles.status }).from(articles).where(or(ilike(articles.title, pat), ilike(articles.slug, pat))).limit(LIMIT)) out.push({ kind: 'Story', id: r.id, title: r.t, sub: r.s, href: `/studio/news/${r.id}`, status: r.st });
   if (can(role, 'event.read')) for (const r of await db.select({ id: events.id, t: events.title, s: events.startDate, st: events.status }).from(events).where(or(ilike(events.title, pat), ilike(events.location, pat))).limit(LIMIT)) out.push({ kind: 'Event', id: r.id, title: r.t, sub: r.s, href: `/studio/events/${r.id}`, status: r.st });
   if (can(role, 'opportunity.read')) for (const r of await db.select({ id: opportunities.id, t: opportunities.title, s: opportunities.deadline, st: opportunities.status }).from(opportunities).where(ilike(opportunities.title, pat)).limit(LIMIT)) out.push({ kind: 'Opportunity', id: r.id, title: r.t, sub: r.s ? `Deadline ${r.s}` : 'Rolling', href: `/studio/opportunities/${r.id}`, status: r.st });
+  if (can(role, 'publication.read')) for (const r of await db.select({ id: publications.id, t: publications.title, s: publications.publishedOn, st: publications.status }).from(publications).where(ilike(publications.title, pat)).limit(LIMIT)) out.push({ kind: 'Publication', id: r.id, title: r.t, sub: r.s ? `Published ${r.s}` : 'No date yet', href: `/studio/publications/${r.id}`, status: r.st });
   if (can(role, 'partner.read')) for (const r of await db.select({ id: partners.id, t: partners.name, s: partners.scope, st: partners.status }).from(partners).where(ilike(partners.name, pat)).limit(LIMIT)) out.push({ kind: 'Partner', id: r.id, title: r.t, sub: r.s, href: `/studio/partners/${r.id}`, status: r.st });
   if (can(role, 'pillar.read')) for (const r of await db.select({ id: pillars.id, t: pillars.name, s: pillars.number, st: pillars.status }).from(pillars).where(ilike(pillars.name, pat)).limit(LIMIT)) out.push({ kind: 'Pillar', id: r.id, title: r.t, sub: `Pillar ${r.s}`, href: `/studio/pillars/${r.id}`, status: r.st });
   if (can(role, 'page.read')) for (const r of await db.select({ id: pages.id, t: pages.title, s: pages.slug, st: pages.status }).from(pages).where(or(ilike(pages.title, pat), ilike(pages.slug, pat))).limit(LIMIT)) out.push({ kind: 'Page', id: r.id, title: r.t, sub: `${r.s}.html`, href: `/studio/pages/${r.id}`, status: r.st });
@@ -45,6 +46,8 @@ export async function notifications(db: DB, user: { id: string; role: Role }): P
       rows: () => db.select({ id: events.id, title: events.title, status: events.status, submittedBy: events.submittedBy, updatedAt: events.updatedAt }).from(events).where(inArray(events.status, ['in_review', 'approved', 'changes_requested'])) },
     { kind: 'Opportunity', perm: { read: 'opportunity.read', approve: 'opportunity.approve', publish: 'opportunity.publish' }, href: (id) => `/studio/opportunities/${id}`,
       rows: () => db.select({ id: opportunities.id, title: opportunities.title, status: opportunities.status, submittedBy: opportunities.submittedBy, updatedAt: opportunities.updatedAt }).from(opportunities).where(inArray(opportunities.status, ['in_review', 'approved', 'changes_requested'])) },
+    { kind: 'Publication', perm: { read: 'publication.read', approve: 'publication.approve', publish: 'publication.publish' }, href: (id) => `/studio/publications/${id}`,
+      rows: () => db.select({ id: publications.id, title: publications.title, status: publications.status, submittedBy: publications.submittedBy, updatedAt: publications.updatedAt }).from(publications).where(inArray(publications.status, ['in_review', 'approved', 'changes_requested'])) },
     { kind: 'Partner', perm: { read: 'partner.read', approve: 'partner.approve', publish: 'partner.publish' }, href: (id) => `/studio/partners/${id}`,
       rows: () => db.select({ id: partners.id, title: partners.name, status: partners.status, submittedBy: partners.submittedBy, updatedAt: partners.updatedAt }).from(partners).where(inArray(partners.status, ['in_review', 'approved', 'changes_requested'])) },
     { kind: 'Pillar', perm: { read: 'pillar.read', approve: 'pillar.approve', publish: 'pillar.publish' }, href: (id) => `/studio/pillars/${id}`,

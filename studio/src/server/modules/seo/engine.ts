@@ -62,7 +62,7 @@ export const RULES = R;
 const STUB_MARK = '<!-- studio-redirect -->';   // redirect pages written by Studio (see redirects.ts)
 export const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 const GENERIC_TITLE = /^(home|page|untitled|new page|title|test|index|welcome|default)$/i;
-const LISTING = new Set(['contact.html', 'team.html', 'news.html', 'events.html', 'projects.html', 'partners.html', 'opportunities.html', 'pillars.html', 'get-involved.html']);
+const LISTING = new Set(['contact.html', 'team.html', 'news.html', 'events.html', 'projects.html', 'partners.html', 'opportunities.html', 'publications.html', 'pillars.html', 'get-involved.html']);
 const WEIGHT: Record<Severity, number> = { critical: 40, high: 20, medium: 8, low: 3, info: 0 };
 
 function scanPage(root: string, file: string, pageUrl: (f: string) => string) {

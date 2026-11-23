@@ -166,6 +166,8 @@ export const projects = pgTable('projects', {
   // project logo, shown in the project summary: a Media Library image and how it is framed (shape, fit, background, size)
   logoMediaId: uuid('logo_media_id').references(() => media.id, { onDelete: 'set null' }),
   logoStyle: jsonb('logo_style').$type<{ shape: string; fit: string; bg: string; size: string }>().notNull().default({ shape: 'original', fit: 'contain', bg: 'white', size: 'm' }),
+  // a square (1:1) project poster, shown whole as one of the cover tiles
+  posterMediaId: uuid('poster_media_id').references(() => media.id, { onDelete: 'set null' }),
   seoTitle: text('seo_title').notNull().default(''),
   seoDescription: text('seo_description').notNull().default(''),
   sort: integer('sort').notNull().default(100),
@@ -454,6 +456,62 @@ export const opportunityRevisions = pgTable('opportunity_revisions', {
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex('opportunity_revisions_num_uq').on(t.opportunityId, t.number)]);
+
+// ---------------------------------------------------------------- Publications (reports, studies, policy briefs, guides…; 0022)
+// Real AFCD documents only; nothing is imported. Same editorial workflow; only published revisions reach the website.
+export const publicationTypeEnum = pgEnum('publication_type', ['report', 'study', 'policy_brief', 'guide', 'annual_report', 'toolkit', 'other']);
+
+// Uploaded PDF files. A row never changes: a new upload is a new row, so every revision keeps pointing at its own file.
+// The file is stored as <storageKey>.pdf in <dataDir>/documents and copied to assets/documents/ when a publication goes live.
+export const documents = pgTable('documents', {
+  id: id(),
+  originalName: text('original_name').notNull(),
+  storageKey: text('storage_key').notNull(),      // random, never user input
+  mime: text('mime').notNull().default('application/pdf'),
+  bytes: integer('bytes').notNull(),
+  sha256: text('sha256').notNull(),
+  uploadedBy: uuid('uploaded_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('documents_storage_uq').on(t.storageKey)]);
+
+export const publications = pgTable('publications', {
+  id: id(),
+  slug: text('slug').notNull(),
+  title: text('title').notNull(),
+  type: publicationTypeEnum('type').notNull().default('report'),
+  summary: text('summary').notNull().default(''),
+  abstract: text('abstract').notNull().default(''),
+  publishedOn: text('published_on'),                            // YYYY-MM-DD, the date on the document
+  authors: jsonb('authors').$type<string[]>().notNull().default([]),
+  organisation: text('organisation').notNull().default(''),
+  language: text('language').notNull().default('en'),           // language of the document: en | fr | ar | multi
+  pillarIds: jsonb('pillar_ids').$type<string[]>().notNull().default([]),
+  projectIds: jsonb('project_ids').$type<string[]>().notNull().default([]),
+  coverMediaId: uuid('cover_media_id').references(() => media.id, { onDelete: 'set null' }),
+  documentId: uuid('document_id').references(() => documents.id, { onDelete: 'set null' }),
+  externalUrl: text('external_url').notNull().default(''),
+  seoTitle: text('seo_title').notNull().default(''),
+  seoDescription: text('seo_description').notNull().default(''),
+  status: workflowEnum('status').notNull().default('draft'),
+  publishedRevisionId: uuid('published_revision_id'),
+  approvedRevisionId: uuid('approved_revision_id'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('publications_slug_uq').on(t.slug), index('publications_status_idx').on(t.status)]);
+
+export const publicationRevisions = pgTable('publication_revisions', {
+  id: id(),
+  publicationId: uuid('publication_id').notNull().references(() => publications.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('publication_revisions_num_uq').on(t.publicationId, t.number)]);
 
 // ---------------------------------------------------------------- Forms / Inbox (submissions from the public site; personal data)
 // Status is the reply workflow; spam, archive, read and star are separate so a message keeps its status when it is

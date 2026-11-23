@@ -9,6 +9,7 @@ export const PERMISSIONS = [
   'pillar.read', 'pillar.create', 'pillar.update', 'pillar.approve', 'pillar.publish',
   'event.read', 'event.create', 'event.update', 'event.approve', 'event.publish',
   'opportunity.read', 'opportunity.create', 'opportunity.update', 'opportunity.approve', 'opportunity.publish',
+  'publication.read', 'publication.create', 'publication.update', 'publication.approve', 'publication.publish',
   'forms.read', 'forms.manage',
   'seo.read', 'seo.update', 'seo.approve', 'seo.publish',
   'translation.read', 'translation.update', 'translation.approve', 'translation.publish',
@@ -35,13 +36,13 @@ export const ROLE_LABELS: Record<Role, string> = {
   read_only: 'Read-Only User',
 };
 
-const READ: Permission[] = ['dashboard.read', 'project.read', 'media.read', 'page.read', 'news.read', 'partner.read', 'pillar.read', 'event.read', 'opportunity.read', 'seo.read', 'translation.read'];
+const READ: Permission[] = ['dashboard.read', 'project.read', 'media.read', 'page.read', 'news.read', 'partner.read', 'pillar.read', 'event.read', 'opportunity.read', 'publication.read', 'seo.read', 'translation.read'];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   super_admin: PERMISSIONS,
   website_admin: PERMISSIONS.filter((p) => p !== 'users.manage'),
-  content_editor: [...READ, 'project.create', 'project.update', 'project.seo', 'media.upload', 'media.update', 'page.create', 'page.update', 'news.create', 'news.update', 'partner.create', 'partner.update', 'pillar.create', 'pillar.update', 'event.create', 'event.update', 'opportunity.create', 'opportunity.update', 'seo.update', 'translation.update'],
-  content_reviewer: [...READ, 'settings.read', 'project.review', 'project.approve', 'page.approve', 'news.approve', 'partner.approve', 'pillar.approve', 'event.approve', 'opportunity.approve', 'seo.approve', 'translation.approve', 'audit.read'],
+  content_editor: [...READ, 'project.create', 'project.update', 'project.seo', 'media.upload', 'media.update', 'page.create', 'page.update', 'news.create', 'news.update', 'partner.create', 'partner.update', 'pillar.create', 'pillar.update', 'event.create', 'event.update', 'opportunity.create', 'opportunity.update', 'publication.create', 'publication.update', 'seo.update', 'translation.update'],
+  content_reviewer: [...READ, 'settings.read', 'project.review', 'project.approve', 'page.approve', 'news.approve', 'partner.approve', 'pillar.approve', 'event.approve', 'opportunity.approve', 'publication.approve', 'seo.approve', 'translation.approve', 'audit.read'],
   media_manager: [...READ, 'media.upload', 'media.update', 'media.delete'],
   seo_manager: [...READ, 'project.seo', 'seo.update', 'settings.read', 'settings.update'],
   read_only: READ,

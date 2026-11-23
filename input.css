@@ -1826,6 +1826,16 @@ button[type="submit"][aria-busy="true"] { opacity: .6; cursor: progress; }
 .pjs-side .pj-logo.s-l:not(.cover) .pj-logo-img { padding: 16px 20px; }
 .pjs-side .pj-logo.bg-none:not(.cover) .pj-logo-img { padding: 0; }
 .pjs-side .pj-logo + .pjs-lede { margin-top: 20px; }
+/* Summary column rhythm: logo tile sized for a logo, pillar card only as wide as it needs */
+.pjs-side .pj-logo { margin-top: 22px; border-radius: 14px; }
+.pjs-side .pj-logo.bg-white { box-shadow: inset 0 0 0 1px #ECECEA; }
+.pjs-side .pj-logo.s-s { height: 48px; } .pjs-side .pj-logo.s-m { height: 64px; } .pjs-side .pj-logo.s-l { height: 84px; }
+.pjs-side .pj-logo.tall.s-s { height: 72px; } .pjs-side .pj-logo.tall.s-m { height: 96px; } .pjs-side .pj-logo.tall.s-l { height: 128px; }
+.pjs-side .pj-logo.s-s:not(.cover) .pj-logo-img { padding: 6px 10px; }
+.pjs-side .pj-logo.s-m:not(.cover) .pj-logo-img { padding: 8px 12px; }
+.pjs-side .pj-logo.s-l:not(.cover) .pj-logo-img { padding: 10px 14px; }
+.pjs-side .pj-logo.round:not(.cover) .pj-logo-img { padding: 14%; }
+.pjs-side .pjs-pillar { width: fit-content; min-width: min(100%, 340px); max-width: 100%; }
 
 /* Activity photo galleries: tiles open a full-screen viewer */
 .pja-pi { position: relative; display: block; width: 100%; min-height: 0; padding: 0; border: 0; background: none; cursor: zoom-in; }

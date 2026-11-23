@@ -70,9 +70,10 @@ ACTIVITIES = [
     'Intercultural learning and international cooperation activities.',
 ]
 SOCIALS = [
-    ('Facebook', 'https://www.facebook.com/afcd.foundation'),
+    ('Facebook', 'https://www.facebook.com/afcdfoundation'),
     ('Instagram', 'https://www.instagram.com/afcd.foundation'),
     ('LinkedIn', 'https://www.linkedin.com/company/afcd-foundation'),
+    ('X', 'https://x.com/afcd_foundation'),
 ]
 
 PILLARS = [
@@ -1044,9 +1045,14 @@ def home_projects():
             tiles.append(('Results', rows['Results']))
         hero = d.get('hero')
         img = media_img(hero, 'pc-img', '(min-width:1024px) 40vw, 100vw') if hero else ''
+        logo = d.get('logo') if isinstance(d, dict) else None
+        logo_img = ''
+        if isinstance(logo, dict) and logo.get('src'):
+            logo_img = (f'<img class="pc-logo" src="{logo["src"]}" alt="{_esc(logo.get("alt") or "")}" '
+                        f'width="{logo.get("w") or ""}" height="{logo.get("h") or ""}" loading="lazy" decoding="async">')
         cards.append(
             f'<article data-n="{i + 1:02d}" data-href="{x["file"]}" data-dot="{PILLAR_TONE.get(x.get("pillar"), "#111")}" data-surface="pc-{i % 3 + 1}" data-ph="{["#E2E2E2", "#E6E6E6", "#DADADA"][i % 3]}">'
-            f'<h3>{_esc(x["name"])}</h3><span class="pp">{_PILLAR_NAMES.get(x.get("pillar"), "")}</span><span class="pk">Case study</span><span class="pc">{_esc(x.get("category") or "")}</span>'
+            f'{logo_img}<h3>{_esc(x["name"])}</h3><span class="pp">{_PILLAR_NAMES.get(x.get("pillar"), "")}</span><span class="pk">Case study</span><span class="pc">{_esc(x.get("category") or "")}</span>'
             f'<p class="pl">{_esc(d.get("lede") or x.get("summary") or "")}</p><p class="ph">{_esc(d.get("photo") or (x["name"] + " · project photo"))}</p>{img}'
             '<dl>' + ''.join(f'<div><dt>{k}</dt><dd>{v}</dd></div>' for k, v in tiles) + '</dl></article>')
     block = f'{a}\n    <template id="home-projects-data">{"".join(cards)}</template>\n    {b}'
@@ -1799,7 +1805,7 @@ def involved():
 
 
 # ---------------------------------------------------------------- Contact
-SOCIAL_ICO = {'Facebook': '<path d="M9.2 14.5V8.6h2l.3-2.3H9.2V4.8c0-.7.2-1.1 1.1-1.1h1.2V1.6a16 16 0 0 0-1.8-.1c-1.8 0-3 1.1-3 3.1v1.7h-2v2.3h2v5.9h2.5Z" fill="currentColor"/>', 'Instagram': '<rect x="2" y="2" width="12" height="12" rx="3.5" stroke="currentColor" stroke-width="1.4" fill="none"/><circle cx="8" cy="8" r="2.8" stroke="currentColor" stroke-width="1.4" fill="none"/><circle cx="11.6" cy="4.4" r=".8" fill="currentColor"/>', 'LinkedIn': '<path d="M3.6 6h2.3v7.5H3.6zM4.7 2.4a1.3 1.3 0 1 1 0 2.7 1.3 1.3 0 0 1 0-2.7ZM7.4 6h2.2v1c.3-.6 1.1-1.2 2.3-1.2 2.4 0 2.9 1.6 2.9 3.7v4H12.5V10c0-.9 0-2-1.2-2s-1.4.9-1.4 1.9v3.6H7.4z" fill="currentColor"/>'}
+SOCIAL_ICO = {'Facebook': '<path d="M9.2 14.5V8.6h2l.3-2.3H9.2V4.8c0-.7.2-1.1 1.1-1.1h1.2V1.6a16 16 0 0 0-1.8-.1c-1.8 0-3 1.1-3 3.1v1.7h-2v2.3h2v5.9h2.5Z" fill="currentColor"/>', 'Instagram': '<rect x="2" y="2" width="12" height="12" rx="3.5" stroke="currentColor" stroke-width="1.4" fill="none"/><circle cx="8" cy="8" r="2.8" stroke="currentColor" stroke-width="1.4" fill="none"/><circle cx="11.6" cy="4.4" r=".8" fill="currentColor"/>', 'LinkedIn': '<path d="M3.6 6h2.3v7.5H3.6zM4.7 2.4a1.3 1.3 0 1 1 0 2.7 1.3 1.3 0 0 1 0-2.7ZM7.4 6h2.2v1c.3-.6 1.1-1.2 2.3-1.2 2.4 0 2.9 1.6 2.9 3.7v4H12.5V10c0-.9 0-2-1.2-2s-1.4.9-1.4 1.9v3.6H7.4z" fill="currentColor"/>', 'X': '<path d="M12.6 1.5h2.2L9.7 7.1 15.5 14.5h-4.6L7.8 9.8 4.2 14.5H2l5.4-6L.8 1.5h4.7l2.8 4.2 4.3-4.2Zm-.8 11.7h1.2L4.3 2.7H3l8.8 10.5Z" fill="currentColor"/>'}
 CT_ICON = {'phone': '<path d="M3.2 1.8h2.4l1.2 3-1.6 1a8 8 0 0 0 5 5l1-1.6 3 1.2v2.4a1.4 1.4 0 0 1-1.5 1.4C6.7 13.8 2.2 9.3 1.8 3.3a1.4 1.4 0 0 1 1.4-1.5Z"/>', 'mail': '<rect x="1.8" y="3.2" width="12.4" height="9.6" rx="1.6"/><path d="m2.5 4.5 5.5 4 5.5-4"/>', 'board': '<path d="M8 1.8 2 4.6v1.2h12V4.6L8 1.8Z"/><path d="M3.5 6.5v5M6.5 6.5v5M9.5 6.5v5M12.5 6.5v5M2 13.6h12"/>', 'pin': '<path d="M8 14.5s4.5-4.2 4.5-8a4.5 4.5 0 0 0-9 0c0 3.8 4.5 8 4.5 8Z"/><circle cx="8" cy="6.5" r="1.6"/>'}
 
 
@@ -1864,7 +1870,7 @@ def contact():
       <fieldset class="ct-step mt-6">
         <legend class="ct-step-h"><span class="ct-step-n">3</span>Your message</legend>
         <label class="ct-field mt-3"><span class="sr-only">Message</span><textarea name="message" rows="4" maxlength="1000" placeholder="Write your message…" required></textarea></label>
-        <div class="mt-2 flex items-start justify-between gap-4"><label class="ct-consent"><input type="checkbox" name="consent" required><span>I agree that AFCD Foundation may use these details to reply to my message. See our <a href="#privacy" class="underline underline-offset-2">Privacy Policy</a>.</span></label><span class="shrink-0 pt-0.5 text-[12px] text-ink-mid"><span class="ct-count">0</span> / 1000</span></div>
+        <div class="mt-2 flex items-start justify-between gap-4"><label class="ct-consent"><input type="checkbox" name="consent" required><span>I agree that AFCD Foundation may use these details to reply to my message. See our <a href="privacy.html" class="underline underline-offset-2">Privacy Policy</a>.</span></label><span class="shrink-0 pt-0.5 text-[12px] text-ink-mid"><span class="ct-count">0</span> / 1000</span></div>
       </fieldset>
 
       <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="hp">
@@ -1879,6 +1885,7 @@ def contact():
       <div id="office" class="os-band on-dark scroll-mt-32 text-white">
         <p class="label text-white/60">Main office</p>
         <p class="mt-4 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em]">Marrakech, <span class="text-white/45">Morocco.</span></p>
+        <!-- TODO(AFCD): Publish a street address only after AFCD confirms the current office. Do not copy an unconfirmed legacy address into this page. -->
         <p class="mt-3 text-[14.5px] leading-relaxed text-white/65">Roots in Ait Ourir and Al Haouz. Full street address to be confirmed before publication.</p>
         <p class="label mt-8 text-white/60">Who to contact</p>
         <ul class="mt-3 border-b border-white/10">{rhtml}</ul>
@@ -1899,7 +1906,7 @@ def contact():
 
 <section class="border-t border-ink-light py-14 lg:py-16">
   <div class="wrap grid gap-4 md:grid-cols-2">
-    <div id="privacy" class="scroll-mt-28 rounded-[28px] border border-ink-light p-6 md:p-8"><p class="label text-ink-mid">Privacy Policy</p><p class="mt-4 text-[15px] leading-relaxed text-ink-dark">AFCD Foundation’s privacy policy will be published here.</p>{placeholder_note('Text to be supplied by AFCD.')}</div>
+    <div id="privacy" class="scroll-mt-28 rounded-[28px] border border-ink-light p-6 md:p-8"><p class="label text-ink-mid">Privacy Policy</p><p class="mt-4 text-[15px] leading-relaxed text-ink-dark">How AFCD Foundation handles messages sent through this website is explained on the privacy policy page.</p><a class="link-arrow mt-5" href="privacy.html">Read the privacy policy <span class="arr" aria-hidden="true">↗</span></a></div>
     <div id="accessibility" class="scroll-mt-28 rounded-[28px] border border-ink-light p-6 md:p-8"><p class="label text-ink-mid">Accessibility</p><p class="mt-4 text-[15px] leading-relaxed text-ink-dark">We aim for this website to meet WCAG 2.2 AA. If something doesn’t work for you, please tell us by phone or using the form above.</p></div>
   </div>
 </section>'''

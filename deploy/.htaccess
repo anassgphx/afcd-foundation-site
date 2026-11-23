@@ -2,6 +2,46 @@
 
 # Always HTTPS, and always the bare domain (www -> afcdfoundation.com)
 RewriteEngine On
+
+# Legacy WordPress paths from afcdfoundation.org (sitemap checked 2026-11-23).
+# Specific paths are mapped on both hosts. Anything else on the .org host
+# moves to the same path on .com, where unknown URLs use the site 404.
+RewriteRule ^about-us/?$ https://afcdfoundation.com/about.html [L,R=301,NC]
+RewriteRule ^contacts/?$ https://afcdfoundation.com/contact.html [L,R=301,NC]
+RewriteRule ^contact/?$ https://afcdfoundation.com/contact.html [L,R=301,NC]
+RewriteRule ^our-team(/single-team)?/?$ https://afcdfoundation.com/team.html [L,R=301,NC]
+RewriteRule ^our-partners/?$ https://afcdfoundation.com/partners.html [L,R=301,NC]
+RewriteRule ^our-pillars/?$ https://afcdfoundation.com/pillars.html [L,R=301,NC]
+RewriteRule ^our-pillars/women-empowerment/?$ https://afcdfoundation.com/womens-empowerment.html [L,R=301,NC]
+RewriteRule ^our-pillars/youth-empowerment/?$ https://afcdfoundation.com/youth-empowerment.html [L,R=301,NC]
+RewriteRule ^our-pillars/green-thumbs/?$ https://afcdfoundation.com/environment-climate.html [L,R=301,NC]
+RewriteRule ^our-pillars/digital-empowerment/?$ https://afcdfoundation.com/digital-inclusion.html [L,R=301,NC]
+RewriteRule ^our-pillars/support-function/?$ https://afcdfoundation.com/pillars.html [L,R=301,NC]
+RewriteRule ^faqs?/?$ https://afcdfoundation.com/contact.html [L,R=301,NC]
+RewriteRule ^blog/?$ https://afcdfoundation.com/news.html [L,R=301,NC]
+RewriteRule ^portfolio-(grid|masonry|carousel)/?$ https://afcdfoundation.com/projects.html [L,R=301,NC]
+RewriteRule ^portfolio/?$ https://afcdfoundation.com/projects.html [L,R=301,NC]
+RewriteRule ^portfolio/eco-citizen/?$ https://afcdfoundation.com/project-eco-citizen.html [L,R=301,NC]
+RewriteRule ^portfolio/leadership-lab-2-0/?$ https://afcdfoundation.com/project-leadership-lab.html [L,R=301,NC]
+RewriteRule ^portfolio/(youth-first|youth-first-academy|lets-dialogue|dialogue-me|youth-leadership-bootcamp|youth-leadership-exchange-program|world-affairs-challenge-virtual-exchange|sustainable-development-goals-summer-school)/?$ https://afcdfoundation.com/youth-empowerment.html [L,R=301,NC]
+RewriteRule ^portfolio/(meta-skills-for-women-empowerment|tot-gender-based-violence-ccp-synergy)/?$ https://afcdfoundation.com/womens-empowerment.html [L,R=301,NC]
+RewriteRule ^portfolio/(oxegen|al-houaz-province-festival-of-environmental-film)/?$ https://afcdfoundation.com/environment-climate.html [L,R=301,NC]
+RewriteRule ^portfolio/saada-initiative-project/?$ https://afcdfoundation.com/digital-inclusion.html [L,R=301,NC]
+RewriteRule ^journey-with-the-afcd-family/?$ https://afcdfoundation.com/news-journey-with-the-afcd-family.html [L,R=301,NC]
+RewriteRule ^a-journey-of-a-thousand-miles?-begins-with-a-single-step/?$ https://afcdfoundation.com/news-a-journey-of-a-thousand-miles-begins-with-a-single-step.html [L,R=301,NC]
+RewriteRule ^solutions-to-climate-change/?$ https://afcdfoundation.com/news-solutions-to-climate-change-the-youth-green-generation-project-2024.html [L,R=301,NC]
+RewriteRule ^(we-serve-our-community-with-love|toward-a-creative-entrepreneurial-spirit-in-women-cooperatives|i-share-therefore-i-am-mem-usem-lugano|experiential-learning-journey|youth-first-academy-in-ait-ourir|we-are-not-nly-freinds-we-are-family|3545|closing-ceremony-of-youth-first-academy|what-is-entrepreneurship-leadrshiplab-project|what-is-entrepreneurship-lessons-learned-at-the-moroccan-american-leadership-forum|journey-of-success-my-grant-winning-experience-with-the-leadership-lab-program|my-journey-with-timgharin-empowering-moroccan-artisans|my-journey-of-self-discovery-and-purpose-in-the-leadership-lab|a-reaction-for-being-selected-as-leadership-lab-participant)/?$ https://afcdfoundation.com/news.html [L,R=301,NC]
+RewriteRule ^(category|portfolio-category)/women-empowerment/?$ https://afcdfoundation.com/womens-empowerment.html [L,R=301,NC]
+RewriteRule ^(category|portfolio-category)/youth-empowerment/?$ https://afcdfoundation.com/youth-empowerment.html [L,R=301,NC]
+RewriteRule ^portfolio-category/green-thumbs/?$ https://afcdfoundation.com/environment-climate.html [L,R=301,NC]
+RewriteRule ^portfolio-category/digital-empowerment/?$ https://afcdfoundation.com/digital-inclusion.html [L,R=301,NC]
+RewriteRule ^(category/(uncategorized|exchange-programs)|tag/.+|author/.+|feed|comments/feed|blog/feed)/?$ https://afcdfoundation.com/news.html [L,R=301,NC]
+RewriteRule ^(sample-page|typography|elements|services-with-icon|coming-soon|404-2|shop|cart|checkout|my-account|pictures|videos)/?$ https://afcdfoundation.com/ [L,R=301,NC]
+RewriteRule ^index\.php$ https://afcdfoundation.com/ [L,R=301,NC]
+
+RewriteCond %{HTTP_HOST} ^(www\.)?afcdfoundation\.org$ [NC]
+RewriteRule ^ https://afcdfoundation.com%{REQUEST_URI} [L,R=301]
+
 RewriteCond %{HTTPS} !=on [OR]
 RewriteCond %{HTTP_HOST} ^www\. [NC]
 RewriteRule ^ https://afcdfoundation.com%{REQUEST_URI} [L,R=301]
@@ -22,6 +62,9 @@ AddDefaultCharset utf-8
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
   Header always set Strict-Transport-Security "max-age=31536000"
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+  Header always set X-Permitted-Cross-Domain-Policies "none"
+  Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self' https://studio.afcdfoundation.com; form-action 'self' https://studio.afcdfoundation.com; base-uri 'self'; object-src 'none'; frame-ancestors 'self'"
   # HTML is never cached long, so updates show at once; versioned assets can be cached for a year
   <FilesMatch "\.html$">
     Header set Cache-Control "no-cache"

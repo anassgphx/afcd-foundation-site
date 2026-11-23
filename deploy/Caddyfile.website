@@ -1,8 +1,50 @@
+# Legacy WordPress paths (afcdfoundation.org sitemap, 2026-11-23). Import inside each site block.
+(afcd_legacy) {
+	map {path} {legacy} {
+		~(?i)^/about-us/?$ /about.html
+		~(?i)^/about/?$ /about.html
+		~(?i)^/(contacts|contact)/?$ /contact.html
+		~(?i)^/our-team(/single-team)?/?$ /team.html
+		~(?i)^/our-partners/?$ /partners.html
+		~(?i)^/our-pillars/?$ /pillars.html
+		~(?i)^/our-pillars/women-empowerment/?$ /womens-empowerment.html
+		~(?i)^/our-pillars/youth-empowerment/?$ /youth-empowerment.html
+		~(?i)^/our-pillars/green-thumbs/?$ /environment-climate.html
+		~(?i)^/our-pillars/digital-empowerment/?$ /digital-inclusion.html
+		~(?i)^/our-pillars/support-function/?$ /pillars.html
+		~(?i)^/faqs?/?$ /contact.html
+		~(?i)^/blog/?$ /news.html
+		~(?i)^/portfolio-(grid|masonry|carousel)/?$ /projects.html
+		~(?i)^/portfolio/?$ /projects.html
+		~(?i)^/portfolio/eco-citizen/?$ /project-eco-citizen.html
+		~(?i)^/portfolio/leadership-lab-2-0/?$ /project-leadership-lab.html
+		~(?i)^/portfolio/(youth-first|youth-first-academy|lets-dialogue|dialogue-me|youth-leadership-bootcamp|youth-leadership-exchange-program|world-affairs-challenge-virtual-exchange|sustainable-development-goals-summer-school)/?$ /youth-empowerment.html
+		~(?i)^/portfolio/(meta-skills-for-women-empowerment|tot-gender-based-violence-ccp-synergy)/?$ /womens-empowerment.html
+		~(?i)^/portfolio/(oxegen|al-houaz-province-festival-of-environmental-film)/?$ /environment-climate.html
+		~(?i)^/portfolio/saada-initiative-project/?$ /digital-inclusion.html
+		~(?i)^/journey-with-the-afcd-family/?$ /news-journey-with-the-afcd-family.html
+		~(?i)^/a-journey-of-a-thousand-miles?-begins-with-a-single-step/?$ /news-a-journey-of-a-thousand-miles-begins-with-a-single-step.html
+		~(?i)^/solutions-to-climate-change/?$ /news-solutions-to-climate-change-the-youth-green-generation-project-2024.html
+		~(?i)^/(we-serve-our-community-with-love|toward-a-creative-entrepreneurial-spirit-in-women-cooperatives|i-share-therefore-i-am-mem-usem-lugano|experiential-learning-journey|youth-first-academy-in-ait-ourir|we-are-not-nly-freinds-we-are-family|3545|closing-ceremony-of-youth-first-academy|what-is-entrepreneurship-leadrshiplab-project|what-is-entrepreneurship-lessons-learned-at-the-moroccan-american-leadership-forum|journey-of-success-my-grant-winning-experience-with-the-leadership-lab-program|my-journey-with-timgharin-empowering-moroccan-artisans|my-journey-of-self-discovery-and-purpose-in-the-leadership-lab|a-reaction-for-being-selected-as-leadership-lab-participant)/?$ /news.html
+		~(?i)^/(category|portfolio-category)/women-empowerment/?$ /womens-empowerment.html
+		~(?i)^/(category|portfolio-category)/youth-empowerment/?$ /youth-empowerment.html
+		~(?i)^/portfolio-category/green-thumbs/?$ /environment-climate.html
+		~(?i)^/portfolio-category/digital-empowerment/?$ /digital-inclusion.html
+		~(?i)^/(category/(uncategorized|exchange-programs)|tag/.+|author/.+|(comments/|blog/)?feed)/?$ /news.html
+		~(?i)^/(sample-page|typography|elements|services-with-icon|coming-soon|404-2|shop|cart|checkout|my-account|pictures|videos)/?$ /
+		~(?i)^/index\.php$ /
+		default ""
+	}
+	@legacy expression {legacy} != ""
+	redir @legacy https://afcdfoundation.com{legacy} permanent
+}
+
 # AFCD Foundation website: add these blocks to the existing Caddyfile on the VPS (next to afcdconnect.tech).
 # The site's files live in their own folder, /srv/afcd-website/public, mounted read-only into the Caddy
 # container at /srv/afcd-website (see deploy/README.md). AFCD Connect's blocks stay exactly as they are.
 
 afcdfoundation.com {
+	import afcd_legacy
 	root * /srv/afcd-website
 	encode zstd gzip
 	try_files {path} {path}.html {path}/index.html
@@ -13,6 +55,9 @@ afcdfoundation.com {
 		X-Frame-Options "SAMEORIGIN"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		Strict-Transport-Security "max-age=31536000"
+		Cross-Origin-Opener-Policy "same-origin"
+		X-Permitted-Cross-Domain-Policies "none"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self' https://studio.afcdfoundation.com; form-action 'self' https://studio.afcdfoundation.com; base-uri 'self'; object-src 'none'; frame-ancestors 'self'"
 	}
 	@html path *.html / /fr/ /ar/
 	header @html Cache-Control "no-cache"
@@ -26,5 +71,11 @@ afcdfoundation.com {
 }
 
 www.afcdfoundation.com {
+	import afcd_legacy
+	redir https://afcdfoundation.com{uri} permanent
+}
+
+afcdfoundation.org, www.afcdfoundation.org {
+	import afcd_legacy
 	redir https://afcdfoundation.com{uri} permanent
 }

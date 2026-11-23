@@ -31,7 +31,7 @@ export function registerMediaLibraryRoutes(api: Hono<Env>) {
     });
   });
 
-  api.post('/media/:id/replace', perm('media.update'), bodyLimit({ maxSize: 40 * 1024 * 1024, onError: () => { throw new AppError(422, 'The file is too large.'); } }), async (c) => {
+  api.post('/media/:id/replace', perm('media.update'), bodyLimit({ maxSize: 20 * 1024 * 1024, onError: () => { throw new AppError(422, 'The file is too large.'); } }), async (c) => {
     const { db, cfg } = c.var;
     const [m] = await db.select().from(t.media).where(eq(t.media.id, c.req.param('id')));
     if (!m) throw new AppError(404, 'Media not found.');

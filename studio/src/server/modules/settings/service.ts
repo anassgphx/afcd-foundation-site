@@ -48,7 +48,7 @@ export const SCHEMAS = {
     generalEmail: z.enum(PUBLIC_EMAILS as [string, ...string[]], { message: `Use one of the foundation’s public addresses: ${PUBLIC_EMAILS.join(' or ')}.` }),
     boardEmail: z.enum(PUBLIC_EMAILS as [string, ...string[]], { message: `Use one of the foundation’s public addresses: ${PUBLIC_EMAILS.join(' or ')}.` }),
     social: z.object({
-      facebook: social(/(^|\.)facebook\.com$/i, 'https://www.facebook.com/afcd.foundation'),
+      facebook: social(/(^|\.)facebook\.com$/i, 'https://www.facebook.com/afcdfoundation'),
       instagram: social(/(^|\.)instagram\.com$/i, 'https://www.instagram.com/afcd.foundation'),
       linkedin: social(/(^|\.)linkedin\.com$/i, 'https://www.linkedin.com/company/afcd-foundation'),
     }).strict(),
@@ -62,7 +62,7 @@ export const DEFAULTS: Values = {
   branding: { logoMediaId: null, logoLightMediaId: null, faviconMediaId: null, socialImageMediaId: null, socialImageAlt: '', themeColor: '#000000' },
   contact: {
     phone: '+212 663 618 536', generalEmail: 'contact@afcdteam.com', boardEmail: 'akaya@afcdteam.com',
-    social: { facebook: 'https://www.facebook.com/afcd.foundation', instagram: 'https://www.instagram.com/afcd.foundation', linkedin: 'https://www.linkedin.com/company/afcd-foundation' },
+    social: { facebook: 'https://www.facebook.com/afcdfoundation', instagram: 'https://www.instagram.com/afcd.foundation', linkedin: 'https://www.linkedin.com/company/afcd-foundation' },
   },
 };
 /** Fields only settings.admin may change (and restore). */

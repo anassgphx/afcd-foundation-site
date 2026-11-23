@@ -508,42 +508,63 @@
     var t = document.getElementById('home-projects-data'); if (!t || !t.content) return;
     var list = Array.prototype.map.call(t.content.querySelectorAll('article'), function (a) {
       var q = function (s) { var e = a.querySelector(s); return e ? e.innerHTML : ''; };
-      var img = a.querySelector('img');
+      var img = a.querySelector('img.pc-img');
+      var logo = a.querySelector('img.pc-logo');
       return { n: a.dataset.n, name: q('h3'), dot: a.dataset.dot, href: a.dataset.href, pillar: q('.pp'), kind: q('.pk'), cat: q('.pc'),
-        surface: a.dataset.surface, phTone: a.dataset.ph, photo: q('.ph'), img: img ? img.outerHTML : '', lede: q('.pl'),
+        surface: a.dataset.surface, phTone: a.dataset.ph, photo: q('.ph'), img: img ? img.outerHTML : '', logo: logo ? logo.outerHTML : '', lede: q('.pl'),
         rows: Array.prototype.map.call(a.querySelectorAll('dl > div'), function (r) { return [r.querySelector('dt').innerHTML, r.querySelector('dd').innerHTML]; }) };
     });
     if (list.length) PROJECTS = list;
   })();
+  function plainText(html) { return String(html || '').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&rsquo;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>'); }
+  function attrText(html) { return plainText(html).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+  function initials(name) {
+    var parts = plainText(name).split(/[^A-Za-z0-9]+/).filter(function (w) { return /[A-Za-z]/.test(w); });
+    if (!parts.length) return '•';
+    return ((parts[0][0] || '') + (parts[1] ? parts[1][0] : (parts[0][1] || ''))).toUpperCase();
+  }
   var stack = $('#stack'), dotsWrap = $('#stack-dots'), sCur = 0;
   PROJECTS.forEach(function (p, i) {
     var card = document.createElement('article');
+    var nameText = plainText(p.name);
+    var mark = p.logo
+      ? '<span class="pc-mark has-img">' + p.logo + '</span>'
+      : '<span class="pc-mark" aria-hidden="true"><span class="pc-mono">' + initials(p.name) + '</span></span>';
+    var spineMark = p.logo
+      ? '<span class="pc-spine-logo" aria-hidden="true">' + p.logo.replace(/\salt="[^"]*"/, ' alt=""') + '</span>'
+      : '<span class="pc-spine-mono" aria-hidden="true">' + initials(p.name) + '</span>';
+    var photoLabel = attrText(p.photo || (nameText + ' project photo'));
     card.className = 'pcard overflow-hidden rounded-[28px] text-ink ' + p.surface;
     card.setAttribute('aria-roledescription', 'project card');
-    card.setAttribute('aria-label', p.name);
     card.innerHTML =
-      '<button class="pcard-spine pcard-spine-btn pointer-events-none absolute inset-y-0 right-0 z-[2] flex w-[14.1%] flex-col justify-between p-6 text-left rtl:left-0 rtl:right-auto rtl:text-right" aria-label="Show project ' + p.n + ': ' + p.name + '" tabindex="-1">' +
-        '<span class="text-[22px] font-medium tabular-nums">' + p.n + '</span>' +
-        '<span class="block origin-bottom-left text-lg font-semibold tracking-[-0.02em] [writing-mode:vertical-rl] rotate-180 self-start">' + p.name + '</span>' +
-        '<span class="grid h-10 w-10 place-items-center rounded-full bg-white/60 text-base" aria-hidden="true">→</span>' +
+      '<button class="pcard-spine pcard-spine-btn pointer-events-none absolute inset-y-0 right-0 z-[2] w-[15%] text-left rtl:left-0 rtl:right-auto rtl:text-right" aria-label="Show project ' + attrText(p.n) + ': ' + attrText(nameText) + '" tabindex="-1">' +
+        '<span class="pc-spine-face">' +
+          '<span class="pc-spine-n tabular-nums">' + p.n + '</span>' +
+          spineMark +
+          '<span class="pc-spine-name">' + p.name + '</span>' +
+          '<span class="pc-spine-go" aria-hidden="true">→</span>' +
+        '</span>' +
       '</button>' +
-      '<div class="pcard-body flex h-full flex-col p-6 md:p-8 lg:p-10">' +
-        '<header class="flex flex-wrap items-center justify-between gap-4">' +
-          '<div class="flex min-w-0 items-center gap-4">' +
-            '<span class="pc-no tabular-nums">' + p.n + '</span>' +
-            '<h3 class="text-[26px] font-semibold leading-[1.05] tracking-[-0.035em] md:text-[36px] lg:text-[42px]">' + p.name + '</h3>' +
+      '<div class="pcard-body flex h-full flex-col p-5 sm:p-6 md:p-8 lg:p-10">' +
+        '<header class="pc-head">' +
+          '<div class="pc-ident">' +
+            mark +
+            '<div class="min-w-0">' +
+              '<p class="pc-kicker"><span class="pc-kicker-n tabular-nums">' + p.n + '</span> ' + (p.kind || 'Case study') + '</p>' +
+              '<h3 class="pc-title">' + p.name + '</h3>' +
+            '</div>' +
           '</div>' +
           '<span class="pc-pillar"><span class="pc-pillar-dot" style="--c:' + p.dot + '" aria-hidden="true"></span>' + p.pillar + '</span>' +
         '</header>' +
-        '<div class="mt-5 flex flex-wrap gap-2"><span class="pc-pill">' + (p.kind || 'Case study') + '</span>' + (p.cat ? '<span class="pc-pill">' + p.cat + '</span>' : '') + '</div>' +
-        '<div class="mt-6 grid min-h-0 flex-1 gap-5 md:grid-cols-12 md:gap-6">' +
-          '<div class="pc-inner flex min-h-[280px] flex-col rounded-[24px] p-4 md:col-span-5 md:p-5">' +
-            (p.img ? '<div class="pc-photo aspect-[4/3] w-full overflow-hidden rounded-[18px] md:aspect-auto md:flex-1">' + p.img + '</div>' : '<div class="ph aspect-[4/3] w-full rounded-[18px] md:aspect-auto md:flex-1" style="--ph:' + p.phTone + ';--ph-line:rgba(0,0,0,.08)"><span class="ph-cap"><b>Photo</b> · ' + p.photo + '</span></div>') +
+        '<div class="mt-4 flex flex-wrap gap-2">' + (p.cat ? '<span class="pc-pill">' + p.cat + '</span>' : '') + '</div>' +
+        '<div class="mt-5 grid min-h-0 flex-1 gap-5 md:grid-cols-12 md:gap-6">' +
+          '<div class="pc-inner flex min-h-[220px] flex-col rounded-[24px] p-4 md:col-span-5 md:min-h-[280px] md:p-5">' +
+            (p.img ? '<div class="pc-photo aspect-[4/3] w-full overflow-hidden rounded-[18px] md:aspect-auto md:flex-1">' + p.img + '</div>' : '<div class="ph pc-ph aspect-[4/3] w-full rounded-[18px] md:aspect-auto md:flex-1" style="--ph:' + p.phTone + ';--ph-line:rgba(0,0,0,.08)" role="img" aria-label="Photo placeholder. ' + photoLabel + '"><span class="ph-cap" aria-hidden="true"><b>Photo</b> · ' + p.photo + '</span></div>') +
             '<p class="mt-4 px-1 text-[17px] font-medium leading-snug tracking-[-0.01em] md:text-[19px]">' + p.lede + '</p>' +
           '</div>' +
           '<div class="flex min-w-0 flex-col md:col-span-7">' +
             '<dl class="grid flex-1 gap-3 sm:grid-cols-2">' + p.rows.map(function (r, k) {
-              return '<div class="pc-tile"><dt class="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-black/55"><span class="pc-tile-n tabular-nums">0' + (k + 1) + '</span>' + r[0] + '</dt><dd class="mt-3 text-[15px] leading-relaxed">' + r[1] + '</dd></div>';
+              return '<div class="pc-tile"><dt class="pc-tile-k"><span class="pc-tile-n tabular-nums">0' + (k + 1) + '</span>' + r[0] + '</dt><dd class="mt-3 text-[15px] leading-relaxed text-ink-pure">' + r[1] + '</dd></div>';
             }).join('') + '</dl>' +
             '<div class="mt-5 flex flex-wrap items-center justify-end gap-x-6 gap-y-3">' +
               '<a href="projects.html" class="link-arrow text-[14px]">All projects <span class="arr" aria-hidden="true">↗</span></a>' +

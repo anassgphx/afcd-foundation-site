@@ -513,8 +513,9 @@
         surface: a.dataset.surface, phTone: a.dataset.ph, photo: q('.ph'), img: img ? img.outerHTML : '', lede: q('.pl'),
         rows: Array.prototype.map.call(a.querySelectorAll('dl > div'), function (r) { return [r.querySelector('dt').innerHTML, r.querySelector('dd').innerHTML]; }) };
     });
-    if (list.length) PROJECTS = list;
+    PROJECTS = list;   /* Studio is the source: no projects published means no cards */
   })();
+  if (!PROJECTS.length) { var sec = $('#projects'); if (sec) sec.hidden = true; return; }
   var stack = $('#stack'), dotsWrap = $('#stack-dots'), sCur = 0;
   PROJECTS.forEach(function (p, i) {
     var card = document.createElement('article');

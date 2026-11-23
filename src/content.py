@@ -918,9 +918,8 @@ def project_details():
 <div class="pl-page" style="--pc:{tone}">
 <section id="summary" class="pl-sec pt-8 lg:pt-10" data-studio-rev="{rev}">
   <div class="wrap">
-    <div class="pj-hero{' has-logo' if logo_html else ''}">
+    <div class="pj-hero">
       {hero}
-      {logo_html}
       <dl class="pj-facts" style="--f:{len(bar)}">{facts}</dl>
     </div>
   </div>
@@ -937,6 +936,7 @@ def project_details():
     <div class="pjs">
       <div class="pjs-side">
         <div class="sh-top"><span class="sh-num">01</span><span class="sh-label">Project Summary</span></div>
+        {logo_html}
         <p class="pjs-lede">{d['lede']}</p>
         <a href="{PILLAR_FILE.get(d['slug'], 'pillars.html')}" class="pjs-pillar"><span class="pjs-pillar-dot" aria-hidden="true"></span><span><span class="block text-[11px] font-medium uppercase tracking-[.16em] text-ink-mid">Part of the pillar</span><span class="mt-1 block text-[16px] font-semibold tracking-[-0.015em]">{d['pillar']}</span></span><span class="ml-auto" aria-hidden="true">↗</span></a>
         {share_bar(file, d['name'], 'Share this project', 'mt-6')}

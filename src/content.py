@@ -881,17 +881,25 @@ def project_details():
         # 04 activities: each has a title, a description and its pictures
         if not acts and rowmap.get('Activities'):
             acts = [{'title': 'Programme activities', 'text': rowmap['Activities'], 'images': gal}]
-        def act_photos(x):
+        def act_photos(x, j):
             imgs = [m for m in (x.get('images') or ([x['image']] if x.get('image') else [])) if m]
             if not imgs:
                 return '<div class="pja-ph n1">' + ph(_esc(x['title']) + ' · photo', 'h-full w-full rounded-[20px]', '#E6E6E5') + '</div>'
             k = min(len(imgs), 3)
-            return f'<div class="pja-ph n{k}">' + ''.join(f'<div class="pja-pi">{media_img(m, "h-full w-full rounded-[20px]", "(min-width:1024px) 40vw, 100vw")}</div>' for m in imgs[:3]) + (f'<span class="pja-more">+{len(imgs) - 3}</span>' if len(imgs) > 3 else '') + '</div>'
+            full = lambda m: (m.get('srcset') or '').split(',')[-1].strip().split(' ')[0] or m['src']
+            n = len(imgs)
+            tiles = ''.join(
+                f'<button type="button" class="pja-pi" data-lb-open="{i}" aria-label="Open photo {i + 1} of {n}">{media_img(m, "h-full w-full rounded-[20px]", "(min-width:1024px) 40vw, 100vw")}'
+                + (f'<span class="pja-more">+{n - 3}</span>' if i == 2 and n > 3 else '') + '</button>' for i, m in enumerate(imgs[:3]))
+            items = ''.join(f'<li><img src="{full(m)}" alt="{_esc(m.get("alt") or "")}" width="{m.get("w", "")}" height="{m.get("h", "")}" loading="lazy" decoding="async"></li>' for m in imgs)
+            return (f'<div class="pja-ph n{k}" data-lb data-lb-title="{_esc(x["title"])}">{tiles}'
+                    f'<ul hidden data-lb-items>{items}</ul>'
+                    f'<span class="pja-count" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="2"/><circle cx="6" cy="7" r="1.2"/><path d="m3 12 3.5-3 2.5 2 2-1.5 2 1.5"/></svg>{n}</span></div>')
         if acts:
             act_block = '<ol class="pja-list mt-8 lg:mt-10">' + ''.join(
                 f'<li class="pja-row"><div class="pja-text"><span class="pjo-n">{j:02d}</span><span class="pja-t">{_esc(x["title"])}</span>'
                 + (f'<p class="pja-d">{x["text"] if x is not None and x.get("title") == "Programme activities" and not d.get("activities") else _esc(x.get("text") or "")}</p>' if (x.get('text') or '').strip() else '')
-                + f'</div>{act_photos(x)}</li>' for j, x in enumerate(acts, 1)) + '</ol>'
+                + f'</div>{act_photos(x, j)}</li>' for j, x in enumerate(acts, 1)) + '</ol>'
         else:
             act_block = empty('Programme activities will be added soon.', 'Each activity will have a short description and photos.')
         summ_html = ''.join(f'<div class="pjs-row"><dt>{k}</dt><dd>{v}</dd></div>' for k, v in summ_rows)
@@ -910,8 +918,9 @@ def project_details():
 <div class="pl-page" style="--pc:{tone}">
 <section id="summary" class="pl-sec pt-8 lg:pt-10" data-studio-rev="{rev}">
   <div class="wrap">
-    <div class="pj-hero">
+    <div class="pj-hero{' has-logo' if logo_html else ''}">
       {hero}
+      {logo_html}
       <dl class="pj-facts" style="--f:{len(bar)}">{facts}</dl>
     </div>
   </div>
@@ -928,7 +937,6 @@ def project_details():
     <div class="pjs">
       <div class="pjs-side">
         <div class="sh-top"><span class="sh-num">01</span><span class="sh-label">Project Summary</span></div>
-        {logo_html}
         <p class="pjs-lede">{d['lede']}</p>
         <a href="{PILLAR_FILE.get(d['slug'], 'pillars.html')}" class="pjs-pillar"><span class="pjs-pillar-dot" aria-hidden="true"></span><span><span class="block text-[11px] font-medium uppercase tracking-[.16em] text-ink-mid">Part of the pillar</span><span class="mt-1 block text-[16px] font-semibold tracking-[-0.015em]">{d['pillar']}</span></span><span class="ml-auto" aria-hidden="true">↗</span></a>
         {share_bar(file, d['name'], 'Share this project', 'mt-6')}

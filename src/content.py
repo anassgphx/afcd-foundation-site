@@ -1014,6 +1014,15 @@ def home_events():
     if new != html:
         idx.write_text(new, encoding='utf-8')
 
+# Temporary stand-in for project cards until each project has its own logo in Studio.
+# Set to None to show a monogram when detail.logo is empty. A published project logo
+# (detail.logo.src, without "test": true) always replaces this.
+CARD_LOGO_TEST = {
+    'src': 'assets/brand/afcd-icon.webp', 'srcset': 'assets/brand/afcd-icon.webp 512w',
+    'w': 512, 'h': 512, 'alt': 'AFCD Foundation',
+    'shape': '1:1', 'fit': 'contain', 'bg': 'none', 'size': 's', 'test': True,
+}
+
 # ---------------------------------------------------------------- Homepage project cards (from the project module)
 def home_projects():
     """Writes the featured project cards' data into src/pages/index.html (between the home-projects markers)."""
@@ -1046,6 +1055,10 @@ def home_projects():
         hero = d.get('hero')
         img = media_img(hero, 'pc-img', '(min-width:1024px) 40vw, 100vw') if hero else ''
         logo = d.get('logo') if isinstance(d, dict) else None
+        # A Studio logo (detail.logo with a src, and no "test" flag) wins.
+        # The test flag marks the temporary AFCD mark. Set CARD_LOGO_TEST = None to drop that stand-in.
+        if not (isinstance(logo, dict) and logo.get('src') and not logo.get('test')):
+            logo = CARD_LOGO_TEST
         logo_img = ''
         if isinstance(logo, dict) and logo.get('src'):
             logo_img = (f'<img class="pc-logo" src="{logo["src"]}" alt="{_esc(logo.get("alt") or "")}" '

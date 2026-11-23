@@ -671,6 +671,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     const index = resolve(adminDir, 'index.html');
     if (!existsSync(index)) return c.text('Admin app not built. Run: npm run build:admin', 503);
     c.header('Cache-Control', 'no-store');
+    c.header('X-Robots-Tag', 'noindex, nofollow');
     return c.html(readFileSync(index, 'utf8'));
   });
   app.get('/', (c) => c.redirect('/studio/'));

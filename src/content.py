@@ -844,9 +844,48 @@ def project_details():
         def nav(f, label):
             o = DETAILS[f]
             return f'''<a href="{f}" class="pj-nav group"><span class="label text-ink-mid">{label}</span><span class="mt-3 flex items-center gap-3"><span class="pj-dot" style="--c:{PILLAR_TONE[o['slug']]}"></span><span class="text-[24px] font-semibold tracking-[-0.03em] md:text-[30px]">{o['name']}</span></span><span class="mt-1 block text-[14px] text-ink-mid">{o['pillar']} · {o['cat']}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a>'''
-        body = page_header([('Projects', 'projects.html'), (d['name'], file)], f'{d["pillar"]} · {d["cat"]}', d['name'], d['lede']) + f'''
-
-<section class="pt-8 lg:pt-10" data-studio-rev="{rev}">
+        rowmap = {k: v for k, v in d['rows']}
+        summ_rows = [(k, v) for k, v in d['rows'] if k not in ('Activities', 'Results')]
+        pobj = [o for o in (d.get('programObjectives') or []) if (o.get('title') or '').strip()]
+        outs = [o for o in (d.get('outcomes') or []) if (o.get('title') or o.get('text') or '').strip()]
+        acts = [x for x in (d.get('activities') or []) if (x.get('title') or '').strip()]
+        empty = lambda msg, sub: f'<div class="po-empty mt-8 lg:mt-10"><span class="po-empty-ico" aria-hidden="true"></span><span><span class="block text-[17px] font-semibold tracking-[-0.015em]">{msg}</span><span class="mt-1 block text-[14.5px] text-ink-dark">{sub}</span></span></div>'
+        # 02 objectives
+        if pobj:
+            obj_block = '<ol class="po-grid mt-8 lg:mt-10">' + ''.join(f'<li class="po-card"><span class="po-n">{j:02d}</span><span class="po-t">{_esc(o["title"])}</span>' + (f'<span class="po-d">{_esc(o.get("text") or "")}</span>' if (o.get('text') or '').strip() else '') + '</li>' for j, o in enumerate(pobj, 1)) + '</ol>'
+        else:
+            obj_block = empty('This programme’s objectives are being finalised.', 'They will appear here once AFCD publishes them.')
+        # 03 outcomes
+        if outs:
+            out_block = '<ul class="pjo-grid mt-8 lg:mt-10">' + ''.join(
+                f'<li class="pjo-card">' + (f'<span class="pjo-fig">{_esc(o.get("figure") or "")}</span>' if (o.get('figure') or '').strip() else f'<span class="pjo-n">{j:02d}</span>')
+                + (f'<span class="pjo-t">{_esc(o.get("title") or "")}</span>' if (o.get('title') or '').strip() else '')
+                + (f'<span class="pjo-d">{_esc(o.get("text") or "")}</span>' if (o.get('text') or '').strip() else '') + '</li>' for j, o in enumerate(outs, 1)) + '</ul>'
+        elif rowmap.get('Results'):
+            out_block = f'<div class="pjo-result mt-8 lg:mt-10"><span class="pjo-n">01</span><p>{rowmap["Results"]}</p></div>'
+        else:
+            out_block = empty('Outcomes will be shared as the programme progresses.', 'Results are published once they have been verified.')
+        # 04 activities: each has a title, a description and its pictures
+        if not acts and rowmap.get('Activities'):
+            acts = [{'title': 'Programme activities', 'text': rowmap['Activities'], 'images': gal}]
+        def act_photos(x):
+            imgs = [m for m in (x.get('images') or ([x['image']] if x.get('image') else [])) if m]
+            if not imgs:
+                return '<div class="pja-ph n1">' + ph(_esc(x['title']) + ' · photo', 'h-full w-full rounded-[20px]', '#E6E6E5') + '</div>'
+            k = min(len(imgs), 3)
+            return f'<div class="pja-ph n{k}">' + ''.join(f'<div class="pja-pi">{media_img(m, "h-full w-full rounded-[20px]", "(min-width:1024px) 40vw, 100vw")}</div>' for m in imgs[:3]) + (f'<span class="pja-more">+{len(imgs) - 3}</span>' if len(imgs) > 3 else '') + '</div>'
+        if acts:
+            act_block = '<ol class="pja-list mt-8 lg:mt-10">' + ''.join(
+                f'<li class="pja-row"><div class="pja-text"><span class="pjo-n">{j:02d}</span><span class="pja-t">{_esc(x["title"])}</span>'
+                + (f'<p class="pja-d">{x["text"] if x is not None and x.get("title") == "Programme activities" and not d.get("activities") else _esc(x.get("text") or "")}</p>' if (x.get('text') or '').strip() else '')
+                + f'</div>{act_photos(x)}</li>' for j, x in enumerate(acts, 1)) + '</ol>'
+        else:
+            act_block = empty('Programme activities will be added soon.', 'Each activity will have a short description and photos.')
+        summ_html = ''.join(f'<div class="pjs-row"><dt>{k}</dt><dd>{v}</dd></div>' for k, v in summ_rows)
+        n_ev = len(pevents)
+        body = page_header([('Projects', 'projects.html'), (d['name'], file)], f'{d["pillar"]} · {d["cat"]}', d['name'], d['lede']) + f"""
+<div class="pl-page" style="--pc:{tone}">
+<section id="summary" class="pl-sec pt-8 lg:pt-10" data-studio-rev="{rev}">
   <div class="wrap">
     <div class="pj-hero">
       {hero}
@@ -855,65 +894,54 @@ def project_details():
   </div>
 </section>
 
-<section id="story" class="py-14 lg:py-16">
-  <div class="wrap">{sec_head('01 / Project Story', 'From context <span class="sh-soft">to results.</span>', f'{n_rows} steps', desc='What the project responded to, how it worked and what it achieved.')}
-    <ol class="pj-steps mt-8 lg:mt-10" style="--n:{n_rows}">{steps}
-    </ol>
-  </div>
-</section>
+<nav class="pl-tabs" aria-label="On this page" data-pl-tabs>
+  <div class="wrap"><div class="pl-tabs-in">
+    <a href="#about" class="pl-tab">Summary</a><a href="#objectives" class="pl-tab">Objectives</a><a href="#outcomes" class="pl-tab">Outcomes</a><a href="#activities" class="pl-tab">Activities</a><a href="#events" class="pl-tab">Events</a>
+  </div></div>
+</nav>
 
-<section id="overview" class="border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap grid gap-10 lg:grid-cols-12 lg:gap-16">
-    <div class="lg:col-span-5">
-      <div class="sh-top"><span class="sh-num">02</span><span class="sh-label">Overview</span></div>
-      <blockquote class="mt-8 text-[28px] font-semibold leading-[1.1] tracking-[-0.035em] md:text-[36px]">“Lorem ipsum dolor sit amet, <span class="text-ink-mid">consectetur adipiscing elit.</span>”</blockquote>
-      <p class="mt-4 text-[13px] text-ink-mid">Placeholder text · to be replaced by AFCD</p>
-    </div>
-    <div class="grid gap-5 text-[16px] leading-[1.75] text-ink-dark lg:col-span-7">
-      <p class="text-[20px] leading-[1.5] tracking-[-0.01em] text-ink-pure md:text-[22px]">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus, posuere velit aliquet. Donec ullamcorper nulla non metus auctor fringilla.</p>
-      <p>Sed posuere consectetur est at lobortis. Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum. Maecenas faucibus mollis interdum, nullam quis risus eget urna mollis ornare vel eu leo.</p>
-      <p>Aenean lacinia bibendum nulla sed consectetur. Curabitur blandit tempus porttitor. Etiam porta sem malesuada magna mollis euismod. Nulla vitae elit libero, a pharetra augue. Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh.</p>
-      <ul class="mt-2 grid gap-2 sm:grid-cols-2">
-        <li class="os-act"><span class="os-act-n">01</span><span>Lorem ipsum dolor sit amet, consectetur.</span></li>
-        <li class="os-act"><span class="os-act-n">02</span><span>Vestibulum id ligula porta felis euismod.</span></li>
-        <li class="os-act"><span class="os-act-n">03</span><span>Cras mattis consectetur purus sit amet.</span></li>
-        <li class="os-act"><span class="os-act-n">04</span><span>Maecenas faucibus mollis interdum nullam.</span></li>
-      </ul>
+<section id="about" class="pl-sec py-14 lg:py-16">
+  <div class="wrap">
+    <div class="pjs">
+      <div class="pjs-side">
+        <div class="sh-top"><span class="sh-num">01</span><span class="sh-label">Project Summary</span></div>
+        <p class="pjs-lede">{d['lede']}</p>
+        <a href="{PILLAR_FILE.get(d['slug'], 'pillars.html')}" class="pjs-pillar"><span class="pjs-pillar-dot" aria-hidden="true"></span><span><span class="block text-[11px] font-medium uppercase tracking-[.16em] text-ink-mid">Part of the pillar</span><span class="mt-1 block text-[16px] font-semibold tracking-[-0.015em]">{d['pillar']}</span></span><span class="ml-auto" aria-hidden="true">↗</span></a>
+        {share_bar(file, d['name'], 'Share this project', 'mt-6')}
+      </div>
+      <dl class="pjs-main">{summ_html}</dl>
     </div>
   </div>
 </section>
 
-<section id="pillar" class="pb-14 lg:pb-16">
-  <div class="wrap grid gap-4 lg:grid-cols-12">
-    <div class="pj-pillar lg:col-span-7" style="--c:{tone}">
-      <p class="label text-black/60">Part of our pillar</p>
-      <p class="mt-4 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[40px]">{d['pillar']}</p>
-      <p class="mt-4 max-w-[52ch] text-[15.5px] leading-relaxed text-black/75">{pdesc}</p>
-      <a href="pillars.html#{d['slug']}" class="btn-dark btn-cta mt-8 min-h-[46px] px-6 text-[14px]">Explore the pillar <span class="arr" aria-hidden="true">↗</span></a>
-    </div>
-    <div class="rounded-[28px] border border-ink-light p-6 md:p-8 lg:col-span-5">
-      <p class="label text-ink-mid">Strategic objectives</p>
-      <ul class="mt-5 grid gap-2">{obj_html}</ul>
-    </div>
+<section id="objectives" class="pl-sec border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('02 / Program Objectives', 'What the programme <span class="sh-soft">sets out to do.</span>', (f'{len(pobj)} objective' + ('s' if len(pobj) != 1 else '')) if pobj else 'Coming soon', desc='The objectives this programme works towards.')}
+    {obj_block}
   </div>
 </section>
 
-<section id="events" class="border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap">{sec_head('03 / Events', 'Project <span class="sh-soft">events.</span>', f'{len(pevents)} linked' if pevents else 'None yet', ('All events', 'events.html'))}
-    {f'<ul class="ev-list mt-8 lg:mt-10">{"".join(event_row(x, compact=True) for x in pevents)}</ul>' if pevents else '<div class="mt-8 rounded-[24px] border border-dashed border-ink-light p-6 text-[15px] text-ink-dark lg:mt-10">No events linked to this project yet. <a class="link-arrow ml-1" href="events.html">See all events ↗</a></div>'}
+<section id="outcomes" class="pl-sec border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('03 / Outcomes', 'What changed <span class="sh-soft">for people.</span>', f'{len(outs)} outcomes' if outs else ('Results' if rowmap.get('Results') else 'Coming soon'), desc='Results and changes the programme has achieved so far.')}
+    {out_block}
   </div>
 </section>
 
-<section id="gallery" class="border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap">{sec_head('04 / Gallery', 'In <span class="sh-soft">pictures.</span>', f'{len(gal)} photos' if gal else 'Photos to come')}
-    <div class="pj-gallery mt-8 lg:mt-10">{''.join(g(i, 'pj-g1' if i == 0 else 'pj-gi') for i in range(max(8, len(gal))))}
-    </div>
+<section id="activities" class="pl-sec border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('04 / Program Activities', 'The programme <span class="sh-soft">in action.</span>', (f'{len(acts)} activit' + ('ies' if len(acts) != 1 else 'y')) if d.get('activities') else 'Photos to come', desc='What participants do, each activity with its own photos.')}
+    {act_block}
   </div>
 </section>
+
+<section id="events" class="pl-sec border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('05 / Events', 'Related <span class="sh-soft">events.</span>', f'{n_ev} linked' if pevents else 'None yet', ('All events', 'events.html'))}
+    {f'<ul class="ev-list mt-8 lg:mt-10">{"".join(event_row(x, compact=True) for x in pevents)}</ul>' if pevents else empty('No events linked to this project yet.', 'Upcoming sessions will appear here as soon as they are announced.')}
+  </div>
+</section>
+</div>
 
 <nav class="border-t border-ink-light py-10 lg:py-12" aria-label="More projects">
   <div class="wrap grid gap-3 md:grid-cols-2">{nav(prev_f, 'Previous project')}{nav(next_f, 'Next project')}</div>
-</nav>''' + cta_band('Be part of the next edition.', 'Calls for applications, volunteering and partnerships open throughout the year.',
+</nav>""" + cta_band('Be part of the next edition.', 'Calls for applications, volunteering and partnerships open throughout the year.',
                ('Get Involved', 'get-involved.html'), ('All projects', 'projects.html'))
         page(file, f'{d["name"]} · AFCD Foundation', f'{d["name"]}: {d["lede"]}', 'projects', body)
 

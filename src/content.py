@@ -1279,32 +1279,8 @@ def news_articles():
 
 
 # ---------------------------------------------------------------- Events
-# Sample events: clearly marked placeholders until AFCD supplies its real calendar (e.g. through Studio).
-EVENTS = [
-    # Real event (Moonshot: Artemis Edition timeline, month 5). Only the month is fixed so far: tba=True hides the
-    # countdown, calendar button and map until the day, time and venue are announced.
-    dict(slug='artemis-morocco-roadshow', project=None, day='Dec', mon='', year='2026', iso='2026-12', tba=True, kind='Roadshow',
-         pillar='youth-empowerment', title='Artemis Morocco Roadshow', where='Venue to be announced', time='Time to be announced',
-         desc='The first public event of Moonshot: Artemis Edition, an 18-month initiative empowering Moroccan youth through STEM, space innovation, entrepreneurship and U.S.–Morocco cooperation in emerging technologies.',
-         upcoming=True, sample=False, partners=['Moroccan Initiative for Space Industry', 'U.S. Embassy Morocco'],
-         registration={'mode': 'contact', 'label': 'Register interest'},
-         poster={'src': 'assets/img/events/moonshot-artemis-poster-1200.webp',
-                 'srcset': 'assets/img/events/moonshot-artemis-poster-600.webp 600w, assets/img/events/moonshot-artemis-poster-1200.webp 1200w',
-                 'w': 1200, 'h': 1200, 'fx': 50, 'fy': 50,
-                 'alt': 'Moonshot: Artemis Edition poster with the AFCD Foundation, Moroccan Initiative for Space Industry and U.S. Embassy Morocco logos, describing the 18-month programme and its six activities.'},
-         bodyHtml=('<p>The Artemis Morocco Roadshow introduces young people to NASA’s Artemis programme and to the opportunities of the space sector. '
-                   'It opens Moonshot: Artemis Edition, an 18-month initiative led by AFCD Foundation with the Moroccan Initiative for Space Industry, '
-                   'supported by the U.S. Embassy Morocco.</p>'
-                   '<p>Moonshot: Artemis Edition brings together:</p><ul>'
-                   '<li><strong>Artemis Roadshow:</strong> introducing Artemis and space opportunities.</li>'
-                   '<li><strong>Innovation Challenges:</strong> developing innovative space solutions.</li>'
-                   '<li><strong>Space Media Series:</strong> promoting public space awareness.</li>'
-                   '<li><strong>Space Orientation:</strong> building essential space-project skills.</li>'
-                   '<li><strong>Leadership Talks:</strong> learning from American space experts.</li>'
-                   '<li><strong>National Competition:</strong> showcasing and rewarding top projects.</li></ul>'
-                   '<p>The exact date, time and venue will be announced here. Register your interest to hear first.</p>'),
-         seoDescription='Artemis Morocco Roadshow, December 2026: the first public event of Moonshot: Artemis Edition, AFCD Foundation’s space and STEM initiative for Moroccan youth.'),
-]
+# Built-in events: none. Every event comes from AFCD Studio (src/data/events.json, loaded below).
+EVENTS = []
 # Studio loader (owned by AFCD Studio): when src/data/events.json exists it replaces EVENTS with real events
 # (same keys as above plus sample=False, studio=True, revision, endIso, online, bodyHtml, agenda, audience, poster,
 # registration, recap, seoTitle, seoDescription). All values are already HTML-escaped. Studio writes the file only

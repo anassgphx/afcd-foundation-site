@@ -656,15 +656,12 @@
     render('all');
   })();
 
-  /* Staff login: links to the AFCD Studio dashboard.
-     Set STUDIO_URL once Studio has a live address; until then the link only appears on a local machine. */
+  /* Staff login: always visible. Local Studio on this computer, the hosted Studio everywhere else. */
   (function () {
-    var STUDIO_URL = /(^|\.)afcdfoundation\.com$/.test(location.hostname) ? 'https://studio.afcdfoundation.com/studio/' : '';   /* the online Studio, on the live site only */
     var local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
-    var url = STUDIO_URL || (local ? 'http://localhost:4400/studio/' : '');
-    if (!url) return;
+    var url = local ? 'http://localhost:4400/studio/' : 'https://studio.afcdfoundation.com/studio/';
     $$('[data-studio-login]').forEach(function (a) {
-      a.href = url; a.hidden = false;
+      a.href = url; a.hidden = false; a.rel = 'nofollow';
       a.addEventListener('click', function () { try { localStorage.setItem('afcd.staff', '1'); } catch (e) { /* storage off */ } });
     });
     /* Edit this page: once "Staff login" has been used in this browser, every page shows a small button that opens the

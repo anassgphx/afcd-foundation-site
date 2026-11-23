@@ -3,11 +3,11 @@ import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import sharp, { type Metadata } from 'sharp';
-import { desc, eq, ilike, or, count, inArray } from 'drizzle-orm';
+import { desc, eq, ilike, or, count } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
-import { media, projects, projectGallery } from '../../db/schema.ts';
+import { media } from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 
 export const DERIVATIVE_WIDTHS = [480, 960, 1600] as const;
@@ -66,11 +66,16 @@ export function derivativeFiles(m: Pick<MediaRow, 'storageKey' | 'width'>) {
   return derivativeWidths(m).map((w) => `${m.storageKey}-${w}.webp`);
 }
 
+/** A calendar day, YYYY-MM-DD (the end of a usage right). */
+export const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2027-06-30.').refine((v) => !Number.isNaN(Date.parse(v)), 'Not a real date.');
+
 export const mediaUpdateSchema = z.object({
   alt: z.string().trim().max(250).optional(),
   caption: z.string().trim().max(500).optional(),
   credit: z.string().trim().max(200).optional(),
   rightsConfirmed: z.boolean().optional(),
+  licence: z.string().trim().max(120).optional(),
+  rightsExpiresOn: isoDate.nullable().optional(),
   focalX: z.number().int().min(0).max(100).optional(),
   focalY: z.number().int().min(0).max(100).optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
@@ -84,21 +89,18 @@ export async function listMedia(db: DB, q: string | undefined, limit = 60, offse
   return { items: rows.map((r) => ({ ...r, url: `/studio/media-file/${r.storageKey}-480.webp`, usedBy: usage[r.id] ?? 0 })), total: n };
 }
 
+/** How many places use each image (drafts, galleries, page blocks, homepage, published versions): see library.ts. */
 export async function usageCounts(db: DB, ids: string[]) {
-  if (!ids.length) return {} as Record<string, number>;
-  const res: Record<string, number> = {};
-  const heroes = await db.select({ id: projects.heroMediaId }).from(projects).where(inArray(projects.heroMediaId, ids));
-  for (const h of heroes) if (h.id) res[h.id] = (res[h.id] ?? 0) + 1;
-  const gal = await db.select({ id: projectGallery.mediaId }).from(projectGallery).where(inArray(projectGallery.mediaId, ids));
-  for (const g of gal) res[g.id] = (res[g.id] ?? 0) + 1;
-  return res;
+  const { usage } = await import('./library.ts');
+  const u = await usage(db, ids);
+  return Object.fromEntries(Object.entries(u).map(([id, l]) => [id, l.length])) as Record<string, number>;
 }
 
 export async function deleteMedia(db: DB, cfg: Config, id: string) {
   const [m] = await db.select().from(media).where(eq(media.id, id));
   if (!m) throw new AppError(404, 'Media not found.');
   const used = (await usageCounts(db, [id]))[id] ?? 0;
-  if (used) throw new AppError(409, 'This image is used by content. Remove it there first.');
+  if (used) throw new AppError(409, `This image is used in ${used} place${used === 1 ? '' : 's'} (see “Used on”). Remove it there first.`);
   await db.delete(media).where(eq(media.id, id));
   for (const f of [...derivativeFiles(m), ...DERIVATIVE_WIDTHS.map((w) => `${m.storageKey}-${w}.webp`)]) {
     const p = resolve(cfg.mediaDir, f); if (existsSync(p)) rmSync(p);

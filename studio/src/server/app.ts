@@ -31,6 +31,7 @@ import * as JOBS from './modules/jobs/service.ts';
 import * as TR from './modules/translations/service.ts';
 import { registerMenuRoutes } from './modules/menus/routes.ts';
 import { registerReviewRoutes } from './modules/review/routes.ts';
+import { registerMediaLibraryRoutes } from './modules/media/routes.ts';
 import { registerInboxRoutes } from './modules/inbox/routes.ts';
 import * as HM from './modules/home/service.ts';
 import * as WS from './modules/workspace/service.ts';
@@ -203,6 +204,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   });
 
   // ---------------------------------------------------------------- Media
+  registerMediaLibraryRoutes(api);   // library view, replace, original download, bulk edits (modules/media/routes.ts)
   api.get('/media', perm('media.read'), async (c) => c.json(await M.listMedia(db, c.req.query('q')?.slice(0, 80), 60, Number(c.req.query('offset') || 0))));
   api.post('/media', perm('media.upload'), bodyLimit({ maxSize: cfg.maxUploadBytes + 64 * 1024, onError: () => { throw new AppError(422, 'The file is too large.'); } }), async (c) => {
     const form = await c.req.parseBody();

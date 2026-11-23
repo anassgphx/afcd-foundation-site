@@ -1,7 +1,7 @@
 // AFCD Studio — PostgreSQL schema (Drizzle). SQL migrations are generated into ./drizzle with `npm run db:generate`.
 import { sql } from 'drizzle-orm';
 import {
-  pgTable, text, integer, boolean, timestamp, jsonb, uuid, primaryKey, uniqueIndex, index, pgEnum,
+  pgTable, text, integer, boolean, timestamp, date, jsonb, uuid, primaryKey, uniqueIndex, index, pgEnum,
 } from 'drizzle-orm/pg-core';
 
 const id = () => uuid('id').primaryKey().default(sql`gen_random_uuid()`);
@@ -128,6 +128,8 @@ export const media = pgTable('media', {
   caption: text('caption').notNull().default(''),
   credit: text('credit').notNull().default(''),
   rightsConfirmed: boolean('rights_confirmed').notNull().default(false),  // usage rights + consent of people shown
+  licence: text('licence').notNull().default(''),                         // e.g. "CC BY 4.0", "AFCD own photo", "Used with permission"
+  rightsExpiresOn: date('rights_expires_on', { mode: 'string' }),          // optional end of the usage right (YYYY-MM-DD)
   focalX: integer('focal_x').notNull().default(50),
   focalY: integer('focal_y').notNull().default(50),
   tags: jsonb('tags').$type<string[]>().notNull().default([]),

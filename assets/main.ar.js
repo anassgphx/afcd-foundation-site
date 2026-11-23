@@ -723,6 +723,11 @@
     var io = new IntersectionObserver(pick, { threshold: [0, .25, .5, 1] });
     Object.keys(map).forEach(function (id) { io.observe(document.getElementById(id)); });
     pick();
+    // "is-stuck" once the bar sits under the header: it then gets its full-width background
+    var raf = 0;
+    function stuck() { raf = 0; var top = parseFloat(getComputedStyle(bar).top) || 0; bar.classList.toggle('is-stuck', bar.getBoundingClientRect().top <= top + 1 && window.scrollY > 0); }
+    window.addEventListener('scroll', function () { if (!raf) raf = requestAnimationFrame(stuck); }, { passive: true });
+    window.addEventListener('resize', stuck); stuck();
   })();
 
   /* ---------- Social sharing ([data-shr]): links follow this language's canonical URL; native share where available ---------- */

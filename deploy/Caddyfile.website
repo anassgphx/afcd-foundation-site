@@ -1,0 +1,30 @@
+# AFCD Foundation website: add these blocks to the existing Caddyfile on the VPS (next to afcdconnect.tech).
+# The site's files live in their own folder, /srv/afcd-website/public, mounted read-only into the Caddy
+# container at /srv/afcd-website (see deploy/README.md). AFCD Connect's blocks stay exactly as they are.
+
+afcdfoundation.com {
+	root * /srv/afcd-website
+	encode zstd gzip
+	try_files {path} {path}.html {path}/index.html
+	file_server
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Strict-Transport-Security "max-age=31536000"
+	}
+	@html path *.html / /fr/ /ar/
+	header @html Cache-Control "no-cache"
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	handle_errors {
+		@404 expression {err.status_code} == 404
+		rewrite @404 /404.html
+		file_server
+	}
+}
+
+www.afcdfoundation.com {
+	redir https://afcdfoundation.com{uri} permanent
+}

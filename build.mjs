@@ -104,8 +104,8 @@ function markActive(html, active) {
 
 // ---------------------------------------------------------------- SEO
 // Canonical production domain. Preview builds (the default, e.g. GitHub Pages) are noindex so the
-// preview copy never competes with the real site. Use `npm run build:production` for afcdfoundation.org.
-const SITE = 'https://afcdfoundation.org/';
+// preview copy never competes with the real site. Use `npm run build:production` for afcdfoundation.com.
+const SITE = 'https://afcdfoundation.com/';
 const PRODUCTION = process.env.SITE_ENV === 'production';
 const FORMS_ENDPOINT = (process.env.FORMS_ENDPOINT || '').trim().replace(/\/+$/, '');
 if (FORMS_ENDPOINT && !/^https?:\/\/[^\s"<>]+$/.test(FORMS_ENDPOINT)) throw new Error(`FORMS_ENDPOINT must be an http(s) URL, got "${FORMS_ENDPOINT}"`);

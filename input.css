@@ -1723,3 +1723,11 @@ button[type="submit"][aria-busy="true"] { opacity: .6; cursor: progress; }
 .pja-ph .ph { height: 100%; }
 .pja-more { position: absolute; right: 12px; bottom: 12px; padding: 4px 10px; border-radius: 9999px; background: rgba(0,0,0,.75); color: #fff; font-size: 12px; font-weight: 600; }
 [dir="rtl"] .pja-more { right: auto; left: 12px; }
+
+/* Homepage values: calm cards, no hover or auto-highlight */
+.vl-row .vl-card, .vl-row .vl-card:hover, .vl-row .vl-card:focus-visible, .vl-row:not(:hover):not(:focus-within) .vl-card.is-default { background: #fff; color: var(--deep); border-color: var(--light); transform: none; box-shadow: none; flex-grow: 1; animation: none; }
+.vl-row .vl-card::before { display: none; }
+.vl-row .vl-card .vl-icon, .vl-row .vl-card:hover .vl-icon, .vl-row .vl-card:focus-visible .vl-icon, .vl-row:not(:hover):not(:focus-within) .vl-card.is-default .vl-icon { background: #F3F3F3; color: #000; transform: none; animation: none; }
+.vl-row .vl-card .vl-idx, .vl-row .vl-card:hover .vl-idx, .vl-row:not(:hover):not(:focus-within) .vl-card.is-default .vl-idx { color: var(--mid); opacity: 1; }
+.vl-row .vl-card .vl-desc, .vl-row .vl-card:hover .vl-desc, .vl-row:not(:hover):not(:focus-within) .vl-card.is-default .vl-desc { color: var(--dark); opacity: 1; animation: none; }
+.vl-row .vl-prog { display: none; }

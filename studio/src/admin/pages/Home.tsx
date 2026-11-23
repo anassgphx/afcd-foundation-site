@@ -317,6 +317,9 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
   </div>;
 }
 
+// panel sub-group headings (fields.ts gives these sections sub-groups)
+const GROUP_LABEL: Record<string, string> = { purpose: 'Section header', 'purpose.mission': 'Our mission', 'purpose.vision': 'Our vision', 'purpose.values': 'Our values' };
+
 // same limits as the server (modules/home/service.ts HEAD_MAX) for the numbered section headers
 const HEAD_MAX: Record<string, number> = { num: 4, label: 60, meta: 60 };
 
@@ -324,7 +327,7 @@ function SectionFields({ fields, values, media, editable, onChange, onPickImage 
   if (!fields.length) return <p className="muted" style={{ fontSize: 13 }}>This section’s content comes from Studio records or the website’s design, so there is nothing to type here. You can move or hide it.</p>;
   // the hero has several slides: show each slide's fields together, under its own heading
   const groups = [...new Set(fields.map((f) => f.section))];
-  if (groups.length > 1) return <>{groups.map((g) => <details key={g} className="hp-group" open={g === groups[0]}><summary>{g.replace(/^hero\.(\d+)$/, 'Slide $1')}</summary>
+  if (groups.length > 1) return <>{groups.map((g) => <details key={g} className="hp-group" open={g === groups[0]}><summary>{GROUP_LABEL[g] ?? g.replace(/^hero\.(\d+)$/, 'Slide $1')}</summary>
     <div className="stack"><SectionFields fields={fields.filter((f) => f.section === g)} values={values} media={media} editable={editable} onChange={onChange} onPickImage={onPickImage} /></div></details>)}</>;
   return <>{fields.map((f) => {
     const v = f.key in values ? values[f.key] : f.default; const changed = f.key in values;

@@ -97,6 +97,28 @@ describe('pillars', () => {
     expect((await c.ed.get(`/pillars/${p.id}`)).body.content.name).toBe('Youth Empowerment');
   });
 
+  it('keeps each pillar’s own objectives: none imported, title required, at most 6, exported as plain text', async () => {
+    await importPillars(h.db, h.cfg, null, SITE_PILLARS);
+    const id = (await c.ed.get('/pillars/records')).body[0].id;
+    const { body: p } = await c.ed.get(`/pillars/${id}`);
+    expect(p.content.objectives).toEqual([]);                                                  // nothing invented on import
+    const seven = Array.from({ length: 7 }, (_, i) => ({ title: `Objective ${i + 1}`, text: '' }));
+    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), objectives: seven })).status).toBe(422);
+    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), objectives: [{ title: 'A <b>', text: '' }] })).status).toBe(422);
+    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), objectives: [{ title: '', text: 'No title yet' }] })).status).toBe(200);   // drafts may be incomplete
+    const blocked = await c.ed.post(`/pillars/${id}/transition`, { action: 'submit' });
+    expect(blocked.status).toBe(422); expect(JSON.stringify(blocked.body.details)).toMatch(/objective a title/);
+    const objectives = [{ title: 'Youth & civic life', text: 'Lead “local” initiatives.' }, { title: 'Second objective', text: '' }];
+    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), objectives })).status).toBe(200);
+    expect((await c.ed.get(`/pillars/${id}`)).body.content.objectives).toEqual(objectives);
+    await c.ed.post(`/pillars/${id}/transition`, { action: 'submit' }); await c.rev.post(`/pillars/${id}/transition`, { action: 'approve' });
+    expect((await c.admin.post(`/pillars/${id}/publish`)).status).toBe(200);
+    const entry = JSON.parse(readFileSync(join(h.siteRoot, 'src/data/pillars.json'), 'utf8')).pillars.find((x: any) => x.key === 'youth-empowerment');
+    expect(entry.objectives).toEqual(objectives);                                               // content.py escapes these itself
+    const other = JSON.parse(readFileSync(join(h.siteRoot, 'src/data/pillars.json'), 'utf8')).pillars.find((x: any) => x.key === 'green-thumbs');
+    expect(other.objectives).toEqual([]);                                                       // a pillar imported before objectives existed
+  });
+
   it('blocks a photo without alt text or confirmed rights', async () => {
     await importPillars(h.db, h.cfg, null, SITE_PILLARS);
     const id = (await c.ed.get('/pillars/records')).body[0].id;

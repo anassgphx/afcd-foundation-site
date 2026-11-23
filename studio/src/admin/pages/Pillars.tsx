@@ -112,7 +112,7 @@ export function PillarsScreen({ id }: { id?: string }) {
 
 type Step = { title: string; text: string };
 type Form = { name: string; short: string; summary: string; intro: string; colour: string; brand: string; highlights: string[]; approachTitle: string; approachSoft: string;
-  view: string; principles: string[]; steps: Step[]; activities: number[]; groups: number[]; mediaId: string | null; provenance: string };
+  view: string; principles: string[]; steps: Step[]; objectives: Step[]; activities: number[]; groups: number[]; mediaId: string | null; provenance: string };
 type Loaded = { id: string; key: string; number: string; publicFile: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; verifiedAt: string | null; removeRequested: boolean; usage: string[];
   content: Form | null; projects: { id: string; slug: string; name: string; live: boolean; primary: boolean }[]; media: MediaItem[]; problems: string[];
   lists: { activities: string[]; groups: string[] }; colours: { value: string; label: string }[];
@@ -176,6 +176,8 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
   const toggle = (k: 'activities' | 'groups', i: number, on: boolean) => set(k, on ? [...f[k], i] : f[k].filter((x) => x !== i));
   const setStep = (i: number, v: Partial<Step>) => set('steps', f.steps.map((s, j) => (j === i ? { ...s, ...v } : s)));
   const moveStep = (i: number, d: -1 | 1) => { const s = [...f.steps]; [s[i], s[i + d]] = [s[i + d], s[i]]; set('steps', s); };
+  const setObj = (i: number, v: Partial<Step>) => set('objectives', f.objectives.map((o, j) => (j === i ? { ...o, ...v } : o)));
+  const moveObj = (i: number, d: -1 | 1) => { const o = [...f.objectives]; [o[i], o[i + d]] = [o[i + d], o[i]]; set('objectives', o); };
   const colourName = p.colours.find((c) => c.value === f.colour)?.label ?? f.colour;
 
   return <>
@@ -196,6 +198,7 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
       <SectionNav sections={[
         { id: 'basics', label: 'Pillar', icon: 'pillars', done: !!f.name },
         { id: 'text', label: 'Summary and introduction', icon: 'log', done: !!f.summary && !!f.intro },
+        { id: 'objectives', label: 'Objectives', icon: 'check', optional: true, done: f.objectives.length ? true : undefined },
         { id: 'photo', label: 'Photo', icon: 'image', optional: true, done: f.mediaId ? true : undefined },
         { id: 'work', label: 'What we do', icon: 'users', optional: true, done: f.activities.length || f.groups.length ? true : undefined },
         { id: 'approach', label: 'Our approach', icon: 'layers', done: !!f.approachTitle && f.steps.length > 0 },
@@ -222,6 +225,20 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
             <textarea className="textarea" rows={3} maxLength={320} value={f.summary} onChange={(x) => set('summary', x.target.value)} aria-label="Summary" /></Field>
           <Field label="Page introduction" span={3} count={[f.intro.length, 200]} hint="The line under the pillar name at the top of its page.">
             <textarea className="textarea" rows={2} maxLength={200} value={f.intro} onChange={(x) => set('intro', x.target.value)} aria-label="Page introduction" /></Field>
+        </Section>
+        <Section id="objectives" title="Objectives" desc="Written here for this pillar only and shown on its page in this order. Nothing is taken from AFCD’s strategy page.">
+          {f.objectives.length === 0 && <p className="muted s3" style={{ margin: 0 }}>No objectives yet. Until you add some, the pillar page says its objectives are being finalised.</p>}
+          {f.objectives.length > 0 && <ol className="pl-steps s3">{f.objectives.map((o, i) => <li key={i}>
+            <span className="pl-step-n">{String(i + 1).padStart(2, '0')}</span>
+            <div className="pl-step-f"><input className="input" maxLength={140} value={o.title} placeholder="Objective (required)" onChange={(x) => setObj(i, { title: x.target.value })} aria-label={`Objective ${i + 1}`} aria-invalid={!o.title.trim()} />
+              <textarea className="textarea" rows={2} maxLength={400} value={o.text} placeholder="Short explanation (optional)" onChange={(x) => setObj(i, { text: x.target.value })} aria-label={`Objective ${i + 1} explanation`} /></div>
+            <span className="pl-step-a">
+              <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === 0} onClick={() => moveObj(i, -1)} aria-label={`Move objective ${i + 1} up`}>↑</button>
+              <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === f.objectives.length - 1} onClick={() => moveObj(i, 1)} aria-label={`Move objective ${i + 1} down`}>↓</button>
+              <button type="button" className="btn btn-ghost icon-btn btn-sm" onClick={() => set('objectives', f.objectives.filter((_, j) => j !== i))} aria-label={`Remove objective ${i + 1}`}><Icon n="x" /></button></span>
+          </li>)}</ol>}
+          {f.objectives.length < 6 ? <button type="button" className="btn btn-sm s3" style={{ justifySelf: 'start' }} onClick={() => set('objectives', [...f.objectives, { title: '', text: '' }])}><Icon n="plus" />Add an objective</button>
+            : <p className="muted s3" style={{ margin: 0, fontSize: 12.5 }}>6 objectives is the maximum.</p>}
         </Section>
         <Section id="photo" title="Photo" desc="Shown in the pillar page’s overview. Without a photo the page keeps its placeholder. Alt text and usage rights are checked before review.">
           <div className="ed-media s3">
@@ -271,7 +288,7 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
       </fieldset>
       <Section id="translations" title="Translations" desc="French and Arabic of this pillar’s pages. Reviewed and published on the Translations screen.">
         <RecordTranslations noun="pillar" dirty={status !== 'published'} files={[p.publicFile, 'pillars.html']} fields={[{ label: 'Name', value: f.name }, { label: 'Summary', value: f.summary }, { label: 'Page introduction', value: f.intro },
-          { label: 'Approach heading', value: f.approachTitle }, { label: 'Our perspective', value: f.view }, ...f.principles.map((x) => ({ label: 'Guiding principle', value: x })), ...f.steps.flatMap((s) => [{ label: 'Step title', value: s.title }, { label: 'Step text', value: s.text }])]} />
+          ...f.objectives.flatMap((o) => [{ label: 'Objective', value: o.title }, { label: 'Objective explanation', value: o.text }]), { label: 'Approach heading', value: f.approachTitle }, { label: 'Our perspective', value: f.view }, ...f.principles.map((x) => ({ label: 'Guiding principle', value: x })), ...f.steps.flatMap((s) => [{ label: 'Step title', value: s.title }, { label: 'Step text', value: s.text }])]} />
       </Section>
       </div>
       <WorkflowPanel status={status} live={live} problems={p.problems}

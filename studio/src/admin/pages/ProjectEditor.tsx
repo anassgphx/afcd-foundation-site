@@ -6,6 +6,7 @@ import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, us
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
+import { ActivityList } from '../ActivityEditor.tsx';
 import '../project-editor.css';
 
 type Pillar = { key: string; name: string; colour: string; number: string };
@@ -435,16 +436,10 @@ export function ProjectEditor({ id }: { id: string }) {
 
             {tab === 'Activities' && <div className="pe-form">
               {!form.hasDetailPage && <div className="notice n-warn" style={{ margin: '18px 20px 0' }}>These sections appear on the project page. Turn on “Give this project its own page” in Summary to publish them.</div>}
-              <PeSection title="Program activities" desc="What actually happened, each with its photos from the Media Library. The page shows up to 3 photos per activity, with “+N” for more. Photos need alt text and confirmed rights before review.">
-                <ListEditor items={form.activityItems} max={LIST_MAX} ro={ro} noun="activity" err={errors.activityItems}
-                  blank={{ title: '', text: '', mediaIds: [] }} onChange={(v) => set('activityItems', v)}
-                  render={(a, upd, i) => <div className="pe-act">
-                    <div className="pe-act-t">
-                      <input className="input" aria-label={`Activity ${i + 1} title`} placeholder="Activity, e.g. Leadership bootcamp in Marrakech" value={a.title} maxLength={160} disabled={ro} onChange={(e) => upd({ ...a, title: e.target.value })} />
-                      <textarea className="textarea" style={{ minHeight: 72 }} aria-label={`Activity ${i + 1} description`} placeholder="What happened (optional)" value={a.text} maxLength={800} disabled={ro} onChange={(e) => upd({ ...a, text: e.target.value })} />
-                    </div>
-                    <PhotoStrip ids={a.mediaIds} media={media} ro={ro} label={`Activity ${i + 1}`} onChange={(ids) => upd({ ...a, mediaIds: ids })} onAdd={() => { setActPick(i); setDialog('activity'); }} />
-                  </div>} />
+              <PeSection title="Program activities" desc="What actually happened, each with its own photo gallery. Drag cards or photos to reorder; the first photo is the main one. The page shows 3 photos per activity, then “+N”. Photos need alt text and confirmed rights before review.">
+                <ActivityList items={form.activityItems} onChange={(v) => set('activityItems', v)} ro={ro} err={errors.activityItems}
+                  media={media} addMedia={(ms) => setMedia((x) => ({ ...x, ...Object.fromEntries(ms.map((m) => [m.id, { ...x[m.id], ...m }])) }))}
+                  onPickPhotos={(i) => { setActPick(i); setDialog('activity'); }} canEditMedia={can('media.update')} />
               </PeSection>
               <PeSection title="Activities text" desc="The earlier free-text activities. The page uses it while there are no activity cards above.">
                 <Field name="activities" label="Activities" optional hint="What actually happened?" err={errors.activities} count={[form.activities.length, 2000]}><textarea className="textarea" value={form.activities} onChange={(e) => set('activities', e.target.value)} maxLength={2000} disabled={ro} /></Field>
@@ -624,27 +619,6 @@ function PhotoFix({ item, onClose, onSaved }: { item: MediaItem; onClose: () => 
 }
 
 const fmtDay = (d: string) => { const t = new Date(`${d.slice(0, 10)}T12:00:00Z`); return isNaN(+t) ? d : t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }); };
-
-/** An activity's photos: thumbnails in page order, move earlier/later, remove, add from the Media Library. */
-function PhotoStrip({ ids, media, ro, label, onChange, onAdd }: { ids: string[]; media: Record<string, MediaItem>; ro: boolean; label: string; onChange: (ids: string[]) => void; onAdd: () => void }) {
-  const move = (i: number, d: number) => { const a = [...ids]; [a[i], a[i + d]] = [a[i + d], a[i]]; onChange(a); };
-  const missingAlt = ids.filter((x) => media[x] && !media[x].alt).length, noRights = ids.filter((x) => media[x] && media[x].alt && !media[x].rightsConfirmed).length;
-  return <div className="pe-photos" role="group" aria-label={`${label} photos`}>
-    <div className="pe-photos-h"><span>Photos</span><small className="count-hint">{ids.length} of 12{ids.length > 3 ? ` · the page shows 3, then +${ids.length - 3}` : ''}</small></div>
-    {ids.length > 0 && <ol className="pe-photos-list">{ids.map((mid, i) => { const m = media[mid]; return <li key={mid} className={i >= 3 ? 'is-extra' : undefined}>
-      {m ? <img src={m.url} alt={m.alt || ''} /> : <span className="pe-act-ph">Photo</span>}
-      {m && !m.alt && <span className="pe-photo-flag" title="No alt text yet">Alt</span>}
-      {!ro && <span className="pe-photo-tools">
-        <button type="button" aria-label={`Move photo ${i + 1} earlier`} disabled={i === 0} onClick={() => move(i, -1)}>‹</button>
-        <button type="button" aria-label={`Move photo ${i + 1} later`} disabled={i === ids.length - 1} onClick={() => move(i, 1)}>›</button>
-        <button type="button" aria-label={`Remove photo ${i + 1}`} onClick={() => onChange(ids.filter((x) => x !== mid))}>×</button>
-      </span>}
-    </li>; })}</ol>}
-    {!ro && ids.length < 12 && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={onAdd}><Icon n="image" />{ids.length ? 'Add more photos' : 'Add photos'}</button>}
-    {missingAlt > 0 && <small className="pe-warn">{missingAlt === 1 ? '1 photo needs' : `${missingAlt} photos need`} alt text in the Media Library before review.</small>}
-    {noRights > 0 && <small className="pe-warn">{noRights === 1 ? '1 photo needs' : `${noRights} photos need`} confirmed usage rights in the Media Library.</small>}
-  </div>;
-}
 
 /** A reorderable list of small cards: add, edit, move up/down, remove (with confirm when the item has content). */
 function ListEditor<T extends object>({ items, max, ro, noun, blank, onChange, render, err }: {

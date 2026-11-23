@@ -16,14 +16,14 @@ const figure = (html: string) => html.slice(html.indexOf('<figure class="im-phot
 const slides = (html: string) => figure(html).match(/<article class="tm-slide[\s\S]*?<\/article>/g) ?? [];
 
 describe('participant stories: field and build output', () => {
-  it('reads the stories written in the page, with the samples marked', () => {
+  it('reads the one real story written in the page', () => {
     const f = readFields(SITE, 'index.html').find((x) => x.key === 'impact.stories')!;
     expect(f).toMatchObject({ type: 'stories', sectionId: 'impact', label: 'Participant stories' });
     const list = f.default as any[];
+    expect(list).toHaveLength(1);
     expect(list[0]).toEqual({ quote: expect.stringMatching(/^It was a good experience/), name: 'Ikram Fatna Elfenn', role: 'Let’s Dialogue Bootcamp · February 2021', caption: '',
       image: { src: 'assets/img/hero-slide-2.webp', alt: 'AFCD team member smiling while working at a laptop', w: 2000, h: 1435, fx: 50, fy: 30 } });   // the page's own photo
-    expect(list[1].image).toBeUndefined();
-    expect(list.slice(1).every((s) => s.sample === true)).toBe(true);
+    expect(list[0].sample).toBeUndefined();
     expect(readFields(SITE, 'index.html').some((x) => /^impact\.quote/.test(x.key))).toBe(false);   // replaced by the list (photos included)
   });
 
@@ -115,18 +115,18 @@ describe('participant stories: editing, review and publishing', () => {
   it('cannot be sent for review while a sample story remains', async () => {
     const ed = await client(h.app, 'ed@afcd.test');
     const f = (await ed.get('/home')).body.fields.find((x: any) => x.key === 'impact.stories');
-    const reordered = [f.default[1], f.default[0]];   // a sample moved to the front, still a sample
-    expect((await ed.put('/home', { 'impact.stories': reordered })).status).toBe(200);
+    const withSample = [...f.default, { quote: 'Lorem ipsum dolor sit amet.', name: 'Participant name', role: 'Programme · Year', caption: '', sample: true }];
+    expect((await ed.put('/home', { 'impact.stories': withSample })).status).toBe(200);
     const sub = await ed.post('/home/transition', { action: 'submit' });
     expect(sub.status).toBe(422);
-    expect(JSON.stringify(sub.body)).toContain('Story 1 is still a sample');
+    expect(JSON.stringify(sub.body)).toContain('Story 2 is still a sample');
   });
 
   it('edit, add, delete and reorder go through review, then publish into page-fields.json', async () => {
     sitePhoto();
     const ed = await client(h.app, 'ed@afcd.test'), rev = await client(h.app, 'rev@afcd.test'), admin = await client(h.app, 'admin@afcd.test');
     const f = (await ed.get('/home')).body.fields.find((x: any) => x.key === 'impact.stories');
-    // keep the real story, delete both samples, add two new ones, and put a new one first
+    // keep the real story, add two new ones, and put a new one first
     const list = [{ quote: 'New story first.', name: 'Sara El Amrani', role: 'Leadership Lab 2.0 · 2023', caption: '' }, f.default[0], { quote: 'Another.', name: 'Youssef', role: '', caption: '' }];
     expect((await ed.put('/home', { 'impact.stories': list })).status).toBe(200);
     expect((await ed.post('/home/transition', { action: 'submit' })).status).toBe(200);

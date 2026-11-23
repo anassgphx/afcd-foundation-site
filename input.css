@@ -1731,3 +1731,6 @@ button[type="submit"][aria-busy="true"] { opacity: .6; cursor: progress; }
 .vl-row .vl-card .vl-idx, .vl-row .vl-card:hover .vl-idx, .vl-row:not(:hover):not(:focus-within) .vl-card.is-default .vl-idx { color: var(--mid); opacity: 1; }
 .vl-row .vl-card .vl-desc, .vl-row .vl-card:hover .vl-desc, .vl-row:not(:hover):not(:focus-within) .vl-card.is-default .vl-desc { color: var(--dark); opacity: 1; animation: none; }
 .vl-row .vl-prog { display: none; }
+
+/* Homepage project cards: real project photo from the project module */
+.pc-photo .pc-img { width: 100%; height: 100%; object-fit: cover; }

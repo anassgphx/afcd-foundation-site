@@ -271,7 +271,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   api.post('/news', perm('news.create'), async (c) => c.json(await N.createArticle(db, actor(c), await c.req.json()), 201));
   api.get('/news/:id', perm('news.read'), async (c) => {
     const a = await N.loadArticle(db, c.req.param('id'));
-    const ids = [a.heroMediaId, ...a.galleryMediaIds].filter(Boolean) as string[];
+    const ids = [...new Set([a.heroMediaId, ...a.galleryMediaIds, ...N.bodyMediaIds(a.body)].filter(Boolean) as string[])];   // + photos placed in the story text
     const mediaRows = ids.length ? await db.select().from(t.media).where(inArray(t.media.id, ids)) : [];
     return c.json({ ...a, media: mediaRows.map(withUrl), problems: await N.articleProblems(db, a), history: await N.articleHistory(db, a.id) });
   });

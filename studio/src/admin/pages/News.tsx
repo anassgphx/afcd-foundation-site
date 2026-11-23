@@ -5,9 +5,12 @@ import { useSite } from '../site.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type Column } from '../DataTable.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
+import { StoryEditor } from '../story/StoryEditor.tsx';
 import { Loading } from './Dashboard.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
 import '../writer.css';
+
+const plainWords = (body: string) => body.replace(/!\[[^\]\n]*\]\(media:[^)]*\)|!video\([^)]*\)/g, ' ').replace(/^(#{2,3}|>|-|\d+[.)])\s+/gm, '').split(/\s+/).filter((w) => /\w/.test(w)).length;
 
 export const TYPES: [string, string][] = [['programme_news', 'Programme news'], ['participant_story', 'Participant story'], ['call_for_applications', 'Call for applications'], ['event_recap', 'Event recap']];
 const typeLabel = (t: string) => TYPES.find((x) => x[0] === t)?.[1] ?? t;
@@ -59,10 +62,10 @@ type Loaded = Form & { id: string; status: string; scheduledAt: string | null; p
 const KEYS: (keyof Form)[] = ['title', 'slug', 'excerpt', 'body', 'type', 'tags', 'authorName', 'authorRole', 'publishDate', 'featured', 'externalUrl', 'heroMediaId', 'galleryMediaIds', 'pillarKeys', 'projectSlugs', 'seoTitle', 'seoDescription'];
 
 export function ArticleEditor({ id }: { id: string }) {
+  const site = useSite();
   const can = useCan(); const me = useMe(); const toast = useToast();
   const [a, setA] = useState<Loaded | null>(null); const [f, setF] = useState<Form | null>(null);
   const [media, setMedia] = useState<Record<string, MediaItem>>({});
-  const site = useSite();
   const [pillars, setPillars] = useState<{ key: string; name: string; colour: string }[]>([]);
   const [projects, setProjects] = useState<{ slug: string; name: string }[]>([]);
   const [tab, setTab] = useState<'details' | 'links' | 'media' | 'seo' | 'translations' | 'publish'>('details');
@@ -71,7 +74,6 @@ export function ArticleEditor({ id }: { id: string }) {
   const [dialog, setDialog] = useState<null | 'hero' | 'gallery' | 'preview' | 'publish' | 'unpublish' | 'changes' | 'schedule'>(null);
   const [url, setUrl] = useState(''); const [comment, setComment] = useState(''); const [when, setWhen] = useState('');
   const [slugTouched, setSlugTouched] = useState(true);
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const load = useCallback(async () => {
     const [d, p, pr] = await Promise.all([api<Loaded>(`/news/${id}`), api('/pillars'), api('/projects')]);
@@ -87,7 +89,7 @@ export function ArticleEditor({ id }: { id: string }) {
   const status = a.status; const live = !!a.publishedRevisionId;
   const editable = can('news.update') && !['in_review', 'scheduled', 'archived'].includes(status);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => { setF((x) => { const n = { ...x!, [k]: v }; if (k === 'title' && !slugTouched && !live) n.slug = slugify(String(v)) || x!.slug; return n; }); setDirty(true); };
-  const words = f.body.split(/\s+/).filter(Boolean).length;
+  const words = plainWords(f.body);
 
   function showErr(e: unknown) { setErrs(e instanceof ApiError && e.details?.length ? e.details.map((d) => (d.path ? `${d.path}: ` : '') + d.message) : [e instanceof Error ? e.message : 'Something went wrong.']); }
   async function save(): Promise<boolean> {
@@ -112,19 +114,7 @@ export function ArticleEditor({ id }: { id: string }) {
     setBusy('preview');
     try { const r = await post<{ url: string }>(`/news/${id}/preview`); setUrl(r.url); setDialog('preview'); } catch (e) { showErr(e); } finally { setBusy(''); }
   }
-  const wrap = (pre: string, post_: string, ph: string) => {
-    const el = bodyRef.current!; const s = el.selectionStart, e = el.selectionEnd; const sel = f.body.slice(s, e) || ph;
-    set('body', f.body.slice(0, s) + pre + sel + post_ + f.body.slice(e));
-    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(s + pre.length, s + pre.length + sel.length); });
-  };
   const file = f.externalUrl ? null : `news-${f.slug}.html`;
-  const onBodyKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!(e.metaKey || e.ctrlKey)) return;
-    const k = e.key.toLowerCase();
-    if (k === 'b') { e.preventDefault(); wrap('**', '**', 'bold text'); }
-    else if (k === 'i') { e.preventDefault(); wrap('*', '*', 'italic text'); }
-    else if (k === 'k') { e.preventDefault(); wrap('[', '](about.html)', 'link text'); }
-  };
   const problems = a.problems;
   const canSubmit = ['draft', 'changes_requested'].includes(status) && can('news.update');
   const canPublish = status === 'approved' && can('news.publish');
@@ -161,16 +151,9 @@ export function ArticleEditor({ id }: { id: string }) {
           <textarea className="w-excerpt" rows={2} maxLength={320} placeholder="A one or two sentence summary for cards and search results" value={f.excerpt} onChange={(e) => set('excerpt', e.target.value.replace(/\n/g, ' '))} aria-label="Summary" />
           <small className={f.excerpt.length > 160 ? 'warn' : ''}>{f.excerpt.length} / 160 recommended{f.excerpt.length > 160 ? ' · search results cut it here' : ''}</small>
         </div>
-        <div className="w-tools wr-tools" role="toolbar" aria-label="Formatting">
-          <span className="wr-group"><button type="button" onClick={() => wrap('\n\n## ', '\n\n', 'Subheading')} aria-label="Subheading">H2</button></span>
-          <span className="wr-group"><button type="button" onClick={() => wrap('**', '**', 'bold text')} aria-label="Bold" aria-keyshortcuts="Meta+B" title="Bold · ⌘B"><b>B</b></button>
-            <button type="button" onClick={() => wrap('*', '*', 'italic text')} aria-label="Italic" aria-keyshortcuts="Meta+I" title="Italic · ⌘I"><i>I</i></button>
-            <button type="button" onClick={() => wrap('[', '](about.html)', 'link text')} aria-label="Link" aria-keyshortcuts="Meta+K" title="Link · ⌘K"><Icon n="ext" width={14} height={14} />Link</button></span>
-          <span className="wr-group"><button type="button" onClick={() => wrap('\n\n> ', '\n\n', 'A quote from a participant')} aria-label="Quote">“ Quote</button>
-            <button type="button" onClick={() => wrap('\n\n- ', '\n', 'List item')} aria-label="Bulleted list">• List</button></span>
-          <span className="wr-hint">Blank line = new paragraph · ⌘S saves</span>
-        </div>
-        <textarea ref={bodyRef} className="w-text" placeholder={f.externalUrl ? 'This story links to the old blog. Write it here to publish it on the new site, then clear the old-blog link.' : 'Write the story…'} value={f.body} maxLength={30000} onChange={(e) => set('body', e.target.value)} onKeyDown={onBodyKey} aria-label="Story text" />
+        <StoryEditor value={f.body} onChange={(v) => set('body', v)} editable={editable} media={media}
+          onMedia={(items) => setMedia((x) => ({ ...x, ...Object.fromEntries(items.map((i) => [i.id, i])) }))}
+          placeholder={f.externalUrl ? 'This story links to the old blog. Write it here to publish it on the new site, then clear the old-blog link.' : 'Write the story… (type / for headings, photos, video, boxes and buttons)'} />
       </fieldset>
 
       <aside className="w-side">

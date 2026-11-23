@@ -13,7 +13,7 @@ import { buildCtx, canvasHtml, docMediaIds, pageSource, type PageSnapshot } from
 import { snapshotOf } from '../pages/service.ts';
 import { validateDoc } from '../pages/blocks.ts';
 import { articles, articleRevisions } from '../../db/schema.ts';
-import { articleFile, articleSource, listingEntry, newsCtx, type ArticleSnapshot } from '../news/render.ts';
+import { articleFile, articleSource, bodyMediaIds, listingEntry, newsCtx, type ArticleSnapshot } from '../news/render.ts';
 import { loadArticle, toArticleSnapshot } from '../news/service.ts';
 import { partners, partnerRevisions, events, eventRevisions, opportunities, opportunityRevisions, seoOverrides, seoRevisions } from '../../db/schema.ts';
 import type { OverrideSnapshot } from '../seo/service.ts';
@@ -133,7 +133,7 @@ export class Publisher {
       const others = listing.filter((l) => l.slug !== x.snap.slug);
       writeFileSync(resolve(pagesDir, file), articleSource(x.snap, ctx, x.id, others));
     }
-    return live.flatMap((x) => [x.snap.heroMediaId, ...x.snap.galleryMediaIds].filter(Boolean) as string[]);
+    return live.flatMap((x) => [x.snap.heroMediaId, ...x.snap.galleryMediaIds, ...bodyMediaIds(x.snap.body)].filter(Boolean) as string[]);
   }
 
   get newsFile() { return resolve(this.cfg.siteRoot, 'src/data/news.json'); }

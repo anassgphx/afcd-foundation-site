@@ -14,10 +14,21 @@ type Form = {
   name: string; slug: string; reference: string; category: string; summary: string; location: string; years: string;
   extraFacts: { label: string; value: string }[]; context: string; approach: string; activities: string; results: string;
   hasDetailPage: boolean; photoCaption: string; heroMediaId: string | null; galleryMediaIds: string[];
+  logoMediaId: string | null; logoStyle: LogoStyle;
   pillarKeys: string[]; primaryPillarKey: string; objectiveRefs: string[]; seoTitle: string; seoDescription: string; sort: number;
   programObjectives: ProgObjective[]; outcomes: Outcome[]; activityItems: Activity[];
 };
 type ProgObjective = { title: string; text: string };
+type LogoStyle = { shape: string; fit: 'contain' | 'cover'; bg: 'none' | 'white' | 'light' | 'dark' | 'pillar'; size: 's' | 'm' | 'l' };
+const LOGO_SHAPES: [string, string][] = [['original', 'Original'], ['1:1', '1:1'], ['circle', 'Circle'], ['3:1', '3:1 wide'], ['2:1', '2:1'], ['4:3', '4:3'], ['16:9', '16:9'], ['3:4', '3:4'], ['1:3', '1:3 tall']];
+const LOGO_BGS: [LogoStyle['bg'], string][] = [['none', 'None'], ['white', 'White'], ['light', 'Light'], ['dark', 'Dark'], ['pillar', 'Pillar colour']];
+/** The logo as the website frames it (same rules as .pj-logo in input.css). */
+function LogoFrame({ m, st, tone }: { m: { url: string; large?: string; alt: string; width: number; height: number; focalX: number; focalY: number }; st: LogoStyle; tone?: string }) {
+  const ratio = st.shape === 'original' ? `${m.width} / ${m.height}` : st.shape === 'circle' ? '1 / 1' : st.shape.replace(':', ' / ');
+  const tall = st.shape === '3:4' || st.shape === '1:3' || (st.shape === 'original' && m.height > m.width);
+  return <span className={`pe-logo s-${st.size} bg-${st.bg}${st.shape === 'circle' ? ' round' : ''}${st.fit === 'cover' ? ' cover' : ''}${tall ? ' tall' : ''}`} style={{ aspectRatio: ratio, ['--pc' as string]: tone ?? '#e7e5e4' }}>
+    <img src={m.large ?? m.url} alt={m.alt} style={{ objectPosition: `${m.focalX}% ${m.focalY}%` }} /></span>;
+}
 type Outcome = { title: string; text: string; figure: string };
 type Activity = { title: string; text: string; mediaIds: string[] };
 type LinkedEvent = { id: string; title: string; startDate: string; status: string; live: boolean };
@@ -25,20 +36,20 @@ type MediaRow = { id: string; storageKey: string; originalName: string; width: n
 type Loaded = Form & {
   activityMedia?: Record<string, MediaRow>; linkedEvents?: LinkedEvent[];
   id: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; approvedRevisionId: string | null; updatedAt: string;
-  hero: MediaItem | null; gallery: MediaItem[]; problems: string[]; pillars: { key: string; isPrimary: boolean }[];
+  hero: MediaItem | null; logo: MediaItem | null; gallery: MediaItem[]; problems: string[]; pillars: { key: string; isPrimary: boolean }[];
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] };
 };
 
 const EMPTY: Form = {
   name: '', slug: '', reference: '', category: '', summary: '', location: '', years: '', extraFacts: [], context: '', approach: '', activities: '', results: '',
-  hasDetailPage: true, photoCaption: '', heroMediaId: null, galleryMediaIds: [], pillarKeys: [], primaryPillarKey: '', objectiveRefs: [], seoTitle: '', seoDescription: '', sort: 100,
+  hasDetailPage: true, photoCaption: '', heroMediaId: null, galleryMediaIds: [], logoMediaId: null, logoStyle: { shape: 'original', fit: 'contain', bg: 'white', size: 'm' }, pillarKeys: [], primaryPillarKey: '', objectiveRefs: [], seoTitle: '', seoDescription: '', sort: 100,
   programObjectives: [], outcomes: [], activityItems: [],
 };
 const LIST_MAX = 12;
 // Same order as the project page: Summary · Program objectives · Outcomes · Program activities · Related events
 const TABS = ['Summary', 'Objectives', 'Outcomes', 'Activities', 'Events', 'Relationships', 'Gallery', 'SEO', 'Translations'] as const;
 const TAB_FIELDS: Record<string, string[]> = {
-  Summary: ['name', 'slug', 'reference', 'category', 'summary', 'location', 'years', 'extraFacts', 'sort', 'context', 'approach', 'heroMediaId', 'photoCaption'],
+  Summary: ['name', 'slug', 'reference', 'category', 'summary', 'location', 'years', 'extraFacts', 'sort', 'context', 'approach', 'heroMediaId', 'photoCaption', 'logoMediaId', 'logoStyle'],
   Objectives: ['programObjectives'],
   Outcomes: ['outcomes', 'results'],
   Activities: ['activityItems', 'activities'],
@@ -51,6 +62,7 @@ const TAB_FIELDS: Record<string, string[]> = {
 const slugify = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[’']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
 
 export function ProjectEditor({ id }: { id: string }) {
+  const site = useSite();
   const isNew = id === 'new';
   const can = useCan(); const me = useMe(); const toast = useToast();
   const [data, setData] = useState<Loaded | null>(null);
@@ -60,9 +72,8 @@ export function ProjectEditor({ id }: { id: string }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Summary');
   const [errors, setErrors] = useState<Record<string, string>>({}); const [banner, setBanner] = useState<{ kind: string; text: ReactNode } | null>(null);
   const [busy, setBusy] = useState(''); const [dirty, setDirty] = useState(false); const [slugTouched, setSlugTouched] = useState(!isNew);
-  const [dialog, setDialog] = useState<null | 'publish' | 'unpublish' | 'changes' | 'approve' | 'preview' | 'hero' | 'gallery' | 'activity'>(null);
+  const [dialog, setDialog] = useState<null | 'publish' | 'unpublish' | 'changes' | 'approve' | 'preview' | 'hero' | 'gallery' | 'activity' | 'logo'>(null);
   const [actPick, setActPick] = useState(-1);   // which activity is choosing a photo
-  const site = useSite();
   const [fixing, setFixing] = useState<MediaItem | null>(null);   // a photo whose alt text / rights are being completed here
   const [previewUrl, setPreviewUrl] = useState(''); const [comment, setComment] = useState('');
   const [changed, setChanged] = useState<Set<string>>(new Set());   // fields edited since the last save (tab dots)
@@ -79,7 +90,7 @@ export function ProjectEditor({ id }: { id: string }) {
     setData(d);
     setForm({ ...pick(d), pillarKeys: d.pillars.map((x) => x.key), primaryPillarKey: primary, galleryMediaIds: d.gallery.map((g) => g.id) });
     const act = Object.values(d.activityMedia ?? {}).map((m) => ({ ...m, url: `/studio/media-file/${m.storageKey}-480.webp` }) as unknown as MediaItem);
-    setMedia(Object.fromEntries([d.hero, ...d.gallery, ...act].filter(Boolean).map((m) => [m!.id, m!])));
+    setMedia(Object.fromEntries([d.hero, d.logo, ...d.gallery, ...act].filter(Boolean).map((m) => [m!.id, m!])));
     setDirty(false); setChanged(new Set());
   }, [id, isNew]);
   useEffect(() => { load().catch((e) => setBanner({ kind: 'n-bad', text: e.message })); }, [load]);
@@ -303,7 +314,7 @@ export function ProjectEditor({ id }: { id: string }) {
               <PeSection title="Details" desc="Shown in the facts bar on the project page.">
                 <div className="row">
                   <Field name="location" label="Location" optional err={errors.location}><input className="input" value={form.location} onChange={(e) => set('location', e.target.value)} maxLength={120} disabled={ro} placeholder="e.g. Ait Ourir" /></Field>
-                  <Field name="years" label="Years" optional hint={yearsOk ? 'A year, or a range like 2020 – 2021.' : undefined} warn={yearsOk ? undefined : 'This doesn’t look like a year or a range (e.g. 2020 – 2021).'} err={errors.years}>
+                  <Field name="years" label="Duration" optional hint={yearsOk ? 'Shown as “Duration” on the project page: a year, or a range like 2020 – 2021.' : undefined} warn={yearsOk ? undefined : 'This doesn’t look like a year or a range (e.g. 2020 – 2021).'} err={errors.years}>
                     <input className="input" value={form.years} onChange={(e) => set('years', e.target.value)} maxLength={60} disabled={ro} placeholder="e.g. 2020 – 2021" inputMode="numeric" />
                   </Field>
                 </div>
@@ -345,12 +356,48 @@ export function ProjectEditor({ id }: { id: string }) {
                 ))}
               </PeSection>
 
-              <PeSection title="Hero photo" desc="Shown full width at the top of the project page.">
-              <Field group name="heroMediaId" label="Hero photo" optional hint="Shown full width at the top of the project page. Needs alt text and confirmed rights before publishing." err={errors.heroMediaId}>
-                  {form.heroMediaId && media[form.heroMediaId] ? (
-                    <div className="thumbs"><div className="thumb" style={{ width: 260 }}><img src={media[form.heroMediaId].url} alt={media[form.heroMediaId].alt} />{!ro && <button type="button" aria-label="Remove hero photo" onClick={() => set('heroMediaId', null)}>×</button>}</div></div>
-                  ) : <div className="muted">No hero photo. A grey placeholder is shown.</div>}
-                  {!ro && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('hero')}><Icon n="image" />{form.heroMediaId ? 'Change' : 'Choose'} hero photo</button>}
+              <PeSection title="Project logo" desc="Shown in the project summary, next to its title. Choose how it is framed.">
+                <Field group name="logoMediaId" label="Logo" optional hint="Upload it to the Media Library first (PNG or SVG-like images with a transparent background work best). Needs alt text and confirmed rights." err={errors.logoMediaId}>
+                  {(() => {
+                    const m = form.logoMediaId ? media[form.logoMediaId] : null; const st = form.logoStyle;
+                    const setSt = (p: Partial<LogoStyle>) => set('logoStyle', { ...st, ...p });
+                    const tone = pillars.find((x) => x.key === (form.primaryPillarKey || form.pillarKeys[0]))?.colour;
+                    return <div className="pe-logo-ed">
+                      <div className="pe-logo-stage">{m ? <LogoFrame m={m} st={st} tone={tone} /> : <span className="muted">No logo</span>}</div>
+                      {!ro && <div className="pe-logo-ctl">
+                        <div className="pe-logo-row"><button type="button" className="btn btn-sm" onClick={() => setDialog('logo')}><Icon n="image" />{m ? 'Change logo' : 'Choose logo'}</button>
+                          {m && <button type="button" className="btn btn-ghost btn-sm btn-danger" onClick={() => set('logoMediaId', null)}>Remove</button>}</div>
+                        {m && <>
+                          <span className="pe-logo-k">Shape</span>
+                          <div className="seg-btns" role="group" aria-label="Logo shape">{LOGO_SHAPES.map(([k, l]) => <button key={k} type="button" className={st.shape === k ? 'on' : ''} aria-pressed={st.shape === k} onClick={() => setSt({ shape: k })}>{l}</button>)}</div>
+                          <span className="pe-logo-k">Fit</span>
+                          <div className="seg-btns" role="group" aria-label="Logo fit">
+                            <button type="button" className={st.fit === 'contain' ? 'on' : ''} aria-pressed={st.fit === 'contain'} onClick={() => setSt({ fit: 'contain' })} title="The whole logo, with space around it">Whole logo</button>
+                            <button type="button" className={st.fit === 'cover' ? 'on' : ''} aria-pressed={st.fit === 'cover'} onClick={() => setSt({ fit: 'cover' })} title="Fill the shape and crop around the focal point set in the Media Library">Fill and crop</button></div>
+                          <span className="pe-logo-k">Background</span>
+                          <div className="seg-btns" role="group" aria-label="Logo background">{LOGO_BGS.map(([k, l]) => <button key={k} type="button" className={st.bg === k ? 'on' : ''} aria-pressed={st.bg === k} onClick={() => setSt({ bg: k })}>{l}</button>)}</div>
+                          <span className="pe-logo-k">Size</span>
+                          <div className="seg-btns" role="group" aria-label="Logo size">{([['s', 'Small'], ['m', 'Medium'], ['l', 'Large']] as const).map(([k, l]) => <button key={k} type="button" className={st.size === k ? 'on' : ''} aria-pressed={st.size === k} onClick={() => setSt({ size: k })}>{l}</button>)}</div>
+                          {st.fit === 'cover' && <small className="muted">The crop keeps the focal point chosen for this image in the Media Library.</small>}
+                        </>}
+                      </div>}
+                    </div>;
+                  })()}
+                </Field>
+              </PeSection>
+
+              <PeSection title="Cover photos" desc="Up to three photos at the top of the project page: one large, two beside it.">
+              <Field group name="heroMediaId" label="Cover photos" optional hint="The first photo is the large one. Photos 2 and 3 are also the first two of the Gallery tab. Each needs alt text and confirmed rights before publishing." err={errors.heroMediaId}>
+                  {(() => {
+                    const cover = [form.heroMediaId, ...form.galleryMediaIds.slice(0, 2)].filter(Boolean) as string[];
+                    const removeAt = (k: number) => { if (k === 0) { const [next, ...rest] = form.galleryMediaIds; set('heroMediaId', next ?? null); set('galleryMediaIds', rest); } else set('galleryMediaIds', form.galleryMediaIds.filter((_, x) => x !== k - 1)); };
+                    const makeMain = (k: number) => { const g = [...form.galleryMediaIds]; const old = form.heroMediaId!; const neu = g[k - 1]; g[k - 1] = old; set('heroMediaId', neu); set('galleryMediaIds', g); };
+                    return <>{cover.length ? <div className="pe-cover">{cover.map((mid, k) => media[mid] && <div key={mid} className={`thumb${k === 0 ? ' main' : ''}`}><img src={media[mid].url} alt={media[mid].alt} />
+                      <span className="pe-cover-n">{k === 0 ? 'Main' : k + 1}</span>
+                      {!ro && <><button type="button" aria-label={`Remove cover photo ${k + 1}`} onClick={() => removeAt(k)}>×</button>{k > 0 && <span className="mv"><button type="button" aria-label="Make this the main photo" title="Make this the large photo" onClick={() => makeMain(k)}>★</button></span>}</>}</div>)}</div>
+                      : <div className="muted">No cover photo. A grey placeholder is shown.</div>}
+                    {!ro && cover.length < 3 && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('hero')}><Icon n="image" />{cover.length ? `Add photo${cover.length === 2 ? '' : 's'} (${3 - cover.length} more)` : 'Choose up to 3 photos'}</button>}</>;
+                  })()}
                 </Field>
                 <Field name="photoCaption" label="Placeholder caption" optional hint="Shown on the grey placeholder while there is no hero photo."><input className="input" value={form.photoCaption} onChange={(e) => set('photoCaption', e.target.value)} maxLength={160} disabled={ro} /></Field>
               </PeSection>
@@ -441,7 +488,7 @@ export function ProjectEditor({ id }: { id: string }) {
             </div>}
 
             {tab === 'Gallery' && <div className="form">
-              <Field group name="galleryMediaIds" label="Gallery" optional hint="The first three photos appear in the gallery section of the page.">
+              <Field group name="galleryMediaIds" label="Gallery" optional hint="The first two photos are also cover photos 2 and 3 at the top of the page.">
                 <div className="thumbs">{form.galleryMediaIds.map((mid, i) => media[mid] && (
                   <div key={mid} className="thumb"><img src={media[mid].url} alt={media[mid].alt} />
                     {!ro && <><button type="button" aria-label="Remove from gallery" onClick={() => set('galleryMediaIds', form.galleryMediaIds.filter((x) => x !== mid))}>×</button>
@@ -506,7 +553,15 @@ export function ProjectEditor({ id }: { id: string }) {
         </aside>
       </div>
 
-      {dialog === 'hero' && <MediaPicker onClose={() => setDialog(null)} onPick={(items) => { const m = items[0]; if (m) { setMedia((x) => ({ ...x, [m.id]: m })); set('heroMediaId', m.id); } setDialog(null); }} />}
+      {dialog === 'logo' && <MediaPicker onClose={() => setDialog(null)} onPick={(items) => { const m = items[0]; if (m) { setMedia((x) => ({ ...x, [m.id]: m })); set('logoMediaId', m.id); } setDialog(null); }} />}
+      {dialog === 'hero' && <MediaPicker multiple onClose={() => setDialog(null)} onPick={(items) => {
+        // fill the cover: the main photo first, then the free places among the first two gallery photos
+        setMedia((x) => ({ ...x, ...Object.fromEntries(items.map((m) => [m.id, m])) }));
+        const ids = items.map((m) => m.id).filter((id) => id !== form.heroMediaId && !form.galleryMediaIds.slice(0, 2).includes(id));
+        const hero = form.heroMediaId ?? ids.shift() ?? null;
+        const front = form.galleryMediaIds.slice(0, 2); const add = ids.slice(0, 2 - front.length);
+        const gallery = [...front, ...add, ...form.galleryMediaIds.slice(2).filter((id) => !add.includes(id))].slice(0, 12);
+        set('heroMediaId', hero); set('galleryMediaIds', gallery); setDialog(null); }} />}
       {dialog === 'gallery' && <MediaPicker multiple onClose={() => setDialog(null)} onPick={(items) => { setMedia((x) => ({ ...x, ...Object.fromEntries(items.map((m) => [m.id, m])) })); set('galleryMediaIds', [...new Set([...form.galleryMediaIds, ...items.map((m) => m.id)])].slice(0, 12)); setDialog(null); }} />}
 
       {dialog === 'activity' && actPick >= 0 && <MediaPicker multiple onClose={() => { setDialog(null); setActPick(-1); }} onPick={(items) => {
@@ -539,7 +594,7 @@ export function ProjectEditor({ id }: { id: string }) {
 const LABELS: Record<string, string> = {
   name: 'Project name', summary: 'One-line summary', category: 'Category', reference: 'Internal reference', location: 'Location', years: 'Years', extraFacts: 'Extra facts',
   slug: 'Page address', sort: 'Order in listings', context: 'Context', approach: 'Approach', activities: 'Activities', results: 'Results', pillarKeys: 'Strategic pillars',
-  primaryPillarKey: 'Primary pillar', objectiveRefs: 'Strategic objectives', heroMediaId: 'Hero photo', galleryMediaIds: 'Gallery', photoCaption: 'Placeholder caption',
+  primaryPillarKey: 'Primary pillar', objectiveRefs: 'Strategic objectives', heroMediaId: 'Cover photos', logoMediaId: 'Project logo', logoStyle: 'Logo framing', galleryMediaIds: 'Gallery', photoCaption: 'Placeholder caption',
   seoTitle: 'SEO title', seoDescription: 'Meta description',
   programObjectives: 'Program objectives', outcomes: 'Outcomes', activityItems: 'Program activities',
 };

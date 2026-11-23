@@ -5,7 +5,9 @@ import { resolve } from 'node:path';
 import { splitSections } from '../../../../../lib/page-fields.mjs';
 
 export type FieldType = 'text' | 'split' | 'rich' | 'link' | 'tail' | 'image' | 'stories';
-export type Story = { quote: string; name: string; role: string; caption: string; sample?: boolean };
+/** A story's photo: chosen in the Media Library ({ mediaId }), or the photo written in the page (src under assets/). */
+export type StoryImage = { mediaId: string } | { src: string; alt: string; w: number; h: number; fx: number; fy: number };
+export type Story = { quote: string; name: string; role: string; caption: string; image?: StoryImage; sample?: boolean };
 export type FieldDef = { key: string; type: FieldType; section: string; sectionId: string | null; label: string; default: unknown; tag: string };
 
 const decode = (s: string) => s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ');
@@ -44,11 +46,14 @@ const FIELD_LABEL: Record<string, string> = {
 function readStories(inner: string): Story[] {
   return (inner.match(/<article class="tm-slide[\s\S]*?<\/article>/g) ?? []).map((a) => {
     const cap = a.match(/<span class="ph-cap tm-cap">([\s\S]*?)<\/span><\/div>/)?.[1] ?? '';
+    const img = a.match(/<img class="tm-img"[^>]*>/)?.[0];
+    const pos = img ? (attr(img, 'style').match(/object-position:\s*([\d.]+)%\s+([\d.]+)%/) ?? []) : [];
     return {
       quote: strip(a.match(/<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/)?.[1] ?? ''),
       name: strip(a.match(/<span class="block font-medium">([^<]*)<\/span>/)?.[1] ?? ''),
       role: strip(a.match(/<span class="block text-white\/65">([^<]*)<\/span>/)?.[1] ?? ''),
       caption: strip(cap.replace(/^<b>Photo<\/b>\s*·\s*/, '')),
+      ...(img ? { image: { src: attr(img, 'src'), alt: decode(attr(img, 'alt')), w: Number(attr(img, 'width')), h: Number(attr(img, 'height')), fx: Number(pos[1] ?? 50), fy: Number(pos[2] ?? 50) } } : {}),
       ...(a.includes('<span class="tm-sample">') ? { sample: true } : {}),
     };
   });

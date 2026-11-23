@@ -1,5 +1,7 @@
 // Homepage editing: edited values for the data-sf fields of src/pages/index.html, with review, revisions and publishing.
 // Only edited fields are stored; every other field keeps the text written in the page.
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { and, desc, eq, inArray, max } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
@@ -31,7 +33,16 @@ const EMAIL = /^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$/i;
 const PHONE = /^\+?[0-9][0-9 ]{5,19}$/;
 /** Participant stories: at least one (the carousel is never left empty), at most STORIES_MAX. */
 export const STORIES_MAX = 8;
-const storySchema = z.object({ quote: plain(300, 1), name: plain(80, 1), role: plain(120), caption: plain(80), sample: z.boolean().optional() }).strict();
+// a story's photo: a Media Library item, or the page's own photo kept as it is (an existing file under assets/img/)
+const storyImage = z.union([
+  z.object({ mediaId: z.string().uuid() }).strict(),
+  z.object({ src: z.string().regex(/^assets\/img\/[a-z0-9-]+\.(webp|jpe?g|png|avif)$/, 'Choose the photo from the Media Library.'), alt: plain(300, 1), w: z.number().int().positive(), h: z.number().int().positive(), fx: z.number().min(0).max(100), fy: z.number().min(0).max(100) }).strict(),
+]);
+const storySchema = z.object({ quote: plain(300, 1), name: plain(80, 1), role: plain(120), caption: plain(80), image: storyImage.optional(), sample: z.boolean().optional() }).strict();
+/** Every Media Library photo a set of values uses: image fields ({ mediaId }) and story photos. */
+export const valueMediaIds = (values: Record<string, unknown>) => Object.values(values).flatMap((v) =>
+  v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId]
+  : Array.isArray(v) ? v.flatMap((s) => (s && typeof s === 'object' && s.image && typeof s.image === 'object' && 'mediaId' in s.image ? [String(s.image.mediaId)] : [])) : []);
 const schemaFor = (f: FieldDef): z.ZodTypeAny => {
   const isNumber = f.key.endsWith('.value');
   const head = headPart(f.key);
@@ -86,10 +97,13 @@ export async function contentProblems(db: DB, cfg: Config, values: Record<string
   // edited participant stories go live only as real stories: no sample left in the list
   for (const f of fields.filter((x) => x.type === 'stories')) {
     const list = values[f.key]; if (!Array.isArray(list)) continue;
-    list.forEach((s: { sample?: boolean; quote?: string }, i) => { if (s?.sample || /lorem|ipsum/i.test(s?.quote ?? '')) out.push(`Story ${i + 1} is still a sample. Replace its text or delete it.`); });
+    list.forEach((s: { sample?: boolean; quote?: string; image?: { src?: string } }, i) => {
+      if (s?.sample || /lorem|ipsum/i.test(s?.quote ?? '')) out.push(`Story ${i + 1} is still a sample. Replace its text or delete it.`);
+      if (s?.image?.src && !existsSync(resolve(cfg.siteRoot, s.image.src))) out.push(`Story ${i + 1}’s photo is no longer on the website. Choose one from the Media Library.`);
+    });
   }
   if (gone.length) out.push(`These edited fields are no longer on the ${page.noun}: ${gone.join(', ')}. Reset them.`);
-  const ids = [...new Set([...Object.values(values).flatMap((v) => (v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId] : [])), ...blockIds])];
+  const ids = [...new Set([...valueMediaIds(values), ...blockIds])];
   if (ids.length) {
     const rows = await db.select().from(media).where(inArray(media.id, ids));
     for (const id of ids) {
@@ -115,7 +129,7 @@ export async function saveContent(db: DB, cfg: Config, actor: NonNullable<Actor>
     if (body.layout === null) layout = null;
     else { const v = validateLayout(cfg.siteRoot, file, body.layout); layout = v.layout; problems = v.problems; }
   }
-  const ids = [...Object.values(values).flatMap((v) => (v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId] : [])), ...(layout ? docMediaIds({ blocks: layoutBlocks(layout) }) : [])];
+  const ids = [...valueMediaIds(values), ...(layout ? docMediaIds({ blocks: layoutBlocks(layout) }) : [])];
   if (ids.length && (await db.select({ id: media.id }).from(media).where(inArray(media.id, [...new Set(ids)]))).length !== new Set(ids).size) throw new AppError(422, 'A chosen photo no longer exists in the media library.');
   if (cur?.status === 'in_review') throw new AppError(409, `The ${page.noun} changes are in review. Withdraw them before editing.`);
   if (cur && body.baseUpdatedAt !== undefined && body.baseUpdatedAt !== null && new Date(body.baseUpdatedAt).getTime() !== cur.updatedAt.getTime()) {

@@ -18,8 +18,8 @@ import { loadArticle, toArticleSnapshot } from '../news/service.ts';
 import { partners, partnerRevisions, events, eventRevisions, opportunities, opportunityRevisions, seoOverrides, seoRevisions } from '../../db/schema.ts';
 import type { OverrideSnapshot } from '../seo/service.ts';
 import { pageContents, pageContentRevisions } from '../../db/schema.ts';
-import { HOME, TEXT_PAGES } from '../home/service.ts';
-import { exportLayout } from '../home/render.ts';
+import { HOME, TEXT_PAGES, valueMediaIds } from '../home/service.ts';
+import { exportLayout, resolveFieldValues } from '../home/render.ts';
 import { currentLayout, layoutBlocks, type LayoutEntry } from '../home/layout.ts';
 import { publicRef } from '../media/service.ts';
 import { detailSource, listingSource, oppCtx, oppState, opportunityFile, type LiveOpp } from '../opportunities/render.ts';
@@ -272,17 +272,7 @@ export class Publisher {
 
   /** Resolves stored values for build.mjs: images become { src, srcset, w, h, alt, fx, fy }. Returns [values, media ids]. */
   private async resolveFields(values: Record<string, unknown>): Promise<[Record<string, unknown>, string[]]> {
-    const ids = Object.values(values).flatMap((v) => (v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId] : []));
-    const rows = ids.length ? await this.db.select().from(media).where(inArray(media.id, ids)) : [];
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(values)) {
-      if (v && typeof v === 'object' && 'mediaId' in v) {
-        const m = rows.find((r) => r.id === (v as { mediaId: string }).mediaId); if (!m) continue;
-        const ref = publicRef(m, 'assets/media/');
-        out[k] = { src: ref.src, srcset: ref.srcset, w: ref.w, h: ref.h, alt: m.alt, fx: m.focalX ?? 50, fy: m.focalY ?? 50 };
-      } else out[k] = v;
-    }
-    return [out, ids];
+    return [await resolveFieldValues(this.db, values), valueMediaIds(values)];
   }
 
   /** page-fields.json (read by build.mjs) exists only while edited text of a Studio-edited page (TEXT_PAGES) is live.

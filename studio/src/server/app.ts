@@ -522,7 +522,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     api.get(prefix, perm('page.read'), async (c) => {
       const fields = readFields(cfg.siteRoot, file);
       const content = await HM.loadContent(db, file);
-      const ids = Object.values(content?.values ?? {}).flatMap((v) => (v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId] : []));
+      const ids = HM.valueMediaIds(content?.values ?? {});   // image fields and participant-story photos
       const mediaRows = ids.length ? await db.select().from(t.media).where(inArray(t.media.id, ids)) : [];
       // a page without a layout lists its sections that have fields, in page order (selection only)
       const sections = page.layout ? siteSections(cfg.siteRoot, file) : fieldSections(cfg.siteRoot, file);

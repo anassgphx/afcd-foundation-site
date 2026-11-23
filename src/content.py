@@ -702,13 +702,13 @@ def pillars():
   </div>
 </section>
 
-<section id="objectives" class="pl-sec border-t border-ink-light py-14 lg:py-16">
+<section id="objectives" class="pl-sec py-8 lg:py-10">
   <div class="wrap">{sec_head('02 / Objectives', 'What this pillar <span class="sh-soft">aims to achieve.</span>', (f'{len(pobj)} objective' + ('s' if len(pobj) != 1 else '')) if pobj else 'Coming soon', desc='What AFCD works toward under this pillar.')}
     {pobj_html}
   </div>
 </section>
 
-<section id="how-we-work" class="pl-sec border-t border-ink-light py-14 lg:py-16">
+<section id="how-we-work" class="pl-sec py-8 lg:py-10">
   <span id="approach" class="pl-anchor" aria-hidden="true"></span><span id="what-we-do" class="pl-anchor" aria-hidden="true"></span>
   <div class="wrap">{sec_head('03 / How We Work', 'How this pillar <span class="sh-soft">comes to life.</span>', 'Approach · Activities', desc='The steps we follow and the activities we run under this pillar.')}
     <ol class="hw-steps mt-8 lg:mt-10">{hw_steps}</ol>
@@ -717,7 +717,7 @@ def pillars():
   </div>
 </section>
 
-<section id="projects" class="pl-sec border-t border-ink-light py-14 lg:py-16">
+<section id="projects" class="pl-sec py-8 lg:py-10">
   <div class="wrap">{sec_head('04 / Projects', f'Projects in <span class="sh-soft">{PILLAR_SHORT[slug].lower()}.</span>', ('All projects', f'projects.html?pillar={slug}#by-pillar'), desc=f'Programmes AFCD has run under the {t} pillar.')}
     <ul class="nw-grid mt-8 lg:mt-10">{proj_html}
     </ul>
@@ -826,13 +826,23 @@ def project_details():
             objs = [(ref, text) for ref, text, _desc, _l in OBJECTIVES if ref in d['objectives']]
         else:
             objs = [(ref, text) for ref, text, _desc, links in OBJECTIVES if any(sl == d['slug'] for _n, sl in links)]
-        hero = media_img(d.get('hero'), 'aspect-[16/10] w-full rounded-[28px] md:aspect-[21/9]', eager=True) or ph(d['photo'], 'aspect-[16/10] w-full rounded-[28px] md:aspect-[21/9]')
+        # cover: up to three photos (main photo + first two gallery photos from Studio), else the main photo or a placeholder
+        cover = [m for m in (d.get('cover') or []) if m][:3]
+        if len(cover) > 1:
+            hero = f'<div class="pj-cover n{len(cover)}">' + ''.join(f'<div class="pj-cover-i">{media_img(m, "h-full w-full", "(min-width:1024px) 60vw, 100vw" if i == 0 else "(min-width:1024px) 30vw, 50vw", eager=i == 0)}</div>' for i, m in enumerate(cover)) + '</div>'
+        else:
+            hero = media_img(d.get('hero'), 'aspect-[16/10] w-full rounded-[28px] md:aspect-[21/9]', eager=True) or ph(d['photo'], 'aspect-[16/10] w-full rounded-[28px] md:aspect-[21/9]')
         gal = d.get('gallery') or []
         def g(i, cls):
             return media_img(gal[i], cls + ' w-full rounded-[24px]', '(min-width:1024px) 50vw, 100vw') if i < len(gal) else ph(d['name'] + ' · gallery', cls + ' w-full rounded-[24px]')
         rev = d.get('revision') or ''
         dot = f'<span class="pj-dot" style="--c:{tone}"></span>'
-        facts = ''.join(f'<div class="pj-fact"><dt>{k}</dt><dd>{dot if k == "Pillar" else ""}{v}</dd></div>' for k, v in d['facts'])
+        # the bar on the cover: project, partner(s) and duration, all from published data (partners list their projects in Studio)
+        pnames = [n for n, x in PARTNER_DETAILS.items() if any((pr or {}).get('file') == file for pr in (x.get('projects') or []))]
+        years = next((v for k, v in d['facts'] if k in ('Years', 'Duration')), '')
+        bar = [(f'Project', d['name']), ('Partners' if len(pnames) > 1 else 'Partner', ', '.join(pnames)), ('Duration', years)]
+        bar = [(k, v) for k, v in bar if v]
+        facts = ''.join(f'<div class="pj-fact"><dt>{k}</dt><dd>{dot if k == "Project" else ""}{v}</dd></div>' for k, v in bar)
         n_rows = len(d['rows'])
         steps = ''.join(f'''
         <li class="pj-step{' is-result' if k == 'Results' else ''}">
@@ -889,7 +899,7 @@ def project_details():
   <div class="wrap">
     <div class="pj-hero">
       {hero}
-      <dl class="pj-facts" style="--f:{len(d['facts'])}">{facts}</dl>
+      <dl class="pj-facts" style="--f:{len(bar)}">{facts}</dl>
     </div>
   </div>
 </section>
@@ -900,7 +910,7 @@ def project_details():
   </div></div>
 </nav>
 
-<section id="about" class="pl-sec py-14 lg:py-16">
+<section id="about" class="pl-sec py-8 lg:py-10">
   <div class="wrap">
     <div class="pjs">
       <div class="pjs-side">
@@ -914,25 +924,25 @@ def project_details():
   </div>
 </section>
 
-<section id="objectives" class="pl-sec border-t border-ink-light py-14 lg:py-16">
+<section id="objectives" class="pl-sec py-8 lg:py-10">
   <div class="wrap">{sec_head('02 / Program Objectives', 'What the programme <span class="sh-soft">sets out to do.</span>', (f'{len(pobj)} objective' + ('s' if len(pobj) != 1 else '')) if pobj else 'Coming soon', desc='The objectives this programme works towards.')}
     {obj_block}
   </div>
 </section>
 
-<section id="outcomes" class="pl-sec border-t border-ink-light py-14 lg:py-16">
+<section id="outcomes" class="pl-sec py-8 lg:py-10">
   <div class="wrap">{sec_head('03 / Outcomes', 'What changed <span class="sh-soft">for people.</span>', f'{len(outs)} outcomes' if outs else ('Results' if rowmap.get('Results') else 'Coming soon'), desc='Results and changes the programme has achieved so far.')}
     {out_block}
   </div>
 </section>
 
-<section id="activities" class="pl-sec border-t border-ink-light py-14 lg:py-16">
+<section id="activities" class="pl-sec py-8 lg:py-10">
   <div class="wrap">{sec_head('04 / Program Activities', 'The programme <span class="sh-soft">in action.</span>', (f'{len(acts)} activit' + ('ies' if len(acts) != 1 else 'y')) if d.get('activities') else 'Photos to come', desc='What participants do, each activity with its own photos.')}
     {act_block}
   </div>
 </section>
 
-<section id="events" class="pl-sec border-t border-ink-light py-14 lg:py-16">
+<section id="events" class="pl-sec py-8 lg:py-10">
   <div class="wrap">{sec_head('05 / Events', 'Related <span class="sh-soft">events.</span>', f'{n_ev} linked' if pevents else 'None yet', ('All events', 'events.html'))}
     {f'<ul class="ev-list mt-8 lg:mt-10">{"".join(event_row(x, compact=True) for x in pevents)}</ul>' if pevents else empty('No events linked to this project yet.', 'Upcoming sessions will appear here as soon as they are announced.')}
   </div>

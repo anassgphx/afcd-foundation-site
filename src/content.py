@@ -994,6 +994,24 @@ def project_details():
 
 
 
+
+# ---------------------------------------------------------------- Homepage events list (from EVENTS)
+def home_events():
+    """Writes the homepage's upcoming-events list (up to 3, real events only) between the home-events markers."""
+    idx = Path(__file__).parent / 'pages' / 'index.html'
+    if not idx.exists():
+        return
+    html = idx.read_text(encoding='utf-8')
+    a, b = '<!-- home-events:start -->', '<!-- home-events:end -->'
+    if a not in html or b not in html:
+        return
+    up = [e for e in EVENTS if e.get('upcoming') and not ev_sample(e)][:3]
+    inner = (f'<ul class="ev-list mt-8 lg:mt-10">{"".join(event_row(e) for e in up)}\n    </ul>' if up else
+             '<div class="po-empty mt-8 lg:mt-10"><span class="po-empty-ico" aria-hidden="true"></span><span><span class="block text-[17px] font-semibold tracking-[-0.015em]">New events will be announced here.</span><span class="mt-1 block text-[14.5px] text-ink-dark"><a class="link-arrow" href="events.html">See all events <span class="arr" aria-hidden="true">↗</span></a></span></span></div>')
+    new = html[:html.index(a)] + f'{a}\n    {inner}\n    {b}' + html[html.index(b) + len(b):]
+    if new != html:
+        idx.write_text(new, encoding='utf-8')
+
 # ---------------------------------------------------------------- Homepage project cards (from the project module)
 def home_projects():
     """Writes the featured project cards' data into src/pages/index.html (between the home-projects markers)."""
@@ -1285,12 +1303,6 @@ EVENTS = [
                    '<li><strong>National Competition:</strong> showcasing and rewarding top projects.</li></ul>'
                    '<p>The exact date, time and venue will be announced here. Register your interest to hear first.</p>'),
          seoDescription='Artemis Morocco Roadshow, December 2026: the first public event of Moonshot: Artemis Edition, AFCD Foundation’s space and STEM initiative for Moroccan youth.'),
-    dict(slug='leadership-workshop', project='project-leadership-lab.html', day='12', mon='Dec', year='2026', iso='2026-12-12', kind='Workshop', pillar='youth-empowerment', title='Lorem ipsum leadership workshop', where='Ait Ourir', time='10:00 – 13:00', desc='Consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus posuere velit aliquet.', upcoming=True),
-    dict(slug='community-clean-up', project='project-eco-citizen.html', day='20', mon='Jan', year='2027', iso='2027-01-20', kind='Community day', pillar='green-thumbs', title='Dolor sit amet community clean-up', where='Al Haouz', time='09:00 – 16:00', desc='Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.', upcoming=True),
-    dict(slug='training-of-trainers', project=None, day='08', mon='Feb', year='2027', iso='2027-02-08', kind='Training', pillar='women-empowerment', title='Amet consectetur training of trainers', where='Marrakech', time='14:00 – 18:00', desc='Maecenas faucibus mollis interdum. Nullam quis risus eget urna mollis ornare vel eu leo.', upcoming=True),
-    dict(slug='digital-skills-webinar', project=None, day='27', mon='Feb', year='2027', iso='2027-02-27', kind='Webinar', pillar='digital-empowerment', title='Adipiscing elit digital skills webinar', where='Online', time='18:00 – 19:30', desc='Aenean lacinia bibendum nulla sed consectetur. Curabitur blandit tempus porttitor.', upcoming=True),
-    dict(slug='bootcamp', project='project-leadership-lab.html', day='18', mon='Oct', year='2026', iso='2026-10-18', kind='Bootcamp', pillar='youth-empowerment', title='Sed posuere bootcamp', where='Marrakech', time='3 days', desc='Etiam porta sem malesuada magna mollis euismod.', upcoming=False),
-    dict(slug='environmental-screening', project='project-youth-green-generation.html', day='05', mon='Jun', year='2026', iso='2026-06-05', kind='Festival', pillar='green-thumbs', title='Nulla vitae environmental screening', where='Al Haouz', time='Evening', desc='Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh.', upcoming=False),
 ]
 # Studio loader (owned by AFCD Studio): when src/data/events.json exists it replaces EVENTS with real events
 # (same keys as above plus sample=False, studio=True, revision, endIso, online, bodyHtml, agenda, audience, poster,
@@ -1961,5 +1973,5 @@ def studio_contact_fields(s):
 
 
 if __name__ == '__main__':
-    about(); pillars(); projects(); project_details(); home_projects(); news(); news_articles(); events(); partners(); involved(); contact()
+    about(); pillars(); projects(); project_details(); home_projects(); home_events(); news(); news_articles(); events(); partners(); involved(); contact()
     print('pages written to', OUT)

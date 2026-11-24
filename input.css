@@ -1972,6 +1972,12 @@ html.lbx-open { overflow: hidden; }
 .tb-super-pulse::after { display: none; }
 .tb-super { padding: 0; box-shadow: none; }
 .tb-super::before { display: none; }
+/* Top bar: Publications button next to Open calls (light pill; on phones it stands alone, Open calls stays hidden) */
+.tb-pub { display: inline-flex; align-items: center; gap: 6px; height: 27px; padding: 0 12px 0 10px; border: 1px solid rgba(0,0,0,.14); border-radius: 9999px; background: #fff; color: #0B0B0B; font-size: 12px; font-weight: 600; white-space: nowrap; transition: border-color .2s ease, transform .25s ease; }
+.tb-pub svg { width: 14px; height: 14px; }
+.tb-pub:hover { border-color: #000; transform: translateY(-1px); }
+.tb-pub:focus-visible { outline: 2px solid #000; outline-offset: 2px; }
+@media (max-width: 767px) { .tb-mid .tb-super { display: none; } }
 
 /* Project cover: 3 / 4 / 5 places and an optional 1:1 poster; tiles open the photo viewer */
 button.pj-cover-i { display: block; width: 100%; padding: 0; border: 0; cursor: zoom-in; }

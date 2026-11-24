@@ -41,7 +41,7 @@ function warmScreens() {   // fetch every screen in the background after the fir
 
 function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
-  const load = () => api<Me>('/me').then((m) => { setCsrf(m.csrf); setMe(m); }).catch(() => setMe(null));
+  const load = () => api<Me>('/me').then((m) => { setCsrf(m.csrf, m.user.id); setMe(m); }).catch(() => setMe(null));
   useEffect(() => { load(); }, []);
   if (me === undefined) return <div className="login"><div className="skeleton" style={{ width: 160 }} /></div>;
   if (me === null) return <Login onDone={load} />;

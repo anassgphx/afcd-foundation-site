@@ -59,7 +59,7 @@ export async function runAudit(db: DB, cfg: Config, actor: Actor) {
   }
   for (const e of existing) if (e.status !== 'resolved' && !found.has(key(e.code, e.file))) await db.update(seoIssues).set({ status: 'resolved', resolvedAt: now }).where(eq(seoIssues.id, e.id));
   const pagesOut = a.pages.map((p) => ({ file: p.file, url: p.url, title: p.title, description: p.description, words: p.words, inSitemap: p.inSitemap, robots: p.robots, canonical: p.canonical, canonicalOk: p.canonical === p.url, lang: p.lang,
-    inbound: p.inbound.length, inboundFrom: p.inbound.slice(0, 12), linksOut: p.linksOut.length, schema: p.schema.types, schemaErrors: p.schema.errors, h1: p.h1[0] ?? '', owner: own.get(p.file) ?? { kind: 'template', label: 'Template page' },
+    inbound: p.inbound.length, inboundFrom: p.inbound.slice(0, 12), linksOut: p.linksOut.length, schema: p.schema.types, schemaErrors: p.schema.errors, h1: p.h1[0] ?? '', owner: own.get(p.file) ?? { kind: 'template', label: 'Template page' }, checks: p.checks ?? [],
     score: Math.max(0, 100 - a.findings.filter((f) => f.file === p.file).reduce((n, f) => n + ({ critical: 40, high: 20, medium: 8, low: 3, info: 0 } as const)[f.severity], 0)) }));
   const summary = { kind: a.kind, at: a.at, production: a.production, scores: a.scores, counts: a.counts, pages: pagesOut, redirects: a.redirects ?? [], score: a.scores.overall };
   const [row] = await db.insert(seoAudits).values({ result: summary as unknown as Record<string, unknown>, createdBy: actor?.id ?? null }).returning();

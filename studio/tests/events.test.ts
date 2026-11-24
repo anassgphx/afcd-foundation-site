@@ -63,6 +63,14 @@ describe('events', () => {
     expect((await admin.post(`/events/${e.id}/unpublish`)).status).toBe(200);
     expect(existsSync(join(h.siteRoot, 'event-climate-youth-workshop.html'))).toBe(false);
     expect(existsSync(join(h.siteRoot, 'src/data/events.json'))).toBe(false);   // no live events: the site's own list returns
+    // a page of an event that is no longer live (e.g. left behind by a restore) is removed when no event is live either
+    writeFileSync(join(h.siteRoot, 'src/pages/event-old-roadshow.html'), 'stale'); writeFileSync(join(h.siteRoot, 'event-old-roadshow.html'), 'stale');
+    expect((await ed.post(`/events/${e.id}/transition`, { action: 'submit' })).status).toBe(200);
+    expect((await rev.post(`/events/${e.id}/transition`, { action: 'approve' })).status).toBe(200);
+    expect((await admin.post(`/events/${e.id}/publish`)).status).toBe(200);
+    writeFileSync(join(h.siteRoot, 'src/pages/event-old-roadshow.html'), 'stale');
+    expect((await admin.post(`/events/${e.id}/unpublish`)).status).toBe(200);
+    expect(existsSync(join(h.siteRoot, 'src/pages/event-old-roadshow.html'))).toBe(false);
     const [row] = await h.db.select().from(events).where(eq(events.id, e.id));
     expect(row.status).toBe('draft');
   });

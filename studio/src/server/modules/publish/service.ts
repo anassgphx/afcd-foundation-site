@@ -252,11 +252,14 @@ export class Publisher {
    *  Event pages that no longer belong to the list are removed (the generator recreates the right ones). Returns poster media ids. */
   private async writeEvents(file: string, override?: { eventId: string; revisionId: string | null }, projectOverride?: { projectId: string; revisionId: string | null }) {
     const live = await this.liveEvents(override);
-    if (!live.length) { if (existsSync(file)) rmSync(file); return [] as string[]; }
-    const list = await eventEntries(this.db, live, { projectOverride });
-    mkdirSync(resolve(file, '..'), { recursive: true });
-    const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
-    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), events: list }, null, 2) + '\n'); renameSync(tmp, file);
+    const list = live.length ? await eventEntries(this.db, live, { projectOverride }) : [];
+    if (!list.length) { if (existsSync(file)) rmSync(file); }
+    else {
+      mkdirSync(resolve(file, '..'), { recursive: true });
+      const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
+      writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), events: list }, null, 2) + '\n'); renameSync(tmp, file);
+    }
+    // pages of events that are no longer live go too, also when none is left (else the last unpublished event's page lingers)
     const keep = new Set(list.map((e) => eventFile(e.slug)));
     for (const dir of [this.cfg.siteRoot, resolve(this.cfg.siteRoot, 'src/pages')]) {
       if (existsSync(dir)) for (const f of readdirSync(dir)) if (/^event-[a-z0-9-]+\.html$/.test(f) && !keep.has(f)) rmSync(resolve(dir, f));

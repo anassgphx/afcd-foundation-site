@@ -141,81 +141,84 @@ export function MasterOverview({ a, issues, history }: { a: AuditV2; issues: Iss
   const verdicts = (insp ?? []).reduce((m, i) => m.set(i.verdict ?? 'UNKNOWN', (m.get(i.verdict ?? 'UNKNOWN') ?? 0) + 1), new Map<string, number>());
   const gscState = !s ? 'loading' : !s.setup.configured ? 'setup' : !s.connection ? 'off' : s.connection.status !== 'connected' ? 'error' : !s.connection.property ? 'property' : !hasData ? 'syncing' : 'ok';
   const gscMsg: Record<string, [string, string]> = {
-    setup: ['Google is not set up on this Studio', 'An administrator adds the Google OAuth client to Studio’s settings, then connects Search Console.'],
+    setup: ['Google is not set up on this Studio', 'A Google OAuth client has to be added to studio/.env once. Open Integrations for the steps.'],
     off: ['Search Console is not connected', 'Connect it in Integrations to see clicks, impressions and positions from Google.'],
     error: ['Search Console needs to be reconnected', 'Google stopped accepting Studio’s access. Reconnect it in Integrations.'],
     property: ['Choose a Search Console property', `The Google account is connected; pick the ${site.host} property in Integrations.`],
     syncing: ['Waiting for the first import', 'Studio is importing Search Console data in the background.'],
   };
 
+  // Google numbers appear only from a real connection; until then one panel says what is missing (no empty charts)
+  const google = gscState === 'ok';
+  const workQueue = <section className="card"><div className="card-h"><h2>Work queue</h2><Link to="/studio/seo/issues" className="btn btn-sm btn-ghost">All issues</Link></div>
+    {groups.length === 0 && !opps.length ? <div className="db-clear"><Icon n="check" /><div><b>Nothing waiting</b><small>No open issues above “info”. The next build audit checks again.</small></div></div>
+      : <ul className="db-list">
+        {groups.slice(0, 6).map((g) => <li key={g[0].code}><Link to={`/studio/seo/issues?code=${g[0].code}`} className="db-row"><SevBadge s={g[0].severity} />
+          <span className="min-w-0"><b>{g[0].rule?.title ?? g[0].code}</b><small>{g.length === 1 ? short(g[0].file) : `${g.length} pages`} · {g[0].rule?.kind === 'heuristic' ? 'recommendation' : 'standard check'}</small></span><Icon n="chev" width={14} height={14} /></Link></li>)}
+        {opps.map((p) => <li key={p.key}><a className="db-row" href="#" onClick={(e) => { e.preventDefault(); navigate(`/studio/seo/search-console?view=pages&page=${encodeURIComponent(p.key)}`); }}><span className="sev" style={{ ['--c' as string]: '#2563eb' }}>Opportunity</span>
+          <span className="min-w-0"><b>Low click-through on {short(p.key)}</b><small>{num(p.impressions)} impressions, {pct(p.ctr)} CTR · Search Console · review its title and description</small></span><Icon n="chev" width={14} height={14} /></a></li>)}
+      </ul>}
+  </section>;
+  const health = <section className="card"><div className="card-h"><h2>Technical health over time</h2></div>
+    <div className="sp-body">{trend.length > 1 ? <><LineChart label="Technical health score per audit" series={[{ name: 'Technical health', values: trend.map((h) => ({ x: h.at, y: h.scores!.technical })) }]} fmt={(v) => String(Math.round(v))} xLabel={(x) => new Date(x).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} />
+      <p className="muted sp-note">Studio build audits ({trend.length}). Higher is better; it is Studio’s own measure.</p></>
+      : <p className="muted sp-empty">Run the build audit a few times to see a trend.</p>}</div></section>;
+
   return <div className="stack sp" style={{ gap: 16 }}>
-    {hasData && <RangeBar rs={rs} showFilters={false} />}
-    {/* KPI strip: internal checks and Google data side by side, each labelled with its source */}
+    {google && <RangeBar rs={rs} showFilters={false} />}
+    {/* KPI strip: Studio's own checks, then Google's data, each labelled with its source */}
     <div className="sp-kpis">
-      <div className="sp-kgroup"><span className="sp-src">Studio build audit · {ago(a.at)}</span>
+      <div className="sp-kgroup"><span className="sp-src">Studio build audit · {ago(a.at)}{a.production === false ? ' · preview build, noindex on purpose' : ''} · not Google’s view</span>
         <div className="sp-krow">
           <Kpi label="Technical health" value={a.scores ? String(a.scores.technical) : '—'} color={a.scores ? tone(a.scores.technical) : undefined} hint="Studio’s score, not Google’s" />
-          <Kpi label="Indexable pages" value={`${indexable}`} hint={`of ${a.pages.length} in the build`} />
+          <Kpi label="Indexable pages" value={`${indexable}`} hint={`of ${a.pages.length} in the build`} to="/studio/seo/indexability" />
           <Kpi label="Critical errors" value={String(a.counts?.critical ?? 0)} color={(a.counts?.critical ?? 0) ? SEV.critical.c : undefined} to="/studio/seo/issues" />
           <Kpi label="Warnings" value={String(warnings)} color={warnings ? SEV.medium.c : undefined} hint="high + medium" to="/studio/seo/issues" />
-          <Kpi label="Broken links" value={String(broken)} hint="pages with broken links" />
-          <Kpi label="Orphan pages" value={String(orphans)} />
+          <Kpi label="Broken links" value={String(broken)} hint="pages with broken links" to="/studio/seo/links" />
+          <Kpi label="Orphan pages" value={String(orphans)} hint="no page links to them" to="/studio/seo/links" />
         </div></div>
-      <div className="sp-kgroup"><span className="sp-src">Google Search Console{s?.coverage?.importedAt ? ` · imported ${ago(s.coverage.importedAt)}` : ''}</span>
-        {gscState === 'ok' && cur ? <div className="sp-krow">
+      <div className="sp-kgroup sp-kwide"><span className="sp-src">Google Search Console{s?.coverage?.importedAt ? ` · imported ${ago(s.coverage.importedAt)}` : ''}</span>
+        {google && cur ? <div className="sp-krow">
           <Kpi label="Clicks" value={num(cur.clicks)} delta={<Delta cur={cur.clicks} prev={prev?.clicks} kind="count" />} />
           <Kpi label="Impressions" value={num(cur.impressions)} delta={<Delta cur={cur.impressions} prev={prev?.impressions} kind="count" />} />
           <Kpi label="Average CTR" value={pct(cur.ctr)} delta={<Delta cur={cur.ctr} prev={prev?.ctr} kind="ratio" />} />
           <Kpi label="Avg position" value={posf(cur.position)} hint="Google’s average, not a live rank" delta={<Delta cur={cur.position} prev={prev?.position} kind="position" />} />
-        </div> : gscState === 'loading' || (gscState === 'ok' && !ov) ? <div className="sp-krow"><Kpi label="Loading" value="…" /></div>
-          : <Link to="/studio/seo/integrations" className="sp-kempty"><Icon n="globe" width={18} height={18} /><span><b>{gscMsg[gscState][0]}</b><small>{gscMsg[gscState][1]}</small></span><Icon n="chev" width={14} height={14} /></Link>}
+        </div> : gscState === 'loading' || (google && !ov) ? <div className="sp-krow"><Kpi label="Loading" value="…" /></div>
+          : <Link to="/studio/seo/integrations" className="sp-kempty"><Icon n="globe" width={18} height={18} /><span><b>{gscMsg[gscState][0]}</b><small>{gscMsg[gscState][1]} Clicks, impressions, winners and losers, and indexing then appear here.</small></span><Icon n="chev" width={14} height={14} /></Link>}
       </div>
-      <div className="sp-kgroup sp-ksmall"><span className="sp-src">Google Analytics 4</span>
-        <div className="sp-kempty is-static"><span><b>Not connected</b><small>Organic sessions and key events appear once GA4 is added. They are never mixed with Search Console clicks.</small></span></div></div>
     </div>
 
-    <div className="sp-grid2">
-      <section className="card"><div className="card-h"><h2>Search performance</h2>{hasData && <Link to="/studio/seo/search-console" className="btn btn-sm btn-ghost">Search Console</Link>}</div>
-        <div className="sp-body">{hasData && ov?.current ? <><LineChart label="Clicks per day" series={series('clicks')} fmt={(v) => num(Math.round(v))} />
+    <div className="sp-grid2">{workQueue}{health}</div>
+
+    {google && <div className="sp-grid2">
+      <section className="card"><div className="card-h"><h2>Search performance</h2><Link to="/studio/seo/search-console" className="btn btn-sm btn-ghost">Search Console</Link></div>
+        <div className="sp-body">{ov?.current ? <><LineChart label="Clicks per day" series={series('clicks')} fmt={(v) => num(Math.round(v))} />
           <p className="muted sp-note">Clicks per day from Google Search Console ({ov.current.days} days). Impressions are on the Search Console page, on their own scale.</p></>
-          : <p className="muted sp-empty">{gscState === 'ok' ? 'Loading…' : 'Appears when Search Console data has been imported. Nothing is estimated.'}</p>}</div></section>
-      <section className="card"><div className="card-h"><h2>Technical health over time</h2></div>
-        <div className="sp-body">{trend.length > 1 ? <><LineChart label="Technical health score per audit" series={[{ name: 'Technical health', values: trend.map((h) => ({ x: h.at, y: h.scores!.technical })) }]} fmt={(v) => String(Math.round(v))} xLabel={(x) => new Date(x).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} />
-          <p className="muted sp-note">Studio build audits ({trend.length}). Higher is better; it is Studio’s own measure.</p></>
-          : <p className="muted sp-empty">Run the build audit a few times to see a trend.</p>}</div></section>
-    </div>
-
-    <div className="sp-grid2">
+          : <p className="muted sp-empty">Loading…</p>}</div></section>
       <section className="card"><div className="card-h"><h2>Winning and losing</h2>
         <div className="seg" role="tablist">{(['pages', 'queries'] as const).map((t) => <button key={t} role="tab" aria-selected={mvTab === t} className={mvTab === t ? 'on' : ''} onClick={() => setMvTab(t)}>{t === 'pages' ? 'Pages' : 'Queries'}</button>)}</div></div>
-        {!hasData || !mv ? <p className="muted sp-empty">{hasData ? 'Loading…' : 'Needs Search Console data for this period and the one before it.'}</p> : <>
+        {!mv ? <p className="muted sp-empty">Loading…</p> : <>
           <div className="sp-movers"><MoverList title="Gaining clicks" rows={mv[mvTab].winners} kind={mvTab} /><MoverList title="Losing clicks" rows={mv[mvTab].losers} kind={mvTab} /></div>
           <p className="muted sp-note" style={{ padding: '0 16px 14px' }}>{mv[mvTab].method}</p></>}
       </section>
-      <section className="card"><div className="card-h"><h2>Work queue</h2><Link to="/studio/seo/issues" className="btn btn-sm btn-ghost">All issues</Link></div>
-        {groups.length === 0 && !opps.length ? <div className="db-clear"><Icon n="check" /><div><b>Nothing waiting</b><small>No open issues above “info”.</small></div></div>
-          : <ul className="db-list">
-            {groups.slice(0, 6).map((g) => <li key={g[0].code}><Link to={`/studio/seo/issues?code=${g[0].code}`} className="db-row"><SevBadge s={g[0].severity} />
-              <span className="min-w-0"><b>{g[0].rule?.title ?? g[0].code}</b><small>{g.length} page{g.length === 1 ? '' : 's'} · build audit · {g[0].rule?.kind === 'heuristic' ? 'recommendation' : 'standard check'}</small></span><Icon n="chev" width={14} height={14} /></Link></li>)}
-            {opps.map((p) => <li key={p.key}><a className="db-row" href="#" onClick={(e) => { e.preventDefault(); navigate(`/studio/seo/search-console?view=pages&page=${encodeURIComponent(p.key)}`); }}><span className="sev" style={{ ['--c' as string]: '#2563eb' }}>Opportunity</span>
-              <span className="min-w-0"><b>Low click-through on {short(p.key)}</b><small>{num(p.impressions)} impressions, {pct(p.ctr)} CTR · Search Console · review its title and description</small></span><Icon n="chev" width={14} height={14} /></a></li>)}
-          </ul>}
-      </section>
-    </div>
+    </div>}
 
-    <div className="sp-grid4">
-      <section className="card sp-mini"><h3>Indexing <small>URL Inspection</small></h3>
-        {!insp?.length ? <p className="muted">{gscState === 'ok' ? 'No addresses inspected yet. Inspect pages in Search Console → Index status.' : 'Needs Search Console.'}</p>
+    <div className={`sp-grid4${google ? '' : ' is-3'}`}>
+      {google && <section className="card sp-mini"><h3>Indexing <small>URL Inspection</small></h3>
+        {!insp?.length ? <p className="muted">No addresses inspected yet. Inspect pages in Search Console → Index status.</p>
           : <ul className="sp-facts">{[...verdicts].map(([v, c]) => <li key={v}><span>{v === 'PASS' ? 'Indexed (last known)' : v === 'NEUTRAL' ? 'Not indexed' : v === 'FAIL' ? 'Problem reported' : v}</span><b>{c}</b></li>)}</ul>}
-        <small className="muted">Google’s indexed version, not a live test.</small></section>
+        <small className="muted">Google’s indexed version, not a live test.</small></section>}
       <section className="card sp-mini"><h3>Structured data</h3>
         <ul className="sp-facts"><li><span>Studio markup</span><b>{schemaLive === null ? '—' : schemaLive ? 'Published' : 'Not published'}</b></li>
           <li><span>Pages with markup errors</span><b>{a.pages.filter((p) => p.schemaErrors.length).length}</b></li></ul>
         <Link to="/studio/seo/schema" className="btn btn-sm btn-ghost">Schema studio</Link></section>
-      <section className="card sp-mini"><h3>Core Web Vitals</h3><p className="muted">Not connected. Field data (CrUX) and lab tests (PageSpeed) will appear here once added; nothing is estimated.</p></section>
+      <section className="card sp-mini"><h3>Redirects</h3>
+        <ul className="sp-facts"><li><span>Redirect pages in the build</span><b>{a.redirects?.length ?? 0}</b></li>
+          <li><span>Links that go through one</span><b>{new Set(open.filter((i) => i.code === 'link.via-redirect').map((i) => i.file)).size}</b></li></ul>
+        <Link to="/studio/seo/redirects" className="btn btn-sm btn-ghost">Redirects</Link></section>
       <section className="card sp-mini"><h3>Background jobs</h3>
-        {!jobs?.length ? <p className="muted">No jobs yet.</p> : <ul className="sp-facts">{jobs.slice(0, 4).map((j) => <li key={j.id}><span>{j.kind === 'gsc_sync' ? 'Search Console sync' : j.kind} · {ago(j.createdAt)}</span><b className={`sp-job is-${j.status}`}>{j.status === 'running' ? `${j.progress}%` : j.status}</b></li>)}</ul>}
-        <Link to="/studio/seo/integrations" className="btn btn-sm btn-ghost">Integrations</Link></section>
+        {!jobs?.length ? <p className="muted">None yet. Search Console imports run here once Google is connected.</p> : <ul className="sp-facts">{jobs.slice(0, 4).map((j) => <li key={j.id}><span>{j.kind === 'gsc_sync' ? 'Search Console sync' : j.kind} · {ago(j.createdAt)}</span><b className={`sp-job is-${j.status}`}>{j.status === 'running' ? `${j.progress}%` : j.status}</b></li>)}</ul>}
+        {!!jobs?.length && <Link to="/studio/seo/integrations" className="btn btn-sm btn-ghost">Sync history</Link>}</section>
     </div>
   </div>;
 }
@@ -247,7 +250,7 @@ export function SearchConsoleView() {
   if (!s) return <Loading />;
   if (!hasData) return <section className="card"><div className="dt-empty"><Icon n="globe" /><b>{!s.setup.configured ? 'Google is not set up on this Studio' : !s.connection ? 'Search Console is not connected' : !s.connection.property ? 'Choose a Search Console property' : 'No Search Console data imported yet'}</b>
     <small>Clicks, impressions, CTR and average position come only from Google’s API. {s.connection?.property ? 'The first import runs in the background; check its progress in Integrations.' : ''}</small>
-    <Link to="/studio/seo/integrations" className="btn btn-sm" style={{ marginTop: 8 }}>Open Integrations</Link></div></section>;
+    <Link to="/studio/seo/integrations" className="btn btn-sm" style={{ marginTop: 8 }}>{!s.setup.configured ? 'See the setup steps' : 'Open Integrations'}</Link></div></section>;
   const VIEWS: [string, string][] = [['performance', 'Performance'], ['queries', 'Queries'], ['pages', 'Pages'], ['breakdown', 'Countries & devices'], ['movers', 'Winners & losers'], ['index', 'Index status']];
   const filtered = (rows ?? []).filter((r) => !q || r.key.toLowerCase().includes(q.toLowerCase()));
   const cols = (kind: 'query' | 'page') => [
@@ -335,6 +338,38 @@ function IndexStatus({ usage }: { usage?: { used: number; limit: number } }) {
   </section>;
 }
 
+// ---------------------------------------------------------------- Google setup guide (shown until studio/.env has the OAuth client)
+/** One-time server setup, step by step. Only someone with access to AFCD's Google account and the Studio server can do
+ *  it; Studio shows no Google numbers until a real connection exists. */
+export function GoogleSetup({ setup, host }: { setup: GStatus['setup']; host: string }) {
+  const toast = useToast();
+  const copy = (t: string) => navigator.clipboard?.writeText(t).then(() => toast('Copied'), () => toast('Copy it by hand', true));
+  const keyCmd = `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`;
+  const Code = ({ t }: { t: string }) => <span className="sp-code"><code className="mono">{t}</code><button type="button" className="btn btn-sm btn-ghost" onClick={() => copy(t)}>Copy</button></span>;
+  return <div className="stack sp-setup" style={{ gap: 10 }}>
+    <p style={{ margin: 0 }}>Google is set up once, by someone with access to AFCD’s Google account and to the server Studio runs on. Until then nothing is connected, and Studio never shows Google numbers it does not have.</p>
+    {setup.missing.length > 0 && <p className="muted" style={{ margin: 0 }}>Missing in <span className="mono">studio/.env</span>: <span className="mono">{setup.missing.join(', ')}</span></p>}
+    {setup.keyError && <div className="notice n-bad"><div>{setup.keyError}</div></div>}
+    <ol className="seo-steps">
+      <li><b>Open Google Cloud.</b> Go to <span className="mono">console.cloud.google.com</span> with AFCD’s Google account and create a project (for example “AFCD Studio”), or choose AFCD’s existing one.</li>
+      <li><b>Turn on the API.</b> APIs &amp; Services → Library → <b>Google Search Console API</b> → Enable.</li>
+      <li><b>Set up the consent screen</b> (Google Auth Platform → Branding, Audience, Data access). App name “AFCD Studio”, support email <span className="mono">contact@afcdteam.com</span>.
+        Audience: <b>Internal</b> if afcdteam.com is a Google Workspace domain (only AFCD accounts can connect, no Google review); otherwise <b>External</b>, and add the Google account that will connect as a test user.
+        Scopes: <span className="mono">openid</span>, <span className="mono">email</span> and <span className="mono">…/auth/webmasters.readonly</span> (view Search Console data).
+        <small className="muted sp-setup-note">With External in “Testing”, Google ends the connection after 7 days and it has to be reconnected; publishing the app avoids that, and Google may ask to verify it first.</small></li>
+      <li><b>Create the OAuth client.</b> Clients (or Credentials) → Create client → type <b>Web application</b>, name “AFCD Studio”. Under <b>Authorized redirect URIs</b> add exactly:
+        <Code t={setup.redirectUri} />
+        <small className="muted sp-setup-note">This is this Studio’s address. When Studio runs at another address (for example on the server), add that address’s <span className="mono">/studio/api/seo/google/callback</span> too and set <span className="mono">STUDIO_ORIGIN</span>.</small></li>
+      <li><b>Make an encryption key</b> on the server (it encrypts Google’s access tokens; keep it secret and unchanged):
+        <Code t={keyCmd} /></li>
+      <li><b>Add three lines to <span className="mono">studio/.env</span></b> (never commit this file), then restart Studio:
+        <pre className="sp-pre mono">{'GOOGLE_CLIENT_ID=…apps.googleusercontent.com\nGOOGLE_CLIENT_SECRET=…\nSTUDIO_ENCRYPTION_KEY=…'}</pre></li>
+      <li><b>Check Search Console access.</b> The Google account that connects must be an owner or full user of the {host} property in <span className="mono">search.google.com/search-console</span> (a Domain property, or the URL-prefix property <span className="mono">https://{host}/</span>). Add and verify the property there first if it does not exist.</li>
+      <li><b>Connect.</b> Come back here: an administrator clicks “Connect with Google”, then chooses the {host} property. The first import starts on its own.</li>
+    </ol>
+  </div>;
+}
+
 // ---------------------------------------------------------------- Integrations (Google connection center)
 export function Integrations() {
   const site = useSite();
@@ -357,15 +392,7 @@ export function Integrations() {
       <div className="card-h"><div className="sp-int-h"><span className="sp-logo">G</span><div><h2 style={{ margin: 0, fontSize: 15 }}>Google Search Console</h2><small className="muted">Clicks, impressions, CTR, average position and URL Inspection · read-only access</small></div></div>
         <span className="dt-state"><span className="dot" style={{ ['--c' as string]: st[1] }} />{st[0]}</span></div>
       <div className="sp-int-b">
-        {!s.setup.configured ? <div className="stack" style={{ gap: 8 }}>
-          <p style={{ margin: 0 }}>An administrator sets up Google once on the server. Nothing is connected until then, and Studio never shows Google numbers without a real connection.</p>
-          <ol className="seo-steps">
-            <li>In AFCD’s Google Cloud project, enable the <b>Google Search Console API</b> and create an OAuth client of type <b>Web application</b>.</li>
-            <li>Add this authorized redirect URI: <code className="mono">{s.setup.redirectUri}</code></li>
-            <li>Put the client ID and secret, and a new encryption key, in <span className="mono">studio/.env</span>{s.setup.missing.length ? <> (missing: <span className="mono">{s.setup.missing.join(', ')}</span>)</> : null}, then restart Studio. See <span className="mono">studio/.env.example</span>.</li>
-          </ol>
-          {s.setup.keyError && <div className="notice n-bad"><div>{s.setup.keyError}</div></div>}
-        </div> : !c ? <div className="between" style={{ gap: 12, flexWrap: 'wrap' }}>
+        {!s.setup.configured ? <GoogleSetup setup={s.setup} host={site.host} /> : !c ? <div className="between" style={{ gap: 12, flexWrap: 'wrap' }}>
           <p style={{ margin: 0, maxWidth: 620 }}>Connect with a Google account that has access to the {site.host} property. Studio asks only for read-only Search Console access and your email address; it stores the access encrypted on the server.</p>
           {can('seo.publish') ? <button className="btn btn-primary" disabled={!!busy} onClick={() => act('connect', async () => { const r = await post<{ url: string }>('/seo/google/connect'); location.href = r.url; })}><Icon n="globe" />Connect with Google</button>
             : <span className="muted">An administrator connects Google.</span>}

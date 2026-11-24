@@ -141,6 +141,19 @@ if STUDIO_PILLARS:   # Studio pillars bring their own page file (<key>.html for 
     PILLAR_FILE = {p['key']: p['file'] for p in STUDIO_PILLARS}
 
 
+def _dims(m):
+    """ width/height attributes for a media item that has them (keeps layout from jumping while it loads)."""
+    return f' width="{m["w"]}" height="{m["h"]}"' if m.get('w') and m.get('h') else ''
+
+
+def fit_title(t, section=''):
+    """'<t> · <section> · AFCD Foundation', shortened step by step (section, then site name) to stay within 70 characters,
+    the length search results show without cutting. The page's own title is never cut."""
+    tries = ([f'{t} · {section} · AFCD Foundation'] if section else []) + [f'{t} · AFCD Foundation', t]
+    plain = lambda x: re.sub(r'&(amp|lt|gt|quot|#39);', '_', x)   # count &amp; as one character
+    return next((x for x in tries if len(plain(x)) <= 70), t)
+
+
 def page(name, title, description, active, body, parent=None):
     for slug, f in PILLAR_FILE.items():
         body = body.replace(f'pillars.html#{slug}', f)
@@ -1047,7 +1060,10 @@ def pillars():
 </div>
 ''' + cta_band(pg.get('ctaTitle') or 'Find your place in our work.', pg.get('ctaText') or 'Volunteer, join a programme when calls open, or partner with us on this pillar.',
                   ('Get Involved', 'get-involved.html'), ('Partner with us', 'get-involved.html#partner'))
-        page(PILLAR_FILE[slug], f'{t} · AFCD Foundation', f'{t}: {d}', 'pillars', body, parent=('Our Pillars', 'pillars.html'))
+        # meta description: the summary when it fits (~160 characters show in results), else the pillar's shorter intro
+        intro = PILLAR_INTRO.get(slug) or ''
+        desc = f'{t}: {d}' if len(f'{t}: {d}') <= 160 or not intro else f'{t}: {intro}'
+        page(PILLAR_FILE[slug], f'{t} · AFCD Foundation', desc, 'pillars', body, parent=('Our Pillars', 'pillars.html'))
 
     # ---- hub
     cards = ''.join(f'''
@@ -1214,7 +1230,7 @@ def project_details():
         cells = ''.join(
             (f'<button type="button" class="pj-cover-i{" is-poster" if isp else ""}" data-lb-open="{cpos[id(m)]}" aria-label="{"Open the poster" if isp else f"Open photo {cpos[id(m)] + 1} of {len(real)}"}">{h}' + ('<span class="pj-cover-tag">Poster</span>' if isp else '') + '</button>')
             if m else f'<div class="pj-cover-i">{h}</div>' for h, m, isp in tiles)
-        items = ''.join(f'<li><img src="{full(m)}" alt="{_esc(m.get("alt") or "")}" loading="lazy" decoding="async"></li>' for m in real)
+        items = ''.join(f'<li><img src="{full(m)}" alt="{_esc(m.get("alt") or "")}" width="{m.get("w", "")}" height="{m.get("h", "")}" loading="lazy" decoding="async"></li>' for m in real)
         hero = (f'<div class="pj-cover {"is-poster-cover" if poster else f"n{n}"}"' + (f' data-lb data-lb-title="{_esc(d["name"])}"' if real else '') + f'>{cells}'
                 + (f'<ul hidden data-lb-items>{items}</ul>' if real else '') + '</div>')
         gal = d.get('gallery') or []
@@ -1255,7 +1271,7 @@ def project_details():
         sec = lambda key, label: secs.append((key, label)) or f'{len(secs):02d}'
 
         # 01 summary: the lede, short blocks with Read more, and the sticky "at a glance" panel
-        blocks = ''.join(f'<div class="pjs-block"><h3 class="pjs-k">{k}</h3>{_read_more(v)}</div>' for k, v in summ_rows)
+        blocks = ''.join(f'<div class="pjs-block"><h2 class="pjs-k">{k}</h2>{_read_more(v)}</div>' for k, v in summ_rows)
         # the panel: status (from the duration) and dates, then each fact with its icon, label above the value
         status = _status(years)
         GI = {'partner': '<path d="M5.5 8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM1.5 15.5c0-2.5 1.8-4.5 4-4.5s4 2 4 4.5M12 8.5a2.2 2.2 0 1 0 0-4.4M11.5 11c2 0 3.5 1.9 3.5 4.5"/>',
@@ -1269,7 +1285,7 @@ def project_details():
         plogos = [(n, partner_logo(n)) for n in pnames if partner_logo(n)]
         if plogos:   # the partners' own logos (Studio → Partners), shown with the names
             glance[0] = ('partner', glance[0][1], '<span class="pjg-plogos">' + ''.join(
-                f'<span class="pjg-plogo {logo_shape(lg)}"><img src="{lg["src"]}" alt="{lg.get("alt") or n}" loading="lazy" decoding="async"></span>' for n, lg in plogos) + '</span>' + glance[0][2])
+                f'<span class="pjg-plogo {logo_shape(lg)}"><img src="{lg["src"]}" alt="{lg.get("alt") or n}"{_dims(lg)} loading="lazy" decoding="async"></span>' for n, lg in plogos) + '</span>' + glance[0][2])
         glance_rows = ''.join(f'<div class="pjg-row">{gico(i)}<div class="min-w-0"><dt>{k}</dt><dd>{v}</dd></div></div>' for i, k, v in glance if v)
         status_html = ((f'<div class="pjg-status">' + (f'<span class="pjg-badge is-{status.lower()}"><span class="pjg-pulse" aria-hidden="true"></span>{status}</span>' if status else '')
                         + (f'<span class="pjg-dates"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 7h12M5.5 1.5v3M10.5 1.5v3"/></svg>{years}</span>' if years else '') + '</div>')
@@ -1723,8 +1739,8 @@ def news():
         </a>
       </li>'''
 
-    # Placeholders (clearly marked) only fill the grid up to six cards; real stories replace them.
-    fill = NEWS_PLACEHOLDERS[:max(0, 6 - len(rest))]
+    # The grid shows real stories only (no lorem-ipsum fillers: they read as unfinished and are flagged by the SEO audit).
+    fill = []
     cards = ''.join(card(x) for x in rest) + ''.join(card(placeholder=p) for p in fill)
     present = [x['type'] for x in rest] + [p[1] for p in fill]
     types = ['All stories'] + [t for t in ['Call for applications', 'Participant story', 'Programme news', 'Event recap'] if t in present]
@@ -1799,10 +1815,8 @@ def news_articles():
     all_items = items
     for i, it in enumerate(items):
         body = it.get('bodyHtml') or ''
-        sample = not body.strip()
-        if sample:
-            body = ('<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus, posuere velit aliquet.</p>'
-                    '<p>Sed posuere consectetur est at lobortis. Vestibulum id ligula porta felis euismod semper. Cras mattis consectetur purus sit amet fermentum.</p>')
+        # no body yet: the page shows the excerpt and (for blog stories) the link to the original, never filler text
+        sample = not body.strip() and not (it.get('external') and it.get('url'))
         hero = (media_img(it['hero'], 'aspect-[16/9] w-full rounded-[28px]', '(min-width:1280px) 1200px, 100vw', eager=True) if it.get('hero')
                 else ph(it['title'], 'aspect-[16/9] w-full rounded-[28px]', '#E2E2E2'))
         pills = it.get('pillars') or []
@@ -1854,9 +1868,9 @@ def news_articles():
     </aside>
 
     <div class="na-body">
-      {'<p class="na-sample">Sample article text: the full story will replace this.</p>' if sample else ''}
+      {'<p class="na-sample">The full story will be added here.</p>' if sample else ''}
       <p class="na-lead">{it.get('excerpt', '')}</p>
-      <div class="na-prose">{body}</div>
+      {f'<div class="na-prose">{body}</div>' if body.strip() else ''}
       {f'<div class="na-callout"><p class="text-[15px] font-semibold">First published on the AFCD blog</p><p class="mt-1 text-[14px] leading-relaxed text-ink-dark">Read the full original post on afcdfoundation.org.</p><a href="{it["url"]}" class="btn-dark btn-cta mt-4 min-h-[44px] px-5 text-[13.5px]">Read the original {ARR}</a></div>' if it.get('external') and it.get('url') else ''}
       {ghtml}
       {f'<div class="na-related-proj"><p class="label text-ink-mid">Related projects</p><ul class="mt-3 grid gap-2">{phtml}</ul></div>' if phtml else ''}
@@ -1873,7 +1887,7 @@ def news_articles():
 </section>""" if rel else ''}
 ''' + cta_band('Have a story to share?', 'Alumni, volunteers and partners: tell us about the change you’ve seen.',
                ('Contact us', 'contact.html'), ('Get Involved', 'get-involved.html'))
-        page(it['file'], f"{it.get('seoTitle') or it['title']} · News · AFCD Foundation", (it.get('seoDescription') or it.get('excerpt', ''))[:155], 'news', body_html, parent=('News &amp; Stories', 'news.html'))
+        page(it['file'], fit_title(it.get('seoTitle') or it['title'], 'News'), (it.get('seoDescription') or it.get('excerpt', ''))[:155], 'news', body_html, parent=('News &amp; Stories', 'news.html'))
 
 
 # ---------------------------------------------------------------- Events

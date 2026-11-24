@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { eq } from 'drizzle-orm';
@@ -199,5 +199,35 @@ describe('media library', () => {
     expect((await mm.post(`/media/trash/${b.id}/restore`, {})).body).toMatchObject({ notRestored: 0 });
     const ids = (await ed.get(`/projects/${p.id}`)).body.activityItems[0].mediaIds;   // both back (order may differ)
     expect(ids).toHaveLength(2); expect(ids).toEqual(expect.arrayContaining([a.id, b.id]));
+  });
+
+  it('crops without losing the original, re-crops and resets', async () => {
+    const ed = await client(h.app, 'ed@afcd.test'), ro = await client(h.app, 'ro@afcd.test');
+    const a = (await send(ed, '/media', await gradient('up'), 'test-crop.png')).body;   // 640×480
+    await ed.raw('PATCH', `/media/${a.id}`, { alt: 'Test gradient', credit: 'Test', focalX: 25, focalY: 50 });
+    const file = () => sharp(readFileSync(join(h.cfg.mediaDir, `${a.storageKey}-480.webp`))).metadata();
+
+    const r = await ed.post(`/media/${a.id}/crop`, { crop: { x: 0, y: 80, w: 320, h: 320 } });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ width: 320, height: 320, crop: { x: 0, y: 80, w: 320, h: 320 }, alt: 'Test gradient', credit: 'Test', focalX: 50, focalY: 50 });   // same spot of the photo, now in the middle
+    expect(await file()).toMatchObject({ width: 320, height: 320 });
+    // the original is untouched, and is what the crop tool shows
+    const src = await h.app.request(`/studio/api/media/${a.id}/source`, { headers: { Cookie: ed.cookie } });
+    expect(src.status).toBe(200);
+    expect(src.headers.get('content-disposition')).toBeNull();
+    expect((await sharp(Buffer.from(await src.arrayBuffer())).metadata()).width).toBe(640);
+
+    // re-crop from the original (not from the cropped copy), then reset
+    expect((await ed.post(`/media/${a.id}/crop`, { crop: { x: 320, y: 0, w: 320, h: 180 } })).body).toMatchObject({ width: 320, height: 180 });
+    expect((await ed.post(`/media/${a.id}/crop`, { crop: { x: 400, y: 0, w: 320, h: 180 } })).status).toBe(422);   // outside the image
+    expect((await ed.post(`/media/${a.id}/crop`, { crop: { x: 0, y: 0, w: 5, h: 5 } })).status).toBe(422);
+    expect((await ro.post(`/media/${a.id}/crop`, { crop: null })).status).toBe(403);
+    expect((await ed.post(`/media/${a.id}/crop`, { crop: null })).body).toMatchObject({ width: 640, height: 480, crop: null });
+    expect(await file()).toMatchObject({ width: 480, height: 360 });
+    expect((await h.db.select().from(t.auditLog).where(eq(t.auditLog.action, 'media.crop'))).length).toBe(3);
+
+    // replacing the file starts it uncropped
+    await ed.post(`/media/${a.id}/crop`, { crop: { x: 0, y: 0, w: 100, h: 100 } });
+    expect((await send(ed, `/media/${a.id}/replace`, await gradient('down', 800, 600), 'test-crop-new.png')).body).toMatchObject({ crop: null, width: 800, height: 600 });
   });
 });

@@ -12,6 +12,7 @@ export type MediaItem = {
 };
 type Use = { kind: string; title: string; href: string; where: string; live: boolean };
 type LibItem = MediaItem & {
+  crop?: { x: number; y: number; w: number; h: number } | null;
   tags: string[]; storageKey: string; updatedAt: string; uploadedByName: string | null; licence: string; rightsExpiresOn: string | null;
   usedOn: Use[]; issues: ('alt' | 'credit' | 'rights' | 'expired')[]; duplicateOf: { ids: string[]; exact: boolean } | null;
 };
@@ -33,6 +34,7 @@ const store = { get: (k: string) => { try { return localStorage.getItem(k); } ca
 
 // small icons this screen needs that the shared set does not have
 const P: Record<string, string> = {
+  crop: 'M6 2v12h12M2 6h12v12',
   copy: 'M7 7h9v9H7zM4 13V4h9', download: 'M10 3v10M6 9l4 4 4-4M4 16h12', replace: 'M4 8a6 6 0 0 1 11-2M16 3v3h-3M16 12a6 6 0 0 1-11 2M4 17v-3h3',
   trash: 'M4 6h12M8 6V4h4v2M6 6l1 10h6l1-10', grid: 'M4 4h5v5H4zM11 4h5v5h-5zM4 11h5v5H4zM11 11h5v5h-5z', list: 'M4 5h12M4 10h12M4 15h12',
   tag: 'M3 10V3h7l7 7-7 7zM7 7h.01', dup: 'M6 6h10v10H6zM4 14V4h10', back: 'M12 4l-6 6 6 6', link: 'M8 12l4-4M7 9l-2 2a3 3 0 0 0 4 4l2-2M13 11l2-2a3 3 0 0 0-4-4L9 7',
@@ -54,7 +56,8 @@ function sendFile(url: string, file: File, csrf: string, onProgress: (p: number)
 async function copy(text: string) { try { await navigator.clipboard.writeText(text); return true; } catch { return false; } }
 
 // ================================================================= Library
-type Job = { id: string; file: File; p: number; state: 'wait' | 'up' | 'done' | 'err'; error?: string; replaceOf?: string };
+type Job = { id: string; file: File; p: number; state: 'wait' | 'up' | 'done' | 'err'; error?: string; replaceOf?: string; cropAfter?: boolean };
+type CropTarget = { id: string; name: string; crop: LibItem['crop']; fresh?: boolean };
 type Filter = 'all' | 'needs' | 'used' | 'unused' | 'dupes' | 'trash';
 type TrashItem = { row: LibItem; deletedAt: string; deletedBy: string | null; usedOn: Use[]; reattach: number; thumb: string | null };
 type Sort = 'new' | 'name' | 'size' | 'used';
@@ -74,6 +77,7 @@ export function MediaLibrary() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [drag, setDrag] = useState(false);
   const [confirmDel, setConfirmDel] = useState<LibItem[] | null>(null);
+  const [cropFor, setCropFor] = useState<CropTarget | null>(null);
   const dirty = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null); const replaceInput = useRef<HTMLInputElement>(null); const replaceTarget = useRef<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -114,7 +118,7 @@ export function MediaLibrary() {
     const list = [...files].filter((f) => f.type === '' || ACCEPT.includes(f.type) || /\.(jpe?g|png|webp|avif|tiff?)$/i.test(f.name));
     const skipped = files.length - list.length;
     if (skipped) toast(`${skipped} file${skipped > 1 ? 's are' : ' is'} not an image Studio accepts (JPEG, PNG, WebP, AVIF or TIFF).`, true);
-    setJobs((j) => [...j.filter((x) => x.state !== 'done'), ...list.slice(0, replaceOf ? 1 : 50).map((file) => ({ id: crypto.randomUUID(), file, p: 0, state: 'wait' as const, replaceOf }))]);
+    setJobs((j) => [...j.filter((x) => x.state !== 'done'), ...list.slice(0, replaceOf ? 1 : 50).map((file) => ({ id: crypto.randomUUID(), file, p: 0, state: 'wait' as const, replaceOf, cropAfter: !replaceOf && list.length === 1 && can('media.update') }))]);
   };
   useEffect(() => {
     const running = jobs.filter((j) => j.state === 'up').length;
@@ -127,7 +131,7 @@ export function MediaLibrary() {
         .then((row) => {
           setJobs((js) => js.map((x) => x.id === j.id ? { ...x, p: 1, state: 'done' } : x));
           if (j.replaceOf) toast('File replaced. Every page keeps using this image and shows the new file from its next publish. Confirm the rights again for the new file.');
-          else if (row?.id) setOpenId((o) => o ?? row.id);
+          else if (row?.id) { setOpenId((o) => o ?? row.id); if (j.cropAfter) setCropFor({ id: row.id, name: row.originalName ?? j.file.name, crop: null, fresh: true }); }
           load();
         })
         .catch((e) => setJobs((js) => js.map((x) => x.id === j.id ? { ...x, state: 'err', error: (e as Error).message } : x)));
@@ -161,6 +165,7 @@ export function MediaLibrary() {
     download: (m: LibItem) => { const a = document.createElement('a'); a.href = `/studio/api/media/${m.id}/original`; a.download = ''; document.body.append(a); a.click(); a.remove(); },
     replace: (m: LibItem) => { replaceTarget.current = m.id; replaceInput.current?.click(); },
     remove: (l: LibItem[]) => setConfirmDel(l),
+    crop: (m: LibItem) => setCropFor({ id: m.id, name: m.originalName, crop: m.crop ?? null }),
   };
 
   // ---- keyboard: arrows move, Space selects, Enter opens
@@ -237,12 +242,13 @@ export function MediaLibrary() {
       {jobs.length > 0 && <UploadQueue jobs={jobs} onRetry={(id) => setJobs((js) => js.map((j) => j.id === id ? { ...j, state: 'wait', p: 0, error: undefined } : j))}
         onDismiss={() => setJobs((js) => js.filter((j) => j.state === 'up' || j.state === 'wait'))} onOpen={() => { /* newest upload is opened when it finishes */ }} />}
       {drag && <div className="ml-drop-over" aria-hidden="true"><div><MI n="download" size={30} /><b>Drop to upload</b><small>JPEG, PNG, WebP, AVIF or TIFF. Location data is removed.</small></div></div>}
+      {cropFor && <CropDialog t={cropFor} onClose={() => setCropFor(null)} onSaved={() => { setCropFor(null); load(); }} />}
       {confirmDel && <DeleteDialog list={confirmDel} onClose={() => setConfirmDel(null)} onDone={(ids) => { setConfirmDel(null); setSel((s) => { const n = new Set(s); ids.forEach((x) => n.delete(x)); return n; }); if (openId && ids.includes(openId)) { dirty.current = false; setOpenId(null); } load(); }} />}
     </div>
   );
 }
 
-type Acts = { copy: (m: LibItem) => void; download: (m: LibItem) => void; replace: (m: LibItem) => void; remove: (l: LibItem[]) => void };
+type Acts = { copy: (m: LibItem) => void; download: (m: LibItem) => void; replace: (m: LibItem) => void; remove: (l: LibItem[]) => void; crop: (m: LibItem) => void };
 
 function Badges({ m, max = 3 }: { m: LibItem; max?: number }) {
   // most useful first: missing alt text and rights, then duplicates, then a missing credit
@@ -261,6 +267,7 @@ function Card({ m, list, on, picked, tab, onFocus, onOpen, onPick, act, can }: {
   const tools = <div className="ml-acts" onClick={(e) => e.stopPropagation()}>
     <button title="Copy URL" aria-label={`Copy URL of ${name}`} onClick={() => act.copy(m)}><MI n="copy" /></button>
     <button title="Download original" aria-label={`Download ${name}`} onClick={() => act.download(m)}><MI n="download" /></button>
+    {can('media.update') && <button title="Crop" aria-label={`Crop ${name}`} onClick={() => act.crop(m)}><MI n="crop" /></button>}
     {can('media.update') && <button title="Replace file" aria-label={`Replace the file of ${name}`} onClick={() => act.replace(m)}><MI n="replace" /></button>}
     {can('media.delete') && <button className="bad" title={m.usedOn.length ? 'Delete (in use: a placeholder shows there instead)' : 'Delete'} aria-label={`Delete ${name}`} onClick={() => act.remove([m])}><MI n="trash" /></button>}
   </div>;
@@ -393,6 +400,100 @@ function TrashList({ items, onRestored }: { items: TrashItem[]; onRestored: () =
   </div>;
 }
 
+// ================================================================= Crop
+const RATIOS: [string, number | null | 'orig'][] = [['Free', null], ['Original', 'orig'], ['1:1', 1], ['4:3', 4 / 3], ['16:9', 16 / 9], ['3:2', 3 / 2], ['4:5', 4 / 5]];
+type Box = { x: number; y: number; w: number; h: number };   // in original pixels
+
+/** Crop on the original: drag the frame, pull its corners, or zoom; pick a ratio. The original file is never changed. */
+function CropDialog({ t, onClose, onSaved }: { t: CropTarget; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast();
+  const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
+  const [box, setBox] = useState<Box | null>(null);
+  const [ratio, setRatio] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false); const [failed, setFailed] = useState(false);
+  const stage = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ mode: string; sx: number; sy: number; b: Box } | null>(null);
+  const src = `/studio/api/media/${t.id}/source`;
+
+  const clamp = (b: Box, n = nat!): Box => {
+    const w = Math.max(16, Math.min(b.w, n.w)), h = Math.max(16, Math.min(b.h, n.h));
+    return { w: Math.round(w), h: Math.round(h), x: Math.round(Math.min(Math.max(0, b.x), n.w - w)), y: Math.round(Math.min(Math.max(0, b.y), n.h - h)) };
+  };
+  /** Largest box of ratio r that fits, scaled by z (0..1), centred on (cx, cy). */
+  const fit = (r: number | null, z: number, c?: { x: number; y: number }, n = nat!): Box => {
+    let w = n.w, h = n.h;
+    if (r) { if (n.w / n.h > r) w = n.h * r; else h = n.w / r; }
+    w *= z; h *= z;
+    const cx = c?.x ?? n.w / 2, cy = c?.y ?? n.h / 2;
+    return clamp({ x: cx - w / 2, y: cy - h / 2, w, h }, n);
+  };
+  function onLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const n = { w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight }; setNat(n);
+    setBox(t.crop ? clamp(t.crop, n) : { x: 0, y: 0, w: n.w, h: n.h });
+  }
+  const zoom = box && nat ? (() => { const full = fit(ratio ?? box.w / box.h, 1); return Math.max(0.1, Math.min(1, box.w / full.w)); })() : 1;
+  function pickRatio(r: number | null | 'orig') {
+    const v = r === 'orig' ? nat!.w / nat!.h : r; setRatio(v);
+    if (v && box) setBox(fit(v, 1, { x: box.x + box.w / 2, y: box.y + box.h / 2 }));
+  }
+  const scale = () => (stage.current ? nat!.w / stage.current.getBoundingClientRect().width : 1);
+  function down(e: React.PointerEvent, mode: string) {
+    e.stopPropagation(); e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    drag.current = { mode, sx: e.clientX, sy: e.clientY, b: box! };
+  }
+  function move(e: React.PointerEvent) {
+    const d = drag.current; if (!d || !nat) return;
+    const k = scale(); const dx = (e.clientX - d.sx) * k, dy = (e.clientY - d.sy) * k; const b = d.b;
+    if (d.mode === 'move') { setBox(clamp({ ...b, x: b.x + dx, y: b.y + dy })); return; }
+    // corners: the opposite corner stays put
+    const left = d.mode.includes('w'), top = d.mode.includes('n');
+    const ax = left ? b.x + b.w : b.x, ay = top ? b.y + b.h : b.y;
+    let w = Math.max(16, left ? b.w - dx : b.w + dx), h = Math.max(16, top ? b.h - dy : b.h + dy);
+    w = Math.min(w, left ? ax : nat.w - ax); h = Math.min(h, top ? ay : nat.h - ay);
+    if (ratio) { if (w / h > ratio) w = h * ratio; else h = w / ratio; }
+    setBox(clamp({ x: left ? ax - w : ax, y: top ? ay - h : ay, w, h }));
+  }
+  function key(e: React.KeyboardEvent) {
+    if (!box) return; const st = e.shiftKey ? 50 : 10;
+    const v = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
+    if (v) { e.preventDefault(); setBox(clamp({ ...box, x: box.x + v[0], y: box.y + v[1] })); }
+  }
+  const whole = !!box && !!nat && box.x === 0 && box.y === 0 && box.w === nat.w && box.h === nat.h;
+  async function save(crop: Box | null) {
+    setBusy(true);
+    try { await post(`/media/${t.id}/crop`, { crop }); toast(crop ? 'Cropped. The original is kept: you can re-crop or reset it any time. Pages show the new crop from their next publish.' : 'Crop removed: the whole image is used again.'); onSaved(); }
+    catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
+  }
+  const pct = (v: number, of: number) => `${(v / of) * 100}%`;
+  return <Modal title={t.fresh ? 'Crop the new image?' : `Crop ${cleanName(t.name)}`} onClose={onClose} footer={<>
+    {t.crop && <button className="btn btn-ghost" disabled={busy} onClick={() => save(null)} style={{ marginRight: 'auto' }}>Reset to original</button>}
+    <button className="btn" onClick={onClose}>{t.fresh ? 'Skip' : 'Cancel'}</button>
+    <button className="btn btn-primary" disabled={busy || !box || (whole && !t.crop)} onClick={() => save(whole ? null : box)}>{busy ? 'Saving…' : 'Save crop'}</button></>}>
+    <div className="modal-b stack ml-cropper">
+      <div className="ml-ratios" role="group" aria-label="Aspect ratio">{RATIOS.map(([l, r]) => { const v = r === 'orig' ? (nat ? nat.w / nat.h : -1) : r; const on = v === ratio || (v === null && ratio === null);
+        return <button key={l} className={`ml-chip${on ? ' on' : ''}`} aria-pressed={on} disabled={!nat} onClick={() => pickRatio(r)}>{l}</button>; })}</div>
+      <div className="ml-crop-stage-w">
+        {failed ? <p className="muted">The original file could not be loaded, so this image cannot be cropped.</p> :
+        <div ref={stage} className="ml-crop-stage" onPointerMove={move} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
+          <img src={src} alt="" draggable={false} onLoad={onLoad} onError={() => setFailed(true)} />
+          {box && nat && <div className="ml-crop-box" tabIndex={0} role="group" aria-label={`Crop frame, ${box.w} by ${box.h} pixels. Arrow keys move it.`} onKeyDown={key}
+            style={{ left: pct(box.x, nat.w), top: pct(box.y, nat.h), width: pct(box.w, nat.w), height: pct(box.h, nat.h) }} onPointerDown={(e) => down(e, 'move')}>
+            <i className="g1" /><i className="g2" />
+            {['nw', 'ne', 'sw', 'se'].map((c) => <b key={c} className={`h ${c}`} onPointerDown={(e) => down(e, c)} />)}
+          </div>}
+        </div>}
+      </div>
+      <div className="ml-crop-foot">
+        <label className="ml-zoom"><span>Zoom</span><input type="range" min={10} max={100} value={Math.round((1.1 - zoom) * 100)} disabled={!box}
+          onChange={(e) => { if (!box) return; const z = 1.1 - Number(e.target.value) / 100; setBox(fit(ratio ?? box.w / box.h, Math.min(1, Math.max(0.1, z)), { x: box.x + box.w / 2, y: box.y + box.h / 2 })); }} /></label>
+        <small className="muted">{box ? `${box.w} × ${box.h} px` : 'Loading…'}{nat && box && box.w < 960 ? ' · small for a wide photo on the website' : ''}</small>
+      </div>
+      <small className="muted">{t.fresh ? 'Optional. Skip keeps the image as uploaded. ' : ''}The original stays as it is: you can re-crop or reset later. Alt text, credit and rights are kept.</small>
+    </div>
+  </Modal>;
+}
+
 // ================================================================= Detail panel
 function Detail({ m, all, onClose, onOpen, onDirty, onSaved, act }: { m: LibItem; all: LibItem[]; onClose: () => void; onOpen: (id: string) => void; onDirty: (d: boolean) => void; onSaved: (m: Partial<LibItem> & { id: string }) => void; act: Acts }) {
   const can = useCan(); const toast = useToast();
@@ -426,6 +527,7 @@ function Detail({ m, all, onClose, onOpen, onDirty, onSaved, act }: { m: LibItem
     <div className="ml-quick">
       <button className="btn btn-sm" onClick={() => act.copy(m)}><MI n="copy" size={14} /> Copy URL</button>
       <button className="btn btn-sm" onClick={() => act.download(m)}><MI n="download" size={14} /> Original</button>
+      {!ro && <button className="btn btn-sm" onClick={() => act.crop(m)} title="Crop. The original is kept, so you can change or undo it later."><MI n="crop" size={14} /> {m.crop ? 'Re-crop' : 'Crop'}</button>}
       {!ro && <button className="btn btn-sm" onClick={() => act.replace(m)} title="Upload a new file in its place. Every page keeps using it."><MI n="replace" size={14} /> Replace</button>}
     </div>
 

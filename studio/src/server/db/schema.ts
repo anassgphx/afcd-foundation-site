@@ -132,6 +132,7 @@ export const media = pgTable('media', {
   rightsExpiresOn: date('rights_expires_on', { mode: 'string' }),          // optional end of the usage right (YYYY-MM-DD)
   focalX: integer('focal_x').notNull().default(50),
   focalY: integer('focal_y').notNull().default(50),
+  crop: jsonb('crop').$type<{ x: number; y: number; w: number; h: number } | null>(),   // crop of the original (pixels, after EXIF rotation); null = whole image
   tags: jsonb('tags').$type<string[]>().notNull().default([]),
   uploadedBy: uuid('uploaded_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: createdAt(),

@@ -9,6 +9,7 @@ import { AppError, perm, type Env } from '../../http.ts';
 import * as M from './service.ts';
 import * as L from './library.ts';
 import * as T from './trash.ts';
+import * as C from './crop.ts';
 
 const urls = (m: M.MediaRow) => ({ url: `/studio/media-file/${m.storageKey}-480.webp`, large: `/studio/media-file/${M.publicRef(m).src.split('/').pop()}` });
 /** What a reviewer would ask for before this image can be used publicly. */
@@ -62,6 +63,24 @@ export function registerMediaLibraryRoutes(api: Hono<Env>) {
     if (!(f instanceof File)) throw new AppError(422, 'Choose an image.');
     const row = await L.replaceFile(db, cfg, m, { name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) });
     await audit(db, actor(c), 'media.replace', { type: 'media', id: m.id }, `Replaced the file of ${m.originalName} with ${f.name.slice(0, 120)}`);
+    return c.json({ ...row, ...urls(row) });
+  });
+
+  // the original, shown inline (for the crop tool); the download below is the same file as an attachment
+  api.get('/media/:id/source', perm('media.read'), async (c) => {
+    const [m] = await c.var.db.select().from(t.media).where(eq(t.media.id, c.req.param('id')));
+    if (!m) throw new AppError(404, 'Media not found.');
+    const o = L.originalFile(c.var.cfg, m); if (!o) throw new AppError(404, 'The original file is missing.');
+    c.header('Content-Type', m.mime); c.header('Cache-Control', 'private, max-age=60');
+    return c.body(new Uint8Array(readFileSync(o.path)));
+  });
+  api.post('/media/:id/crop', perm('media.update'), async (c) => {
+    const p = C.cropSchema.safeParse(await c.req.json());
+    if (!p.success) throw new AppError(422, 'Invalid crop.', p.error.issues);
+    const [m] = await c.var.db.select().from(t.media).where(eq(t.media.id, c.req.param('id')));
+    if (!m) throw new AppError(404, 'Media not found.');
+    const row = await C.cropMedia(c.var.db, c.var.cfg, m, p.data.crop);
+    await audit(c.var.db, actor(c), 'media.crop', { type: 'media', id: m.id }, row.crop ? `Cropped ${m.originalName} to ${row.width}×${row.height}` : `Removed the crop of ${m.originalName}`);
     return c.json({ ...row, ...urls(row) });
   });
 

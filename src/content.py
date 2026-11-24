@@ -465,6 +465,75 @@ def abx_rows(items, cls='abx-rows'):
         for j, x in enumerate(items, 1)) + '</ol>'
 
 
+# Sections of each About page, in their default order, with their default headings (plain text). Studio can override
+# any field per section (content['sections'][id]), hide a section (show: false) and change the order (content['order']).
+# Fields: tab (sticky menu), label (small numbered label), title + soft (heading, second part in grey), meta (right-hand
+# note), desc (line beside the heading). A section marked fixed keeps its place (it frames the others).
+ABOUT_SECTIONS = {
+    'our-story': {
+        'statement': {'tab': 'President’s statement', 'label': 'President’s Statement'},
+        'journey': {'tab': 'Journey', 'label': 'Our Journey', 'title': 'From Ait Ourir', 'soft': 'to across Morocco.', 'meta': 'Since 2007', 'desc': 'How a local volunteer initiative became a national nonprofit.'},
+        'different': {'tab': 'What makes us different', 'label': 'What Makes Us Different', 'title': 'How we work,', 'soft': 'and why it lasts.', 'meta': '', 'desc': ''},
+        'what-we-do': {'tab': 'What we do', 'label': 'What We Do', 'title': 'Four areas,', 'soft': 'one approach.', 'desc': 'Programmes combine non-formal education, practical training, mentoring and community action.', 'sub': 'Core activities'},
+        'approach': {'tab': 'Approach', 'label': 'Our Approach'},
+        'impact': {'tab': 'Impact', 'label': 'Our Impact', 'title': 'A story', 'soft': 'of people.', 'meta': 'Since 2007', 'desc': 'The measure of this work is the people who carry it on.'},
+    },
+    'mission-vision': {
+        'path': {'fixed': True, 'label': 'From Purpose to Future', 'title': 'From what we do today', 'soft': 'to the society we work toward.', 'meta': 'Mission · Values · Vision'},
+        'mission': {'tab': 'Mission', 'label': 'Today', 'title': 'Our Mission', 'desc': 'What we do, every day.'},
+        'values': {'tab': 'Values', 'label': 'Every step', 'title': 'Our Values', 'desc': 'The values that shape how we work.'},
+        'vision': {'tab': 'Vision', 'label': 'Tomorrow', 'title': 'Our Vision', 'desc': 'The society we work toward.'},
+        'next': {'tab': 'Strategy', 'label': 'The way there', 'title': 'Our Strategy', 'desc': 'Strategic objectives turn this vision into programmes.'},
+    },
+    'strategy': {
+        'objectives': {'tab': 'Objectives', 'label': 'Strategic Objectives', 'title': 'What AFCD', 'soft': 'works toward.', 'meta': '', 'desc': 'Each objective links to the pillars that carry it.'},
+        'who-we-serve': {'tab': 'Who we serve', 'label': 'Who We Serve', 'title': 'People', 'soft': 'we work with.', 'meta': '', 'sub': 'Primary groups', 'sub2': 'In detail'},
+        'where-we-work': {'tab': 'Where we work', 'label': 'Where We Work', 'title': 'Places', 'soft': 'we serve.', 'meta': 'Across Morocco', 'sub': 'Coverage'},
+    },
+    'team': {
+        **{g: {'tab': lab, 'label': lab, 'title': lab + '.', 'soft': '', 'meta': '', 'desc': ''} for g, lab in TEAM_GROUPS},
+        'people': {'fixed': True, 'tab': 'The team', 'label': 'The Team', 'title': 'Meet', 'soft': 'the team.', 'desc': 'Team profiles are not published yet. They appear here as soon as AFCD publishes them.'},
+    },
+    'partners': {
+        'directory': {'tab': 'Directory', 'label': 'Partner Directory', 'title': 'Organisations', 'soft': 'we work with.', 'meta': ''},
+        'models': {'tab': 'Ways to partner', 'label': 'Ways to Partner', 'title': 'Co-design', 'soft': 'change with us.', 'meta': '', 'desc': 'Every partnership is shaped around shared goals and the communities we serve.'},
+        'how': {'tab': 'How it starts', 'label': 'How It Starts', 'title': 'From first message', 'soft': 'to shared results.', 'meta': ''},
+    },
+}
+
+
+def about_section(key, c, sid):
+    """One section's settings: the built-in defaults with Studio's values on top."""
+    cfg = dict(ABOUT_SECTIONS[key][sid]); cfg.setdefault('show', True)
+    cfg.update((c.get('sections') or {}).get(sid) or {})
+    return cfg
+
+
+def about_sections(key, c):
+    """The page's movable sections in display order (Studio's order first, then any it does not list)."""
+    ids = [k for k, v in ABOUT_SECTIONS[key].items() if not v.get('fixed')]
+    order = [x for x in (c.get('order') or []) if x in ids]
+    return [(sid, about_section(key, c, sid)) for sid in order + [x for x in ids if x not in order]]
+
+
+def abx_head(n, cfg, meta='', right=None):
+    """Numbered section heading from a section's settings (all plain text, escaped here)."""
+    title = _esc(cfg.get('title') or '') + (f' <span class="sh-soft">{_esc(cfg["soft"])}</span>' if cfg.get('soft') else '')
+    return sec_head(f'{n:02d} / {_esc(cfg.get("label") or "")}', title, right or _esc(cfg.get('meta') or meta), desc=_esc(cfg.get('desc') or ''))
+
+
+def abx_build(key, c, blocks):
+    """Renders the visible sections in order, numbered 01, 02… (a section with no content is skipped), and their menu."""
+    html, tabs, n = [], [], 0
+    for sid, cfg in about_sections(key, c):
+        if not cfg.get('show', True) or sid not in blocks:
+            continue
+        out = blocks[sid](n + 1, cfg)
+        if out:
+            n += 1; html.append(out); tabs.append((sid, _esc(cfg.get('tab') or cfg.get('label') or sid)))
+    return ''.join(html), tabs
+
+
 def about():
     ABOUT = ('About Us', 'about.html')
     num = lambda: iter(range(1, 20))
@@ -498,64 +567,68 @@ def about():
     st_img = st.get('image')
     st_sig = (f'<div class="abx-sig">' + (f'<span class="abx-sig-img">{media_img(st_img, "h-full w-full", "64px")}</span>' if st_img else '')
               + f'<span><span class="abx-sig-n">{_esc(st.get("name") or "")}</span><span class="abx-sig-r">{_esc(st.get("role") or "")}</span></span></div>') if st.get('name') or st.get('role') else ''
-    tabs = ([('statement', 'President’s statement')] if st_paras else []) + ([('journey', 'Journey')] if tl else []) + ([('different', 'What makes us different')] if pr else []) + ([('what-we-do', 'What we do')] if areas else []) \
-        + ([('approach', 'Approach')] if steps or ap.get('title') else []) + [('impact', 'Impact')]
-    body = page_header([ABOUT, ('Our Story', 'our-story.html')], 'About · Our Story', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
-<div class="plx abx"{_rev(c)}>
-{abx_overview('our-story.html', '2007' if not c.get('foundedYear') else str(int(c['foundedYear'])), _esc(c.get('intro') or ''), facts,
-              [('Our journey <span aria-hidden="true">↓</span>', '#journey' if tl else '#impact'), ('Our impact <span aria-hidden="true">↓</span>', '#impact')], side, 'Our Story')}
-{abx_tabs(tabs)}
-{f"""
+    fy = str(c.get('foundedYear') or 2007)
+    blocks = {
+        'statement': lambda k, cfg: f"""
 <section id="statement" class="plx-sec py-14 lg:py-20">
   <div class="wrap">
     <div class="plx-pv">
       <div>
-        <div class="sh-top"><span class="sh-num">{next(n):02d}</span><span class="sh-label">President’s Statement</span></div>
+        <div class="sh-top"><span class="sh-num">{k:02d}</span><span class="sh-label">{_esc(cfg.get('label') or '')}</span></div>
         {f'<p class="plx-k mt-8">{_esc(st["kicker"])}</p>' if st.get('kicker') else ''}
         <h2 class="plx-pv-title abx-st-title">{_esc(st.get('title') or '')}</h2>
       </div>
       <figure class="abx-st"><blockquote class="plx-pv-quote abx-st-q">{st_paras}</blockquote>{f'<figcaption>{st_sig}</figcaption>' if st_sig else ''}</figure>
     </div>
   </div>
-</section>""" if st_paras else ''}
-{f"""
+</section>""" if st_paras else '',
+        'journey': lambda k, cfg: f"""
 <section id="journey" class="plx-sec py-14 lg:py-20">
-  <div class="wrap">{sec_head(f'{next(n):02d} / Our Journey', 'From Ait Ourir <span class="sh-soft">to across Morocco.</span>', 'Since ' + str(c.get('foundedYear') or 2007), desc='How a local volunteer initiative became a national nonprofit.')}
+  <div class="wrap">{abx_head(k, cfg)}
     <ol class="abx-tl mt-8 lg:mt-12">{tl}</ol>
   </div>
-</section>""" if tl else ''}
-{f"""
+</section>""" if tl else '',
+        'different': lambda k, cfg: f"""
 <section id="different" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{sec_head(f'{next(n):02d} / What Makes Us Different', 'How we work, <span class="sh-soft">and why it lasts.</span>', f'{len(pr)} principles')}
+  <div class="wrap">{abx_head(k, cfg, f'{len(pr)} principles')}
     <div class="mt-8 lg:mt-10">{abx_rows(pr, 'abx-rows abx-2col')}</div>
   </div>
-</section>""" if pr else ''}
-{f"""
+</section>""" if pr else '',
+        'what-we-do': lambda k, cfg: f"""
 <section id="what-we-do" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{sec_head(f'{next(n):02d} / What We Do', f'{len(areas)} areas, <span class="sh-soft">one approach.</span>', ('Our pillars', 'pillars.html'), desc='Programmes combine non-formal education, practical training, mentoring and community action.')}
+  <div class="wrap">{abx_head(k, cfg, right=('Our pillars', 'pillars.html'))}
     <ul class="plx-others mt-8 lg:mt-10">{area_rows}</ul>
-    <p class="plx-k mt-12">Core activities</p>
+    {f'<p class="plx-k mt-12">{_esc(cfg["sub"])}</p>' if cfg.get('sub') else '<div class="mt-12"></div>'}
     <ul class="plx-acts abx-acts mt-4">{acts}</ul>
   </div>
-</section>""" if areas else ''}
-{f"""
+</section>""" if areas else '',
+        'approach': lambda k, cfg: f"""
 <section id="approach" class="plx-sec py-10 lg:py-14">
   <div class="wrap">
     <div class="plx-pv">
       <div>
-        <div class="sh-top"><span class="sh-num">{next(n):02d}</span><span class="sh-label">Our Approach</span></div>
+        <div class="sh-top"><span class="sh-num">{k:02d}</span><span class="sh-label">{_esc(cfg.get('label') or '')}</span></div>
         <h2 class="plx-pv-title">{_esc(ap.get('title') or '')}{f' <span class="text-ink-mid">{_esc(ap["soft"])}</span>' if ap.get('soft') else ''}</h2>
       </div>
       <ol class="plx-steps abx-steps">{steps}</ol>
     </div>
   </div>
-</section>""" if steps or ap.get('title') else ''}
-
+</section>""" if steps or ap.get('title') else '',
+        'impact': lambda k, cfg: f"""
 <section id="impact" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{sec_head(f'{next(n):02d} / Our Impact', 'A story <span class="sh-soft">of people.</span>', 'Since ' + str(c.get('foundedYear') or 2007), desc='The measure of this work is the people who carry it on.')}
+  <div class="wrap">{abx_head(k, cfg)}
     <div class="mt-8 lg:mt-10">{stats}</div>
   </div>
-</section>
+</section>""" if (c.get('stats') or c.get('foundedYear')) else '',
+    }
+    secs, tabs = abx_build('our-story', c, blocks)
+    first = tabs[0][0] if tabs else 'overview'
+    body = page_header([ABOUT, ('Our Story', 'our-story.html')], 'About · Our Story', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
+<div class="plx abx"{_rev(c)}>
+{abx_overview('our-story.html', fy, _esc(c.get('intro') or ''), facts,
+              [('Read our story <span aria-hidden="true">↓</span>', f'#{first}')] + ([('Our impact <span aria-hidden="true">↓</span>', '#impact')] if any(t == 'impact' for t, _l in tabs) else []), side, 'Our Story')}
+{abx_tabs(tabs) if tabs else ''}
+{secs}
 </div>
 ''' + abx_cta(c) + about_more('our-story.html')
     page('our-story.html', 'Our Story · AFCD Foundation',
@@ -566,25 +639,28 @@ def about():
     vals = c.get('values') or []
     roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII']
     vrows = ''.join(f'<li class="abx-val"><span class="abx-val-n">{roman[j] if j < len(roman) else j + 1}</span><span class="min-w-0"><span class="abx-val-t">{_esc(v["title"])}</span><span class="abx-val-d">{_esc(v.get("text") or "")}</span></span></li>' for j, v in enumerate(vals))
-    stages = [
-        ('mission', 'Today', 'Our Mission', 'What we do, every day.', f'<p class="abx-path-q">{_esc(c.get("mission") or "")}</p>'),
-        ('values', 'Every step', 'Our Values', f'{len(vals)} values shape how we work.', f'<ol class="abx-vals">{vrows}</ol>'),
-        ('vision', 'Tomorrow', 'Our Vision', 'The society we work toward.', f'<p class="abx-path-q">{_esc(c.get("vision") or "")}</p>'),
-        ('next', 'The way there', 'Our Strategy', f'{len(OBJECTIVES)} strategic objectives turn this vision into programmes.',
-         f'<a href="strategy.html" class="plx-other abx-next"><span class="plx-other-n">SO</span><span class="min-w-0"><span class="plx-other-t">Strategy &amp; Objectives</span><span class="plx-other-d">{len(OBJECTIVES)} objectives, the people we serve and where we work.</span></span><span class="plx-arr" aria-hidden="true">↗</span></a>'),
-    ]
-    path = ''.join(f'''
+    stage_body = {
+        'mission': f'<p class="abx-path-q">{_esc(c.get("mission") or "")}</p>' if c.get('mission') else '',
+        'values': f'<ol class="abx-vals">{vrows}</ol>' if vals else '',
+        'vision': f'<p class="abx-path-q">{_esc(c.get("vision") or "")}</p>' if c.get('vision') else '',
+        'next': f'<a href="strategy.html" class="plx-other abx-next"><span class="plx-other-n">SO</span><span class="min-w-0"><span class="plx-other-t">Strategy &amp; Objectives</span><span class="plx-other-d">{len(OBJECTIVES)} objectives, the people we serve and where we work.</span></span><span class="plx-arr" aria-hidden="true">↗</span></a>',
+    }
+    def stage(sid):
+        return lambda k, cfg: f"""
       <li id="{sid}" class="abx-path-i plx-sec">
-        <div class="abx-path-h"><span class="abx-path-n">{j:02d}</span><span class="abx-path-k">{k}</span></div>
-        <div class="abx-path-b"><h2 class="abx-path-t">{t}</h2><p class="abx-path-s">{s}</p><div class="abx-path-c">{body_}</div></div>
-      </li>''' for j, (sid, k, t, s, body_) in enumerate(stages, 1))
+        <div class="abx-path-h"><span class="abx-path-n">{k:02d}</span><span class="abx-path-k">{_esc(cfg.get('label') or '')}</span></div>
+        <div class="abx-path-b"><h2 class="abx-path-t">{_esc(cfg.get('title') or '')}</h2>{f'<p class="abx-path-s">{_esc(cfg["desc"])}</p>' if cfg.get('desc') else ''}<div class="abx-path-c">{stage_body[sid]}</div></div>
+      </li>""" if stage_body[sid] else ''
+    path, tabs = abx_build('mission-vision', c, {sid: stage(sid) for sid in stage_body})
+    ph = about_section('mission-vision', c, 'path')
+    ph_title = _esc(ph.get('title') or '') + (f' <span class="sh-soft">{_esc(ph["soft"])}</span>' if ph.get('soft') else '')
     body = page_header([ABOUT, ('Mission &amp; Vision', 'mission-vision.html')], 'About · Mission &amp; Vision', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
 <div class="plx abx"{_rev(c)}>
 {abx_overview('mission-vision.html', 'M·V', _esc(c.get('mission') or ''), [('Mission', '01'), ('Values', f'{len(vals):02d}'), ('Objectives', f'{len(OBJECTIVES):02d}')],
-              [('Read the path <span aria-hidden="true">↓</span>', '#mission'), ('Our strategy <span aria-hidden="true">↗</span>', 'strategy.html')], '', 'Mission &amp; Vision')}
-{abx_tabs([('mission', 'Mission'), ('values', 'Values'), ('vision', 'Vision'), ('next', 'Strategy')])}
+              [('Read the path <span aria-hidden="true">↓</span>', f'#{tabs[0][0]}' if tabs else '#overview'), ('Our strategy <span aria-hidden="true">↗</span>', 'strategy.html')], '', 'Mission &amp; Vision')}
+{abx_tabs(tabs) if tabs else ''}
 <section class="py-14 lg:py-20">
-  <div class="wrap">{sec_head('01 / From Purpose to Future', 'From what we do today <span class="sh-soft">to the society we work toward.</span>', 'Mission · Values · Vision')}
+  <div class="wrap">{sec_head(f'01 / {_esc(ph.get("label") or "")}', ph_title, _esc(ph.get('meta') or ''))}
     <ol class="abx-path mt-8 lg:mt-12">{path}
     </ol>
   </div>
@@ -608,33 +684,50 @@ def about():
     summary = ''.join(f'<p>{_esc(p)}</p>' for p in c.get('summary') or [])
     regions = c.get('regions') or []
     reg = ''.join(f'<li class="abx-reg"><span class="abx-reg-n">{j:02d}</span><span class="abx-reg-t">{_esc(r["name"])}</span><span class="abx-reg-d">{_esc(r.get("places") or "")}</span></li>' for j, r in enumerate(regions, 1))
+    def who_block(k, cfg):
+        head = abx_head(k, dict(cfg, desc=cfg.get('desc') or c.get('whoIntro') or ''), f'{len(BENEFICIARIES)} groups')
+        sub = f'<p class="plx-k">{_esc(cfg["sub"])}</p>' if cfg.get('sub') else ''
+        sub2 = f'<p class="plx-k">{_esc(cfg["sub2"])}</p>' if cfg.get('sub2') else ''
+        detail = f'<div>{sub2}<div class="abx-paras abx-paras-lg mt-4">{summary}</div></div>' if summary else ''
+        return f"""
+<section id="who-we-serve" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">{head}
+    <div class="plx-work mt-8 lg:mt-10">
+      <div>{sub}<ul class="plx-who mt-4">{groups}</ul></div>
+      {detail}
+    </div>
+  </div>
+</section>"""
+    def where_block(k, cfg):
+        if not reg and not c.get('coverage'):
+            return ''
+        sub = f'<p class="plx-k">{_esc(cfg["sub"])}</p>' if cfg.get('sub') else ''
+        note = f'<div class="abx-note mt-8">{sub}<p class="mt-3">{_esc(c["coverage"])}</p></div>' if c.get('coverage') else ''
+        return f"""
+<section id="where-we-work" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">{abx_head(k, cfg)}
+    <ol class="abx-regs mt-8 lg:mt-10">{reg}</ol>
+    {note}
+  </div>
+</section>"""
+    blocks = {
+        'objectives': lambda k, cfg: f"""
+<section id="objectives" class="plx-sec py-14 lg:py-20">
+  <span id="strategy" class="pl-anchor" aria-hidden="true"></span>
+  <div class="wrap">{abx_head(k, cfg, f'SO-01 to SO-{len(OBJECTIVES):02d}')}
+    <ol class="abx-sos mt-8 lg:mt-10">{objs}</ol>
+  </div>
+</section>""" if objs else '',
+        'who-we-serve': who_block,
+        'where-we-work': where_block,
+    }
+    secs, tabs = abx_build('strategy', c, blocks)
     body = page_header([ABOUT, ('Strategy &amp; Objectives', 'strategy.html')], 'About · Strategy', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
 <div class="plx abx"{_rev(c)}>
 {abx_overview('strategy.html', f'{len(OBJECTIVES):02d}', _esc(c.get('objectivesIntro') or ''), [('Objectives', f'{len(OBJECTIVES):02d}'), ('Pillars', f'{PILLAR_COUNT:02d}'), ('Regions', f'{len(regions):02d}')],
-              [('See the objectives <span aria-hidden="true">↓</span>', '#objectives'), ('Who we serve <span aria-hidden="true">↓</span>', '#who-we-serve')], '', 'Strategy &amp; Objectives')}
-{abx_tabs([('objectives', 'Objectives'), ('who-we-serve', 'Who we serve'), ('where-we-work', 'Where we work')])}
-<section id="objectives" class="plx-sec py-14 lg:py-20">
-  <span id="strategy" class="pl-anchor" aria-hidden="true"></span>
-  <div class="wrap">{sec_head(f'{next(n):02d} / Strategic Objectives', 'What AFCD <span class="sh-soft">works toward.</span>', f'SO-01 to SO-{len(OBJECTIVES):02d}', desc='Each objective links to the pillars that carry it.')}
-    <ol class="abx-sos mt-8 lg:mt-10">{objs}</ol>
-  </div>
-</section>
-
-<section id="who-we-serve" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{sec_head(f'{next(n):02d} / Who We Serve', 'People <span class="sh-soft">we work with.</span>', f'{len(BENEFICIARIES)} groups', desc=_esc(c.get('whoIntro') or ''))}
-    <div class="plx-work mt-8 lg:mt-10">
-      <div><p class="plx-k">Primary groups</p><ul class="plx-who mt-4">{groups}</ul></div>
-      <div><p class="plx-k">In detail</p><div class="abx-paras abx-paras-lg mt-4">{summary}</div></div>
-    </div>
-  </div>
-</section>
-
-<section id="where-we-work" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{sec_head(f'{next(n):02d} / Where We Work', 'Places <span class="sh-soft">we serve.</span>', 'Across Morocco')}
-    <ol class="abx-regs mt-8 lg:mt-10">{reg}</ol>
-    {f'<div class="abx-note mt-8"><p class="plx-k">Coverage</p><p class="mt-3">{_esc(c["coverage"])}</p></div>' if c.get('coverage') else ''}
-  </div>
-</section>
+              [('See the objectives <span aria-hidden="true">↓</span>', f'#{tabs[0][0]}' if tabs else '#overview'), ('Who we serve <span aria-hidden="true">↓</span>', '#who-we-serve')], '', 'Strategy &amp; Objectives')}
+{abx_tabs(tabs) if tabs else ''}
+{secs}
 </div>
 ''' + abx_cta(c) + about_more('strategy.html')
     page('strategy.html', 'Strategy &amp; Objectives · AFCD Foundation',
@@ -652,25 +745,30 @@ def about():
         bio = (p.get('bio') or '').strip()
         return (f'<li class="abx-p"><div class="abx-p-vis{" has-img" if img else ""}">{vis}</div><div class="abx-p-b"><span class="abx-p-n">{_esc(p["name"])}</span>'
                 f'<span class="abx-p-r">{_esc(p.get("role") or "")}</span>' + (f'<span class="abx-p-d">{_esc(bio)}</span>' if bio else '') + '</div></li>')
-    groups_html = ''.join(f'''
+    grouped = {g: [p for p in people if p.get('group') == g] for g, _l in TEAM_GROUPS}
+    def group_block(g):
+        return lambda k, cfg: f"""
 <section id="{g}" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{sec_head(f'{next(n):02d} / {label}', _esc(label) + '.', f'{len(ps)} ' + ('person' if len(ps) == 1 else 'people'))}
-    <ul class="abx-ps mt-8 lg:mt-10">{''.join(person(p) for p in ps)}</ul>
+  <div class="wrap">{abx_head(k, cfg, f'{len(grouped[g])} ' + ('person' if len(grouped[g]) == 1 else 'people'))}
+    <ul class="abx-ps mt-8 lg:mt-10">{''.join(person(p) for p in grouped[g])}</ul>
   </div>
-</section>''' for g, label, ps in by_group)
-    if not by_group:
+</section>""" if grouped[g] else ''
+    groups_html, tabs = abx_build('team', c, {g: group_block(g) for g, _l in TEAM_GROUPS})
+    if not tabs:
+        ec = about_section('team', c, 'people')
         groups_html = f'''
 <section id="people" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{sec_head(f'{next(n):02d} / The Team', 'Meet <span class="sh-soft">the team.</span>', ('Join us', 'get-involved.html'))}
-    <div class="plx-empty mt-8 lg:mt-10"><p class="plx-empty-t">Team profiles are not published yet.</p><p class="plx-empty-d">They appear here as soon as AFCD publishes them.</p><a href="get-involved.html" class="link-arrow mt-4">Get involved <span class="arr" aria-hidden="true">↗</span></a></div>
+  <div class="wrap">{abx_head(1, dict(ec, desc=''), right=('Join us', 'get-involved.html'))}
+    <div class="plx-empty mt-8 lg:mt-10"><p class="plx-empty-t">{_esc(ec.get('desc') or '')}</p><a href="get-involved.html" class="link-arrow mt-4">Get involved <span class="arr" aria-hidden="true">↗</span></a></div>
   </div>
 </section>'''
-    facts = [(label, f'{len(ps):02d}') for _g, label, ps in by_group][:4]
+        tabs = [('people', _esc(ec.get('tab') or ec.get('label') or ''))]
+    facts = [(lab, f'{len(grouped[g]):02d}') for g, lab in TEAM_GROUPS if grouped[g] and about_section('team', c, g).get('show', True)][:4]
     body = page_header([ABOUT, ('Our Team', 'team.html')], 'About · Our Team', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
 <div class="plx abx"{_rev(c)}>
 {abx_overview('team.html', f'{len(people):02d}' if people else 'AFCD', _esc(c.get('intro') or ''), facts,
-              [('Meet the team <span aria-hidden="true">↓</span>', f'#{by_group[0][0]}' if by_group else '#people'), ('Join us <span aria-hidden="true">↗</span>', 'get-involved.html')], '', 'Our Team')}
-{abx_tabs([(g, label) for g, label, _ps in by_group] or [('people', 'The team')])}
+              [('Meet the team <span aria-hidden="true">↓</span>', f'#{tabs[0][0]}'), ('Join us <span aria-hidden="true">↗</span>', 'get-involved.html')], '', 'Our Team')}
+{abx_tabs(tabs)}
 {groups_html}
 </div>
 ''' + abx_cta(c) + about_more('team.html')
@@ -2075,38 +2173,43 @@ def partners():
     steps = pc.get('steps') or []
     shtml = ''.join(f'<li class="plx-step"><span class="plx-step-n">{i:02d}</span><span class="plx-step-t">{_esc(st["title"])}</span><span class="plx-step-d">{_esc(st.get("text") or "")}</span></li>' for i, st in enumerate(steps, 1))
     facts = [('Partners', f'{total:02d}')] + [(g, f'{len(nm):02d}') for g, nm in PARTNERS]
-    nsec = iter(range(1, 10))
-    tabs = [('directory', 'Directory')] + ([('models', 'Ways to partner')] if models else []) + ([('how', 'How it starts')] if steps else [])
     cl = pc.get('closing') or {}
-
-    body = page_header([('Partners', 'partners.html')], 'Our Partners', _title(pc['hero']), '') + f'''
-<div class="plx abx"{_rev(pc)}>
-{abx_overview('partners.html', f'{total:02d}', _esc(pc['hero'].get('lead') or ''), facts,
-              [('Browse partners <span aria-hidden="true">↓</span>', '#directory'), ('Partner with us <span aria-hidden="true">↗</span>', 'contact.html?topic=Partnership#message')], '', 'Our Partners')}
-{abx_tabs(tabs)}
+    tools = '<div class="pr-tools mt-8"><div class="nw-chips" role="group" aria-label="Filter partners">' + chips + '</div><label class="pr-search"><span class="sr-only">Search partners</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13.2 13.2 3.3 3.3"/></svg><input id="partner-search" type="search" placeholder="Search partners" autocomplete="off"></label></div>'
+    def directory(k, cfg):
+        desc = cfg.get('desc') or pc.get('directoryIntro') or ''
+        if with_logo != total:
+            desc = (desc + ' ' if desc else '') + 'Logos will be added once each partner approves their use.'
+        return f"""
 <section id="directory" class="plx-sec py-14 lg:py-16">
-  <div class="wrap">{sec_head(f'{next(nsec):02d} / Partner Directory', 'Organisations <span class="sh-soft">we work with.</span>', f'{total} partners', desc=_esc(pc.get('directoryIntro') or '') + ('' if with_logo == total else ' Logos will be added once each partner approves their use.'))}
-    <div class="pr-tools mt-8">
-      <div class="nw-chips" role="group" aria-label="Filter partners">{chips}</div>
-      <label class="pr-search"><span class="sr-only">Search partners</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13.2 13.2 3.3 3.3"/></svg><input id="partner-search" type="search" placeholder="Search partners" autocomplete="off"></label>
-    </div>
+  <div class="wrap">{abx_head(k, dict(cfg, desc=desc), f'{total} partners')}
+    {tools}
     <ul id="partner-grid" class="pr-grid mt-6">{cards}
     </ul>
     <p class="pr-empty mt-6 hidden text-[15px] text-ink-mid" role="status">No partners match your search.</p>
   </div>
-</section>
-{f"""
+</section>"""
+    blocks = {
+        'directory': directory,
+        'models': lambda k, cfg: f"""
 <section id="models" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{sec_head(f'{next(nsec):02d} / Ways to Partner', 'Co-design <span class="sh-soft">change with us.</span>', f'{len(models)} models', desc='Every partnership is shaped around shared goals and the communities we serve.')}
+  <div class="wrap">{abx_head(k, cfg, f'{len(models)} models')}
     <ul class="plx-acts abx-models mt-8 lg:mt-10">{mhtml}</ul>
   </div>
-</section>""" if models else ''}
-{f"""
+</section>""" if models else '',
+        'how': lambda k, cfg: f"""
 <section id="how" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{sec_head(f'{next(nsec):02d} / How It Starts', 'From first message <span class="sh-soft">to shared results.</span>', f'{len(steps)} steps')}
+  <div class="wrap">{abx_head(k, cfg, f'{len(steps)} steps')}
     <ol class="plx-steps mt-8 lg:mt-10">{shtml}</ol>
   </div>
-</section>""" if steps else ''}
+</section>""" if steps else '',
+    }
+    secs, tabs = abx_build('partners', pc, blocks)
+    body = page_header([('Partners', 'partners.html')], 'Our Partners', _title(pc['hero']), '') + f'''
+<div class="plx abx"{_rev(pc)}>
+{abx_overview('partners.html', f'{total:02d}', _esc(pc['hero'].get('lead') or ''), facts,
+              [('Browse partners <span aria-hidden="true">↓</span>', '#directory'), ('Partner with us <span aria-hidden="true">↗</span>', 'contact.html?topic=Partnership#message')], '', 'Our Partners')}
+{abx_tabs(tabs) if tabs else ''}
+{secs}
 </div>
 ''' + cta_band(_esc(cl.get('title') or ''), _esc(cl.get('text') or ''),
                ('Partner With Us', 'contact.html?topic=Partnership#message'), ('Our projects', 'projects.html'))

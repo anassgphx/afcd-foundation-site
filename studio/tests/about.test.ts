@@ -141,6 +141,20 @@ describe('about pages', () => {
     expect(existsSync(join(h.siteRoot, team.people[0].image.src))).toBe(true);
   });
 
+  it('saves section settings: visibility, order and headings, validated', async () => {
+    await importAbout(h.db, h.cfg, null, SITE);
+    const { body: p } = await c.ed.get('/about/partners');
+    const sections = { models: { show: false }, how: { show: true, title: 'How we start', soft: '', label: 'First steps' } };
+    expect((await c.ed.put('/about/partners', { content: { ...p.content, sections: { Bad: { show: true } } } })).status).toBe(422);
+    expect((await c.ed.put('/about/partners', { content: { ...p.content, sections: { how: { title: 'x <b>' } } } })).status).toBe(422);
+    expect((await c.ed.put('/about/partners', { content: { ...p.content, sections: { how: { colour: 'red' } } } })).status).toBe(422);
+    expect((await c.ed.put('/about/partners', { content: { ...p.content, sections, order: ['how', 'directory', 'models'] } })).status).toBe(200);
+    const saved = (await c.ed.get('/about/partners')).body.content;
+    expect(saved.order).toEqual(['how', 'directory', 'models']);
+    expect(saved.sections.how).toMatchObject({ show: true, title: 'How we start', soft: '', label: 'First steps' });
+    expect(saved.sections.models).toEqual({ show: false });
+  });
+
   it('builds a preview without touching the live site', async () => {
     await importAbout(h.db, h.cfg, null, SITE);
     const { body: p } = await c.ed.get('/about/mission-vision');
@@ -157,12 +171,20 @@ describe('about pages in the real generator (src/content.py)', () => {
     const file = join(dir, 'about.json');
     const team = { ...SITE.team, people: [{ name: 'Test <Person> & Co (fake)', role: 'Coordinator', group: 'board', bio: '', mediaId: null, image: null }], revision: 'rev-team-1' };
     const strategy = { ...SITE.strategy, objectives: (SITE.strategy.objectives as any[]).map((o, i) => (i === 0 ? { ...o, title: 'Renamed & “quoted”' } : o)), revision: 'rev-str-1' };
-    writeFileSync(file, JSON.stringify({ version: 1, pages: { team, strategy } }));
+    const partners = { ...SITE.partners, revision: 'rev-pt-1', order: ['how', 'directory'], sections: { models: { show: false }, how: { show: true, label: 'First steps', title: 'How we start', soft: '' } } };
+    writeFileSync(file, JSON.stringify({ version: 1, pages: { team, strategy, partners } }));
     execFileSync('python3', ['-I', 'src/content.py'], { cwd: REPO, env: { ...process.env, STUDIO_ABOUT_JSON: file, STUDIO_OUT: dir }, stdio: 'pipe' });
     const teamHtml = readFileSync(join(dir, 'team.html'), 'utf8');
     expect(teamHtml).toContain('Test &lt;Person&gt; &amp; Co (fake)'); expect(teamHtml).toContain('data-studio-rev="rev-team-1"');
     expect(teamHtml).toContain('id="board"'); expect(teamHtml).not.toContain('Team profiles are not published yet');
     expect(readFileSync(join(dir, 'strategy.html'), 'utf8')).toContain('Renamed &amp; “quoted”');
+    // sections: hidden ones are gone (menu too), the order and the headings follow Studio, numbers run 01, 02…
+    const pt = readFileSync(join(dir, 'partners.html'), 'utf8');
+    expect(pt).not.toContain('id="models"'); expect(pt).not.toContain('>Ways to partner<');
+    expect(pt.indexOf('id="how"')).toBeLessThan(pt.indexOf('id="directory"'));
+    expect(pt).toMatch(/<span class="sh-num">01<\/span><span class="sh-label">First steps<\/span>/);
+    expect(pt).toContain('How we start'); expect(pt).not.toContain('to shared results.');
+    expect(pt).toMatch(/class="pl-tab">How it starts<\/a><a href="#directory" class="pl-tab">Directory/);
     // Our Story was not in the file: built-in text, no revision marker
     const story = readFileSync(join(dir, 'our-story.html'), 'utf8');
     expect(story).toContain('Community-Rooted Leadership'); expect(story).not.toContain('data-studio-rev');

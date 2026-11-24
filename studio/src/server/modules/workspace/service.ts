@@ -53,7 +53,7 @@ export async function notifications(db: DB, user: { id: string; role: Role }): P
       rows: () => db.select({ id: partners.id, title: partners.name, status: partners.status, submittedBy: partners.submittedBy, updatedAt: partners.updatedAt }).from(partners).where(inArray(partners.status, ['in_review', 'approved', 'changes_requested'])) },
     { kind: 'Pillar', perm: { read: 'pillar.read', approve: 'pillar.approve', publish: 'pillar.publish' }, href: (id) => `/studio/pillars/${id}`,
       rows: () => db.select({ id: pillars.id, title: pillars.name, status: pillars.status, submittedBy: pillars.submittedBy, updatedAt: pillars.updatedAt }).from(pillars).where(inArray(pillars.status, ['in_review', 'approved', 'changes_requested'])) },
-    { kind: 'About page', perm: { read: 'about.read', approve: 'about.approve', publish: 'about.publish' }, href: (id) => `/studio/about/${id}`,
+    { kind: 'About page', perm: { read: 'about.read', approve: 'about.approve', publish: 'about.publish' }, href: (id) => `/studio/pages/site/${id}`,
       rows: async () => (await db.select({ id: aboutPages.id, key: aboutPages.key, status: aboutPages.status, submittedBy: aboutPages.submittedBy, updatedAt: aboutPages.updatedAt }).from(aboutPages).where(inArray(aboutPages.status, ['in_review', 'approved', 'changes_requested'])))
         .map(({ key, ...r }) => ({ ...r, title: ABOUT_META[key as AboutKey]?.title ?? key })) },
     { kind: 'SEO settings', perm: { read: 'seo.read', approve: 'seo.approve', publish: 'seo.publish' }, href: (_id) => '/studio/seo/pages',

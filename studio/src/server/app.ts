@@ -354,7 +354,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     const p = await AB.loadAbout(db, c.req.param('ref'));
     const ids = p.content ? AB.contentMediaIds(p.key, p.content) : [];
     const mediaRows = ids.length ? await db.select().from(t.media).where(inArray(t.media.id, ids)) : [];
-    return c.json({ ...p, draft: undefined, meta: AB.ABOUT_META[p.key], media: mediaRows.map(withUrl), problems: await AB.aboutProblems(db, p), history: await AB.aboutHistory(db, p.id), context: await AB.aboutContext(db) });
+    return c.json({ ...p, draft: undefined, meta: AB.ABOUT_META[p.key], media: mediaRows.map(withUrl), problems: await AB.aboutProblems(db, p), history: await AB.aboutHistory(db, p.id), context: { ...(await AB.aboutContext(db)), sections: AB.sectionDefaults(cfg)[p.key] ?? {} } });
   });
   api.put('/about/:ref', perm('about.update'), async (c) => c.json(await AB.updateAbout(db, actor(c), c.req.param('ref'), await c.req.json())));
   api.post('/about/:ref/transition', async (c) => {

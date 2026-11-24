@@ -44,6 +44,14 @@ const mediaId = z.string().uuid().nullable().default(null);
 const hero = z.object({ title: opt(90), soft: opt(90), lead: opt(280) }).strict();
 const closing = z.object({ title: opt(90), text: opt(300) }).strict();
 const item = (t: number, x: number) => z.object({ title: opt(t), text: opt(x) }).strict();
+/** Per-section settings: shown or hidden, and any heading text that replaces the built-in one (see ABOUT_SECTIONS in
+ *  src/content.py). A field left out keeps the built-in text; an empty field shows nothing there. */
+export const sectionSchema = z.object({
+  show: z.boolean().default(true), tab: plain(40).optional(), label: plain(60).optional(), title: plain(120).optional(), soft: plain(120).optional(),
+  meta: plain(60).optional(), desc: plain(400).optional(), sub: plain(60).optional(), sub2: plain(60).optional(),
+}).strict();
+const SECTION_ID = z.string().regex(/^[a-z][a-z-]{1,29}$/);
+const layout = { sections: z.record(SECTION_ID, sectionSchema).default({}), order: z.array(SECTION_ID).max(20).default([]) };
 
 export const SCHEMAS = {
   'our-story': z.object({
@@ -59,9 +67,9 @@ export const SCHEMAS = {
     approach: z.object({ title: opt(60), soft: opt(60), steps: z.array(item(40, 260)).max(6).default([]) }).strict(),
     stats: z.array(z.object({ value: opt(12), label: opt(60) }).strict()).max(6).default([]),
     mediaId,
-    closing,
+    closing, ...layout,
   }).strict(),
-  'mission-vision': z.object({ hero, mission: opt(600), vision: opt(600), values: z.array(item(40, 320)).max(8).default([]), closing }).strict(),
+  'mission-vision': z.object({ hero, mission: opt(600), vision: opt(600), values: z.array(item(40, 320)).max(8).default([]), closing, ...layout }).strict(),
   strategy: z.object({
     hero, objectivesIntro: opt(420),
     objectives: z.array(z.object({ ref: z.string().regex(/^SO-\d{2}$/), title: opt(180), text: opt(600) }).strict()).max(20).default([]),
@@ -69,14 +77,14 @@ export const SCHEMAS = {
     summary: z.array(plain(1000)).max(5).default([]),
     regions: z.array(z.object({ name: opt(60), places: opt(260) }).strict()).max(16).default([]),
     coverage: opt(1000),
-    closing,
+    closing, ...layout,
   }).strict(),
   team: z.object({
     hero, intro: opt(700),
     people: z.array(z.object({ name: opt(80), role: opt(100), group: z.enum(['board', 'executive', 'staff', 'volunteers']), bio: opt(700), mediaId }).strict()).max(120).default([]),
-    closing,
+    closing, ...layout,
   }).strict(),
-  partners: z.object({ hero, directoryIntro: opt(260), models: z.array(item(40, 320)).max(6).default([]), steps: z.array(item(80, 320)).max(6).default([]), closing }).strict(),
+  partners: z.object({ hero, directoryIntro: opt(260), models: z.array(item(40, 320)).max(6).default([]), steps: z.array(item(80, 320)).max(6).default([]), closing, ...layout }).strict(),
 } as const;
 export type AboutContent<K extends AboutKey = AboutKey> = z.infer<(typeof SCHEMAS)[K]>;
 /** What a revision stores and the website receives (before media ids become image refs). */
@@ -289,6 +297,21 @@ export async function aboutContext(db: DB) {
     objectives: objs.map((o) => ({ ref: o.ref, pillarKeys: links.filter((l) => l.o === o.id).map((l) => l.key) })),
     groups: TEAM_GROUPS, publicEmails: PUBLIC_EMAILS,
   };
+}
+
+// ---------------------------------------------------------------- built-in section headings (src/content.py ABOUT_SECTIONS)
+export type SectionDefaults = Record<string, Record<string, Record<string, string | boolean>>>;
+let sectionsCache: { root: string; data: SectionDefaults } | null = null;
+/** The built-in sections of each page, in their default order, so the editor can show today's wording. */
+export function sectionDefaults(cfg: Config): SectionDefaults {
+  if (sectionsCache?.root === cfg.siteRoot) return sectionsCache.data;
+  let data: SectionDefaults = {};
+  try {
+    const py = `import sys, json, os; os.environ['STUDIO_ABOUT_JSON'] = '/nonexistent'; sys.path.insert(0, 'src'); import content as c\nprint(json.dumps(c.ABOUT_SECTIONS))`;
+    data = JSON.parse(execFileSync('python3', ['-I', '-c', py], { cwd: cfg.siteRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
+  } catch { /* site without the generator (tests): the editor shows no section settings */ }
+  sectionsCache = { root: cfg.siteRoot, data };
+  return data;
 }
 
 // ---------------------------------------------------------------- import of the current pages

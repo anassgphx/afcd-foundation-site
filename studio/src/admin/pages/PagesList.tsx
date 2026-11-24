@@ -6,6 +6,8 @@ import { DataTable, EmptyState, ListToolbar, useUrlState, workflowActions, type 
 import { Loading } from './Dashboard.tsx';
 
 type Row = { id: string; slug: string; title: string; status: string; publishedRevisionId: string | null; updatedAt: string };
+/** Site pages built from templates whose text is edited in Studio (Our Story, Mission & Vision, Strategy, Our Team, Partners). */
+type SiteRow = { id: string; key: string; title: string; file: string; desc: string; status: string; imported: boolean; publishedRevisionId: string | null; updatedAt: string; people: number | null };
 const slugify = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[’']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
 
 export function PagesList() {
@@ -13,7 +15,20 @@ export function PagesList() {
   const [rows, setRows] = useState<Row[] | null>(null); const [creating, setCreating] = useState(false);
   const [st, set] = useUrlState({ status: 'all', q: '' });
   const load = () => api<Row[]>('/pages').then(setRows).catch(() => setRows([]));
-  useEffect(() => { load(); }, []);
+  const [site, setSite] = useState<SiteRow[] | null>(null); const [importing, setImporting] = useState(false);
+  const loadSite = () => (can('about.read') ? api<SiteRow[]>('/about/records').then(setSite).catch(() => setSite([])) : setSite([]));
+  useEffect(() => { load(); loadSite(); }, []);
+  async function importSite() {
+    setImporting(true);
+    try { const r = await post<{ imported: number }>('/about/import'); toast(`Imported ${r.imported} page${r.imported === 1 ? '' : 's'} from the current website`); await loadSite(); }
+    catch (e) { toast((e as Error).message, true); } finally { setImporting(false); }
+  }
+  const siteColumns: Column<SiteRow>[] = [
+    { key: 'title', header: 'Page', sort: (r) => r.title, csv: (r) => r.title, render: (r) => <div className="dt-main"><span className="dt-thumb"><Icon n={r.key === 'team' ? 'users' : r.key === 'partners' ? 'partner' : 'book'} /></span><span className="min-w-0">{r.imported ? <Link className="title" to={`/studio/pages/site/${r.key}`}>{r.title}</Link> : <span className="title">{r.title}</span>}<span className="sub">{r.key === 'team' && r.people !== null ? `${r.people} ${r.people === 1 ? 'person' : 'people'} · ` : ''}{r.desc}</span></span></div> },
+    { key: 'file', header: 'Address', sort: (r) => r.file, csv: (r) => r.file, hideBelow: 800, render: (r) => <span className={r.publishedRevisionId ? 'dt-page' : 'sub'}>{r.publishedRevisionId && <Icon n="globe" width={13} height={13} />}<span className="mono">{r.file}</span></span> },
+    { key: 'status', header: 'Status', sort: (r) => r.status, csv: (r) => r.status, render: (r) => r.imported ? <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div> : <span className="sub">Not in Studio yet</span> },
+    { key: 'updated', header: 'Updated', align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
+  ];
   const is = (k: string, r: Row) => (k === 'all' ? r.status !== 'archived' : k === 'live' ? !!r.publishedRevisionId : k === 'draft' ? ['draft', 'changes_requested'].includes(r.status) : r.status === k);
   const base = (rows ?? []).filter((r) => !st.q || `${r.title} ${r.slug}`.toLowerCase().includes(st.q.toLowerCase()));
   const shown = base.filter((r) => is(st.status, r));
@@ -26,10 +41,16 @@ export function PagesList() {
   ];
   return <>
     <div className="page-h">
-      <div><h1>Pages</h1><p>Pages built with the visual builder from AFCD’s approved blocks. Existing site pages stay managed by their templates.</p></div>
+      <div><h1>Pages</h1><p>The website’s own pages, whose text you edit here, and pages built with the visual builder from AFCD’s approved blocks.</p></div>
       {can('page.create') && <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon n="plus" />New page</button>}
     </div>
+    {can('about.read') && <section className="card" style={{ marginBottom: 16 }}>
+      <div className="card-h"><h2>Site pages</h2>{site && site.some((r) => !r.imported) && can('about.publish') && <button className="btn btn-primary btn-sm" disabled={importing} onClick={importSite}>{importing ? 'Importing…' : 'Import current content'}</button>}</div>
+      {!site ? <Loading /> : <DataTable id="site-pages" rows={site} total={site.length} rowKey={(r) => r.id} columns={siteColumns} csvName="afcd-site-pages"
+        onOpen={(r) => { if (r.imported) navigate(`/studio/pages/site/${r.key}`); }} empty={<EmptyState icon="book" text="No site pages." />} />}
+    </section>}
     <section className="card">
+      <div className="card-h"><h2>Builder pages</h2></div>
       <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search pages" />
       {!rows ? <Loading /> : <DataTable id="pages" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-pages"
         actions={workflowActions<Row>({ base: '/pages', noun: ['page', 'pages'], name: (r) => r.title, canUpdate: can('page.update'), reload: load, post, toast })}

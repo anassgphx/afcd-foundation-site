@@ -1,69 +1,21 @@
-// About pages: Our Story, Mission & Vision, Strategy & Objectives, Our Team, and the texts of the Partners page.
-// One master–detail screen like Pillars: the five pages on the left, the selected page's editor on the right (on a phone,
-// two steps). Every page goes through review (draft → in review → approved → published), like any other record.
+// Site pages: Our Story, Mission & Vision, Strategy & Objectives, Our Team, and the texts of the Partners page.
+// Listed in Website › Pages (PagesList) and opened at /studio/pages/site/<key>. Every page goes through review
+// (draft → in review → approved → published), like any other record.
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
-import { Icon, Link, Modal, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import { Icon, Link, Modal, fmtDate, useCan, useMe, useToast } from '../ui.tsx';
 import { EditorHeader, Field, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 import '../pillars.css';
 import '../about.css';
 
-type Row = { id: string; key: string; title: string; file: string; desc: string; status: string; imported: boolean; publishedRevisionId: string | null; publishedAt: string | null; updatedAt: string; people: number | null };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Content = Record<string, any>;
 type Loaded = { id: string; key: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; verifiedAt: string | null; provenance: string; content: Content | null;
   meta: { title: string; file: string; desc: string }; media: MediaItem[]; problems: string[];
-  context: { pillars: { key: string; name: string }[]; objectives: { ref: string; pillarKeys: string[] }[]; groups: { value: string; label: string }[]; publicEmails: string[] };
+  context: { pillars: { key: string; name: string }[]; objectives: { ref: string; pillarKeys: string[] }[]; groups: { value: string; label: string }[]; publicEmails: string[]; sections: Record<string, Record<string, string | boolean>> };
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] } };
-
-const NUM: Record<string, string> = { 'our-story': '01', 'mission-vision': '02', strategy: '03', team: '04', partners: 'P' };
-const WIDE = '(min-width: 900px)';
-function useWide() {
-  const [wide, setWide] = useState(() => typeof matchMedia === 'undefined' || matchMedia(WIDE).matches);
-  useEffect(() => { const m = matchMedia(WIDE); const k = () => setWide(m.matches); m.addEventListener('change', k); return () => m.removeEventListener('change', k); }, []);
-  return wide;
-}
-
-function StatusLine({ r }: { r: Row }) {
-  if (!r.imported) return <>Not in Studio yet</>;
-  const live = !!r.publishedRevisionId;
-  const [tone, text] = r.status === 'published' ? ['live', 'Live']
-    : live ? ['live', { draft: 'Live · edits in draft', changes_requested: 'Live · changes requested', in_review: 'Live · edits in review', approved: 'Live · edits approved' }[r.status] ?? 'Live']
-    : ['new', r.status.replace('_', ' ')];
-  return <><span className={`pl-st pl-st-${tone}`} aria-hidden="true" />{text}{r.people !== null ? ` · ${r.people} ${r.people === 1 ? 'person' : 'people'}` : ''}</>;
-}
-
-export function AboutScreen({ refKey }: { refKey?: string }) {
-  const can = useCan(); const toast = useToast(); const wide = useWide();
-  const [rows, setRows] = useState<Row[] | null>(null); const [busy, setBusy] = useState(false);
-  const load = useCallback(() => api<Row[]>('/about/records').then(setRows).catch(() => setRows([])), []);
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => { if (wide && !refKey && rows?.some((r) => r.imported)) navigate(`/studio/about/${rows.find((r) => r.imported)!.key}`); }, [wide, refKey, rows]);
-  const sel = rows?.find((r) => r.key === refKey || r.id === refKey);
-  const missing = (rows ?? []).filter((r) => !r.imported).length;
-  async function importContent() {
-    setBusy(true);
-    try { const r = await post<{ imported: number }>('/about/import'); toast(`Imported ${r.imported} page${r.imported === 1 ? '' : 's'} from the current website`); await load(); }
-    catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
-  }
-  const list = <aside className="pl-master card" aria-label="About pages">
-    <div className="pl-master-h"><div><h1>About pages</h1><p className="muted">{rows ? `${rows.filter((r) => r.publishedRevisionId).length} of ${rows.length} managed here are live` : ' '}</p></div></div>
-    {rows && missing > 0 && <div className="notice n-info pl-master-note"><div><b>{missing === rows.length ? 'These pages are still written in the site’s code.' : `${missing} page${missing === 1 ? ' is' : 's are'} not in Studio yet.`}</b> Import their current text to edit it here. The website stays exactly as it is until someone publishes a change.
-      {can('about.publish') && <button className="btn btn-primary btn-sm" style={{ marginTop: 8 }} disabled={busy} onClick={importContent}>{busy ? 'Importing…' : 'Import current content'}</button>}</div></div>}
-    {!rows ? <Loading /> : <ol className="pl-items">{rows.map((r) => {
-      const inner = <><span className="pl-item-n ab-item-n">{NUM[r.key]}</span><span className="pl-item-t"><b>{r.title}</b><span className="pl-item-s"><StatusLine r={r} /></span></span></>;
-      return <li key={r.id} className={sel?.id === r.id ? 'on' : ''}>{r.imported ? <Link className="pl-item" to={`/studio/about/${r.key}`} aria-current={sel?.id === r.id ? 'page' : undefined}>{inner}</Link> : <div className="pl-item is-off">{inner}</div>}</li>;
-    })}</ol>}
-    <p className="muted pl-foot">Partner organisations are edited in <Link to="/studio/partners">Partners</Link>, pillars in <Link to="/studio/pillars">Pillars</Link>, photos in the <Link to="/studio/media">Media library</Link>.</p>
-  </aside>;
-  return <div className={`pl-md${refKey ? ' has-detail' : ''}`}>
-    {(wide || !refKey) && list}
-    {refKey ? <div className="pl-detail"><AboutEditor key={refKey} refKey={refKey} onChanged={load} /></div>
-      : wide && rows && <div className="pl-detail pl-empty card"><Icon n="book" /><p>{missing ? 'Import the current content to start.' : 'Choose a page.'}</p></div>}
-  </div>;
-}
 
 // ---------------------------------------------------------------- small form helpers (paths into the content object)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -138,6 +90,47 @@ function Photo({ c, path, media, pick, label, small }: { c: Ctx; path: (string |
   </div>;
 }
 
+// ---------------------------------------------------------------- sections: show/hide, order, headings
+const SECTION_FIELDS: [string, string, number, string][] = [
+  ['tab', 'Menu label', 40, 'In the sticky menu under the overview.'], ['label', 'Small label', 60, 'Next to the section number.'],
+  ['title', 'Heading', 120, 'Written in black.'], ['soft', 'Heading, second part', 120, 'Written in grey. Leave empty for none.'],
+  ['meta', 'Note on the right', 60, 'Short note at the end of the label line. Leave empty for none.'], ['desc', 'Description', 400, 'One or two lines beside the heading.'],
+  ['sub', 'Sub-heading', 60, 'Small heading inside the section.'], ['sub2', 'Second sub-heading', 60, 'Small heading inside the section.'],
+];
+function SectionsEditor({ c, defs }: { c: Ctx; defs: Record<string, Record<string, string | boolean>> }) {
+  const ids = Object.keys(defs);
+  if (!ids.length) return <p className="muted s3" style={{ margin: 0 }}>The site’s section list could not be read.</p>;
+  const movable = ids.filter((id) => !defs[id].fixed);
+  const saved: string[] = (c.f.order ?? []).filter((x: string) => movable.includes(x));
+  const order = [...saved, ...movable.filter((x) => !saved.includes(x))];
+  const own = (id: string) => (c.f.sections?.[id] ?? null) as Record<string, string | boolean> | null;
+  const val = (id: string, k: string) => (own(id)?.[k] ?? defs[id][k] ?? '') as string;
+  const shown = (id: string) => own(id)?.show !== false;
+  const base = (id: string) => { const { fixed: _f, ...d } = defs[id]; return { show: true, ...d, ...(own(id) ?? {}) }; };
+  const setField = (id: string, k: string, v: string | boolean) => c.set(['sections', id], { ...base(id), [k]: v });
+  const move = (i: number, d: -1 | 1) => { const n = [...order]; [n[i], n[i + d]] = [n[i + d], n[i]]; c.set(['order'], n); };
+  const row = (id: string, i: number | null) => {
+    const fixed = i === null; const on = shown(id); const fields = SECTION_FIELDS.filter(([k]) => k in defs[id]);
+    return <li key={id} className={`ab-sec${on ? '' : ' is-off'}`}>
+      <div className="ab-sec-h">
+        <span className="pl-step-n">{fixed ? '—' : String(i! + 1).padStart(2, '0')}</span>
+        <span className="ab-sec-t"><b>{val(id, 'label') || val(id, 'title') || id}</b><small>{fixed ? 'Frames the sections, always shown' : on ? (own(id) ? 'Shown · your text' : 'Shown · built-in text') : 'Hidden on the website'}</small></span>
+        {!fixed && <label className="ab-switch"><input type="checkbox" checked={on} onChange={(e) => setField(id, 'show', e.target.checked)} aria-label={`Show ${val(id, 'label') || id}`} /><span>{on ? 'Shown' : 'Hidden'}</span></label>}
+        {!fixed && <span className="pl-step-a">
+          <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === 0} onClick={() => move(i!, -1)} aria-label={`Move ${id} up`}>↑</button>
+          <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === order.length - 1} onClick={() => move(i!, 1)} aria-label={`Move ${id} down`}>↓</button></span>}
+      </div>
+      {fields.length > 0 && <details className="ab-sec-d"><summary>Edit the section’s texts</summary>
+        <div className="ab-sec-f">{fields.map(([k, lab, max, hint]) => <Field key={k} label={lab} span={k === 'desc' ? 3 : k === 'title' || k === 'soft' ? 2 : 1} count={[val(id, k).length, max]} hint={hint}>
+          {k === 'desc' ? <textarea className="textarea" rows={2} maxLength={max} value={val(id, k)} onChange={(e) => setField(id, k, e.target.value)} aria-label={`${id}: ${lab}`} />
+            : <input className="input" maxLength={max} value={val(id, k)} onChange={(e) => setField(id, k, e.target.value)} aria-label={`${id}: ${lab}`} />}</Field>)}
+          {own(id) && <button type="button" className="btn btn-sm btn-ghost s3" style={{ justifySelf: 'start' }} onClick={() => c.set(['sections', id], undefined)}><Icon n="undo" />Reset to built-in text</button>}
+        </div></details>}
+    </li>;
+  };
+  return <ol className="ab-secs s3">{ids.filter((id) => defs[id].fixed).map((id) => row(id, null))}{order.map((id, i) => row(id, i))}</ol>;
+}
+
 // ---------------------------------------------------------------- the editor
 export function AboutEditor({ refKey, onChanged }: { refKey: string; onChanged?: () => void }) {
   const can = useCan(); const me = useMe(); const toast = useToast();
@@ -155,8 +148,8 @@ export function AboutEditor({ refKey, onChanged }: { refKey: string; onChanged?:
   useEffect(() => { const k = (e: BeforeUnloadEvent) => { if (dirty) e.preventDefault(); }; window.addEventListener('beforeunload', k); return () => window.removeEventListener('beforeunload', k); }, [dirty]);
 
   if (!p) return <Loading />;
-  if (!f) return <><EditorHeader back={{ to: '/studio/about', label: 'About pages' }} title={p.meta.title} status="draft" live={false} dirty={false} actions={null} />
-    <div className="notice n-info"><div>This page’s content is not in Studio yet. Import it from the <Link to="/studio/about">About pages</Link> list.</div></div></>;
+  if (!f) return <><EditorHeader back={{ to: '/studio/pages', label: 'Pages' }} title={p.meta.title} status="draft" live={false} dirty={false} actions={null} />
+    <div className="notice n-info"><div>This page’s content is not in Studio yet. Import it from the <Link to="/studio/pages">Pages</Link> list.</div></div></>;
   const status = p.status; const live = !!p.publishedRevisionId;
   const editable = can('about.update') && status !== 'in_review';
   const c: Ctx = { f, editable, set: (path, v) => { setF((x) => setAt(x!, path, v)); setDirty(true); } };
@@ -189,6 +182,9 @@ export function AboutEditor({ refKey, onChanged }: { refKey: string; onChanged?:
     <p className="pl-title-prev s3" aria-label="Title preview">{f.hero?.title} <span>{f.hero?.soft}</span></p>
     <TextF c={c} path={['hero', 'lead']} label="Line under the title" max={280} rows={2} />
   </Section>;
+  const layout = <Section id="layout" title="Sections" desc="Show or hide each section, change their order with the arrows, and edit their headings. Numbers and the menu follow automatically.">
+    <SectionsEditor c={c} defs={p.context.sections ?? {}} />
+  </Section>;
   const closing = <Section id="closing" title="Closing call to action" desc="The “Get involved” band at the end of the page.">
     <TextF c={c} path={['closing', 'title']} label="Heading" max={90} />
     <TextF c={c} path={['closing', 'text']} label="Text" max={300} rows={2} />
@@ -200,10 +196,10 @@ export function AboutEditor({ refKey, onChanged }: { refKey: string; onChanged?:
   let sections: { id: string; label: string; icon: string; done?: boolean; optional?: boolean }[] = [];
   let body: ReactNode = null;
   if (p.key === 'our-story') {
-    sections = [{ id: 'hero', label: 'Page header', icon: 'log', done: !!f.hero?.title }, { id: 'intro', label: 'Introduction', icon: 'log', done: !!f.intro }, { id: 'statement', label: 'President’s statement', icon: 'users', optional: true },
+    sections = [{ id: 'hero', label: 'Page header', icon: 'log', done: !!f.hero?.title }, { id: 'layout', label: 'Sections', icon: 'layers', optional: true }, { id: 'intro', label: 'Introduction', icon: 'log', done: !!f.intro }, { id: 'statement', label: 'President’s statement', icon: 'users', optional: true },
       { id: 'journey', label: 'Journey', icon: 'calendar', optional: true }, { id: 'principles', label: 'What makes us different', icon: 'check', optional: true }, { id: 'areas', label: 'What we do', icon: 'pillars', optional: true },
       { id: 'approach', label: 'Approach', icon: 'layers', optional: true }, { id: 'impact', label: 'Impact numbers', icon: 'spark', optional: true }, { id: 'closing', label: 'Closing', icon: 'send', optional: true }];
-    body = <>{hero}
+    body = <>{hero}{layout}
       <Section id="intro" title="Introduction" desc="The black overview at the top of the page, and the panel next to it.">
         <TextF c={c} path={['intro']} label="Introduction" max={700} rows={4} hint="The large text in the black overview." />
         <Paras c={c} path={['paragraphs']} label="In short" max={600} maxItems={4} hint="Shown next to the overview when there is no photo." />
@@ -238,9 +234,9 @@ export function AboutEditor({ refKey, onChanged }: { refKey: string; onChanged?:
       </Section>
       {closing}</>;
   } else if (p.key === 'mission-vision') {
-    sections = [{ id: 'hero', label: 'Page header', icon: 'log', done: !!f.hero?.title }, { id: 'mission', label: 'Mission', icon: 'send', done: !!f.mission }, { id: 'values', label: 'Values', icon: 'check', done: (f.values ?? []).length > 0 },
+    sections = [{ id: 'hero', label: 'Page header', icon: 'log', done: !!f.hero?.title }, { id: 'layout', label: 'Sections', icon: 'layers', optional: true }, { id: 'mission', label: 'Mission', icon: 'send', done: !!f.mission }, { id: 'values', label: 'Values', icon: 'check', done: (f.values ?? []).length > 0 },
       { id: 'vision', label: 'Vision', icon: 'eye', done: !!f.vision }, { id: 'closing', label: 'Closing', icon: 'send', optional: true }];
-    body = <>{hero}
+    body = <>{hero}{layout}
       <Section id="mission" title="Mission" desc="Step 01 of the path, “Today”: what AFCD does every day."><TextF c={c} path={['mission']} label="Mission" max={600} rows={3} /></Section>
       <Section id="values" title="Values" desc="Step 02, “Every step”: numbered I, II, III…">
         <Repeat c={c} path={['values']} label="Values" noun="Value" max={8} fields={[{ k: 'title', label: 'Name', max: 40, required: true }, { k: 'text', label: 'What it means', max: 320, rows: 2 }]} />
@@ -249,9 +245,9 @@ export function AboutEditor({ refKey, onChanged }: { refKey: string; onChanged?:
       {closing}</>;
   } else if (p.key === 'strategy') {
     const pname = (k: string) => p.context.pillars.find((x) => x.key === k)?.name ?? k;
-    sections = [{ id: 'hero', label: 'Page header', icon: 'log', done: !!f.hero?.title }, { id: 'objectives', label: 'Objectives', icon: 'check', done: (f.objectives ?? []).every((o: Content) => o.title) },
+    sections = [{ id: 'hero', label: 'Page header', icon: 'log', done: !!f.hero?.title }, { id: 'layout', label: 'Sections', icon: 'layers', optional: true }, { id: 'objectives', label: 'Objectives', icon: 'check', done: (f.objectives ?? []).every((o: Content) => o.title) },
       { id: 'who', label: 'Who we serve', icon: 'users', optional: true }, { id: 'where', label: 'Where we work', icon: 'pin', optional: true }, { id: 'closing', label: 'Closing', icon: 'send', optional: true }];
-    body = <>{hero}
+    body = <>{hero}{layout}
       <Section id="objectives" title="Strategic objectives" desc="SO-01 to SO-06 are AFCD’s strategic objective records, also linked from projects. Publishing this page updates their wording everywhere.">
         <TextF c={c} path={['objectivesIntro']} label="Introduction" max={420} rows={2} />
         <Repeat c={c} path={['objectives']} label="Objectives" noun="Objective" max={20} fixed head={(it) => it.ref}
@@ -269,9 +265,9 @@ export function AboutEditor({ refKey, onChanged }: { refKey: string; onChanged?:
       {closing}</>;
   } else if (p.key === 'team') {
     const people: Content[] = f.people ?? [];
-    sections = [{ id: 'hero', label: 'Page header', icon: 'log', done: !!f.hero?.title }, { id: 'intro', label: 'Introduction', icon: 'log', done: !!f.intro },
+    sections = [{ id: 'hero', label: 'Page header', icon: 'log', done: !!f.hero?.title }, { id: 'layout', label: 'Sections', icon: 'layers', optional: true }, { id: 'intro', label: 'Introduction', icon: 'log', done: !!f.intro },
       { id: 'people', label: `People (${people.length})`, icon: 'users', optional: true }, { id: 'closing', label: 'Closing', icon: 'send', optional: true }];
-    body = <>{hero}
+    body = <>{hero}{layout}
       <Section id="intro" title="Introduction" desc="The large text in the black overview."><TextF c={c} path={['intro']} label="Introduction" max={700} rows={4} /></Section>
       <Section id="people" title="People" desc="Grouped on the page in this order: board, executive team, staff, volunteers. Within a group, the order below is kept. Without people the page says profiles are not published yet.">
         <Repeat c={c} path={['people']} label="People" noun="Person" max={120} blank={{ name: '', role: '', group: 'executive', bio: '', mediaId: null }}
@@ -284,9 +280,9 @@ export function AboutEditor({ refKey, onChanged }: { refKey: string; onChanged?:
       </Section>
       {closing}</>;
   } else {
-    sections = [{ id: 'hero', label: 'Page header', icon: 'log', done: !!f.hero?.title }, { id: 'directory', label: 'Directory', icon: 'partner', optional: true }, { id: 'models', label: 'Ways to partner', icon: 'layers', optional: true },
+    sections = [{ id: 'hero', label: 'Page header', icon: 'log', done: !!f.hero?.title }, { id: 'layout', label: 'Sections', icon: 'layers', optional: true }, { id: 'directory', label: 'Directory', icon: 'partner', optional: true }, { id: 'models', label: 'Ways to partner', icon: 'layers', optional: true },
       { id: 'steps', label: 'How it starts', icon: 'send', optional: true }, { id: 'closing', label: 'Closing', icon: 'send', optional: true }];
-    body = <>{hero}
+    body = <>{hero}{layout}
       <Section id="directory" title="Partner directory" desc="The organisations, their logos and descriptions are Partner records: edit them in Partners.">
         <TextF c={c} path={['directoryIntro']} label="Line above the directory" max={260} rows={2} />
         <p className="s3" style={{ margin: 0 }}><Link className="btn btn-sm" to="/studio/partners"><Icon n="partner" />Open Partners</Link></p>
@@ -297,7 +293,7 @@ export function AboutEditor({ refKey, onChanged }: { refKey: string; onChanged?:
   }
 
   return <>
-    <EditorHeader back={{ to: '/studio/about', label: 'About pages' }} title={p.meta.title} file={p.meta.file} status={status} live={live} dirty={dirty}
+    <EditorHeader back={{ to: '/studio/pages', label: 'Pages' }} title={p.meta.title} file={p.meta.file} status={status} live={live} dirty={dirty}
       actions={<>
         <button className="btn" onClick={preview} disabled={!!busy}><Icon n="eye" />{busy === 'preview' ? 'Building…' : 'Preview'}</button>
         {editable && dirty && <button className="btn btn-primary" onClick={save} disabled={!!busy} title="Save (⌘S)"><Icon n="save" />{busy === 'save' ? 'Saving…' : 'Save draft'}</button>}

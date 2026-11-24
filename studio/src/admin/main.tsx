@@ -22,7 +22,7 @@ const SCREENS = {
 const screen = <K extends keyof typeof SCREENS>(k: K, name: string) => lazy(() => SCREENS[k]().then((m) => ({ default: (m as any)[name] as React.ComponentType<any> })));
 const ProjectsList = screen('projects', 'ProjectsList'), ProjectEditor = screen('projectEditor', 'ProjectEditor'), PagesList = screen('pagesList', 'PagesList');
 const Builder = screen('builder', 'Builder'), NewsList = screen('news', 'NewsList'), ArticleEditor = screen('news', 'ArticleEditor');
-const PartnersList = screen('partners', 'PartnersList'), PartnerEditor = screen('partners', 'PartnerEditor'), PillarsScreen = screen('pillars', 'PillarsScreen'), AboutScreen = screen('about', 'AboutScreen');
+const PartnersList = screen('partners', 'PartnersList'), PartnerEditor = screen('partners', 'PartnerEditor'), PillarsScreen = screen('pillars', 'PillarsScreen'), AboutEditor = screen('about', 'AboutEditor');
 const EventsList = screen('events', 'EventsList'), EventEditor = screen('events', 'EventEditor'), OpportunitiesList = screen('opportunities', 'OpportunitiesList');
 const OpportunityEditor = screen('opportunities', 'OpportunityEditor'), InboxPage = screen('inbox', 'InboxPage'), SeoPage = screen('seo', 'SeoPage');
 const TranslationsPage = screen('translations', 'TranslationsPage'), MenusPage = screen('menus', 'MenusPage'), HomeEditor = screen('home', 'HomeEditor');
@@ -174,9 +174,10 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   const ev = path.match(/^\/studio\/events\/([0-9a-f-]{36})$/);
   if (ev) return { title: 'Event', el: <EventEditor key={ev[1]} id={ev[1]} /> };
   if (path.startsWith('/studio/events')) return { title: 'Events', el: <EventsList /> };
-  const ab = path.match(/^\/studio\/about\/([a-z-]+|[0-9a-f-]{36})$/);
-  if (ab) return { title: 'About pages', el: <AboutScreen key="about" refKey={ab[1]} /> };
-  if (path.startsWith('/studio/about')) return { title: 'About pages', el: <AboutScreen key="about" /> };
+  // site pages (Our Story, Mission & Vision, Strategy, Our Team, Partners texts) live under Pages; /studio/about/… is the older address
+  const ab = path.match(/^\/studio\/(?:pages\/site|about)\/([a-z-]+|[0-9a-f-]{36})$/);
+  if (ab) return { title: 'Pages', el: <AboutEditor key={ab[1]} refKey={ab[1]} /> };
+  if (path.startsWith('/studio/about')) return { title: 'Pages', el: <PagesList /> };
   const pl = path.match(/^\/studio\/pillars\/([0-9a-f-]{36})$/);
   if (pl) return { title: 'Pillar', el: <PillarsScreen key="pillars" id={pl[1]} /> };
   if (path.startsWith('/studio/pillars')) return { title: 'Pillars', el: <PillarsScreen key="pillars" /> };

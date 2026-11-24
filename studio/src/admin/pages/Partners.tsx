@@ -57,7 +57,7 @@ export function PartnersList() {
   const missingLogo = (rows ?? []).filter((r) => r.publishedRevisionId && !r.logoMediaId).length;
   return <>
     <div className="page-h"><div><h1>Partners</h1><p>One record per organisation. Changes reach the Our Partners page only after review and publishing.</p></div>
-      <div className="row" style={{ gap: 8 }}>{can('about.read') && <Link className="btn" to="/studio/about/partners" title="The page’s title, introduction, partnership models and steps"><Icon n="log" />Page texts</Link>}
+      <div className="row" style={{ gap: 8 }}>{can('about.read') && <Link className="btn" to="/studio/pages/site/partners" title="The page’s title, introduction, partnership models and steps"><Icon n="log" />Page texts</Link>}
       {can('partner.create') && <button className="btn btn-primary" onClick={() => { setName(''); setErr(''); setAdding(true); }}><Icon n="plus" />Add partner</button>}</div></div>
     {rows && rows.length === 0 && <div className="notice n-info"><div><b>No partner records yet.</b> The website shows its built-in list of {''}partners. Import it to manage those organisations here; nothing changes on the website until something is published.</div>
       {can('partner.publish') && <button className="btn btn-primary btn-sm" disabled={busy} onClick={importList}>{busy ? 'Importing…' : 'Import current list'}</button>}</div>}

@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { makeApp, addUser, client, ORIGIN } from './helpers.ts';
-import { auditLog, publications } from '../src/server/db/schema.ts';
+import { auditLog, projectRevisions, projects, publications } from '../src/server/db/schema.ts';
 import { documentsDir, pdfProblem } from '../src/server/modules/publications/documents.ts';
 
 let h: Awaited<ReturnType<typeof makeApp>>;
@@ -156,6 +156,25 @@ describe('publications', () => {
     expect(data().detail.outputs).toEqual([{ title: 'FAKE TEST Report on nothing &amp; more', type: 'Policy brief', file: 'publication-fake-test-report.html', year: '2026' }]);
     expect((await admin.post(`/publications/${p.id}/unpublish`)).status).toBe(200);
     expect(data().detail.outputs).toBeUndefined();
+  });
+
+  it('shows publications linked to an activity under it (live ones only) and in the project’s Publications', async () => {
+    const ed = await client(h.app, 'ed@afcd.test'), rev = await client(h.app, 'rev@afcd.test'), admin = await client(h.app, 'admin@afcd.test');
+    // the live Eco Citizen page has an activity that links this paper and one that isn't published
+    const [proj] = await h.db.select().from(projects).where(eq(projects.slug, 'eco-citizen'));
+    const [r] = await h.db.select().from(projectRevisions).where(eq(projectRevisions.id, proj.publishedRevisionId!));
+    const snap = structuredClone(r.snapshot) as any; snap.detail.activities = [{ title: 'Regional forum', publications: ['fake-test-report', 'not-published-yet'] }, { title: 'Workshop' }];
+    await h.db.update(projectRevisions).set({ snapshot: snap }).where(eq(projectRevisions.id, r.id));
+    const up = await upload(h.app, ed, fakePdf());
+    const { body: p } = await ed.post('/publications', pub({ documentId: up.body.id }));   // not listing the project itself
+    await ed.post(`/publications/${p.id}/transition`, { action: 'submit' });
+    await rev.post(`/publications/${p.id}/transition`, { action: 'approve' });
+    expect((await admin.post(`/publications/${p.id}/publish`)).status).toBe(200);
+    const d = JSON.parse(readFileSync(join(h.siteRoot, 'src/data/projects.json'), 'utf8')).projects.find((x: { slug: string }) => x.slug === 'eco-citizen').detail;
+    const ref = { title: 'FAKE TEST Report on nothing &amp; more', type: 'Report', file: 'publication-fake-test-report.html', year: '2026' };
+    expect(d.activities[0].publications).toEqual([ref]);
+    expect(d.activities[1].publications).toBeUndefined();
+    expect(d.outputs).toEqual([ref]);
   });
 
   it('does not let the author approve their own submission (except a super admin)', async () => {

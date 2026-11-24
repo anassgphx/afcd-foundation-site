@@ -157,7 +157,7 @@ export const projects = pgTable('projects', {
   // (optionally a short verified figure) and activities with their photos. Exported as detail.programObjectives/outcomes/activities.
   programObjectives: jsonb('program_objectives').$type<{ title: string; text: string }[]>().notNull().default([]),
   outcomes: jsonb('outcomes').$type<{ title: string; text: string; figure: string }[]>().notNull().default([]),
-  activityItems: jsonb('activity_items').$type<{ title: string; text: string; when?: string; place?: string; mediaIds: string[] }[]>().notNull().default([]),
+  activityItems: jsonb('activity_items').$type<{ title: string; text: string; when?: string; place?: string; mediaIds: string[]; publicationSlugs?: string[] }[]>().notNull().default([]),
   context: text('context').notNull().default(''),
   approach: text('approach').notNull().default(''),
   activities: text('activities').notNull().default(''),

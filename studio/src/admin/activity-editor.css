@@ -81,3 +81,15 @@
 }
 @media (prefers-reduced-motion: reduce) { .ae *, .ae-gal * { transition: none !important; } }
 .ae-meta { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; } @media (max-width: 600px) { .ae-meta { grid-template-columns: 1fr; } } .ae-meta-hint { display: block; margin-top: -4px; font-size: 12px; }
+
+/* activity › publications (ActivityPubs) */
+.ae-pubs { display: grid; gap: 6px; }
+.ae-pub-chips { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ae-pub-chips li { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 4px 4px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-size: 13px; }
+.ae-pub-chips b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ae-pub-chips small { color: var(--muted); font-size: 11.5px; }
+.ae-pub-chips em { font-style: normal; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: #fef3c7; color: #92400e; }
+.ae-pub-chips button { display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 7px; background: none; color: var(--muted); cursor: pointer; font-size: 15px; }
+.ae-pub-chips button:hover { background: var(--canvas); color: var(--ink); }
+.ae-pub-doc { flex: none; width: 13px; height: 16px; background: var(--ink); clip-path: polygon(0 0, 64% 0, 100% 30%, 100% 100%, 0 100%); }
+.ae-pub-select { max-width: 460px; }

@@ -83,6 +83,11 @@ describe('project page sections', () => {
     expect(got.activityItems[1]).toMatchObject({ when: '', place: '' });
     const snap = P.toSnapshot(await P.loadProject(h.db, p.id));
     expect(snap.detail.activities).toEqual([{ title: 'Bootcamp', when: 'March 2025', place: 'Marrakech' }, { title: 'Forum', text: 'Closing day.' }]);
+    // publications linked to an activity are kept by slug (the publish step turns live ones into links)
+    expect((await ed.put(`/projects/${p.id}`, projectInput({ activityItems: [{ title: 'Forum', text: '', mediaIds: [], publicationSlugs: ['climate-brief'] }] }))).status).toBe(200);
+    expect((await ed.get(`/projects/${p.id}`)).body.activityItems[0].publicationSlugs).toEqual(['climate-brief']);
+    expect(P.toSnapshot(await P.loadProject(h.db, p.id)).detail.activities).toEqual([{ title: 'Forum', publications: ['climate-brief'] }]);
+    expect((await ed.put(`/projects/${p.id}`, projectInput({ activityItems: [{ title: 'A', text: '', mediaIds: [], publicationSlugs: Array.from({ length: 7 }, (_, k) => `p${k}`) }] }))).status).toBe(422);
     // short fields: a date or a place, not a paragraph
     expect((await ed.put(`/projects/${p.id}`, projectInput({ activityItems: [{ title: 'A', text: '', when: 'x'.repeat(41), mediaIds: [] }] }))).status).toBe(422);
     expect((await ed.put(`/projects/${p.id}`, projectInput({ activityItems: [{ title: 'A', text: '', place: 'x'.repeat(81), mediaIds: [] }] }))).status).toBe(422);

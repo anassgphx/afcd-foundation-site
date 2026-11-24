@@ -93,9 +93,19 @@ export class Publisher {
       const s = escapeSnapshot(structuredClone(r.snapshot) as unknown as Snapshot);
       if (s.detail && Object.keys(s.detail).length) {
         const d = s.detail as Record<string, unknown>; d.revision = r.id;
-        const outs = pubs.filter((p) => p.snap.projectSlugs.includes(s.slug))
+        const ref = (p: LivePub) => ({ title: escapeHtml(p.snap.title), type: escapeHtml(PUB_TYPE_LABEL[p.snap.type] ?? 'Publication'), file: publicationFile(p.snap.slug), year: (p.snap.publishedOn ?? '').slice(0, 4) });
+        // publications linked to an activity: shown under it, live ones only (a draft or unpublished one is left out)
+        const acts = (d.activities ?? []) as { publications?: string[] }[];
+        const bySlug = new Map(pubs.map((p) => [p.snap.slug, p]));
+        for (const a of acts) {
+          const list = (a.publications ?? []).map((sl) => bySlug.get(sl)).filter((p): p is LivePub => !!p).map(ref);
+          if (list.length) (a as Record<string, unknown>).publications = list; else delete a.publications;
+        }
+        const fromActs = new Set(acts.flatMap((a) => ((a.publications ?? []) as unknown as { file: string }[]).map((x) => x.file)));
+        // the project's Publications section: those that list the project, plus those linked to its activities
+        const outs = pubs.filter((p) => p.snap.projectSlugs.includes(s.slug) || fromActs.has(publicationFile(p.snap.slug)))
           .sort((a, b) => (b.snap.publishedOn ?? '').localeCompare(a.snap.publishedOn ?? ''))
-          .map((p) => ({ title: escapeHtml(p.snap.title), type: escapeHtml(PUB_TYPE_LABEL[p.snap.type] ?? 'Publication'), file: publicationFile(p.snap.slug), year: (p.snap.publishedOn ?? '').slice(0, 4) }));
+          .map(ref);
         if (outs.length) d.outputs = outs;
       }
       return s;

@@ -1147,11 +1147,11 @@ body.show-notes .note { display: block; }
 .pr-logo span { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 9999px; background: #fff; border: 1px solid #E5E5E5; font-size: 14px; font-weight: 600; letter-spacing: .02em; }
 .pr-card:hover .pr-logo { background: #EFEFEF; }
 /* a logo always fits its box, whatever its shape (wide, square, tall): never bigger than the box, never cropped */
-.pr-logo.has-img, .pt-logo.has-img { display: flex; align-items: center; justify-content: center; overflow: hidden; background: #fff; border: 1px solid #EFEFEF; }
-.pr-logo.has-img { padding: 12px 16px; }
+.pr-logo.has-img, .pt-logo.has-img { display: flex; align-items: center; justify-content: center; overflow: hidden; background: none; border: 0; border-radius: 0; }   /* logos are transparent PNGs: no box behind them */
+.pr-logo.has-img { padding: 8px 4px; justify-content: flex-start; }
 .pr-logo.has-img .pr-logo-img, .pt-logo.has-img img { display: block; width: auto !important; height: auto !important; max-width: 100%; max-height: 100%; min-width: 0; object-fit: contain !important; }
-.pt-logo.has-img { padding: 6px 10px; }
-.pr-card:hover .pr-logo.has-img { background: #fff; }
+.pt-logo.has-img { padding: 4px 0; justify-content: flex-start; }
+.pr-card:hover .pr-logo.has-img { background: none; }
 .pr-scope { margin-top: auto; padding-top: 14px; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--mid); }
 .pr-scope svg { width: 15px; height: 15px; }
 
@@ -2107,3 +2107,11 @@ button.pj-cover-i.is-poster:hover img { transform: scale(1.02); }
 .pjw-i img { display: block; width: 100%; height: auto !important; transition: transform .6s cubic-bezier(.2,.7,.2,1); }
 .pjw-i:hover img { transform: scale(1.03); }
 @media (prefers-reduced-motion: reduce) { .pjw-i img { transition: none; } .pjw-i:hover img { transform: none; } }
+
+/* Project activities: publications linked to an activity in Studio */
+.pja-pubs { display: grid; gap: 6px; width: 100%; margin-top: 16px; list-style: none; padding: 0; }
+.pja-pub { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 16px; border: 1px solid #ECECEA; background: #FAFAF9; transition: border-color .2s ease, background-color .2s ease; }
+.pja-pub:hover { border-color: #A8A29E; background: #fff; }
+.pja-pub .pjd-ico { width: 18px; height: 22px; }
+.pja-pub-k { display: block; font-size: 10.5px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: #78716C; }
+.pja-pub-t { display: block; margin-top: 2px; font-size: 14.5px; font-weight: 600; line-height: 1.3; letter-spacing: -.01em; }

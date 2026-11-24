@@ -991,12 +991,20 @@ def project_details():
             return (f'<div class="pja-ph n{k}" data-lb data-lb-title="{_esc(x["title"])}">{tiles}'
                     f'<ul hidden data-lb-items>{items}</ul>'
                     f'<span class="pja-count" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="2"/><circle cx="6" cy="7" r="1.2"/><path d="m3 12 3.5-3 2.5 2 2-1.5 2 1.5"/></svg>{n}</span></div>')
+        # publications linked to the activity in Studio (published ones only; values arrive HTML-escaped)
+        def act_pubs(x):
+            pubs = [p for p in (x.get('publications') or []) if isinstance(p, dict) and p.get('file')]
+            if not pubs:
+                return ''
+            return '<ul class="pja-pubs">' + ''.join(
+                f'<li><a href="{p["file"]}" class="pja-pub"><span class="pjd-ico" aria-hidden="true"></span><span class="min-w-0 flex-1"><span class="pja-pub-k">{p.get("type") or "Publication"}{(" · " + p["year"]) if p.get("year") else ""}</span>'
+                f'<span class="pja-pub-t">{p["title"]}</span></span><span aria-hidden="true">↗</span></a></li>' for p in pubs) + '</ul>'
         if acts:
             nn = sec('activities', 'Activities')
             act_block = '<ol class="pja-list mt-8 lg:mt-10">' + ''.join(
                 f'<li class="pja-row"><div class="pja-text"><span class="pjo-n">{j:02d}</span><span class="pja-t">{_esc(x["title"])}</span>'
                 + (f'<p class="pja-d">{x["text"] if x.get("title") == "Programme activities" and not d.get("activities") else _esc(x.get("text") or "")}</p>' if (x.get('text') or '').strip() else '')
-                + f'</div>{act_photos(x, j)}</li>' for j, x in enumerate(acts, 1)) + '</ol>'
+                + act_pubs(x) + f'</div>{act_photos(x, j)}</li>' for j, x in enumerate(acts, 1)) + '</ol>'
             act_sec = f"""
 <section id="activities" class="pl-sec py-8 lg:py-10">
   <div class="wrap">{sec_head(f'{nn} / Program Activities', 'The programme <span class="sh-soft">in action.</span>', (f'{len(acts)} activit' + ('ies' if len(acts) != 1 else 'y')) if d.get('activities') else 'Photos to come', desc='What participants do, each activity with its own photos.')}

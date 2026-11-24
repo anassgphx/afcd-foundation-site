@@ -6,7 +6,7 @@ import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, us
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
-import { ActivityList } from '../ActivityEditor.tsx';
+import { ActivityList, type PubOpt } from '../ActivityEditor.tsx';
 import { DurationPicker, TagInput, splitTags } from '../projectFields.tsx';
 import '../project-editor.css';
 
@@ -38,7 +38,7 @@ function LogoFrame({ m, st, tone }: { m: { url: string; large?: string; alt: str
     <img src={m.large ?? m.url} alt={m.alt} style={{ objectPosition: `${m.focalX}% ${m.focalY}%` }} /></span>;
 }
 type Outcome = { title: string; text: string; figure: string };
-type Activity = { title: string; text: string; when?: string; place?: string; mediaIds: string[] };
+type Activity = { title: string; text: string; when?: string; place?: string; mediaIds: string[]; publicationSlugs?: string[] };
 type LinkedEvent = { id: string; title: string; startDate: string; status: string; live: boolean };
 type MediaRow = { id: string; storageKey: string; originalName: string; width: number; height: number; alt: string; rightsConfirmed: boolean; focalX: number; focalY: number };
 type Loaded = Form & {
@@ -77,7 +77,7 @@ export function ProjectEditor({ id }: { id: string }) {
   const [form, setForm] = useState<Form>(EMPTY);
   const [media, setMedia] = useState<Record<string, MediaItem>>({});
   const [pillars, setPillars] = useState<Pillar[]>([]); const [objectives, setObjectives] = useState<Objective[]>([]);
-  const [partnersAll, setPartnersAll] = useState<PartnerOpt[]>([]);
+  const [partnersAll, setPartnersAll] = useState<PartnerOpt[]>([]); const [pubsAll, setPubsAll] = useState<PubOpt[]>([]);
   const [tab, setTab] = useState<(typeof TABS)[number]>('Summary');
   const [errors, setErrors] = useState<Record<string, string>>({}); const [banner, setBanner] = useState<{ kind: string; text: ReactNode } | null>(null);
   const [busy, setBusy] = useState(''); const [dirty, setDirty] = useState(false); const [slugTouched, setSlugTouched] = useState(!isNew);
@@ -94,6 +94,7 @@ export function ProjectEditor({ id }: { id: string }) {
     const [p, o] = await Promise.all([api<Pillar[]>('/pillars'), api<Objective[]>('/objectives')]);
     setPillars(p); setObjectives(o);
     api<PartnerOpt[]>('/partners').then(setPartnersAll).catch(() => setPartnersAll([]));   // partners the project can be linked to
+    api<PubOpt[]>('/publications').then(setPubsAll).catch(() => setPubsAll([]));   // publications an activity can link to
     if (isNew) return;
     const d = await api<Loaded>(`/projects/${id}`);
     const primary = d.pillars.find((x) => x.isPrimary)?.key ?? d.pillars[0]?.key ?? '';
@@ -500,7 +501,7 @@ export function ProjectEditor({ id }: { id: string }) {
               <PeSection title="Program activities" desc="What actually happened, each with its own photo gallery. Drag cards or photos to reorder; the first photo is the main one. The page shows 3 photos per activity, then “+N”. Photos need alt text and confirmed rights before review.">
                 <ActivityList items={form.activityItems} onChange={(v) => set('activityItems', v)} ro={ro} err={errors.activityItems}
                   media={media} addMedia={(ms) => setMedia((x) => ({ ...x, ...Object.fromEntries(ms.map((m) => [m.id, { ...x[m.id], ...m }])) }))}
-                  onPickPhotos={(i) => { setActPick(i); setDialog('activity'); }} canEditMedia={can('media.update')} />
+                  onPickPhotos={(i) => { setActPick(i); setDialog('activity'); }} canEditMedia={can('media.update')} publications={pubsAll} />
               </PeSection>
               <PeSection title="Activities text" desc="The earlier free-text activities. The page uses it while there are no activity cards above.">
                 <Field name="activities" label="Activities" optional hint="What actually happened?" err={errors.activities} count={[form.activities.length, 2000]}><textarea className="textarea" value={form.activities} onChange={(e) => set('activities', e.target.value)} maxLength={2000} disabled={ro} /></Field>

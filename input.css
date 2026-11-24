@@ -2199,3 +2199,12 @@ button.pj-cover-i.is-poster:hover img { transform: scale(1.02); }
 .pr-web { margin-top: auto; padding-top: 14px; font-size: 13px; font-weight: 600; }
 .pr-web:hover { text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 639px) { .pr-stage { height: 96px; padding: 12px; } .pr-stage .pr-logo.is-wide .pr-logo-img { height: 70% !important; } .pr-stage .pr-logo.is-mid .pr-logo-img { height: 82% !important; } }
+
+/* homepage partner strip: bigger logos (wider tiles, taller logo area; square, medium and wide still balanced) */
+.pt-tile { width: 250px; }
+.pt-grid .pt-tile { width: auto; }
+.pt-logo.has-img, .pt-logo.is-initials { height: 86px; }
+.pt-logo.has-img.is-square img { height: 100% !important; }
+.pt-logo.has-img.is-mid img { height: 84% !important; }
+.pt-logo.has-img.is-wide img { height: 66% !important; }
+.pt-logo.is-initials span { width: 64px; height: 64px; font-size: 16px; }

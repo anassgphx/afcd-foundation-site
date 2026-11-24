@@ -1726,9 +1726,16 @@ def partners():
     def initials(name):
         w = [x for x in name.replace('(', '').replace(')', '').split() if x[0].isalpha() and x.lower() not in ('of', 'in', 'for', 'the', 'and')]
         return ''.join(x[0] for x in w[:2]).upper()
+    # the logo uploaded in Studio (Partners → Logo); initials until there is one
+    def logo(n):
+        lg = (PARTNER_DETAILS.get(n) or {}).get('logo')
+        if lg and lg.get('src'):
+            return f'<span class="pr-logo has-img">{media_img(lg, "pr-logo-img", "220px")}</span>'
+        return f'<span class="pr-logo" aria-hidden="true"><span>{initials(n)}</span></span>'
+    with_logo = sum(1 for _g, names in PARTNERS for n in names if ((PARTNER_DETAILS.get(n) or {}).get('logo') or {}).get('src'))
     cards = ''.join(f'''
       <li class="pr-card" data-group="{g}" data-name="{n.lower()}">
-        <span class="pr-logo" aria-hidden="true"><span>{initials(n)}</span></span>
+        {logo(n)}
         <span class="mt-5 block text-[16px] font-semibold leading-snug tracking-[-0.015em]">{n}</span>
         <span class="pr-scope">{ico(g)}{g}</span>
       </li>''' for g, names in PARTNERS for n in names)
@@ -1752,7 +1759,7 @@ def partners():
 </section>
 
 <section id="directory" class="py-14 lg:py-16">
-  <div class="wrap">{sec_head('01 / Partner Directory', 'Organisations <span class="sh-soft">we work with.</span>', f'{total} partners', desc='Filter by scope or search by name. Logos will be added once each partner approves their use.')}
+  <div class="wrap">{sec_head('01 / Partner Directory', 'Organisations <span class="sh-soft">we work with.</span>', f'{total} partners', desc='Filter by scope or search by name.' + ('' if with_logo == total else ' Logos will be added once each partner approves their use.'))}
     <div class="pr-tools mt-8">
       <div class="nw-chips" role="group" aria-label="Filter partners">{chips}</div>
       <label class="pr-search"><span class="sr-only">Search partners</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13.2 13.2 3.3 3.3"/></svg><input id="partner-search" type="search" placeholder="Search partners" autocomplete="off"></label>
@@ -1760,7 +1767,7 @@ def partners():
     <ul id="partner-grid" class="pr-grid mt-6">{cards}
     </ul>
     <p class="pr-empty mt-6 hidden text-[15px] text-ink-mid" role="status">No partners match your search.</p>
-    {placeholder_note('Logos to be added. AFCD will confirm which partnerships are current.')}
+    {'' if with_logo == total else placeholder_note('Logos to be added. AFCD will confirm which partnerships are current.')}
   </div>
 </section>
 

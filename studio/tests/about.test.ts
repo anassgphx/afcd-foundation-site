@@ -6,7 +6,8 @@ import { join, resolve } from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import { makeApp, addUser, client, fakeRunner, pngBytes, ORIGIN } from './helpers.ts';
 import { aboutPages, aboutPageRevisions, auditLog, objectives } from '../src/server/db/schema.ts';
-import { ABOUT_KEYS, importAbout, readSiteAbout } from '../src/server/modules/about/service.ts';
+import { ABOUT_KEYS, importAbout, parseContent, readSiteAbout } from '../src/server/modules/about/service.ts';
+import { aboutCanvas } from '../src/server/modules/about/canvas.ts';
 import { loadConfig } from '../src/server/config.ts';
 
 // The real website checkout: its content.py holds the built-in About texts that Studio imports once.
@@ -153,6 +154,15 @@ describe('about pages', () => {
     expect(saved.order).toEqual(['how', 'directory', 'models']);
     expect(saved.sections.how).toMatchObject({ show: true, title: 'How we start', soft: '', label: 'First steps' });
     expect(saved.sections.models).toEqual({ show: false });
+  });
+
+  it('draws the live canvas from the unsaved draft with the real generator, writing nothing to the site', async () => {
+    const content = parseContent('our-story', { ...SITE['our-story'], intro: 'Canvas & draft “only”', sections: { journey: { show: false } } });
+    const html = await aboutCanvas(h.db, { ...h.cfg, siteRoot: REPO }, 'our-story', content);
+    expect(html).toContain('Canvas &amp; draft “only”'); expect(html).not.toContain('id="journey"');
+    expect(html).toContain('<base href="/studio/site/">'); expect(html).toContain('/studio/site/assets/');
+    expect(readFileSync(join(REPO, 'src/pages/our-story.html'), 'utf8')).not.toContain('Canvas &amp; draft');
+    expect((await c.ro.post('/about/our-story/canvas', { content: { intro: 'x' } })).status).not.toBe(403);   // readers may view the canvas
   });
 
   it('builds a preview without touching the live site', async () => {

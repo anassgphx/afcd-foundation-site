@@ -51,6 +51,7 @@ import { docMediaIds } from './modules/pages/render.ts';
 import { importPartners } from './modules/partners/import.ts';
 import * as PL from './modules/pillars/service.ts';
 import * as AB from './modules/about/service.ts';
+import { aboutCanvas } from './modules/about/canvas.ts';
 import { blockCatalog } from './modules/pages/blocks.ts';
 import { Publisher, type BuildRunner } from './modules/publish/service.ts';
 
@@ -355,6 +356,12 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     const ids = p.content ? AB.contentMediaIds(p.key, p.content) : [];
     const mediaRows = ids.length ? await db.select().from(t.media).where(inArray(t.media.id, ids)) : [];
     return c.json({ ...p, draft: undefined, meta: AB.ABOUT_META[p.key], media: mediaRows.map(withUrl), problems: await AB.aboutProblems(db, p), history: await AB.aboutHistory(db, p.id), context: { ...(await AB.aboutContext(db)), sections: AB.sectionDefaults(cfg)[p.key] ?? {} } });
+  });
+  // live canvas of the unsaved working copy (nothing written to the site)
+  api.post('/about/:ref/canvas', perm('about.read'), bodyLimit({ maxSize: 512 * 1024, onError: () => { throw new AppError(422, 'The page is too large.'); } }), async (c) => {
+    const p = await AB.findPage(db, c.req.param('ref')); const key = p.key as AB.AboutKey;
+    const b = await c.req.json().catch(() => ({})) as { content?: unknown };
+    return c.json({ html: await aboutCanvas(db, cfg, key, AB.parseContent(key, b.content)) });
   });
   api.put('/about/:ref', perm('about.update'), async (c) => c.json(await AB.updateAbout(db, actor(c), c.req.param('ref'), await c.req.json())));
   api.post('/about/:ref/transition', async (c) => {

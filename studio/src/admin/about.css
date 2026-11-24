@@ -30,3 +30,16 @@
 .ab-sec-d summary { padding: 8px 0; font-size: 12.5px; cursor: pointer; color: var(--muted); }
 .ab-sec-f { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; padding: 4px 0 12px; }
 @media (max-width: 640px) { .ab-sec-h { grid-template-columns: minmax(0, 1fr) auto; } .ab-sec-h .pl-step-n { display: none; } .ab-sec-f { grid-template-columns: minmax(0, 1fr); } .ab-sec-f > * { grid-column: auto !important; } }
+/* visual editor (site pages): layer actions, section heading block, narrow inspector rows */
+.ab-builder .b-layer-act { display: flex; align-items: center; gap: 0; padding-right: 4px; }
+.ab-layer-act .b-more { min-width: 24px; height: 26px; padding: 0 4px; font-size: 13px; }
+.ab-layer-act .b-more:disabled { opacity: .3; }
+.ab-heads { border-top: 1px solid var(--line); padding-top: 10px; }
+.ab-heads summary { font-size: 12.5px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
+.b-insp .ab-rows li { grid-template-columns: 30px minmax(0, 1fr) auto; gap: 6px; padding: 8px; }
+.b-insp .pl-step-a { flex-direction: column; }
+.b-insp .ab-person { flex-direction: column; align-items: flex-start; }
+.b-insp .ab-photo img { width: 96px; }
+/* the move/hide buttons appear on hover or on the selected section, so names keep their room */
+.ab-builder .b-layer .ab-layer-act { display: none; }
+.ab-builder .b-layer:hover .ab-layer-act, .ab-builder .b-layer.on .ab-layer-act, .ab-builder .b-layer:focus-within .ab-layer-act { display: flex; }

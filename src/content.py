@@ -659,7 +659,7 @@ def about():
 {abx_overview('mission-vision.html', 'M·V', _esc(c.get('mission') or ''), [('Mission', '01'), ('Values', f'{len(vals):02d}'), ('Objectives', f'{len(OBJECTIVES):02d}')],
               [('Read the path <span aria-hidden="true">↓</span>', f'#{tabs[0][0]}' if tabs else '#overview'), ('Our strategy <span aria-hidden="true">↗</span>', 'strategy.html')], '', 'Mission &amp; Vision')}
 {abx_tabs(tabs) if tabs else ''}
-<section class="py-14 lg:py-20">
+<section id="path" class="plx-sec py-14 lg:py-20">
   <div class="wrap">{sec_head(f'01 / {_esc(ph.get("label") or "")}', ph_title, _esc(ph.get('meta') or ''))}
     <ol class="abx-path mt-8 lg:mt-12">{path}
     </ol>

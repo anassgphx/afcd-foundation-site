@@ -176,7 +176,7 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   if (path.startsWith('/studio/events')) return { title: 'Events', el: <EventsList /> };
   // site pages (Our Story, Mission & Vision, Strategy, Our Team, Partners texts) live under Pages; /studio/about/… is the older address
   const ab = path.match(/^\/studio\/(?:pages\/site|about)\/([a-z-]+|[0-9a-f-]{36})$/);
-  if (ab) return { title: 'Pages', el: <AboutEditor key={ab[1]} refKey={ab[1]} /> };
+  if (ab) return { title: 'Pages', el: <AboutEditor key={ab[1]} refKey={ab[1]} />, full: true };
   if (path.startsWith('/studio/about')) return { title: 'Pages', el: <PagesList /> };
   const pl = path.match(/^\/studio\/pillars\/([0-9a-f-]{36})$/);
   if (pl) return { title: 'Pillar', el: <PillarsScreen key="pillars" id={pl[1]} /> };

@@ -1,8 +1,9 @@
 // Top-bar workspace features: search across Studio records, and notifications computed from real state
 // (nothing is stored). Every query is filtered by the signed-in user's permissions; form messages are never searched.
+import { ABOUT_META, type AboutKey } from '../about/service.ts';
 import { and, count, desc, eq, gte, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
-import { articles, events, formSubmissions, opportunities, pageContents, pages, partners, pillars, projects, publications, publishJobs, seoOverrides } from '../../db/schema.ts';
+import { aboutPages, articles, events, formSubmissions, opportunities, pageContents, pages, partners, pillars, projects, publications, publishJobs, seoOverrides } from '../../db/schema.ts';
 import { can, type Role } from '../../rbac.ts';
 import { TEXT_PAGES } from '../home/service.ts';
 
@@ -52,6 +53,9 @@ export async function notifications(db: DB, user: { id: string; role: Role }): P
       rows: () => db.select({ id: partners.id, title: partners.name, status: partners.status, submittedBy: partners.submittedBy, updatedAt: partners.updatedAt }).from(partners).where(inArray(partners.status, ['in_review', 'approved', 'changes_requested'])) },
     { kind: 'Pillar', perm: { read: 'pillar.read', approve: 'pillar.approve', publish: 'pillar.publish' }, href: (id) => `/studio/pillars/${id}`,
       rows: () => db.select({ id: pillars.id, title: pillars.name, status: pillars.status, submittedBy: pillars.submittedBy, updatedAt: pillars.updatedAt }).from(pillars).where(inArray(pillars.status, ['in_review', 'approved', 'changes_requested'])) },
+    { kind: 'About page', perm: { read: 'about.read', approve: 'about.approve', publish: 'about.publish' }, href: (id) => `/studio/about/${id}`,
+      rows: async () => (await db.select({ id: aboutPages.id, key: aboutPages.key, status: aboutPages.status, submittedBy: aboutPages.submittedBy, updatedAt: aboutPages.updatedAt }).from(aboutPages).where(inArray(aboutPages.status, ['in_review', 'approved', 'changes_requested'])))
+        .map(({ key, ...r }) => ({ ...r, title: ABOUT_META[key as AboutKey]?.title ?? key })) },
     { kind: 'SEO settings', perm: { read: 'seo.read', approve: 'seo.approve', publish: 'seo.publish' }, href: (_id) => '/studio/seo/pages',
       rows: () => db.select({ id: seoOverrides.id, title: seoOverrides.file, status: seoOverrides.status, submittedBy: seoOverrides.submittedBy, updatedAt: seoOverrides.updatedAt }).from(seoOverrides).where(inArray(seoOverrides.status, ['in_review', 'approved', 'changes_requested'])) },
   ];

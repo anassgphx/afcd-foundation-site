@@ -35,6 +35,9 @@ import { pillars, pillarRevisions } from '../../db/schema.ts';
 import { pillarEntries } from '../pillars/render.ts';
 import type { PillarSnapshot } from '../pillars/service.ts';
 import type { PartnerSnapshot } from '../partners/service.ts';
+import { aboutPages, aboutPageRevisions, objectives } from '../../db/schema.ts';
+import { aboutEntries, type LiveAbout } from '../about/render.ts';
+import { ABOUT_META, type AboutKey, type AboutSnapshot } from '../about/service.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import { derivativeFiles } from '../media/service.ts';
@@ -52,7 +55,7 @@ import * as SET from '../settings/service.ts';
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
 
-export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string; partnersFile?: string; eventsFile?: string; fieldsFile?: string; pillarsFile?: string }) => Promise<string>;
+export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string; partnersFile?: string; eventsFile?: string; fieldsFile?: string; pillarsFile?: string; aboutFile?: string }) => Promise<string>;
 
 /** Default runner: the real generator and build. Tests inject a fake. */
 export const realRunner: BuildRunner = async (cfg, mode) => {
@@ -62,7 +65,7 @@ export const realRunner: BuildRunner = async (cfg, mode) => {
     const b = await run('npm', ['run', 'build'], { ...opts, env: { ...process.env } });
     return [a.stdout, b.stdout, b.stderr].join('\n');
   }
-  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}), ...(mode.partnersFile ? { STUDIO_PARTNERS_JSON: mode.partnersFile } : {}), ...(mode.eventsFile ? { STUDIO_EVENTS_JSON: mode.eventsFile } : {}), ...(mode.fieldsFile ? { PAGE_FIELDS_JSON: mode.fieldsFile } : {}), ...(mode.pillarsFile ? { STUDIO_PILLARS_JSON: mode.pillarsFile } : {}) };
+  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}), ...(mode.partnersFile ? { STUDIO_PARTNERS_JSON: mode.partnersFile } : {}), ...(mode.eventsFile ? { STUDIO_EVENTS_JSON: mode.eventsFile } : {}), ...(mode.fieldsFile ? { PAGE_FIELDS_JSON: mode.fieldsFile } : {}), ...(mode.pillarsFile ? { STUDIO_PILLARS_JSON: mode.pillarsFile } : {}), ...(mode.aboutFile ? { STUDIO_ABOUT_JSON: mode.aboutFile } : {}) };
   const a = mode.only === 'pages' ? { stdout: '' } : await run('python3', ['-I', 'src/content.py'], { ...opts, env });
   const b = await run('node', ['build.mjs'], { ...opts, env });
   return [a.stdout, b.stdout].join('\n');
@@ -209,6 +212,28 @@ export class Publisher {
     const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
     writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), pillars: list }, null, 2) + '\n'); renameSync(tmp, file);
     return live.map((x) => x.snap.mediaId).filter(Boolean) as string[];
+  }
+
+  get aboutFile() { return resolve(this.cfg.siteRoot, 'src/data/about.json'); }
+
+  /** Live About page revisions (optionally overriding one). */
+  async liveAbout(override?: { pageId: string; revisionId: string | null }): Promise<LiveAbout[]> {
+    const rows = await this.db.select({ id: aboutPages.id, rev: aboutPages.publishedRevisionId }).from(aboutPages);
+    const map = new Map(rows.filter((r) => r.rev).map((r) => [r.id, r.rev as string]));
+    if (override) { if (override.revisionId) map.set(override.pageId, override.revisionId); else map.delete(override.pageId); }
+    if (!map.size) return [];
+    const revs = await this.db.select().from(aboutPageRevisions).where(inArray(aboutPageRevisions.id, [...map.values()]));
+    return revs.map((r) => ({ id: r.id, snap: r.snapshot as unknown as AboutSnapshot }));
+  }
+
+  /** about.json lists the About pages published from Studio; without any, the generator keeps its built-in text. */
+  private async writeAbout(file: string, live: LiveAbout[]) {
+    if (!live.length) { if (existsSync(file)) rmSync(file); return [] as string[]; }
+    const { pages: list, mediaIds } = await aboutEntries(this.db, live);
+    mkdirSync(resolve(file, '..'), { recursive: true });
+    const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), pages: list }, null, 2) + '\n'); renameSync(tmp, file);
+    return mediaIds;
   }
 
   get eventsFile() { return resolve(this.cfg.siteRoot, 'src/data/events.json'); }
@@ -365,12 +390,13 @@ export class Publisher {
     return ids;
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; pillar?: { pillarId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; publication?: { publicationId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { file?: string; revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string }; settings?: { values: SET.Values; revision: string } } = {}) {
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; pillar?: { pillarId: string; revisionId: string | null }; about?: { pageId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; publication?: { publicationId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { file?: string; revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string }; settings?: { values: SET.Values; revision: string } } = {}) {
     const entries = await this.liveEntries(o.project, o.publication);
     await this.writeRedirects(o.redirects === 'pending');
     this.writeData(this.dataFile, entries);
     const partnerMedia = await this.writePartners(this.partnersFile, o.partner, o.project);
     const pillarMedia = await this.writePillars(this.pillarsFile, o.pillar);
+    const aboutMedia = await this.writeAbout(this.aboutFile, await this.liveAbout(o.about));
     const eventMedia = await this.writeEvents(this.eventsFile, o.event, o.project);
     const seoMedia = await this.writeSeo(o.seo);
     await this.writeSchema(o.schema, o.article, o.event);
@@ -393,7 +419,7 @@ export class Publisher {
       const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
       writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
     }
-    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...eventMedia, ...oppMedia, ...pub.mediaIds, ...seoMedia, ...homeMedia, ...settingsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...aboutMedia, ...eventMedia, ...oppMedia, ...pub.mediaIds, ...seoMedia, ...homeMedia, ...settingsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
     return { entries, live };
   }
 
@@ -542,7 +568,7 @@ export class Publisher {
       const msg = (e as Error).message;
       try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
       await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
-      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('settings') ? 'settings' : kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('pillar') ? 'pillar' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('publication') ? 'publication' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
+      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('settings') ? 'settings' : kind.includes('about') ? 'about_page' : kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('pillar') ? 'pillar' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('publication') ? 'publication' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
       throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
     }
     return { job, log };
@@ -785,6 +811,61 @@ export class Publisher {
       await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, newsFile: resolve(dir, 'news.json'), partnersFile });
       if (!existsSync(resolve(outDir, 'partners.html'))) throw new AppError(409, 'The preview could not be generated.');
       return { token, file: 'partners.html', mediaIds: snap.logoMediaId ? [snap.logoMediaId] : [] };
+    });
+  }
+
+  // ---------------------------------------------------------------- About pages
+  /** The strategic objectives' wording follows the published Strategy page (other modules read these rows). */
+  private async setObjectives(rows: { ref: string; title: string; description: string }[]) {
+    for (const r of rows) await this.db.update(objectives).set({ title: r.title, description: r.description }).where(eq(objectives.ref, r.ref));
+  }
+
+  async publishAboutPage(actor: NonNullable<Actor>, pageId: string) {
+    return this.locked(async () => {
+      const [p] = await this.db.select().from(aboutPages).where(eq(aboutPages.id, pageId));
+      if (!p) throw new AppError(404, 'Page not found.');
+      if (p.status !== 'approved' || !p.approvedRevisionId) throw new AppError(409, 'Only an approved page can be published.');
+      const [rev] = await this.db.select().from(aboutPageRevisions).where(eq(aboutPageRevisions.id, p.approvedRevisionId));
+      const snap = rev.snapshot as unknown as AboutSnapshot;
+      const meta = ABOUT_META[p.key as AboutKey];
+      const objs = snap.key === 'strategy' ? (snap.objectives as { ref: string; title: string; text: string }[]) : null;
+      const before = objs ? await this.db.select({ ref: objectives.ref, title: objectives.title, description: objectives.description }).from(objectives) : [];
+      const { job, log } = await this.deliver('publish_about', actor, pageId, rev.id, async (log) => {
+        if (objs) await this.setObjectives(objs.map((o) => ({ ref: o.ref, title: o.title, description: o.text })));
+        try {
+          await this.writeSite({ about: { pageId, revisionId: rev.id } });
+          log.push(await this.runner(this.cfg, { kind: 'live' }));
+          const f = resolve(this.cfg.siteRoot, meta.file);
+          if (!existsSync(f)) throw new Error(`${meta.file} was not generated.`);
+          if (!readFileSync(f, 'utf8').includes(`data-studio-rev="${rev.id}"`)) throw new Error(`${meta.file} does not contain the published revision.`);
+        } catch (e) { if (objs) await this.setObjectives(before); throw e; }
+      }, `Publishing ${meta.title} failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(aboutPages).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, updatedAt: new Date() }).where(eq(aboutPages.id, pageId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'about.publish', { type: 'about_page', id: pageId }, `Published ${meta.title} (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file: meta.file };
+    });
+  }
+
+  /** Builds the page with the saved working copy in an isolated folder. */
+  async previewAboutPage(pageId: string, snap: AboutSnapshot) {
+    return this.locked(async () => {
+      this.cleanupPreviews();
+      const token = randomBytes(16).toString('hex');
+      const dir = resolve(this.cfg.previewDir, token);
+      const pagesDir = resolve(dir, 'pages'), outDir = resolve(dir, 'site'), dataFile = resolve(dir, 'projects.json'), aboutFile = resolve(dir, 'about.json');
+      mkdirSync(pagesDir, { recursive: true }); mkdirSync(outDir, { recursive: true });
+      this.writeData(dataFile, await this.liveEntries());
+      const live = (await this.liveAbout()).filter((x) => x.snap.key !== snap.key).concat({ id: 'preview', snap });
+      const { pages } = await aboutEntries(this.db, live);
+      writeFileSync(aboutFile, JSON.stringify({ version: 1, source: 'AFCD Studio (preview)', pages }, null, 2));
+      await this.writeNews(resolve(dir, 'news.json'), pagesDir, await this.liveArticles());
+      await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, newsFile: resolve(dir, 'news.json'), aboutFile });
+      const file = ABOUT_META[snap.key].file;
+      if (!existsSync(resolve(outDir, file))) throw new AppError(409, 'The preview could not be generated.');
+      return { token, file, mediaIds: [] as string[] };
     });
   }
 

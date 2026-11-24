@@ -12,7 +12,7 @@ import { NAV, Sidebar } from './Sidebar.tsx';
 // fetched the first time it is opened, and all of them are fetched in the background once Studio is idle.
 const SCREENS = {
   projects: () => import('./pages/Projects.tsx'), projectEditor: () => import('./pages/ProjectEditor.tsx'), pagesList: () => import('./pages/PagesList.tsx'),
-  builder: () => import('./pages/Builder.tsx'), news: () => import('./pages/News.tsx'), partners: () => import('./pages/Partners.tsx'), pillars: () => import('./pages/Pillars.tsx'),
+  builder: () => import('./pages/Builder.tsx'), news: () => import('./pages/News.tsx'), partners: () => import('./pages/Partners.tsx'), pillars: () => import('./pages/Pillars.tsx'), about: () => import('./pages/About.tsx'),
   events: () => import('./pages/Events.tsx'), opportunities: () => import('./pages/Opportunities.tsx'), publications: () => import('./pages/Publications.tsx'), inbox: () => import('./pages/Inbox.tsx'), seo: () => import('./pages/Seo.tsx'),
   translations: () => import('./pages/Translations.tsx'), menus: () => import('./pages/Menus.tsx'), home: () => import('./pages/Home.tsx'), media: () => import('./pages/Media.tsx'),
   admin: () => import('./pages/Admin.tsx'), approvals: () => import('./pages/Approvals.tsx'),
@@ -22,7 +22,7 @@ const SCREENS = {
 const screen = <K extends keyof typeof SCREENS>(k: K, name: string) => lazy(() => SCREENS[k]().then((m) => ({ default: (m as any)[name] as React.ComponentType<any> })));
 const ProjectsList = screen('projects', 'ProjectsList'), ProjectEditor = screen('projectEditor', 'ProjectEditor'), PagesList = screen('pagesList', 'PagesList');
 const Builder = screen('builder', 'Builder'), NewsList = screen('news', 'NewsList'), ArticleEditor = screen('news', 'ArticleEditor');
-const PartnersList = screen('partners', 'PartnersList'), PartnerEditor = screen('partners', 'PartnerEditor'), PillarsScreen = screen('pillars', 'PillarsScreen');
+const PartnersList = screen('partners', 'PartnersList'), PartnerEditor = screen('partners', 'PartnerEditor'), PillarsScreen = screen('pillars', 'PillarsScreen'), AboutScreen = screen('about', 'AboutScreen');
 const EventsList = screen('events', 'EventsList'), EventEditor = screen('events', 'EventEditor'), OpportunitiesList = screen('opportunities', 'OpportunitiesList');
 const OpportunityEditor = screen('opportunities', 'OpportunityEditor'), InboxPage = screen('inbox', 'InboxPage'), SeoPage = screen('seo', 'SeoPage');
 const TranslationsPage = screen('translations', 'TranslationsPage'), MenusPage = screen('menus', 'MenusPage'), HomeEditor = screen('home', 'HomeEditor');
@@ -174,6 +174,9 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   const ev = path.match(/^\/studio\/events\/([0-9a-f-]{36})$/);
   if (ev) return { title: 'Event', el: <EventEditor key={ev[1]} id={ev[1]} /> };
   if (path.startsWith('/studio/events')) return { title: 'Events', el: <EventsList /> };
+  const ab = path.match(/^\/studio\/about\/([a-z-]+|[0-9a-f-]{36})$/);
+  if (ab) return { title: 'About pages', el: <AboutScreen key="about" refKey={ab[1]} /> };
+  if (path.startsWith('/studio/about')) return { title: 'About pages', el: <AboutScreen key="about" /> };
   const pl = path.match(/^\/studio\/pillars\/([0-9a-f-]{36})$/);
   if (pl) return { title: 'Pillar', el: <PillarsScreen key="pillars" id={pl[1]} /> };
   if (path.startsWith('/studio/pillars')) return { title: 'Pillars', el: <PillarsScreen key="pillars" /> };

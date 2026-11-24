@@ -274,252 +274,411 @@ def placeholder_note(text, dark=False):
 
 
 # ---------------------------------------------------------------- About
-def about():
-    impact = [('2,700', 'Alumni of AFCD programs'), ('400', 'Ambassadors across Morocco'),
-              ('24', 'Projects completed'), ('<span data-years-since>19</span>', 'Years of community work, since 2007')]
-    stats = ''.join(
-        f'<div class="border-t border-white/20 py-6 pr-4"><dd class="text-5xl font-semibold tracking-tightest tabular-nums md:text-6xl">{n}</dd><dt class="mt-3 text-sm text-white/65">{t}</dt></div>'
-        for n, t in impact)
-    # Same coloured value cards as the homepage (single source: src/pages/index.html)
-    home = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pages', 'index.html'), encoding='utf-8').read()
-    values = re.search(r'<ul class="vl-row[^"]*">(.*?)</ul>', home, re.S).group(1).strip()
-    def obj_links(links):
-        if not links:
-            return '<span class="text-[13px] text-ink-mid">Cross-cutting, all pillars</span>'
-        return ''.join(f'<a class="inline-flex min-h-[30px] items-center rounded-full border border-ink-light bg-white px-3 text-[12.5px] font-medium hover:border-ink-pure" href="pillars.html#{slug}">{name}</a>' for name, slug in links)
-    objectives = ''.join(f'''
-      <li id="{ref.lower()}" class="so-card">
-        <span class="flex items-center justify-between gap-3"><span class="so-ref">{ref}</span><span class="so-n" aria-hidden="true">{ref[-2:]}</span></span>
-        <span class="mt-6 block text-[20px] font-semibold leading-[1.2] tracking-[-0.02em]">{text}</span>
-        <span class="mt-3 block text-[14.5px] leading-relaxed text-ink-dark">{desc}</span>
-        <span class="mt-auto flex flex-wrap gap-2 pt-6">{obj_links(links)}</span>
-      </li>''' for ref, text, desc, links in OBJECTIVES)
-    beneficiaries = ''.join(f'<li class="inline-flex min-h-[38px] items-center rounded-full bg-ink-faint px-4 text-[14px] font-medium">{b}</li>' for b in BENEFICIARIES)
-    summary = ''.join(f'<p>{p}</p>' for p in BENEFICIARY_SUMMARY)
-    regions = ''.join(f'<li class="rounded-2xl border border-white/10 bg-white/5 p-4"><span class="block text-[16px] font-semibold tracking-[-0.015em]">{r}</span><span class="mt-1 block text-[14px] leading-relaxed text-white/65">{c}</span></li>' for r, c in REGIONS)
-    team = ''.join(f'''
-        <li>
-          {ph('Team portrait', 'aspect-[4/5] w-full', '#DADADA')}
-          <p class="mt-4 text-lg font-medium tracking-[-0.015em]">Team member</p>
-          <p class="text-sm text-ink-mid">Role</p>
-        </li>''' for _ in range(4))
-    sections = f'''
-<section id="story" class="py-14 lg:py-16">
-  <div class="wrap">{sec_head('01 / Our Story', 'It started with young volunteers <span class="sh-soft">in Ait Ourir.</span>', 'Since 2007', desc='From a group of committed young volunteers in 2007 to programmes across Morocco.')}
-    <div class="mt-12 grid gap-12 lg:mt-16 lg:grid-cols-12 lg:gap-16">
-      <div class="lg:col-span-6">{ph('Youth First Academy, closing ceremony', 'aspect-[4/3] w-full rounded-3xl')}</div>
-      <div class="lg:col-span-5 lg:col-start-8">
-        <p class="text-xl leading-[1.45] tracking-[-0.01em] md:text-2xl">Founded in 2007 by a group of committed young volunteers, AFCD Foundation is a Moroccan nonprofit organization dedicated to empowering individuals and strengthening communities.</p>
-        <p class="body mt-6 text-ink-dark">Rooted in Ait Ourir and active through initiatives across Morocco, our work focuses on youth and women’s empowerment, environmental education, digital inclusion, and participatory local development.</p>
-        <p class="body mt-4 text-ink-dark">We believe sustainable change happens when people, institutions and communities work together to create opportunities and shape their own future.</p>
-        <dl class="aura-a mt-10 grid gap-5 rounded-2xl border border-ink-light p-5 text-sm sm:grid-cols-2 md:p-6">
-          <div><dt class="label text-ink-mid">Legal name</dt><dd class="mt-1.5 leading-snug">Association le Futur pour les Chantiers et le Développement</dd></div>
-          <div><dt class="label text-ink-mid">Main office</dt><dd class="mt-1.5 leading-snug">Marrakech, Morocco · roots in Ait Ourir, Al Haouz</dd></div>
-        </dl>
-      </div>
-    </div>
-  </div>
-</section>
+# The About pages (Our Story, Mission & Vision, Strategy, Our Team) and the Partners page texts are managed in AFCD Studio
+# (Content > About pages). Studio writes src/data/about.json (or env STUDIO_ABOUT_JSON) with one entry per published page,
+# in PLAIN TEXT: this generator escapes every value itself. Without the file (or for a page not yet published from
+# Studio) the pages use ABOUT_DEFAULTS below, which is also what Studio imports once. Nothing here is invented: the texts
+# are the ones the website showed, plus the copy AFCD supplied for Our Story and Our Team.
+import html as _html
+_U = _html.unescape   # the literals elsewhere in this file are HTML; the About content is plain text
 
-<section id="mission" class="py-14 lg:py-16">
-  <div class="wrap">{sec_head('02 / Mission &amp; Vision', 'What guides <span class="sh-soft">our work.</span>', 'Mission · Vision · Values', desc='A mission we act on every day, a vision we work toward, and four values that shape how we work.')}
-    <div class="mt-8 lg:mt-10">
-      <div class="grid gap-4 border-t border-ink-light py-8 md:grid-cols-12 md:gap-8 lg:py-10">
-        <p class="label text-ink-mid md:col-span-3 md:pt-2">Our Mission</p>
-        <p class="text-2xl leading-[1.2] tracking-[-0.025em] md:col-span-9 md:text-[32px]">To promote sustainable development by strengthening the capacities of young people and women through environmental education, economic empowerment, and innovation.</p>
-      </div>
-      <div class="grid gap-4 border-y border-ink-light py-8 md:grid-cols-12 md:gap-8 lg:py-10">
-        <p class="label text-ink-mid md:col-span-3 md:pt-2">Our Vision</p>
-        <p class="text-2xl leading-[1.2] tracking-[-0.025em] md:col-span-9 md:text-[32px]">A society free from exploitation and discrimination, where everyone has equal opportunities to grow, contribute, and realise their full potential.</p>
-      </div>
-      <p class="label mt-14 text-ink-mid">Our Values</p>
-      <ul class="vl-row mt-6 grid grid-cols-2 gap-3 lg:flex lg:gap-4">{values}</ul>
-    </div>
-  </div>
-</section>
+ABOUT_DEFAULTS = {
+    'our-story': {
+        'hero': {'title': 'It started with young volunteers', 'soft': 'in Ait Ourir.',
+                 'lead': 'Founded in 2007 by committed young volunteers, AFCD Foundation grew from Ait Ourir into programmes across Morocco.'},
+        'intro': 'Founded in 2007 by a group of passionate young people, AFCD Foundation began with a mission to build a sustainable future for Moroccan communities. What started as a local project has grown into a national platform for civic engagement and social transformation.',
+        'paragraphs': [
+            'AFCD Foundation is a Moroccan nonprofit association founded in 2007 that promotes sustainable development through youth and women’s empowerment, environmental education, civic participation, and digital inclusion.',
+            'Rooted in Ait Ourir and the Al Haouz area, with its main office in Marrakech, AFCD works with young people, women, and local communities across Morocco.',
+            'Through practical training, mentoring, community initiatives, and dialogue, AFCD helps people build skills and contribute to positive change in their communities.',
+        ],
+        'facts': [{'label': 'Founded', 'value': '2007'}, {'label': 'Roots', 'value': 'Ait Ourir, Al Haouz'}, {'label': 'Main office', 'value': 'Marrakech'}],
+        'legalName': 'Association le Futur pour les Chantiers et le Développement',
+        'foundedYear': 2007,
+        'statement': {
+            'kicker': 'Welcome to AFCD Foundation', 'title': 'AFCD Foundation: We Serve Our Community With Love',
+            'paragraphs': [
+                'AFCD is remarkably reputed locally, nationally, and internationally due to the fact that improving citizens’ lifestyles lies at the heart of most of our projects. Thus, we put much focus on education as it is considered the only key to emancipation. Youth and women’s empowerment issues top our agendas because AFCD considers both youths and women the backbone of society and their empowerment will bring about fruitful results.',
+                'It’s really mesmerizing that recently a lot of ambitious and vigor youths have shown an inner desire to work with AFCD, which feeds our team year in and year out. Furthermore, the overwhelming majority of volunteers are young people who are intrinsically motivated to make their areas a safe haven where everyone learns, produces, and shares.',
+            ],
+            'name': 'AKAYA Kamal', 'role': 'President of AFCD Foundation', 'mediaId': None,
+        },
+        'milestones': [
+            {'when': '2007', 'title': 'Founded', 'text': 'A group of young people committed to improving living conditions in their community founds AFCD.'},
+            {'when': 'Roots', 'title': 'Ait Ourir & Al Haouz', 'text': 'Work rooted in Ait Ourir and the Al Haouz area expands through regional and national initiatives.'},
+            {'when': '2020–21', 'title': 'Eco-Citizen & Youth First', 'text': 'Eco-Citizen, Youth First and Youth First Academy combine environmental awareness, youth mobilisation, leadership and active citizenship.'},
+            {'when': '2022 →', 'title': 'Leadership Lab', 'text': 'Successive editions of Leadership Lab develop this work through training, mentoring, entrepreneurship and support for community initiatives.'},
+        ],
+        'principles': [
+            {'title': 'Community-Rooted Leadership', 'text': 'Our programs are built and led by people from the communities we serve. This local ownership ensures that our work is grounded in reality.'},
+            {'title': 'Inclusive & Participatory', 'text': 'We believe real impact happens when people are included from the start. AFCD engages youth, women, and civil society at every stage of our initiatives.'},
+            {'title': 'Sustainable Impact', 'text': 'We don’t aim for quick wins. Our projects focus on long-term results—building skills, confidence, and resilience that last beyond the program timeline.'},
+            {'title': 'Environmental & Digital Focus', 'text': 'AFCD bridges critical gaps in environmental education and digital access, helping communities respond to global challenges with local solutions.'},
+            {'title': 'Transparent & Accountable', 'text': 'We are committed to ethical leadership and open communication. Transparency is central to our work, from budgeting to community reporting.'},
+            {'title': 'Driven by Innovation', 'text': 'From youth-led climate solutions to community hackathons, AFCD embraces creativity to tackle the most urgent challenges of our time.'},
+        ],
+        'areas': [
+            {'title': 'Youth Empowerment & Civic Engagement', 'pillar': 'youth-empowerment', 'text': 'We engage young people with pressing social issues and equip them with the tools and opportunities to realize their full potential. Our programs cultivate leadership skills, fostering a new generation of community leaders.'},
+            {'title': 'Environmental Stewardship & Community Action', 'pillar': 'green-thumbs', 'text': 'We champion environmental awareness and protection, inspiring collective action to address local and global ecological challenges, including climate change. We bring people together to collaborate on effective, sustainable solutions for our planet, advocating for Nationally Determined Contributions (NDCs).'},
+            {'title': 'Women’s Leadership & Mentorship', 'pillar': 'women-empowerment', 'text': 'We empower women by raising awareness about critical issues, offering direct guidance, and facilitating valuable network connections. Our goal is to build their capacities so they can become influential role models within their communities.'},
+            {'title': 'Digital Inclusion & Knowledge Access', 'pillar': 'digital-empowerment', 'text': 'We empower youth by closing the digital divide, ensuring equitable access to information and vital knowledge. Our initiatives equip people with the digital literacy and technological understanding essential to thrive and seize opportunities in today’s interconnected world.'},
+        ],
+        'approach': {'title': 'With communities,', 'soft': 'not simply for communities.', 'steps': [
+            {'title': 'Listen', 'text': 'Start from what communities in Ait Ourir and across Morocco say they need.'},
+            {'title': 'Build capacity', 'text': 'Strengthen people’s skills through education, empowerment and innovation.'},
+            {'title': 'Act together', 'text': 'Work with residents, institutions and partners so change lasts.'}]},
+        'stats': [{'value': '2,700', 'label': 'Alumni of AFCD programs'}, {'value': '400', 'label': 'Ambassadors across Morocco'}, {'value': '24', 'label': 'Projects completed'}],
+        'mediaId': None,
+        'closing': {'title': 'Let’s create change together.', 'text': 'Whether you’re interested in partnering, volunteering, or learning more about our work—AFCD Foundation is here to connect.'},
+    },
+    'mission-vision': {
+        'hero': {'title': 'What guides', 'soft': 'our work.', 'lead': 'A mission we act on every day, a vision we work toward, and four values that shape how we work.'},
+        'mission': 'To promote sustainable development by strengthening the capacities of young people and women through environmental education, economic empowerment, and innovation.',
+        'vision': 'A society free from exploitation and discrimination, where everyone has equal opportunities to grow, contribute, and realise their full potential.',
+        'values': [{'title': t, 'text': d} for _n, t, d in VALUES],
+        'closing': {'title': 'Let’s create change together.', 'text': 'Whether you’re interested in partnering, volunteering, or learning more about our work—AFCD Foundation is here to connect.'},
+    },
+    'strategy': {
+        'hero': {'title': 'Six strategic', 'soft': 'objectives.', 'lead': 'The institutional objectives behind our programmes and reporting, and the people and places we serve.'},
+        'objectivesIntro': f'Our institutional objectives guide programme design and reporting. They connect to our {PILLARS_WORD} pillars; they are not additional pillars.',
+        'objectives': [{'ref': r, 'title': t, 'text': d, 'pillars': [s for _n, s in links]} for r, t, d, links in OBJECTIVES],
+        'whoIntro': 'Age groups and participation criteria vary by programme; not every activity serves every group.',
+        'summary': list(BENEFICIARY_SUMMARY),
+        'regions': [{'name': r, 'places': c} for r, c in REGIONS],
+        'coverage': COVERAGE_NOTE,
+        'closing': {'title': 'Let’s create change together.', 'text': 'Whether you’re interested in partnering, volunteering, or learning more about our work—AFCD Foundation is here to connect.'},
+    },
+    'team': {
+        'hero': {'title': 'The people who carry', 'soft': 'our work forward.', 'lead': 'The team, volunteers and alumni who run AFCD programmes in Marrakech, Al Haouz and across Morocco.'},
+        'intro': 'At the heart of AFCD Foundation is a dynamic team united by passion, purpose, and innovation. Together, we transform ideas into action and challenges into opportunities, building a better future for all.',
+        'people': [],
+        'closing': {'title': 'Let’s create change together.', 'text': 'Whether you’re interested in partnering, volunteering, or learning more about our work—AFCD Foundation is here to connect.'},
+    },
+    'partners': {
+        'hero': {'title': 'Stronger', 'soft': 'together.', 'lead': 'International, national and local organizations that have supported AFCD’s programmes, as listed on the current Our Partners page.'},
+        'directoryIntro': 'Filter by scope or search by name.',
+        'models': [{'title': 'Fund', 'text': f'Support a programme under one of our {PILLARS_WORD} pillars, from a single cohort to multi-year work.'},
+                   {'title': 'Co-design', 'text': 'Build an initiative with AFCD and the community, from the first idea to the final report.'},
+                   {'title': 'Share expertise', 'text': 'Train, mentor or host participants, and bring your organisation’s know-how to a programme.'}],
+        'steps': [{'title': 'Tell us about your organisation', 'text': 'Share your goals and the communities or pillar you’d like to support.'},
+                  {'title': 'Explore the fit together', 'text': f'We look at how your goals connect with our {PILLARS_WORD} pillars and current programmes.'},
+                  {'title': 'Co-design and launch', 'text': 'We agree the plan, launch the work together and report on what it achieves.'}],
+        'closing': {'title': 'Let’s build something together.', 'text': 'Tell us about your organization and what you would like to support.'},
+    },
+}
+# Team groups, in the order the page shows them (Studio offers the same list).
+TEAM_GROUPS = [('board', 'Board'), ('executive', 'Executive team'), ('staff', 'Staff'), ('volunteers', 'Volunteers & ambassadors')]
 
-<section id="approach" class="bg-ink-pure text-white on-dark">
-  <div class="wrap py-14 lg:py-16">
-    <p class="label text-white/60">03 / Our Approach</p>
-    <blockquote class="mt-8 max-w-[18ch] text-[40px] font-semibold leading-[1.02] tracking-tightest sm:text-6xl lg:text-[80px]">With communities, not simply for communities.</blockquote>
-    <div class="mt-12 grid gap-px overflow-hidden rounded-3xl border border-white/15 bg-white/15 md:grid-cols-3">
-      <div class="bg-ink-pure p-6 md:p-8"><p class="label text-white/50">Listen</p><p class="mt-3 text-lg">Start from what communities in Ait Ourir and across Morocco say they need.</p></div>
-      <div class="bg-ink-pure p-6 md:p-8"><p class="label text-white/50">Build capacity</p><p class="mt-3 text-lg">Strengthen people’s skills through education, empowerment and innovation.</p></div>
-      <div class="bg-ink-pure p-6 md:p-8"><p class="label text-white/50">Act together</p><p class="mt-3 text-lg">Work with residents, institutions and partners so change lasts.</p></div>
-    </div>
-  </div>
-</section>
+_ABOUT_JSON = Path(os.environ.get('STUDIO_ABOUT_JSON') or Path(__file__).parent / 'data' / 'about.json')
+STUDIO_ABOUT = _json.loads(_ABOUT_JSON.read_text(encoding='utf-8')).get('pages', {}) if _ABOUT_JSON.is_file() else {}
 
-<section id="strategy" class="scroll-mt-28 border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap">{sec_head('04 / Strategy', 'Six strategic <span class="sh-soft">objectives.</span>', 'SO-01 to SO-06', desc='Our institutional objectives guide programme design and reporting. They connect to our four pillars; they are not additional pillars.')}
-    <ol class="mt-8 grid gap-3 md:grid-cols-2 lg:mt-10 lg:grid-cols-3">{objectives}</ol>
-  </div>
-</section>
 
-<section id="who-we-serve" class="scroll-mt-28 border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap">{sec_head('05 / Who We Work With', 'People and places <span class="sh-soft">we serve.</span>', 'Across Morocco', desc='Age groups and participation criteria vary by programme; not every activity serves every group.')}
-    <div class="mt-8 grid gap-4 lg:mt-10 lg:grid-cols-12">
-      <div class="rounded-[28px] border border-ink-light p-6 md:p-8 lg:col-span-7">
-        <p class="label text-ink-mid">Primary beneficiary groups</p>
-        <ul class="mt-5 flex flex-wrap gap-2">{beneficiaries}</ul>
-        <div class="mt-8 grid gap-4 border-t border-ink-light pt-6 text-[15px] leading-relaxed text-ink-dark">{summary}</div>
-      </div>
-      <div class="grid content-start gap-3 lg:col-span-5">
-        <div class="os-band on-dark text-white" style="padding:28px">
-          <p class="label text-white/60">Where we work</p>
-          <ul class="mt-5 grid gap-3">{regions}</ul>
+def about_content(key):
+    """The published Studio content of an About page, or the built-in text. Plain text: escape on output."""
+    return STUDIO_ABOUT.get(key) or ABOUT_DEFAULTS[key]
+
+
+# Strategic objectives published from Studio replace the built-in titles and texts everywhere on the site.
+if STUDIO_ABOUT.get('strategy', {}).get('objectives'):
+    _pn = {s: t for s, _n, t, _d, _r in PILLARS}
+    OBJECTIVES = [(o['ref'], _esc(o['title']), _esc(o.get('text') or ''), [(_pn.get(s, s), s) for s in o.get('pillars') or [] if s in _pn])
+                  for o in STUDIO_ABOUT['strategy']['objectives']]
+
+
+def _rev(c):
+    return f' data-studio-rev="{_esc(c["revision"])}"' if c.get('revision') else ''
+
+
+def _title(h):
+    """Hero title: main part, then the softer second part."""
+    return _esc(h.get('title') or '') + (f' <span class="text-ink-mid">{_esc(h["soft"])}</span>' if h.get('soft') else '')
+
+
+ABX_ICO = {
+    'alumni': '<path d="M2.5 8 12 4l9.5 4-9.5 4-9.5-4Z"/><path d="M6.5 10v4.5c0 1.4 2.5 2.7 5.5 2.7s5.5-1.3 5.5-2.7V10M21.5 8v5"/>',
+    'people': '<circle cx="8.5" cy="8" r="3"/><circle cx="16.5" cy="9.5" r="2.4"/><path d="M3 19c.7-3.3 2.9-5 5.5-5s4.8 1.7 5.5 5M14.2 15.2c.7-.5 1.5-.8 2.3-.8 2.1 0 3.8 1.5 4.4 4.1"/>',
+    'projects': '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 9.5h17M8 5V3.5M16 5V3.5M8 13.5l2.5 2.5 5-5"/>',
+    'years': '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+}
+
+
+def abx_stats(c):
+    """Impact numbers in one row: icon, big number, small spaced label. The years counter follows the founding year."""
+    icons = ['alumni', 'people', 'projects']
+    sup = lambda v: _esc(v[:-1]) + '<sup class="abx-plus">+</sup>' if v.endswith('+') else _esc(v)
+    rows = [(icons[i] if i < len(icons) else 'projects', sup(s['value']), _esc(s['label'])) for i, s in enumerate(c.get('stats') or [])]
+    fy = c.get('foundedYear')
+    if fy:
+        rows.append(('years', f'<span data-years-since>{__import__("datetime").date.today().year - int(fy)}</span>', f'Years of community work, since {int(fy)}'))
+    ico = lambda k: f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{ABX_ICO[k]}</svg>'
+    return '<dl class="abx-stats">' + ''.join(f'<div class="abx-stat"><span class="abx-stat-ico">{ico(k)}</span><dd>{v}</dd><dt>{l}</dt></div>' for k, v, l in rows) + '</dl>'
+
+
+def abx_nav(current):
+    """The About pages as numbered pills inside the black overview (like the pillar switcher)."""
+    return '<nav class="plx-pns" aria-label="About AFCD">' + ''.join(
+        f'<a href="{f}" class="plx-pn{" is-on" if f == current else ""}" title="{t}"' + (' aria-current="page"' if f == current else '') + f'>{i:02d}</a>'
+        for i, (f, t, _d) in enumerate(ABOUT_PAGES, 1)) + '</nav>'
+
+
+def abx_overview(file, big, lead, facts, ctas, side='', share_title=''):
+    facts_html = ''.join(f'<div class="plx-fact"><dt>{k}</dt><dd>{v}</dd></div>' for k, v in facts)
+    links = ''.join((f'<a href="{h}" class="plx-btn">{t}</a>' if i == 0 else f'<a href="{h}" class="plx-link">{t}</a>') for i, (t, h) in enumerate(ctas))
+    return f'''
+<section id="overview" class="plx-sec pt-8 lg:pt-10">
+  <div class="wrap">
+    <div class="plx-hero{' has-side' if side else ''}">
+      <div class="plx-hero-main">
+        <div class="plx-hero-top">
+          <span class="plx-big abx-big" aria-hidden="true">{big}</span>
+          <div class="plx-hero-meta">{abx_nav(file) if any(f == file for f, _t, _d in ABOUT_PAGES) else ''}</div>
         </div>
-        <div class="rounded-[28px] border border-ink-light p-6 md:p-7"><p class="label text-ink-mid">Coverage</p><p class="mt-3 text-[15px] leading-relaxed text-ink-dark">{COVERAGE_NOTE}</p></div>
+        <p class="plx-lead abx-lead">{lead}</p>
+        {f'<dl class="plx-facts">{facts_html}</dl>' if facts else ''}
+        <div class="plx-cta">{links}</div>
+        {share_bar(file, share_title, 'Share this page', 'plx-share')}
       </div>
+      {side}
     </div>
   </div>
-</section>
+</section>'''
 
-<section id="team" class="py-14 lg:py-16">
-  <div class="wrap">{sec_head('06 / Our Team', 'The people who carry <span class="sh-soft">our work forward.</span>', ('Join us', 'get-involved.html'))}
-    <ul class="mt-12 grid grid-cols-2 gap-x-5 gap-y-10 lg:mt-16 lg:grid-cols-4">{team}
-    </ul>
-    {placeholder_note('Team names, roles and portraits to be supplied by AFCD.')}
-  </div>
-</section>
 
-<section id="impact" class="bg-ink text-white on-dark py-14 lg:py-16">
-  <div class="wrap">{sec_head('07 / Our Impact', 'Our impact is <span class="sh-soft">a story of people.</span>', 'Since 2007', dark=True, desc='The measure of this work is the people who carry it on.')}
-    <dl class="mt-12 grid grid-cols-2 gap-x-6 lg:mt-16 lg:grid-cols-4">{stats}</dl>
-  </div>
-</section>
-'''
+def abx_tabs(tabs):
+    return f'''
+<nav class="pl-tabs" aria-label="On this page" data-pl-tabs>
+  <div class="wrap"><div class="pl-tabs-in">{''.join(f'<a href="#{a}" class="pl-tab">{b}</a>' for a, b in tabs)}</div></div>
+</nav>'''
 
-    parts = {m.group(1): m.group(0) for m in re.finditer(r'<section id="([a-z-]+)".*?</section>', sections, re.S)}
 
-    def renum_all(html):
-        # number every section heading on a page in order (sh-num pills and the dark "NN / Label" kicker)
-        n = iter(range(1, 20))
-        return re.sub(r'(<span class="sh-num">)\d\d(</span>)|(<p class="label text-white/60">)\d\d( / )',
-                      lambda m: (f'{m.group(1)}{next(n):02d}{m.group(2)}' if m.group(1) else f'{m.group(3)}{next(n):02d}{m.group(4)}'), html)
+def abx_cta(c):
+    cl = c.get('closing') or {}
+    return cta_band(_esc(cl.get('title') or 'Let’s create change together.'), _esc(cl.get('text') or ''),
+                    ('Get Involved', 'get-involved.html'), ('Partner With Us', 'get-involved.html#partner'))
 
-    cta = cta_band('Let’s create change together.', 'Join our community, explore opportunities or collaborate with AFCD Foundation.',
-                   ('Get Involved', 'get-involved.html'), ('Partner With Us', 'get-involved.html#partner'))
+
+def abx_rows(items, cls='abx-rows'):
+    """Numbered list rows (title + text), the same rhythm as the pillar objectives."""
+    return f'<ol class="plx-objs {cls}">' + ''.join(
+        f'<li class="plx-obj"><span class="plx-obj-n">{j:02d}</span><span class="min-w-0"><span class="plx-obj-t">{_esc(x["title"])}</span>'
+        + (f'<span class="plx-obj-d">{_esc(x["text"])}</span>' if (x.get('text') or '').strip() else '') + '</span></li>'
+        for j, x in enumerate(items, 1)) + '</ol>'
+
+
+def about():
     ABOUT = ('About Us', 'about.html')
+    num = lambda: iter(range(1, 20))
 
-    def sub(file, crumb, label, title, lead, keys, meta_title, meta_desc):
-        first = re.sub(r'\s*<header class="sh">.*?</header>', '', parts[keys[0]], count=1, flags=re.S)  # page header already titles it
-        first = first.replace('mt-12 grid', 'grid', 1).replace('<div class="mt-8 lg:mt-10">', '<div>', 1).replace('mt-8 grid', 'grid', 1).replace('mt-12 grid', 'grid', 1)
-        body = page_header([ABOUT, (crumb, file)], label, title, lead) + renum_all('\n'.join([first] + [parts[k] for k in keys[1:]])) + cta + about_more(file)
-        page(file, meta_title, meta_desc, 'about', body, parent=ABOUT)
-
-    # ---- Our Story: custom layout (story + facts, journey, approach)
-    journey = [
-        ('2007', 'Founded', 'A group of young people committed to improving living conditions in their community founds AFCD.'),
-        ('Roots', 'Ait Ourir &amp; Al Haouz', 'Work rooted in Ait Ourir and the Al Haouz area expands through regional and national initiatives.'),
-        ('2020–21', 'Eco-Citizen &amp; Youth First', 'Eco-Citizen, Youth First and Youth First Academy combine environmental awareness, youth mobilisation, leadership and active citizenship.'),
-        ('2022 →', 'Leadership Lab', 'Successive editions of Leadership Lab develop this work through training, mentoring, entrepreneurship and support for community initiatives.'),
-    ]
-    area_tones = ['#FFB2B9', '#A8DDFB', '#82E591', '#FBE38A']
-    area_slugs = ['youth-empowerment', 'women-empowerment', 'green-thumbs', 'digital-empowerment']
-    areas = ''.join(f'<li><a href="pillars.html#{sl}" class="os-area"><span class="os-area-dot" style="--c:{c}" aria-hidden="true"></span><span class="flex-1">{t}</span><span class="os-area-arr" aria-hidden="true">↗</span></a></li>'
-                    for t, c, sl in zip(AREAS, area_tones, area_slugs))
-    acts = ''.join(f'<li class="os-act"><span class="os-act-n">{i:02d}</span><span>{t}</span></li>' for i, t in enumerate(ACTIVITIES, 1))
-    steps = ''.join(f'''
-        <li class="os-step">
-          <span class="os-step-k">{k}</span>
-          <span class="os-step-dot" aria-hidden="true"></span>
-          <span class="mt-5 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span>
-          <span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span>
-        </li>''' for k, t, d in journey)
-    approach = [('Listen', 'Start from what communities in Ait Ourir and across Morocco say they need.'),
-                ('Build capacity', 'Strengthen people’s skills through education, empowerment and innovation.'),
-                ('Act together', 'Work with residents, institutions and partners so change lasts.')]
-    appr = ''.join(f'''
-          <li class="os-ap"><span class="os-ap-n">{i:02d}</span><span><span class="block text-[19px] font-semibold tracking-[-0.02em]">{t}</span><span class="mt-1.5 block text-[14.5px] leading-relaxed text-white/65">{d}</span></span></li>'''
-                   for i, (t, d) in enumerate(approach, 1))
-    body = page_header([ABOUT, ('Our Story', 'our-story.html')], 'About · Our Story',
-                       'It started with young volunteers <span class="text-ink-mid">in Ait Ourir.</span>',
-                       'Founded in 2007 by committed young volunteers, AFCD Foundation grew from Ait Ourir into programmes across Morocco.') + f'''
-
-<section id="story" class="py-14 lg:py-20">
-  <div class="wrap grid gap-10 lg:grid-cols-12 lg:gap-16">
-    <div class="lg:col-span-6">
-      <p class="text-[26px] font-medium leading-[1.25] tracking-[-0.025em] md:text-[32px]">AFCD Foundation is a Moroccan nonprofit association founded in 2007 that promotes sustainable development through <span class="text-ink-mid">youth and women’s empowerment, environmental education, civic participation, and digital inclusion.</span></p>
-      <div class="mt-8 grid gap-5 sm:grid-cols-2">
-        <p class="text-[15.5px] leading-relaxed text-ink-dark">Rooted in Ait Ourir and the Al Haouz area, with its main office in Marrakech, AFCD works with young people, women, and local communities across Morocco.</p>
-        <p class="text-[15.5px] leading-relaxed text-ink-dark">Through practical training, mentoring, community initiatives, and dialogue, AFCD helps people build skills and contribute to positive change in their communities.</p>
+    # ---------------------------------------------------------------- Our Story
+    c = about_content('our-story')
+    n = num()
+    photo = c.get('image')
+    paras = ''.join(f'<p>{_esc(p)}</p>' for p in c.get('paragraphs') or [])
+    legal = f'<div class="abx-legal"><p class="plx-k">Legal name</p><p class="abx-legal-v">{_esc(c["legalName"])}</p></div>' if c.get('legalName') else ''
+    side = (f'<figure class="plx-photo">{media_img(photo, "h-full w-full", "(min-width: 1024px) 40vw, 100vw", eager=True)}</figure>' if photo else
+            f'<div class="plx-side abx-side"><p class="plx-k">In short</p><div class="abx-paras">{paras}</div>{legal}</div>' if paras or legal else '')
+    facts = [(_esc(f['label']), _esc(f['value'])) for f in c.get('facts') or []] + [('Pillars', f'{PILLAR_COUNT:02d}')]
+    tl = ''.join(f'''<li class="abx-tl-i"><span class="abx-tl-when">{_esc(m["when"])}</span><span class="abx-tl-dot" aria-hidden="true"></span><span class="abx-tl-b"><span class="abx-tl-t">{_esc(m["title"])}</span>{f'<span class="abx-tl-d">{_esc(m["text"])}</span>' if (m.get("text") or "").strip() else ''}</span></li>'''
+                 for m in c.get('milestones') or [])
+    pr = c.get('principles') or []
+    areas = c.get('areas') or []
+    area_rows = ''.join(
+        (f'<li><a href="pillars.html#{_esc(a["pillar"])}" class="plx-other abx-area">' if a.get('pillar') in PILLAR_FILE else '<li><div class="plx-other abx-area">')
+        + f'<span class="plx-other-n">{j:02d}</span><span class="min-w-0"><span class="plx-other-t">{_esc(a["title"])}</span>'
+        + (f'<span class="plx-other-d">{_esc(a["text"])}</span>' if (a.get('text') or '').strip() else '') + '</span>'
+        + ('<span class="plx-arr" aria-hidden="true">↗</span></a></li>' if a.get('pillar') in PILLAR_FILE else '</div></li>')
+        for j, a in enumerate(areas, 1))
+    acts = ''.join(f'<li class="plx-act"><span class="plx-act-ico">{j:02d}</span><span>{a}</span></li>' for j, a in enumerate(ACTIVITIES, 1))
+    ap = c.get('approach') or {}
+    steps = ''.join(f'<li class="plx-step"><span class="plx-step-n">{j:02d}</span><span class="plx-step-t">{_esc(s["title"])}</span><span class="plx-step-d">{_esc(s["text"])}</span></li>'
+                    for j, s in enumerate(ap.get('steps') or [], 1))
+    stats = abx_stats(c)
+    st = c.get('statement') or {}
+    st_paras = ''.join(f'<p>{_esc(p)}</p>' for p in st.get('paragraphs') or [] if p.strip())
+    st_img = st.get('image')
+    st_sig = (f'<div class="abx-sig">' + (f'<span class="abx-sig-img">{media_img(st_img, "h-full w-full", "64px")}</span>' if st_img else '')
+              + f'<span><span class="abx-sig-n">{_esc(st.get("name") or "")}</span><span class="abx-sig-r">{_esc(st.get("role") or "")}</span></span></div>') if st.get('name') or st.get('role') else ''
+    tabs = ([('statement', 'President’s statement')] if st_paras else []) + ([('journey', 'Journey')] if tl else []) + ([('different', 'What makes us different')] if pr else []) + ([('what-we-do', 'What we do')] if areas else []) \
+        + ([('approach', 'Approach')] if steps or ap.get('title') else []) + [('impact', 'Impact')]
+    body = page_header([ABOUT, ('Our Story', 'our-story.html')], 'About · Our Story', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
+<div class="plx abx"{_rev(c)}>
+{abx_overview('our-story.html', '2007' if not c.get('foundedYear') else str(int(c['foundedYear'])), _esc(c.get('intro') or ''), facts,
+              [('Our journey <span aria-hidden="true">↓</span>', '#journey' if tl else '#impact'), ('Our impact <span aria-hidden="true">↓</span>', '#impact')], side, 'Our Story')}
+{abx_tabs(tabs)}
+{f"""
+<section id="statement" class="plx-sec py-14 lg:py-20">
+  <div class="wrap">
+    <div class="plx-pv">
+      <div>
+        <div class="sh-top"><span class="sh-num">{next(n):02d}</span><span class="sh-label">President’s Statement</span></div>
+        {f'<p class="plx-k mt-8">{_esc(st["kicker"])}</p>' if st.get('kicker') else ''}
+        <h2 class="plx-pv-title abx-st-title">{_esc(st.get('title') or '')}</h2>
       </div>
-      <dl class="os-facts mt-10">
-        <div><dt>Founded</dt><dd>2007</dd></div>
-        <div><dt>Roots</dt><dd>Ait Ourir, Al Haouz</dd></div>
-        <div><dt>Main office</dt><dd>Marrakech</dd></div>
-        <div><dt>Pillars</dt><dd>{PILLAR_COUNT}</dd></div>
-      </dl>
-    </div>
-    <div class="relative lg:col-span-6">
-      {ph('Youth First Academy, closing ceremony', 'aspect-[4/3] w-full rounded-[28px] lg:aspect-auto lg:h-full lg:min-h-[460px]')}
-      <div class="os-legal">
-        <p class="label text-ink-mid">Legal name</p>
-        <p class="mt-1.5 text-[15px] font-medium leading-snug">Association le Futur pour les Chantiers et le Développement</p>
-      </div>
+      <figure class="abx-st"><blockquote class="plx-pv-quote abx-st-q">{st_paras}</blockquote>{f'<figcaption>{st_sig}</figcaption>' if st_sig else ''}</figure>
     </div>
   </div>
-</section>
+</section>""" if st_paras else ''}
+{f"""
+<section id="journey" class="plx-sec py-14 lg:py-20">
+  <div class="wrap">{sec_head(f'{next(n):02d} / Our Journey', 'From Ait Ourir <span class="sh-soft">to across Morocco.</span>', 'Since ' + str(c.get('foundedYear') or 2007), desc='How a local volunteer initiative became a national nonprofit.')}
+    <ol class="abx-tl mt-8 lg:mt-12">{tl}</ol>
+  </div>
+</section>""" if tl else ''}
+{f"""
+<section id="different" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">{sec_head(f'{next(n):02d} / What Makes Us Different', 'How we work, <span class="sh-soft">and why it lasts.</span>', f'{len(pr)} principles')}
+    <div class="mt-8 lg:mt-10">{abx_rows(pr, 'abx-rows abx-2col')}</div>
+  </div>
+</section>""" if pr else ''}
+{f"""
+<section id="what-we-do" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">{sec_head(f'{next(n):02d} / What We Do', f'{len(areas)} areas, <span class="sh-soft">one approach.</span>', ('Our pillars', 'pillars.html'), desc='Programmes combine non-formal education, practical training, mentoring and community action.')}
+    <ul class="plx-others mt-8 lg:mt-10">{area_rows}</ul>
+    <p class="plx-k mt-12">Core activities</p>
+    <ul class="plx-acts abx-acts mt-4">{acts}</ul>
+  </div>
+</section>""" if areas else ''}
+{f"""
+<section id="approach" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">
+    <div class="plx-pv">
+      <div>
+        <div class="sh-top"><span class="sh-num">{next(n):02d}</span><span class="sh-label">Our Approach</span></div>
+        <h2 class="plx-pv-title">{_esc(ap.get('title') or '')}{f' <span class="text-ink-mid">{_esc(ap["soft"])}</span>' if ap.get('soft') else ''}</h2>
+      </div>
+      <ol class="plx-steps abx-steps">{steps}</ol>
+    </div>
+  </div>
+</section>""" if steps or ap.get('title') else ''}
 
-<section id="journey" class="border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap">{sec_head('01 / Our Journey', 'From Ait Ourir <span class="sh-soft">to across Morocco.</span>', 'Since 2007', desc='How a local volunteer initiative became a national nonprofit.')}
-    <ol class="os-steps mt-10 lg:mt-12">{steps}
+<section id="impact" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">{sec_head(f'{next(n):02d} / Our Impact', 'A story <span class="sh-soft">of people.</span>', 'Since ' + str(c.get('foundedYear') or 2007), desc='The measure of this work is the people who carry it on.')}
+    <div class="mt-8 lg:mt-10">{stats}</div>
+  </div>
+</section>
+</div>
+''' + abx_cta(c) + about_more('our-story.html')
+    page('our-story.html', 'Our Story · AFCD Foundation',
+         'How young volunteers founded AFCD Foundation in Ait Ourir in 2007, and how we work with communities.', 'about', body, parent=ABOUT)
+
+    # ---------------------------------------------------------------- Mission & Vision: one path, from today to tomorrow
+    c = about_content('mission-vision')
+    vals = c.get('values') or []
+    roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII']
+    vrows = ''.join(f'<li class="abx-val"><span class="abx-val-n">{roman[j] if j < len(roman) else j + 1}</span><span class="min-w-0"><span class="abx-val-t">{_esc(v["title"])}</span><span class="abx-val-d">{_esc(v.get("text") or "")}</span></span></li>' for j, v in enumerate(vals))
+    stages = [
+        ('mission', 'Today', 'Our Mission', 'What we do, every day.', f'<p class="abx-path-q">{_esc(c.get("mission") or "")}</p>'),
+        ('values', 'Every step', 'Our Values', f'{len(vals)} values shape how we work.', f'<ol class="abx-vals">{vrows}</ol>'),
+        ('vision', 'Tomorrow', 'Our Vision', 'The society we work toward.', f'<p class="abx-path-q">{_esc(c.get("vision") or "")}</p>'),
+        ('next', 'The way there', 'Our Strategy', f'{len(OBJECTIVES)} strategic objectives turn this vision into programmes.',
+         f'<a href="strategy.html" class="plx-other abx-next"><span class="plx-other-n">SO</span><span class="min-w-0"><span class="plx-other-t">Strategy &amp; Objectives</span><span class="plx-other-d">{len(OBJECTIVES)} objectives, the people we serve and where we work.</span></span><span class="plx-arr" aria-hidden="true">↗</span></a>'),
+    ]
+    path = ''.join(f'''
+      <li id="{sid}" class="abx-path-i plx-sec">
+        <div class="abx-path-h"><span class="abx-path-n">{j:02d}</span><span class="abx-path-k">{k}</span></div>
+        <div class="abx-path-b"><h2 class="abx-path-t">{t}</h2><p class="abx-path-s">{s}</p><div class="abx-path-c">{body_}</div></div>
+      </li>''' for j, (sid, k, t, s, body_) in enumerate(stages, 1))
+    body = page_header([ABOUT, ('Mission &amp; Vision', 'mission-vision.html')], 'About · Mission &amp; Vision', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
+<div class="plx abx"{_rev(c)}>
+{abx_overview('mission-vision.html', 'M·V', _esc(c.get('mission') or ''), [('Mission', '01'), ('Values', f'{len(vals):02d}'), ('Objectives', f'{len(OBJECTIVES):02d}')],
+              [('Read the path <span aria-hidden="true">↓</span>', '#mission'), ('Our strategy <span aria-hidden="true">↗</span>', 'strategy.html')], '', 'Mission &amp; Vision')}
+{abx_tabs([('mission', 'Mission'), ('values', 'Values'), ('vision', 'Vision'), ('next', 'Strategy')])}
+<section class="py-14 lg:py-20">
+  <div class="wrap">{sec_head('01 / From Purpose to Future', 'From what we do today <span class="sh-soft">to the society we work toward.</span>', 'Mission · Values · Vision')}
+    <ol class="abx-path mt-8 lg:mt-12">{path}
     </ol>
   </div>
 </section>
-
-<section id="what-we-do" class="border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap">{sec_head('02 / What We Do', 'Four areas, <span class="sh-soft">eight ways of working.</span>', 'Areas · Activities', desc='Programmes combine non-formal education, practical training, mentoring and community action.')}
-    <div class="mt-8 grid gap-4 lg:mt-10 lg:grid-cols-12">
-      <div class="rounded-[28px] border border-ink-light p-6 md:p-7 lg:col-span-4">
-        <p class="label text-ink-mid">Areas of intervention</p>
-        <ul class="mt-4 grid gap-2">{areas}</ul>
-      </div>
-      <div class="rounded-[28px] bg-[#F6F6F6] p-6 md:p-7 lg:col-span-8">
-        <p class="label text-ink-mid">Core activities</p>
-        <ol class="mt-4 grid gap-2 sm:grid-cols-2">{acts}</ol>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="approach" class="py-6 lg:py-8">
-  <div class="wrap">
-    <div class="os-band on-dark text-white">
-      <div class="grid gap-10 lg:grid-cols-12 lg:gap-16">
-        <div class="lg:col-span-6">
-          <div class="sh-top"><span class="sh-num">03</span><span class="sh-label">Our Approach</span></div>
-          <blockquote class="mt-8 text-[38px] font-semibold leading-[1.02] tracking-[-0.045em] md:text-[56px]">With communities, <span class="text-white/45">not simply for communities.</span></blockquote>
-        </div>
-        <ol class="grid content-end gap-3 lg:col-span-6">{appr}
-        </ol>
-      </div>
-    </div>
-  </div>
-</section>
-''' + cta + about_more('our-story.html')
-    page('our-story.html', 'Our Story · AFCD Foundation',
-         'How young volunteers founded AFCD Foundation in Ait Ourir in 2007, and how we work with communities.',
+</div>
+''' + abx_cta(c) + about_more('mission-vision.html')
+    page('mission-vision.html', 'Mission, Vision &amp; Values · AFCD Foundation',
+         'AFCD Foundation’s mission, vision and values: ' + ', '.join(_esc(v['title']).lower() for v in vals[:-1]) + (' and ' if len(vals) > 1 else '') + (_esc(vals[-1]['title']).lower() if vals else '') + '.',
          'about', body, parent=ABOUT)
 
-    sub('mission-vision.html', 'Mission &amp; Vision', 'About · Mission &amp; Vision',
-        'What guides <span class="text-ink-mid">our work.</span>',
-        'A mission we act on every day, a vision we work toward, and four values that shape how we work.',
-        ['mission'], 'Mission, Vision &amp; Values · AFCD Foundation',
-        'AFCD Foundation’s mission, vision and values: integrity, inclusiveness, transparency and effectiveness.')
-    sub('strategy.html', 'Strategy &amp; Objectives', 'About · Strategy',
-        'Six strategic <span class="text-ink-mid">objectives.</span>',
-        'The institutional objectives behind our programmes and reporting, and the people and places we serve.',
-        ['strategy', 'who-we-serve'], 'Strategy &amp; Objectives · AFCD Foundation',
-        f'AFCD Foundation’s six strategic objectives, linked to its {PILLARS_WORD} pillars, and who it works with across Morocco.')
-    sub('team.html', 'Our Team', 'About · Our Team',
-        'The people who carry <span class="text-ink-mid">our work forward.</span>',
-        'The team, volunteers and alumni who run AFCD programmes in Marrakech, Al Haouz and across Morocco.',
-        ['team'], 'Our Team · AFCD Foundation',
-        'Meet the team behind AFCD Foundation’s programmes in Marrakech, Al Haouz and across Morocco.')
+    # ---------------------------------------------------------------- Strategy
+    c = about_content('strategy')
+    n = num()
+    def obj_links(links):
+        if not links:
+            return '<span class="abx-chip is-soft">Cross-cutting, all pillars</span>'
+        return ''.join(f'<a class="abx-chip" href="pillars.html#{slug}">{name}</a>' for name, slug in links)
+    objs = ''.join(f'''<li id="{ref.lower()}" class="abx-so"><span class="abx-so-ref">{ref}</span><span class="min-w-0"><span class="abx-so-t">{text}</span>{f'<span class="abx-so-d">{desc}</span>' if desc else ''}</span><span class="abx-so-p">{obj_links(links)}</span></li>'''
+                   for ref, text, desc, links in OBJECTIVES)
+    groups = ''.join(f'<li>{b}</li>' for b in BENEFICIARIES)
+    summary = ''.join(f'<p>{_esc(p)}</p>' for p in c.get('summary') or [])
+    regions = c.get('regions') or []
+    reg = ''.join(f'<li class="abx-reg"><span class="abx-reg-n">{j:02d}</span><span class="abx-reg-t">{_esc(r["name"])}</span><span class="abx-reg-d">{_esc(r.get("places") or "")}</span></li>' for j, r in enumerate(regions, 1))
+    body = page_header([ABOUT, ('Strategy &amp; Objectives', 'strategy.html')], 'About · Strategy', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
+<div class="plx abx"{_rev(c)}>
+{abx_overview('strategy.html', f'{len(OBJECTIVES):02d}', _esc(c.get('objectivesIntro') or ''), [('Objectives', f'{len(OBJECTIVES):02d}'), ('Pillars', f'{PILLAR_COUNT:02d}'), ('Regions', f'{len(regions):02d}')],
+              [('See the objectives <span aria-hidden="true">↓</span>', '#objectives'), ('Who we serve <span aria-hidden="true">↓</span>', '#who-we-serve')], '', 'Strategy &amp; Objectives')}
+{abx_tabs([('objectives', 'Objectives'), ('who-we-serve', 'Who we serve'), ('where-we-work', 'Where we work')])}
+<section id="objectives" class="plx-sec py-14 lg:py-20">
+  <span id="strategy" class="pl-anchor" aria-hidden="true"></span>
+  <div class="wrap">{sec_head(f'{next(n):02d} / Strategic Objectives', 'What AFCD <span class="sh-soft">works toward.</span>', f'SO-01 to SO-{len(OBJECTIVES):02d}', desc='Each objective links to the pillars that carry it.')}
+    <ol class="abx-sos mt-8 lg:mt-10">{objs}</ol>
+  </div>
+</section>
 
-    # About hub: overview cards to each sub-page, then impact
+<section id="who-we-serve" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">{sec_head(f'{next(n):02d} / Who We Serve', 'People <span class="sh-soft">we work with.</span>', f'{len(BENEFICIARIES)} groups', desc=_esc(c.get('whoIntro') or ''))}
+    <div class="plx-work mt-8 lg:mt-10">
+      <div><p class="plx-k">Primary groups</p><ul class="plx-who mt-4">{groups}</ul></div>
+      <div><p class="plx-k">In detail</p><div class="abx-paras abx-paras-lg mt-4">{summary}</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="where-we-work" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">{sec_head(f'{next(n):02d} / Where We Work', 'Places <span class="sh-soft">we serve.</span>', 'Across Morocco')}
+    <ol class="abx-regs mt-8 lg:mt-10">{reg}</ol>
+    {f'<div class="abx-note mt-8"><p class="plx-k">Coverage</p><p class="mt-3">{_esc(c["coverage"])}</p></div>' if c.get('coverage') else ''}
+  </div>
+</section>
+</div>
+''' + abx_cta(c) + about_more('strategy.html')
+    page('strategy.html', 'Strategy &amp; Objectives · AFCD Foundation',
+         f'AFCD Foundation’s {len(OBJECTIVES)} strategic objectives, linked to its {PILLARS_WORD} pillars, and who it works with across Morocco.', 'about', body, parent=ABOUT)
+
+    # ---------------------------------------------------------------- Our Team
+    c = about_content('team')
+    n = num()
+    people = c.get('people') or []
+    by_group = [(g, label, [p for p in people if p.get('group') == g]) for g, label in TEAM_GROUPS]
+    by_group = [x for x in by_group if x[2]]
+    def person(p):
+        img = p.get('image')
+        vis = media_img(img, 'h-full w-full', '(min-width: 1024px) 22vw, 50vw') if img else f'<span class="abx-p-ini" aria-hidden="true">{_esc("".join(w[0] for w in (p.get("name") or "?").split()[:2]).upper())}</span>'
+        bio = (p.get('bio') or '').strip()
+        return (f'<li class="abx-p"><div class="abx-p-vis{" has-img" if img else ""}">{vis}</div><div class="abx-p-b"><span class="abx-p-n">{_esc(p["name"])}</span>'
+                f'<span class="abx-p-r">{_esc(p.get("role") or "")}</span>' + (f'<span class="abx-p-d">{_esc(bio)}</span>' if bio else '') + '</div></li>')
+    groups_html = ''.join(f'''
+<section id="{g}" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">{sec_head(f'{next(n):02d} / {label}', _esc(label) + '.', f'{len(ps)} ' + ('person' if len(ps) == 1 else 'people'))}
+    <ul class="abx-ps mt-8 lg:mt-10">{''.join(person(p) for p in ps)}</ul>
+  </div>
+</section>''' for g, label, ps in by_group)
+    if not by_group:
+        groups_html = f'''
+<section id="people" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">{sec_head(f'{next(n):02d} / The Team', 'Meet <span class="sh-soft">the team.</span>', ('Join us', 'get-involved.html'))}
+    <div class="plx-empty mt-8 lg:mt-10"><p class="plx-empty-t">Team profiles are not published yet.</p><p class="plx-empty-d">They appear here as soon as AFCD publishes them.</p><a href="get-involved.html" class="link-arrow mt-4">Get involved <span class="arr" aria-hidden="true">↗</span></a></div>
+  </div>
+</section>'''
+    facts = [(label, f'{len(ps):02d}') for _g, label, ps in by_group][:4]
+    body = page_header([ABOUT, ('Our Team', 'team.html')], 'About · Our Team', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
+<div class="plx abx"{_rev(c)}>
+{abx_overview('team.html', f'{len(people):02d}' if people else 'AFCD', _esc(c.get('intro') or ''), facts,
+              [('Meet the team <span aria-hidden="true">↓</span>', f'#{by_group[0][0]}' if by_group else '#people'), ('Join us <span aria-hidden="true">↗</span>', 'get-involved.html')], '', 'Our Team')}
+{abx_tabs([(g, label) for g, label, _ps in by_group] or [('people', 'The team')])}
+{groups_html}
+</div>
+''' + abx_cta(c) + about_more('team.html')
+    page('team.html', 'Our Team · AFCD Foundation',
+         'Meet the team behind AFCD Foundation’s programmes in Marrakech, Al Haouz and across Morocco.', 'about', body, parent=ABOUT)
+
+    # ---------------------------------------------------------------- About hub: overview of the sub-pages, then impact
+    story = about_content('our-story')
     hub = ''.join(f'''
         <li><a href="{f}" class="gi-tile group">
           <span class="flex items-center justify-between"><span class="text-[12px] tabular-nums text-ink-mid">{i:02d}</span><span class="gi-arr" aria-hidden="true">↗</span></span>
@@ -536,7 +695,13 @@ def about():
     </ul>
   </div>
 </section>
-''' + renum_all(parts['impact']).replace('<span class="sh-num">01</span>', '<span class="sh-num">02</span>') + cta
+
+<section id="impact" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('02 / Our Impact', 'Our impact is <span class="sh-soft">a story of people.</span>', 'Since 2007', desc='The measure of this work is the people who carry it on.')}
+    <div class="mt-8 lg:mt-10">{abx_stats(story)}</div>
+  </div>
+</section>
+''' + abx_cta(story)
     page('about.html', 'About Us · AFCD Foundation',
          'About AFCD Foundation: a Moroccan nonprofit founded in 2007 in Ait Ourir. Our story, mission and vision, strategy and team.',
          'about', body)
@@ -544,8 +709,8 @@ def about():
 
 ABOUT_PAGES = [
     ('our-story.html', 'Our Story', 'How young volunteers started AFCD in 2007, and how we work with communities.'),
-    ('mission-vision.html', 'Mission &amp; Vision', 'What guides our work and the four values we hold.'),
-    ('strategy.html', 'Strategy &amp; Objectives', 'Six objectives behind our programmes, and who we serve.'),
+    ('mission-vision.html', 'Mission &amp; Vision', 'What guides our work and the values we hold.'),
+    ('strategy.html', 'Strategy &amp; Objectives', 'The objectives behind our programmes, and who we serve.'),
     ('team.html', 'Our Team', 'The people who carry AFCD’s work forward.'),
 ]
 
@@ -1885,27 +2050,24 @@ def partners():
                 + (f'<a href="{url}" class="pr-web" target="_blank" rel="noopener noreferrer">Website <span aria-hidden="true">↗</span></a>' if url.startswith('https://') else '')
                 + '</div></li>')
     cards = ''.join(card(g, n) for g, names in PARTNERS for n in names)
-    models = [('fund', 'Fund', f'Support a programme under one of our {PILLARS_WORD} pillars, from a single cohort to multi-year work.'),
-              ('design', 'Co-design', 'Build an initiative with AFCD and the community, from the first idea to the final report.'),
-              ('share', 'Share expertise', 'Train, mentor or host participants, and bring your organisation’s know-how to a programme.')]
-    mhtml = ''.join(f'<li class="wd-card" style="--c:#F3F3F3"><span class="flex items-start justify-between"><span class="wd-ico">{ico(k)}</span><span class="wd-n">{i:02d}</span></span><span class="mt-8 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for i, (k, t, d) in enumerate(models, 1))
-    steps = [('Tell us about your organisation', 'Share your goals and the communities or pillar you’d like to support.'),
-             ('Explore the fit together', f'We look at how your goals connect with our {PILLARS_WORD} pillars and current programmes.'),
-             ('Co-design and launch', 'We agree the plan, launch the work together and report on what it achieves.')]
-    shtml = ''.join(f'<li class="os-step"><span class="os-step-k">{i:02d}</span><span class="os-step-dot" aria-hidden="true"></span><span class="mt-5 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for i, (t, d) in enumerate(steps, 1))
+    pc = about_content('partners')
+    models = pc.get('models') or []
+    mk = ['fund', 'design', 'share']
+    mhtml = ''.join(f'<li class="plx-act abx-model"><span class="plx-act-ico">{ico(mk[i] if i < len(mk) else "share")}</span><span class="min-w-0"><span class="abx-model-t">{_esc(m["title"])}</span><span class="abx-model-d">{_esc(m.get("text") or "")}</span></span></li>' for i, m in enumerate(models))
+    steps = pc.get('steps') or []
+    shtml = ''.join(f'<li class="plx-step"><span class="plx-step-n">{i:02d}</span><span class="plx-step-t">{_esc(st["title"])}</span><span class="plx-step-d">{_esc(st.get("text") or "")}</span></li>' for i, st in enumerate(steps, 1))
+    facts = [('Partners', f'{total:02d}')] + [(g, f'{len(nm):02d}') for g, nm in PARTNERS]
+    nsec = iter(range(1, 10))
+    tabs = [('directory', 'Directory')] + ([('models', 'Ways to partner')] if models else []) + ([('how', 'How it starts')] if steps else [])
+    cl = pc.get('closing') or {}
 
-    body = page_header([('Partners', 'partners.html')], 'Our Partners',
-                       'Stronger <span class="text-ink-mid">together.</span>',
-                       'International, national and local organizations that have supported AFCD’s programmes, as listed on the current Our Partners page.') + f'''
-
-<section id="overview" class="pt-8 lg:pt-10">
-  <div class="wrap">
-    <dl class="pr-stats">{stats}</dl>
-  </div>
-</section>
-
-<section id="directory" class="py-14 lg:py-16">
-  <div class="wrap">{sec_head('01 / Partner Directory', 'Organisations <span class="sh-soft">we work with.</span>', f'{total} partners', desc='Filter by scope or search by name.' + ('' if with_logo == total else ' Logos will be added once each partner approves their use.'))}
+    body = page_header([('Partners', 'partners.html')], 'Our Partners', _title(pc['hero']), '') + f'''
+<div class="plx abx"{_rev(pc)}>
+{abx_overview('partners.html', f'{total:02d}', _esc(pc['hero'].get('lead') or ''), facts,
+              [('Browse partners <span aria-hidden="true">↓</span>', '#directory'), ('Partner with us <span aria-hidden="true">↗</span>', 'contact.html?topic=Partnership#message')], '', 'Our Partners')}
+{abx_tabs(tabs)}
+<section id="directory" class="plx-sec py-14 lg:py-16">
+  <div class="wrap">{sec_head(f'{next(nsec):02d} / Partner Directory', 'Organisations <span class="sh-soft">we work with.</span>', f'{total} partners', desc=_esc(pc.get('directoryIntro') or '') + ('' if with_logo == total else ' Logos will be added once each partner approves their use.'))}
     <div class="pr-tools mt-8">
       <div class="nw-chips" role="group" aria-label="Filter partners">{chips}</div>
       <label class="pr-search"><span class="sr-only">Search partners</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13.2 13.2 3.3 3.3"/></svg><input id="partner-search" type="search" placeholder="Search partners" autocomplete="off"></label>
@@ -1913,23 +2075,22 @@ def partners():
     <ul id="partner-grid" class="pr-grid mt-6">{cards}
     </ul>
     <p class="pr-empty mt-6 hidden text-[15px] text-ink-mid" role="status">No partners match your search.</p>
-    {'' if with_logo == total else placeholder_note('Logos to be added. AFCD will confirm which partnerships are current.')}
   </div>
 </section>
-
-<section id="models" class="border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap">{sec_head('02 / Ways to Partner', 'Co-design <span class="sh-soft">change with us.</span>', 'Three models', desc='Every partnership is shaped around shared goals and the communities we serve.')}
-    <ul class="mt-8 grid gap-3 md:grid-cols-3 lg:mt-10">{mhtml}</ul>
+{f"""
+<section id="models" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">{sec_head(f'{next(nsec):02d} / Ways to Partner', 'Co-design <span class="sh-soft">change with us.</span>', f'{len(models)} models', desc='Every partnership is shaped around shared goals and the communities we serve.')}
+    <ul class="plx-acts abx-models mt-8 lg:mt-10">{mhtml}</ul>
   </div>
-</section>
-
-<section id="how" class="border-t border-ink-light py-14 lg:py-16">
-  <div class="wrap">{sec_head('03 / How It Starts', 'From first message <span class="sh-soft">to shared results.</span>', 'Three steps')}
-    <ol class="os-steps gi-journey mt-8 lg:mt-10">{shtml}
-    </ol>
+</section>""" if models else ''}
+{f"""
+<section id="how" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">{sec_head(f'{next(nsec):02d} / How It Starts', 'From first message <span class="sh-soft">to shared results.</span>', f'{len(steps)} steps')}
+    <ol class="plx-steps mt-8 lg:mt-10">{shtml}</ol>
   </div>
-</section>
-''' + cta_band('Let’s build something together.', 'Tell us about your organization and what you would like to support.',
+</section>""" if steps else ''}
+</div>
+''' + cta_band(_esc(cl.get('title') or ''), _esc(cl.get('text') or ''),
                ('Partner With Us', 'contact.html?topic=Partnership#message'), ('Our projects', 'projects.html'))
     page('partners.html', 'Partners · AFCD Foundation',
          'The international, national and local organizations that have supported AFCD Foundation’s programmes.', 'partners', body)

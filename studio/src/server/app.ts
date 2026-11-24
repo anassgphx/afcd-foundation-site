@@ -50,6 +50,7 @@ import { homeCanvas } from './modules/home/render.ts';
 import { docMediaIds } from './modules/pages/render.ts';
 import { importPartners } from './modules/partners/import.ts';
 import * as PL from './modules/pillars/service.ts';
+import * as AB from './modules/about/service.ts';
 import { blockCatalog } from './modules/pages/blocks.ts';
 import { Publisher, type BuildRunner } from './modules/publish/service.ts';
 
@@ -344,6 +345,31 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     return c.json({ url: `/studio/preview/${r.token}/${r.file}` });
   });
   api.post('/pillars/:id/revisions/:rev/restore', perm('pillar.update'), async (c) => { await PL.restorePillarRevision(db, cfg, actor(c), c.req.param('id'), c.req.param('rev')); return c.json({ ok: true }); });
+
+  // ---------------------------------------------------------------- About pages (Our Story, Mission & Vision, Strategy, Team, Partners texts)
+  // :ref is the page key (our-story) or its id
+  api.get('/about/records', perm('about.read'), async (c) => c.json(await AB.listAbout(db)));
+  api.post('/about/import', perm('about.publish'), async (c) => c.json(await AB.importAbout(db, cfg, actor(c))));
+  api.get('/about/:ref', perm('about.read'), async (c) => {
+    const p = await AB.loadAbout(db, c.req.param('ref'));
+    const ids = p.content ? AB.contentMediaIds(p.key, p.content) : [];
+    const mediaRows = ids.length ? await db.select().from(t.media).where(inArray(t.media.id, ids)) : [];
+    return c.json({ ...p, draft: undefined, meta: AB.ABOUT_META[p.key], media: mediaRows.map(withUrl), problems: await AB.aboutProblems(db, p), history: await AB.aboutHistory(db, p.id), context: await AB.aboutContext(db) });
+  });
+  api.put('/about/:ref', perm('about.update'), async (c) => c.json(await AB.updateAbout(db, actor(c), c.req.param('ref'), await c.req.json())));
+  api.post('/about/:ref/transition', async (c) => {
+    const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
+    if (!body.success || !AB.aboutTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');
+    const u = requirePerm(c, AB.aboutTransitionPerm(body.data.action)!);
+    return c.json(await AB.transitionAbout(db, actor(c), u.role, c.req.param('ref'), body.data.action, { comment: body.data.comment }));
+  });
+  api.post('/about/:ref/publish', perm('about.publish'), async (c) => c.json(await publisher.publishAboutPage(actor(c), (await AB.findPage(db, c.req.param('ref'))).id)));
+  api.post('/about/:ref/preview', perm('about.read'), async (c) => {
+    const p = await AB.loadAbout(db, c.req.param('ref'));
+    const r = await publisher.previewAboutPage(p.id, AB.toAboutSnapshot(p));
+    return c.json({ url: `/studio/preview/${r.token}/${r.file}` });
+  });
+  api.post('/about/:ref/revisions/:rev/restore', perm('about.update'), async (c) => { await AB.restoreAboutRevision(db, actor(c), c.req.param('ref'), c.req.param('rev')); return c.json({ ok: true }); });
 
   // ---------------------------------------------------------------- Events
   api.get('/events', perm('event.read'), async (c) => c.json(await EV.listEvents(db)));

@@ -183,6 +183,13 @@
       "when": 1795534400720,
       "tag": "0025_media_quality",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795548963474,
+      "tag": "0026_about_pages",
+      "breakpoints": true
     }
   ]
 }

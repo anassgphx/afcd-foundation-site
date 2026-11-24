@@ -1553,7 +1553,7 @@ def home_pillars():
         chips = '<li class="pl-chip">Pillar</li>' + (f'<li class="pl-chip">{count} project{"s" if count != 1 else ""}</li>' if count else '')
         rel_html = ''
         if rel:
-            rel_html = ('\n              <div class="mt-6 border-l-2 border-black/15 pl-5 rtl:border-l-0 rtl:border-r-2 rtl:pl-0 rtl:pr-5">'
+            rel_html = ('\n              <div class="mt-6 lg:mt-4 border-l-2 border-black/15 pl-5 rtl:border-l-0 rtl:border-r-2 rtl:pl-0 rtl:pr-5">'
                         '\n                <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-black/55">Related projects</p>'
                         f'\n                <ul class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[14px]">{"".join(related(r) for r in rel)}</ul>'
                         '\n              </div>')
@@ -1566,6 +1566,7 @@ def home_pillars():
         # long names (set in Studio) get a smaller title so the card's buttons stay inside the open panel
         plain_len = len(_html.unescape(re.sub(r'<[^>]+>', '', t)))
         size = 'md:text-[44px]' if plain_len <= 22 else 'md:text-[38px]' if plain_len <= 30 else 'md:text-[32px]'
+        explore = f'Explore {t}' if plain_len <= 26 else 'Explore this pillar'
         is_open = ' is-open' if i == 0 else ''
         expanded = 'true' if i == 0 else 'false'
         panels.append(
@@ -1586,8 +1587,8 @@ def home_pillars():
             f'\n              <ul class="flex flex-wrap gap-2 lg:mt-6">{chips}</ul>'
             f'\n              <p class="mt-6 text-[32px] font-semibold leading-[1.02] tracking-tightest {size} lg:mt-auto">{t}</p>'
             f'\n              <p class="pl-sum mt-4 max-w-[44ch] text-[15px] leading-relaxed text-black/75 md:text-base">{d}</p>{rel_html}'
-            '\n              <div class="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">'
-            f'\n                <a href="{file}" class="pc-btn">Explore {t} <span class="pc-arr" aria-hidden="true">→</span></a>'
+            '\n              <div class="mt-8 lg:mt-5 flex flex-wrap items-center gap-x-6 gap-y-3">'
+            f'\n                <a href="{file}" class="pc-btn">{explore} <span class="pc-arr" aria-hidden="true">→</span></a>'
             f'\n                <a href="projects.html?pillar={slug}#by-pillar" class="link-arrow">See projects <span class="arr" aria-hidden="true">↗</span></a>'
             '\n              </div>'
             '\n            </div>'

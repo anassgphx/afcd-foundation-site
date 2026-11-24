@@ -345,7 +345,9 @@ export async function listProjects(db: DB) {
   const incomplete = new Set((allIds.length ? await db.select({ id: media.id, alt: media.alt, ok: media.rightsConfirmed }).from(media).where(inArray(media.id, allIds)) : [])
     .filter((m) => !m.alt.trim() || !m.ok).map((m) => m.id));
   const th = (id: string | null) => (id ? thumbs.get(id) ?? null : null);
-  return rows.map((r) => ({ ...r, thumb: th(r.heroMediaId) ?? th(r.posterMediaId), logoThumb: th(r.logoMediaId), updatedByName: r.updatedBy ? names.get(r.updatedBy) ?? null : null,
+  // for the list's "info entered" meter: how many partners and gallery photos each project has
+  const pp = await db.select({ projectId: partnerProjects.projectId }).from(partnerProjects);
+  return rows.map((r) => ({ ...r, partnerCount: pp.filter((x) => x.projectId === r.id).length, galleryCount: gal.filter((g) => g.projectId === r.id).length, thumb: th(r.heroMediaId) ?? th(r.posterMediaId), logoThumb: th(r.logoMediaId), updatedByName: r.updatedBy ? names.get(r.updatedBy) ?? null : null,
     photoCount: used.get(r.id)!.length, photoIssues: used.get(r.id)!.filter((x) => incomplete.has(x)).length,
     pillars: pl.filter((x) => x.projectId === r.id).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)) }));
 }

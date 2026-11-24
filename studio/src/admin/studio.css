@@ -935,9 +935,18 @@ button.b-chip.is-warn:hover, button.b-chip.is-warn[aria-expanded="true"] { borde
 .pjl-thumb { width: 56px; height: 56px; border-radius: 12px; }
 .pjl-thumb.is-logo { background: #fff; border: 1px solid var(--line); padding: 5px; }
 .pjl-thumb.is-logo img { object-fit: contain; }
-.pjl-st { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; vertical-align: 2px; }
+.pjl-st { display: inline-flex; justify-self: start; width: fit-content; align-items: center; gap: 5px; margin: 3px 0 2px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; vertical-align: 2px; }
 .pjl-st i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .pjl-st.is-ongoing { background: #000; color: #fff; } .pjl-st.is-ongoing i { background: #22C55E; }
 .pjl-st.is-completed { background: var(--canvas); color: var(--ink-2); } .pjl-st.is-completed i { background: #A8A29E; }
 .pjl-st.is-upcoming { background: #FEF3C7; color: #92400E; } .pjl-st.is-upcoming i { background: #F59E0B; }
+/* Projects list: how much of the project's information is entered (13 parts), linking to the editor */
+.pjl-info { display: grid; gap: 5px; min-width: 128px; max-width: 170px; color: var(--ink-2); text-decoration: none; }
+.pjl-info-t { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--muted); } .pjl-info-t b { color: var(--ink-2); font-weight: 600; }
+.pjl-info-bar { height: 4px; border-radius: 999px; background: var(--canvas, #f5f5f4); overflow: hidden; }
+.pjl-info-bar i { display: block; height: 100%; border-radius: inherit; background: #1c1917; }
+.pjl-info small { font-size: 11.5px; color: var(--muted); }
+.pjl-info.is-full .pjl-info-t { color: #15803D; font-weight: 600; } .pjl-info.is-full .pjl-info-bar i { background: #22C55E; }
+.pjl-info:hover small, .pjl-info:hover .pjl-info-t { color: var(--ink-2); }
+.dt.dense .pjl-info small { display: none; }
 .dt.dense .pjl-thumb { width: 32px; height: 32px; padding: 2px; }

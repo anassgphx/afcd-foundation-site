@@ -937,10 +937,16 @@ def pillars():
                     break
         photo_html = (f'<figure class="plx-photo">{media_img(cover, "h-full w-full", "(min-width: 1024px) 40vw, 100vw", eager=True)}'
                       + (f'<figcaption class="plx-cap"><a href="{cover_from[4]}">{cover_from[0]} <span aria-hidden="true">↗</span></a></figcaption>' if cover_from else '') + '</figure>') if cover else ''
-        flags_html = f'<div class="plx-side"><p class="plx-k">{pg.get("flagshipLabel") or "Flagship programmes"}</p><ul class="plx-flags">{flags}</ul></div>' if flags else ''
+        who = [_esc(BENEFICIARIES[g]) for g in PILLAR_GROUPS[slug]] + list(extra_groups)
+        h3_boxes = ((f'<div class="plx-h3-box"><p class="plx-k">{pg.get("flagshipLabel") or "Flagship programmes"}</p><ul class="plx-flags">{flags}</ul></div>' if flags else '')
+                    + (f'<div class="plx-h3-box"><p class="plx-k">Who we work with</p><ul class="plx-whos">{"".join(f"<li>{w}</li>" for w in who)}</ul></div>' if who else ''))
+        flags_html = ('<div class="plx-side">'
+                      + (f'<p class="plx-k">{pg.get("flagshipLabel") or "Flagship programmes"}</p><ul class="plx-flags">{flags}</ul>' if flags else '')
+                      + (f'<p class="plx-k plx-side-k2">Who we work with</p><ul class="plx-whos">{"".join(f"<li>{w}</li>" for w in who)}</ul>' if who else '')
+                      + '</div>') if (flags or who) else ''
         side = f'<div class="plx-col">{photo_html}{flags_html}</div>' if (photo_html or flags_html) else ''
         facts = [('Projects', len(projs)), ('Activities', len(PILLAR_ACTS[slug]))] + ([('Objectives', len(pobj))] if pobj else []) + ([('Stories', len(stories))] if stories else [])
-        facts_html = ''.join(f'<div class="plx-fact"><dt>{k}</dt><dd>{v:02d}</dd></div>' for k, v in facts)
+        facts_html = ''.join(f'<div class="plx-fact"><dd>{v}</dd><dt>{k if v != 1 else k[:-1] if k.endswith("s") else k}</dt></div>' for k, v in facts if v)   # a zero is not shown
         brand = f'<span class="plx-chip">Programme brand: {PILLAR_BRAND[slug]}</span>' if PILLAR_BRAND.get(slug) else ''
         steps_nav = ''.join(f'<a href="{PILLAR_FILE[s2]}" class="plx-pn{" is-on" if s2 == slug else ""}" title="{_esc(t2)}"{" aria-current=" + chr(34) + "page" + chr(34) if s2 == slug else ""}>{n2}</a>' for s2, n2, t2, _d2, _r2 in PILLARS)
 
@@ -974,7 +980,7 @@ def pillars():
         rel_rows = ''.join(rel_row(x.get('file') or f'news-{x["slug"]}.html', _esc(x.get('type') or 'Story'), _esc(x.get('dateLabel') or ''), _esc(x['title'])) for x in stories)
         rel_rows += ''.join(rel_row(event_file(e), 'Upcoming event' if e.get('upcoming') else 'Event', f'{e.get("day", "")} {e.get("mon", "")} {e.get("year", "")}'.strip(), e['title']) for e in evs)
 
-        others = ''.join(f'''<li><a href="{PILLAR_FILE[s2]}" class="plx-other"><span class="plx-other-n">{n2}</span><span class="min-w-0"><span class="plx-other-t">{t2}</span><span class="plx-other-d">{PILLAR_INTRO.get(s2, d2)}</span></span><span class="plx-arr" aria-hidden="true">↗</span></a></li>'''
+        others = ''.join(f'''<li><a href="{PILLAR_FILE[s2]}" class="plx-other" style="--pc:{PILLAR_TONE.get(s2, '#E7E5E4')}"><span class="plx-other-n">{n2}</span><span class="min-w-0"><span class="plx-other-t">{t2}</span><span class="plx-other-d">{PILLAR_INTRO.get(s2, d2)}</span></span><span class="plx-arr" aria-hidden="true">↗</span></a></li>'''
                          for s2, n2, t2, d2, _r2 in PILLARS if s2 != slug)
 
         tabs = [('overview', 'Overview'), ('perspective', 'Perspective')] + ([('objectives', 'Objectives')] if pobj else []) + [('how-we-work', 'How we work'), ('projects', 'Projects')] + ([('related', 'Related')] if rel_rows else []) + [('other-pillars', 'Other pillars')]
@@ -984,21 +990,28 @@ def pillars():
 
 <section id="overview" class="plx-sec pt-8 lg:pt-10">
   <div class="wrap">
-    <div class="plx-hero{' has-side' if side else ''}">
-      <div class="plx-hero-main">
-        <div class="plx-hero-top">
-          <span class="plx-big" aria-hidden="true">{n}</span>
-          <div class="plx-hero-meta">{brand}<nav class="plx-pns" aria-label="All pillars">{steps_nav}</nav></div>
+    <div class="plx-h3" style="--pc:{PILLAR_TONE.get(slug, '#E7E5E4')}">
+      <div class="plx-h3-card{' has-photo' if photo_html else ' has-aside' if (flags or who) else ''}">
+        <div class="plx-h3-text">
+          <div class="plx-h3-top">
+            <span class="plx-badge"><span class="plx-badge-dot" aria-hidden="true"></span>Pillar {n}<i> / {PILLARS_TOTAL}</i></span>{brand}
+            <nav class="plx-pns" aria-label="All pillars">{steps_nav}</nav>
+          </div>
+          <p class="plx-k plx-mission-k">Our mission</p>
+          <p class="plx-h3-lead">{d}</p>
+          {f'<dl class="plx-h3-facts">{facts_html}</dl>' if facts_html else ''}
+          <div class="plx-h3-cta">
+            {'<a href="#projects" class="plx-btn">See projects <span aria-hidden="true">↓</span></a>' if projs else '<a href="#how-we-work" class="plx-btn">How we work <span aria-hidden="true">↓</span></a>'}
+            {'<a href="#how-we-work" class="plx-link">How we work <span aria-hidden="true">↓</span></a>' if projs else '<a href="get-involved.html" class="plx-link">Get involved <span aria-hidden="true">↗</span></a>'}
+            {share_bar(PILLAR_FILE[slug], t, 'Share', 'plx-h3-share')}
+          </div>
         </div>
-        <p class="plx-lead">{d}</p>
-        <dl class="plx-facts">{facts_html}</dl>
-        <div class="plx-cta">
-          <a href="#projects" class="plx-btn">See projects <span aria-hidden="true">↓</span></a>
-          <a href="#how-we-work" class="plx-link">How we work <span aria-hidden="true">↓</span></a>
-        </div>
-        {share_bar(PILLAR_FILE[slug], t, 'Share this pillar', 'plx-share')}
+        {photo_html or (f'<div class="plx-h3-aside">{h3_boxes}</div>' if h3_boxes else '')}
       </div>
-      {side}
+      {f"""<div class="plx-h3-strip">
+        {f'<div class="plx-h3-box"><p class="plx-k">{pg.get("flagshipLabel") or "Flagship programmes"}</p><ul class="plx-flags">{flags}</ul></div>' if flags else ''}
+        {f'<div class="plx-h3-box"><p class="plx-k">Who we work with</p><ul class="plx-whos">{"".join(f"<li>{w}</li>" for w in who)}</ul></div>' if who else ''}
+      </div>""" if (photo_html and (flags or who)) else ''}
     </div>
   </div>
 </section>

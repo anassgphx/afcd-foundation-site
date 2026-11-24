@@ -510,7 +510,7 @@
       var q = function (s) { var e = a.querySelector(s); return e ? e.innerHTML : ''; };
       var img = a.querySelector('img');
       var pairs = function (s) { return Array.prototype.map.call(a.querySelectorAll(s + ' > li'), function (li) { return [li.querySelector('b').innerHTML, li.querySelector('span').innerHTML]; }); };
-      return { n: a.dataset.n, name: q('h3'), dot: a.dataset.dot, href: a.dataset.href, pillar: q('.pp'), kind: q('.pk'), cat: q('.pc'),
+      return { n: a.dataset.n, status: a.dataset.status || '', name: q('h3'), dot: a.dataset.dot, href: a.dataset.href, pillar: q('.pp'), kind: q('.pk'), cat: q('.pc'),
         surface: a.dataset.surface, phTone: a.dataset.ph, photo: q('.ph'), img: img ? img.outerHTML : '', fit: a.dataset.fit || 'cover',
         facts: pairs('.pf'), outcomes: pairs('.po'),
         rows: Array.prototype.map.call(a.querySelectorAll('dl > div'), function (r) { return [r.querySelector('dt').innerHTML, r.querySelector('dd').innerHTML, r.hasAttribute('data-more')]; }) };
@@ -538,7 +538,7 @@
           '</div>' +
           '<span class="pc-pillar"><span class="pc-pillar-dot" style="--c:' + p.dot + '" aria-hidden="true"></span>' + p.pillar + '</span>' +
         '</header>' +
-        '<div class="mt-5 flex flex-wrap gap-2"><span class="pc-pill">' + (p.kind || 'Case study') + '</span>' + (p.cat ? '<span class="pc-pill">' + p.cat + '</span>' : '') + '</div>' +
+        '<div class="mt-5 flex flex-wrap items-center gap-2">' + (/^(Ongoing|Completed|Upcoming)$/.test(p.status) ? '<span class="pjg-badge is-sm is-' + p.status.toLowerCase() + '"><span class="pjg-pulse" aria-hidden="true"></span>' + p.status + '</span>' : '') + '<span class="pc-pill">' + (p.kind || 'Case study') + '</span>' + (p.cat ? '<span class="pc-pill">' + p.cat + '</span>' : '') + '</div>' +
         '<div class="mt-6 grid min-h-0 flex-1 gap-5 md:grid-cols-12 md:gap-6">' +
           '<div class="pc-inner flex flex-col rounded-[24px] p-3 md:col-span-5 md:p-4">' +
             /* 1:1 frame: a poster or document is shown whole on a neutral ground, a photo fills the square */

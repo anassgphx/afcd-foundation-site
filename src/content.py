@@ -760,11 +760,22 @@ def pillars():
 
 
 # ---------------------------------------------------------------- Projects
+def project_status(name):
+    """Ongoing / Completed / Upcoming for a project, from the Duration (or Years) fact Studio exports; None without dates."""
+    x = next((y for y in _PROJECT_DATA if y.get('name') == name), None)
+    facts = dict(((x or {}).get('detail') or {}).get('facts') or [])
+    return _status(facts.get('Duration') or facts.get('Years') or '')
+
+
+def status_badge(st, cls=''):
+    return f'<span class="pjg-badge is-{st.lower()} {cls}"><span class="pjg-pulse" aria-hidden="true"></span>{st}</span>' if st else ''
+
+
 def project_card(p, featured=False):
     name, slug, pname, cat, href, summary = p
     inner = f'''
         {ph(name, 'aspect-[4/3] w-full', '#D4D4D4')}
-        <div class="mt-5 flex flex-wrap items-center gap-2">{tag(pname)}<span class="label text-ink-mid">{cat}</span></div>
+        <div class="mt-5 flex flex-wrap items-center gap-2">{status_badge(project_status(name), 'is-sm')}{tag(pname)}<span class="label text-ink-mid">{cat}</span></div>
         <h3 class="mt-4 text-2xl font-semibold leading-[1.15] tracking-[-0.03em]">{name}</h3>
 '''
     if summary:
@@ -1201,7 +1212,7 @@ def home_projects():
         fit = 'contain' if d.get('poster') or (pic and pic.get('h', 0) > 1.1 * pic.get('w', 1)) else 'cover'
         img = media_img(pic, 'pc-img', '(min-width:1024px) 30vw, 100vw') if pic else ''
         cards.append(
-            f'<article data-n="{i + 1:02d}" data-href="{x["file"]}" data-dot="{PILLAR_TONE.get(x.get("pillar"), "#111")}" data-surface="pc-{i % 3 + 1}" data-ph="{["#E2E2E2", "#E6E6E6", "#DADADA"][i % 3]}" data-fit="{fit}">'
+            f'<article data-n="{i + 1:02d}" data-status="{project_status(x["name"]) or ""}" data-href="{x["file"]}" data-dot="{PILLAR_TONE.get(x.get("pillar"), "#111")}" data-surface="pc-{i % 3 + 1}" data-ph="{["#E2E2E2", "#E6E6E6", "#DADADA"][i % 3]}" data-fit="{fit}">'
             f'<h3>{_esc(x["name"])}</h3><span class="pp">{_PILLAR_NAMES.get(x.get("pillar"), "")}</span><span class="pk">Case study</span><span class="pc">{_esc(x.get("category") or "")}</span>'
             f'<p class="ph">{_esc(d.get("photo") or (x["name"] + " · project photo"))}</p>{img}'
             + ('<ul class="pf">' + ''.join(f'<li><b>{k}</b><span>{v}</span></li>' for k, v in facts[:3]) + '</ul>' if facts else '')

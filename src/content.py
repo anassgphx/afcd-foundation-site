@@ -844,18 +844,20 @@ def project_details():
         # cover: 3 to 5 photos (Studio "Cover photos") plus an optional 1:1 poster; empty places show a placeholder.
         photos = [m for m in (d.get('cover') or ([d['hero']] if d.get('hero') else [])) if m][:5]
         poster = d.get('poster') if (d.get('poster') or {}).get('src') else None
-        n = max(3, min(5, len(photos) + (1 if poster else 0)))
+        # with a 1:1 poster: the poster first (left, shown whole), then four square photo tiles beside it
+        n = 5 if poster else max(3, min(5, len(photos)))
         tiles = []   # (html, media or None, is_poster)
-        order = [('photo', 0)] + ([('poster', None)] if poster else []) + [('photo', k) for k in range(1, 5)]
+        order = ([('poster', None)] + [('photo', k) for k in range(0, 4)]) if poster else [('photo', k) for k in range(0, 5)]
         for kind, k in order:
             if len(tiles) == n:
                 break
             if kind == 'poster':
-                tiles.append((media_img(poster, 'h-full w-full', '(min-width:1024px) 20vw, 50vw'), poster, True))
+                tiles.append((media_img(poster, 'h-full w-full', '(min-width:1024px) 45vw, 100vw', eager=True), poster, True))
             elif k < len(photos):
-                tiles.append((media_img(photos[k], 'h-full w-full', '(min-width:1024px) 60vw, 100vw' if k == 0 else '(min-width:1024px) 22vw, 50vw', eager=k == 0), photos[k], False))
+                big = k == 0 and not poster
+                tiles.append((media_img(photos[k], 'h-full w-full', '(min-width:1024px) 60vw, 100vw' if big else '(min-width:1024px) 22vw, 50vw', eager=big), photos[k], False))
             else:
-                tiles.append((ph(d['photo'] if k == 0 else f'{d["name"]} · photo {k + 1}', 'h-full w-full', '#D4D4D4' if k == 0 else '#E2E2E1'), None, False))
+                tiles.append((ph(d['photo'] if (k == 0 and not poster) else f'{d["name"]} · photo {k + 1}', 'h-full w-full', '#D4D4D4' if (k == 0 and not poster) else '#E2E2E1'), None, False))
         real = [m for _h, m, _p in tiles if m]
         full = lambda m: (m.get('srcset') or '').split(',')[-1].strip().split(' ')[0] or m['src']
         cpos = {id(m): j for j, m in enumerate(real)}
@@ -863,7 +865,7 @@ def project_details():
             (f'<button type="button" class="pj-cover-i{" is-poster" if isp else ""}" data-lb-open="{cpos[id(m)]}" aria-label="{"Open the poster" if isp else f"Open photo {cpos[id(m)] + 1} of {len(real)}"}">{h}' + ('<span class="pj-cover-tag">Poster</span>' if isp else '') + '</button>')
             if m else f'<div class="pj-cover-i">{h}</div>' for h, m, isp in tiles)
         items = ''.join(f'<li><img src="{full(m)}" alt="{_esc(m.get("alt") or "")}" loading="lazy" decoding="async"></li>' for m in real)
-        hero = (f'<div class="pj-cover n{n}{" has-poster" if poster else ""}"' + (f' data-lb data-lb-title="{_esc(d["name"])}"' if real else '') + f'>{cells}'
+        hero = (f'<div class="pj-cover {"is-poster-cover" if poster else f"n{n}"}"' + (f' data-lb data-lb-title="{_esc(d["name"])}"' if real else '') + f'>{cells}'
                 + (f'<ul hidden data-lb-items>{items}</ul>' if real else '') + '</div>')
         gal = d.get('gallery') or []
         rev = d.get('revision') or ''

@@ -287,7 +287,11 @@ if (LANGS.length) {
 // Sitemap: indexable canonical pages only, absolute production URLs.
 writeFileSync(join(OUT_DIR, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemap.join('\n')}\n</urlset>\n`);
 // robots.txt: open on production, closed on preview builds. (Not access control: private systems need auth.)
+// The build stamp: a hash of the English pages and the sitemap, exactly as written. Studio reads it here and on the public
+// site after each publish, so "Published" is only confirmed once visitors get these very files (see studio publish/public-check.ts).
+const BUILD_STAMP = createHash('sha1').update([...readdirSync(OUT_DIR).filter((f) => /\.html$/.test(f)).sort(), 'sitemap.xml']
+  .map((f) => `${f}\n${readFileSync(join(OUT_DIR, f))}`).join('\n')).digest('hex').slice(0, 16);
 writeFileSync(join(OUT_DIR, 'robots.txt'), PRODUCTION
-  ? `User-agent: *\nAllow: /\n\nSitemap: ${SITE}sitemap.xml\n`
+  ? `User-agent: *\nAllow: /\n\nSitemap: ${SITE}sitemap.xml\n\n# studio-build: ${BUILD_STAMP}\n`
   : `# Preview build: not for indexing. Production builds use: npm run build:production\nUser-agent: *\nDisallow: /\n`);
 console.log(`sitemap.xml (${sitemap.length} urls), robots.txt [${PRODUCTION ? 'production' : 'preview'}]`);

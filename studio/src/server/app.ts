@@ -22,6 +22,7 @@ import * as N from './modules/news/service.ts';
 import * as PT from './modules/partners/service.ts';
 import { trimIfUncropped } from './modules/media/trim.ts';
 import { placeholderAlt } from './modules/media/alt.ts';
+import { publicState } from './modules/publish/public-check.ts';
 import * as EV from './modules/events/service.ts';
 import * as OP from './modules/opportunities/service.ts';
 import * as FM from './modules/forms/service.ts';
@@ -570,7 +571,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
 
   // ---------------------------------------------------------------- Top bar: search and notifications (permission-filtered)
   api.get('/search', async (c) => { const u = requireUser(c); return c.json(await WS.search(db, u.role, c.req.query('q') ?? '')); });
-  api.get('/overview', perm('dashboard.read'), async (c) => c.json(await dashboardOverview(db, requireUser(c))));
+  api.get('/overview', perm('dashboard.read'), async (c) => c.json(await dashboardOverview(db, requireUser(c), cfg)));
   api.get('/notifications', async (c) => { const u = requireUser(c); return c.json(await WS.notifications(db, u)); });
 
   // ---------------------------------------------------------------- Homepage and contact page editing (marked text, review, publishing)
@@ -615,6 +616,8 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
 
   // ---------------------------------------------------------------- Publishing jobs, audit, users
   api.get('/publish-jobs', perm('dashboard.read'), async (c) => c.json(await publisher.recentJobs(30)));
+  // whether visitors get the build Studio made (the public copy is synced separately): see modules/publish/public-check.ts
+  api.get('/publish-jobs/public', perm('dashboard.read'), async (c) => c.json(await publicState(cfg)));
   api.get('/audit', perm('audit.read'), async (c) => {
     const limit = Math.min(200, Number(c.req.query('limit') || 100));
     return c.json(await db.select().from(t.auditLog).orderBy(desc(t.auditLog.at)).limit(limit));

@@ -1,5 +1,6 @@
 // Delivery to the public website. Exports published revisions as JSON, copies approved image derivatives, runs the existing
 // generator (src/content.py) and build (build.mjs + Tailwind), then VERIFIES the output before the database records success.
+import { confirmPublic } from './public-check.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, renameSync, statSync } from 'node:fs';
@@ -574,6 +575,7 @@ export class Publisher {
       await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('settings') ? 'settings' : kind.includes('about') ? 'about_page' : kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('pillar') ? 'pillar' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('publication') ? 'publication' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
       throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
     }
+    void confirmPublic(this.db, this.cfg, job.id, actor);   // in the background: is the public copy serving this build?
     return { job, log };
   }
 

@@ -1,12 +1,14 @@
 // Dashboard overview: one read across every module, filtered by the user's permissions. Only real counts and records.
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
+import type { Config } from '../../config.ts';
 import { articles, events, formSubmissions, media, opportunities, publications, pageContents, pages, partners, pillars, projects, publishJobs, seoAudits } from '../../db/schema.ts';
 import { can, type Role } from '../../rbac.ts';
 import { TEXT_PAGES } from '../home/service.ts';
 import { todayMorocco } from '../events/render.ts';
 import { notifications, openFailures } from './service.ts';
 import { placeholderAlt } from '../media/alt.ts';
+import { recentPublicState } from '../publish/public-check.ts';
 
 type Mod = { key: string; label: string; href: string; icon: string; live: number; drafts: number; review: number; note?: string; scheduled?: number };
 type Recent = { kind: string; title: string; status: string; live: boolean; href: string; at: string };
@@ -21,7 +23,7 @@ const JOB_LABEL: Record<string, string> = {
   publish_translations: 'Published translations',
 };
 
-export async function overview(db: DB, user: { id: string; role: Role }) {
+export async function overview(db: DB, user: { id: string; role: Role }, cfg?: Config) {
   const role = user.role; const today = todayMorocco();
   const statusCounts = async (table: typeof projects | typeof articles | typeof events | typeof opportunities | typeof publications | typeof partners | typeof pages | typeof pillars) => {
     const t = table as typeof projects;
@@ -79,7 +81,13 @@ export async function overview(db: DB, user: { id: string; role: Role }) {
   if (can(role, 'dashboard.read')) {
     const [lastOk] = await db.select({ at: publishJobs.finishedAt }).from(publishJobs).where(eq(publishJobs.status, 'succeeded')).orderBy(desc(publishJobs.finishedAt)).limit(1);
     const failed = (await openFailures(db, 864e5)).length;   // not counting failures a later delivery fixed
-    health.push({ key: 'delivery', label: 'Publishing', value: failed ? `${failed} failed` : 'Working', tone: failed ? 'bad' : 'ok', href: '/studio/publishing', detail: failed ? 'In the last 24 hours. Open Publishing for details.' : lastOk?.at ? `Last update delivered ${lastOk.at.toISOString()}` : 'No delivery yet' });
+    // "Working" needs evidence that visitors get the build, not only that Studio built it (the public copy is synced separately)
+    const pub = cfg ? await recentPublicState(cfg) : { checked: false, match: null, error: null };
+    const stale = pub.checked && pub.match === false && !!lastOk?.at && Date.now() - lastOk.at.getTime() > 3 * 60_000;
+    health.push({ key: 'delivery', label: 'Publishing', value: failed ? `${failed} failed` : stale ? 'Not on the public site' : 'Working', tone: failed || stale ? 'bad' : 'ok', href: '/studio/publishing',
+      detail: failed ? 'In the last 24 hours. Open Publishing for details.'
+        : stale ? `The last publish was built, but the public site still serves an older version${pub.error ? ` (${pub.error})` : ''}. Check the site sync on the server.`
+        : lastOk?.at ? `Last update delivered ${lastOk.at.toISOString()}${pub.checked && pub.match ? ', public site confirmed' : ''}` : 'No delivery yet' });
   }
   if (can(role, 'seo.read')) {
     const [a] = await db.select().from(seoAudits).orderBy(desc(seoAudits.createdAt)).limit(1);

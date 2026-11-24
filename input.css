@@ -2544,3 +2544,6 @@ a.abx-chip:hover { background: #000; color: #fff; border-color: #000; }
 /* Homepage pillar explorer: the closed panels' vertical titles are laid fully sideways, so punctuation such as the
    apostrophe in "Women’s" stays in line instead of standing upright as a separate mark. */
 @media (min-width: 1024px) { .pl-title { text-orientation: sideways; } }
+/* the open pillar card keeps its buttons visible: a long summary (set in Studio) is cut at five lines on desktop;
+   the full text is on the pillar's own page */
+@media (min-width: 1024px) { .pl-sum { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; } }

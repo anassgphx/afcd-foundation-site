@@ -1563,6 +1563,9 @@ def home_pillars():
         else:
             photo = f'<div class="ph pl-photo relative h-full min-h-[240px] w-full rounded-2xl" style="--ph-line:rgba(0,0,0,.08)"><span class="ph-cap"><b>Photo</b> · {t}</span><span class="pl-tag">{t}</span></div>'
         file = PILLAR_FILE.get(slug, f'pillars.html#{slug}')
+        # long names (set in Studio) get a smaller title so the card's buttons stay inside the open panel
+        plain_len = len(_html.unescape(re.sub(r'<[^>]+>', '', t)))
+        size = 'md:text-[44px]' if plain_len <= 22 else 'md:text-[38px]' if plain_len <= 30 else 'md:text-[32px]'
         is_open = ' is-open' if i == 0 else ''
         expanded = 'true' if i == 0 else 'false'
         panels.append(
@@ -1581,8 +1584,8 @@ def home_pillars():
             f'\n              <div class="hidden items-center justify-between lg:flex"><span class="flex items-center gap-3"><span class="text-[26px] font-medium tabular-nums">{num}</span>{ico(slug, True)}</span>'
             f'<span class="flex items-center gap-2"><span class="mr-1 text-[13px] font-medium tabular-nums text-black/60">{num} / {total:02d}</span>{step}</span></div>'
             f'\n              <ul class="flex flex-wrap gap-2 lg:mt-6">{chips}</ul>'
-            f'\n              <p class="mt-6 text-[32px] font-semibold leading-[1.02] tracking-tightest md:text-[44px] lg:mt-auto">{t}</p>'
-            f'\n              <p class="mt-4 max-w-[44ch] text-[15px] leading-relaxed text-black/75 md:text-base">{d}</p>{rel_html}'
+            f'\n              <p class="mt-6 text-[32px] font-semibold leading-[1.02] tracking-tightest {size} lg:mt-auto">{t}</p>'
+            f'\n              <p class="pl-sum mt-4 max-w-[44ch] text-[15px] leading-relaxed text-black/75 md:text-base">{d}</p>{rel_html}'
             '\n              <div class="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">'
             f'\n                <a href="{file}" class="pc-btn">Explore {t} <span class="pc-arr" aria-hidden="true">→</span></a>'
             f'\n                <a href="projects.html?pillar={slug}#by-pillar" class="link-arrow">See projects <span class="arr" aria-hidden="true">↗</span></a>'

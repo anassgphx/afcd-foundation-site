@@ -836,6 +836,30 @@ def _lightbox(imgs, title, cls, tile_cls, shown, sizes):
     return f'<div class="{cls}" data-lb data-lb-title="{_esc(title)}">{tiles}<ul hidden data-lb-items>{items}</ul></div>'
 
 
+_MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+
+
+def _status(years, today=None):
+    """Ongoing / Completed / Upcoming from the Duration text ("2025 – 2026", "April – November 2025", "March 2024 – present").
+    None when there is no date to go by. Worked out each time the site is built (every publish)."""
+    import datetime
+    t = (years or '').strip().lower()
+    if not t:
+        return None
+    today = today or datetime.date.today()
+    if re.search(r'present|ongoing|today|now', t):
+        return 'Ongoing'
+    pts = [(int(y), (_MONTHS.index(m[:3]) + 1) if m else 0) for m, y in re.findall(r'(?:([a-z]{3,9})\.?\s+)?((?:19|20)\d{2})', t) if not m or m[:3] in _MONTHS]
+    if not pts:
+        return None
+    first_month = next((_MONTHS.index(w[:3]) + 1 for w in re.findall(r'[a-z]{3,9}', t) if w[:3] in _MONTHS), 0)
+    (sy, sm), (ey, em) = pts[0], pts[-1]
+    start = (sy, first_month if (len(pts) == 1 and first_month) else (sm or 1))
+    end = (ey, em or 12)
+    now = (today.year, today.month)
+    return 'Completed' if end < now else 'Upcoming' if start > now else 'Ongoing'
+
+
 def project_details():
     files = list(DETAILS)
     for idx, (file, d) in enumerate(DETAILS.items()):
@@ -906,10 +930,20 @@ def project_details():
 
         # 01 summary: the lede, short blocks with Read more, and the sticky "at a glance" panel
         blocks = ''.join(f'<div class="pjs-block"><h3 class="pjs-k">{k}</h3>{_read_more(v)}</div>' for k, v in summ_rows)
-        glance = [('Partners' if len(pnames) > 1 else 'Partner', ', '.join(pnames)), ('Duration', years), ('Location', fmap.get('Location', '')),
-                  ('Pillar', f'<a href="{PILLAR_FILE.get(d["slug"], "pillars.html")}" class="pjg-link"><span class="pjs-pillar-dot" aria-hidden="true"></span>{d["pillar"]}</a>'),
-                  ('Category', d['cat'])]
-        glance_rows = ''.join(f'<div class="pjg-row"><dt>{k}</dt><dd>{v}</dd></div>' for k, v in glance if v)
+        # the panel: status (from the duration) and dates, then each fact with its icon, label above the value
+        status = _status(years)
+        GI = {'partner': '<path d="M5.5 8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM1.5 15.5c0-2.5 1.8-4.5 4-4.5s4 2 4 4.5M12 8.5a2.2 2.2 0 1 0 0-4.4M11.5 11c2 0 3.5 1.9 3.5 4.5"/>',
+              'pin': '<path d="M8 14.5s4.5-4.2 4.5-8A4.5 4.5 0 0 0 3.5 6.5c0 3.8 4.5 8 4.5 8Z"/><circle cx="8" cy="6.5" r="1.6"/>',
+              'pillar': '<path d="M1.5 14.5h13M3.5 12V7.5M6.5 12V7.5M9.5 12V7.5M12.5 12V7.5M8 1.5l6.5 4h-13z"/>',
+              'tag': '<path d="M8.6 1.5H14.5v5.9l-7 7-5.9-5.9 7-7Z"/><circle cx="11.3" cy="4.7" r="1"/>'}
+        gico = lambda k: f'<span class="pjg-ico" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">{GI[k]}</svg></span>'
+        glance = [('partner', 'Partners' if len(pnames) > 1 else 'Partner', ', '.join(pnames)), ('pin', 'Location', fmap.get('Location', '')),
+                  ('pillar', 'Pillar', f'<a href="{PILLAR_FILE.get(d["slug"], "pillars.html")}" class="pjg-link">{d["pillar"]}</a>'),
+                  ('tag', 'Categories' if ',' in d['cat'] else 'Category', d['cat'])]
+        glance_rows = ''.join(f'<div class="pjg-row">{gico(i)}<div class="min-w-0"><dt>{k}</dt><dd>{v}</dd></div></div>' for i, k, v in glance if v)
+        status_html = ((f'<div class="pjg-status">' + (f'<span class="pjg-badge is-{status.lower()}"><span class="pjg-pulse" aria-hidden="true"></span>{status}</span>' if status else '')
+                        + (f'<span class="pjg-dates"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 7h12M5.5 1.5v3M10.5 1.5v3"/></svg>{years}</span>' if years else '') + '</div>')
+                       if (status or years) else '')
         # the project's most relevant event: the next upcoming one, else the most recent past one
         nxt = sorted([e for e in pevents if e.get('upcoming')], key=lambda e: e.get('iso') or '')
         past = sorted([e for e in pevents if not e.get('upcoming')], key=lambda e: e.get('iso') or '', reverse=True)
@@ -934,7 +968,7 @@ def project_details():
       </div>
       <aside class="pjg" aria-label="At a glance">
         {f'<div class="pjg-logo">{logo_html}</div>' if logo_html else ''}
-        <span class="pjg-k">At a glance</span>
+        {status_html}
         <dl class="pjg-list">{glance_rows}</dl>
         {ev_html}
         {dl_html}

@@ -1659,15 +1659,15 @@ button[type="submit"][aria-busy="true"] { opacity: .6; cursor: progress; }
 .po-empty-ico { flex-shrink: 0; width: 40px; height: 40px; border-radius: 9999px; background: #000; -webkit-mask: url(brand/afcd-symbol.svg?v=2) center / 60% no-repeat; mask: url(brand/afcd-symbol.svg?v=2) center / 60% no-repeat; }
 
 /* Pillar pages: a soft touch of each pillar's colour (--pc) on the neutral layout */
-.pl-page .pl-hero-n2 { background: color-mix(in srgb, var(--pc) 18%, #FAFAF9); border-color: color-mix(in srgb, var(--pc) 34%, #ECECEA); }
+.pl-page .pl-hero-n2 { background: color-mix(in srgb, var(--pc) 7%, #FAFAF9); border-color: color-mix(in srgb, var(--pc) 16%, #ECECEA); }
 .pl-page .pl-hero-n::before { content: ""; width: 8px; height: 8px; margin-right: 8px; border-radius: 9999px; background: var(--pc); }
-.pl-page .pv-main { background: color-mix(in srgb, var(--pc) 13%, #FAFAF9); border-color: color-mix(in srgb, var(--pc) 28%, #ECECEA); }
-.pl-page .pv-mark { color: var(--pc); }
-.pl-page .po-empty { background: color-mix(in srgb, var(--pc) 10%, #FAFAF9); border-color: color-mix(in srgb, var(--pc) 45%, #D6D3D1); }
-@media (max-width: 1023px) { .pl-page .hw-step { background: color-mix(in srgb, var(--pc) 9%, #FAFAF9); } }
-.pl-page .wd-card:hover { background: color-mix(in srgb, var(--pc) 22%, #fff); }
-.pl-other[style*="--pc"] { background: color-mix(in srgb, var(--pc) 16%, #FAFAF9); border-color: color-mix(in srgb, var(--pc) 32%, #ECECEA); }
-.pl-other[style*="--pc"]:hover { background: #000; color: #fff; }
+.pl-page .pv-main { background: color-mix(in srgb, var(--pc) 5%, #FAFAF9); border-color: color-mix(in srgb, var(--pc) 14%, #ECECEA); }
+.pl-page .pv-mark { color: color-mix(in srgb, var(--pc) 55%, #A8A29E); }
+.pl-page .po-empty { background: #FAFAF9; border-color: #E7E5E4; }
+@media (max-width: 1023px) { .pl-page .hw-step { background: #FAFAF9; } }
+.pl-page .wd-card:hover { background: #fff; }
+.pl-other[style*="--pc"] { background: color-mix(in srgb, var(--pc) 6%, #FAFAF9); border-color: color-mix(in srgb, var(--pc) 14%, #ECECEA); }
+.pl-other[style*="--pc"]:hover { background: color-mix(in srgb, var(--pc) 6%, #FAFAF9); color: inherit; }
 
 /* Homepage mission card: black gradient, no colour line */
 .pv-card.pv-mission { background: radial-gradient(520px 320px at 100% 0%, rgba(255,255,255,.09), transparent 70%), linear-gradient(160deg, #222 0%, #0D0D0D 50%, #000 100%); }
@@ -2016,3 +2016,34 @@ button.pj-cover-i.is-poster:hover img { transform: scale(1.02); }
   .pj-cover.n4 .pj-cover-i:nth-child(2) { grid-column: 2 / 4; }
   .pj-cover.n4 .pj-cover-i:last-child { grid-column: auto; aspect-ratio: auto; }
 }
+
+/* Pillar detail: stronger type, quieter colour, no lift or glow. The card layout stays. */
+body:has(.pl-page) .phd-title { font-size: clamp(48px, 5.6vw, 84px); letter-spacing: -.052em; }
+body:has(.pl-page) .phd-glow { opacity: .35; }
+.pl-page .pl-hero-lead { margin-top: 16px; max-width: 22ch; font-size: 24px; font-weight: 600; letter-spacing: -.035em; line-height: 1.15; }
+@media (min-width: 768px) { .pl-page .pl-hero-lead { font-size: 36px; } }
+@media (min-width: 1024px) {
+  .pl-page .pl-hero-2 { padding: 28px 32px; gap: 28px; }
+  .pl-page .pl-hero-photo { min-height: 300px; }
+}
+.pl-page #perspective { padding-top: 3.25rem; padding-bottom: 3.25rem; }
+@media (min-width: 1024px) { .pl-page #perspective { padding-top: 4.25rem; padding-bottom: 4.25rem; } }
+.pl-page .pv-title { font-size: clamp(36px, 4vw, 56px); }
+.pl-hero-mark { position: relative; display: grid; place-items: center; height: 100%; min-height: 220px; overflow: hidden; border-radius: 22px; background: #F4F4F3; }
+.pl-hero-mark::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--pc); }
+.pl-hero-mark::after { content: ""; position: absolute; width: 180px; aspect-ratio: 53.24 / 48; right: -28px; bottom: -36px; background: #141414; opacity: .06; -webkit-mask: url(brand/afcd-symbol.svg?v=2) center / contain no-repeat; mask: url(brand/afcd-symbol.svg?v=2) center / contain no-repeat; }
+.pl-hero-mark-n { position: relative; font-size: clamp(88px, 10vw, 128px); font-weight: 600; letter-spacing: -.06em; line-height: .85; color: #141414; }
+.pl-page .wd-card, .pl-page .wd-card:hover { transform: none; box-shadow: none; background: #fff; border-color: var(--light); }
+.pl-page .wd-card:hover .wd-n { color: #E7E5E4; }
+.pl-other, .pl-other:hover { transform: none; box-shadow: none; }
+.pl-other[style*="#F4F4F3"]:hover { background: color-mix(in srgb, var(--pc) 6%, #FAFAF9); color: inherit; }
+.pl-other:hover .pj-nav-arr, .pl-other[style*="--pc"]:hover .pj-nav-arr { background: rgba(255,255,255,.7); color: inherit; border-color: transparent; transform: none; }
+.pl-page .nw-card, .pl-page .nw-card:hover { transform: none; box-shadow: none; }
+.pl-page .nw-card:hover { border-color: #D6D3D1; }
+.pl-page .pl-step:hover { background: #F4F4F3; color: #141414; }
+.pl-page .shr-b:hover { transform: none; background: #fff; color: #141414; border-color: #141414; }
+.pl-page + .cta-wrap .cta-glow { opacity: .22; }
+.pl-page + .cta-wrap .cta-way, .pl-page + .cta-wrap .cta-way:hover { transform: none; box-shadow: none; }
+.pl-page + .cta-wrap .cta-way:hover .cta-way-n { background: #F3F3F3; color: inherit; }
+.pl-page + .cta-wrap .cta-way:hover .cta-way-arr { background: transparent; color: inherit; border-color: #E5E5E5; transform: none; }
+.pl-page :focus-visible, .pl-page + .cta-wrap :focus-visible { outline: 2px solid #141414; outline-offset: 3px; }

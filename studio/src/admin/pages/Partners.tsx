@@ -91,10 +91,10 @@ export function PartnerEditor({ id }: { id: string }) {
   const [dirty, setDirty] = useState(false); const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
   const [dialog, setDialog] = useState<null | 'logo' | 'preview' | 'publish' | 'unpublish' | 'changes'>(null);
   const [url, setUrl] = useState(''); const [comment, setComment] = useState('');
-  const [others, setOthers] = useState<{ id: string; name: string }[]>([]); const [pq, setPq] = useState('');
+  const [others, setOthers] = useState<{ id: string; name: string; category?: string }[]>([]);
 
   const load = useCallback(async () => {
-    const [d, pr, all] = await Promise.all([api<Loaded>(`/partners/${id}`), api('/projects'), api<{ id: string; name: string }[]>('/partners')]);
+    const [d, pr, all] = await Promise.all([api<Loaded>(`/partners/${id}`), api('/projects'), api<{ id: string; name: string; category?: string }[]>('/partners')]);
     setOthers(all.filter((x) => x.id !== id));
     setP(d); setF(Object.fromEntries(KEYS.map((k) => [k, (d as any)[k]])) as Form); setLogo(d.media[0] ?? null);
     setProjects(pr.filter((x: any) => x.publishedRevisionId)); setDirty(false);
@@ -114,7 +114,18 @@ export function PartnerEditor({ id }: { id: string }) {
   const site = (() => { try { const u = new URL(f.websiteUrl); return u.protocol === 'https:' || u.protocol === 'http:' ? u : null; } catch { return null; } })();
   const siteIssue = !f.websiteUrl ? '' : !site ? 'Use a full address starting with https://' : site.protocol === 'http:' ? 'Prefer the secure https:// address if the site has one.' : '';
   const years = f.sinceYear && f.sinceYear <= thisYear ? thisYear - f.sinceYear : null;
-  const shownProjects = projects.filter((x) => !pq || x.name.toLowerCase().includes(pq.toLowerCase())).sort((a, b) => Number(f.projectSlugs.includes(b.slug)) - Number(f.projectSlugs.includes(a.slug)));
+  const types = [...new Set([...others.map((o) => (o.category ?? '').trim()).filter(Boolean), 'Embassy', 'Foundation', 'Association', 'International NGO', 'University', 'Commune', 'Company', 'Network'])].sort();
+  const projLeft = projects.filter((x) => !f.projectSlugs.includes(x.slug)).sort((a, b) => a.name.localeCompare(b.name));
+  const logoShape = logo ? shapeOf(logo.width, logo.height) : null;
+  async function trimLogo(undo = false) {
+    if (!logo) return;
+    setBusy('trim');
+    try {
+      const r = undo ? await post<MediaItem>(`/media/${logo.id}/crop`, { crop: null }) : await post<MediaItem & { trimmed: boolean }>(`/media/${logo.id}/trim`);
+      setLogo({ ...logo, ...r, url: `${r.url}?v=${Date.now()}` });
+      toast(undo ? 'Trim undone: the whole image is used again' : (r as { trimmed?: boolean }).trimmed ? `Trimmed to ${r.width}×${r.height}. Publish the partner to update the website.` : 'Nothing to trim: the margins are already small');
+    } catch (e) { showErr(e); } finally { setBusy(''); }
+  }
   async function save(): Promise<boolean> {
     setBusy('save'); setErrs([]);
     try { await put(`/partners/${id}`, f); await load(); toast(live ? 'Draft saved. The live listing is unchanged until you publish.' : 'Draft saved'); return true; }
@@ -169,16 +180,13 @@ export function PartnerEditor({ id }: { id: string }) {
             </div>
             <div className="pt-prev" aria-label="Preview on the Partners page">
               <span className="op-cap">On the Partners page</span>
-              <div className="pt-tile">
-                <span className="pt-logo">{f.logoMediaId && logo ? <img src={logo.url} alt="" /> : <span>{initials(f.name) || '?'}</span>}</span>
-                <b>{f.name || 'Organisation name'}</b>
-                <span className="pt-scope">{scopeLabel(f.scope)}{f.category ? ` · ${f.category}` : ''}</span>
-              </div>
+              <PartnerCard f={f} logo={f.logoMediaId ? logo : null} projects={projects} />
             </div>
           </div>
           <Field label="Scope" span={3} hint="Groups the partner on the website."><div className="ed-choice">
             {SCOPES.map(([v, l]) => <label key={v} className={f.scope === v ? 'on' : ''}><input type="radio" name="scope" checked={f.scope === v} onChange={() => set('scope', v)} /><b>{l}</b><small>{SCOPE_INFO[v]}</small></label>)}</div></Field>
-          <Field label="Type of organisation" span={2} hint="e.g. Embassy, Foundation, Association, Commune"><input className="input" maxLength={60} value={f.category} onChange={(x) => set('category', x.target.value)} aria-label="Type of organisation" /></Field>
+          <Field label="Type of organisation" span={2} hint="Pick one in use, or type a new one."><input className="input" list="pt-types" maxLength={60} value={f.category} placeholder="e.g. Embassy, Foundation, Association" onChange={(x) => set('category', x.target.value)} aria-label="Type of organisation" />
+            <datalist id="pt-types">{types.map((x) => <option key={x} value={x} />)}</datalist></Field>
           <Field label="Partnership"><div className="seg pt-seg" role="radiogroup" aria-label="Partnership">
             <button type="button" role="radio" aria-checked={f.current} className={f.current ? 'on' : ''} onClick={() => set('current', true)}>Current</button>
             <button type="button" role="radio" aria-checked={!f.current} className={!f.current ? 'on' : ''} onClick={() => set('current', false)}>Past</button></div></Field>
@@ -192,17 +200,32 @@ export function PartnerEditor({ id }: { id: string }) {
             <input className="input" type="number" min={2000} max={thisYear} placeholder="Year" value={f.sinceYear ?? ''} onChange={(x) => set('sinceYear', x.target.value ? Number(x.target.value) : null)} aria-label="Partner since" /></Field>
         </Section>
         <Section id="logo" title="Logo" desc="Only with the partner’s permission; confirm the rights in the Media Library. Without a logo the site shows initials.">
-          <div className="ed-media s3">
-            {f.logoMediaId && logo ? <div className="ed-media-img" style={{ background: '#fff' }}><img src={logo.url} alt={logo.alt} style={{ objectFit: 'contain', aspectRatio: '3 / 2', padding: 12 }} /><button type="button" className="btn btn-sm" onClick={() => set('logoMediaId', null)}><Icon n="x" />Remove</button></div>
-              : <button type="button" className="ed-drop" onClick={() => setDialog('logo')}><Icon n="image" /><b>Choose a logo</b><small>From the media library.</small></button>}
-            {f.logoMediaId && <button type="button" className="btn btn-sm" onClick={() => setDialog('logo')}><Icon n="image" />Change logo</button>}
+          {f.logoMediaId && logo ? <div className="pt-logo-ed s3">
+            <div className="pt-logo-stage"><img src={logo.url} alt={logo.alt} /></div>
+            <div className="pt-logo-info">
+              <b>{logoShape === 'is-square' ? 'Square logo' : logoShape === 'is-mid' ? 'Medium logo' : 'Wide logo'}</b>
+              <small>{logo.width}×{logo.height} px · the website sizes it by its shape so every logo looks equally weighted.</small>
+              {(!logo.alt || !logo.rightsConfirmed) && <small className="pt-hint-warn">{!logo.alt ? 'Add alt text (usually the organisation name)' : 'Confirm AFCD may use it (permission from the partner)'} in the Media Library before review.</small>}
+              <div className="pt-logo-actions">
+                <button type="button" className="btn btn-sm" disabled={!!busy || !can('media.update')} onClick={() => trimLogo()} title="Crop away empty transparent or white margins"><Icon n="image" />{busy === 'trim' ? 'Trimming…' : 'Trim empty margins'}</button>
+                {(logo as MediaItem & { crop?: unknown }).crop ? <button type="button" className="btn btn-sm btn-ghost" disabled={!!busy || !can('media.update')} onClick={() => trimLogo(true)}>Undo trim</button> : null}
+                <button type="button" className="btn btn-sm" onClick={() => setDialog('logo')}>Change</button>
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => set('logoMediaId', null)}><Icon n="x" />Remove</button>
+              </div>
+            </div>
           </div>
+            : <button type="button" className="ed-drop s3" onClick={() => setDialog('logo')}><Icon n="image" /><b>Choose a logo</b><small>From the media library. A transparent PNG works best; empty margins are trimmed automatically.</small></button>}
         </Section>
         <Section id="projects" title="Projects with this partner" desc="Live projects only.">
-          {projects.length > 6 && <div className="pt-pbar s3"><label className="search"><Icon n="search" /><span className="sr-only">Search projects</span><input className="input" placeholder="Search projects" value={pq} onChange={(e) => setPq(e.target.value)} /></label><span className="muted">{f.projectSlugs.length} selected</span></div>}
-          {projects.length === 0 && <p className="muted s3" style={{ margin: 0 }}>No live projects yet. Projects appear here once they are published.</p>}
-          {projects.length > 0 && projects.length <= 6 && <span className="muted s3" style={{ fontSize: 12 }}>{f.projectSlugs.length} selected</span>}
-          <div className="ed-checks s3">{shownProjects.map((x) => <label key={x.slug} className={f.projectSlugs.includes(x.slug) ? 'on' : ''}><input type="checkbox" checked={f.projectSlugs.includes(x.slug)} onChange={(e) => set('projectSlugs', e.target.checked ? [...f.projectSlugs, x.slug] : f.projectSlugs.filter((s) => s !== x.slug))} /><span>{x.name}</span></label>)}</div>
+          {projects.length === 0 ? <p className="muted s3" style={{ margin: 0 }}>No live projects yet. Projects appear here once they are published.</p> : <div className="pt-projs s3">
+            {f.projectSlugs.length > 0 && <ul className="pt-pchips">{f.projectSlugs.map((sl) => <li key={sl}><Icon n="folder" width={14} height={14} /><span>{projects.find((x) => x.slug === sl)?.name ?? sl}</span>
+              <button type="button" aria-label="Remove this project" onClick={() => set('projectSlugs', f.projectSlugs.filter((x) => x !== sl))}>×</button></li>)}</ul>}
+            <select className="select pt-pselect" value="" disabled={!projLeft.length} onChange={(e) => e.target.value && set('projectSlugs', [...f.projectSlugs, e.target.value])} aria-label="Add a project">
+              <option value="">{projLeft.length ? 'Add a project…' : 'All live projects are linked'}</option>
+              {projLeft.map((x) => <option key={x.slug} value={x.slug}>{x.name}</option>)}
+            </select>
+            <small className="muted">Shown on the partner’s card on the website, as links to the project pages.</small>
+          </div>}
         </Section>
         <Section id="internal" title="Internal" desc="Not shown on the website.">
           <Field label="Source" span={2} hint="Where these details come from."><input className="input" maxLength={300} value={f.provenance} onChange={(x) => set('provenance', x.target.value)} aria-label="Source" /></Field>
@@ -241,4 +264,24 @@ export function PartnerEditor({ id }: { id: string }) {
 
 function Fld({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return <div className="field"><span>{label}</span>{children}{hint && <small>{hint}</small>}</div>;
+}
+
+/** Same rule as the website (src/content.py logo_shape): square logos tallest, wide ones shortest. */
+function shapeOf(w: number, h: number) { const r = w && h ? w / h : 2; return r < 1.35 ? 'is-square' : r < 2.6 ? 'is-mid' : 'is-wide'; }
+
+/** The partner's card as the Partners page shows it, from the form as it is now. */
+function PartnerCard({ f, logo, projects }: { f: Form; logo: MediaItem | null; projects: { slug: string; name: string }[] }) {
+  const linked = f.projectSlugs.map((sl) => projects.find((x) => x.slug === sl)?.name).filter(Boolean) as string[];
+  let site: URL | null = null; try { site = new URL(f.websiteUrl); } catch { site = null; }
+  return <div className="ptc">
+    <div className="ptc-stage">{logo ? <img className={shapeOf(logo.width, logo.height)} src={logo.url} alt="" /> : <span className="ptc-ini">{initials(f.name) || '?'}</span>}</div>
+    <div className="ptc-body">
+      <span className="ptc-scope">{scopeLabel(f.scope)}{f.category ? ` · ${f.category}` : ''}</span>
+      <b>{f.name || 'Organisation name'}</b>
+      <span className="ptc-meta"><i>{f.current ? 'Current partner' : 'Past partner'}</i>{f.sinceYear ? <i>since {f.sinceYear}</i> : null}</span>
+      {f.description.trim() && <p>{f.description}</p>}
+      {linked.length > 0 && <span className="ptc-projs"><em>Projects</em>{linked.map((n) => <u key={n}>{n}</u>)}</span>}
+      {site?.protocol === 'https:' && <span className="ptc-web">Website ↗</span>}
+    </div>
+  </div>;
 }

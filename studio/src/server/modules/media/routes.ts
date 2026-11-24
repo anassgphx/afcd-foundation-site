@@ -10,6 +10,7 @@ import * as M from './service.ts';
 import * as L from './library.ts';
 import * as T from './trash.ts';
 import * as C from './crop.ts';
+import { trimBox } from './trim.ts';
 
 const urls = (m: M.MediaRow) => ({ url: `/studio/media-file/${m.storageKey}-480.webp`, large: `/studio/media-file/${M.publicRef(m).src.split('/').pop()}` });
 /** What a reviewer would ask for before this image can be used publicly. */
@@ -92,6 +93,17 @@ export function registerMediaLibraryRoutes(api: Hono<Env>) {
     const row = await C.cropMedia(c.var.db, c.var.cfg, m, p.data.crop);
     await audit(c.var.db, actor(c), 'media.crop', { type: 'media', id: m.id }, row.crop ? `Cropped ${m.originalName} to ${row.width}×${row.height}` : `Removed the crop of ${m.originalName}`);
     return c.json({ ...row, ...urls(row) });
+  });
+
+  // trims the empty (transparent or white) margins around a logo: a crop like any other, so "Reset" undoes it (media/trim.ts)
+  api.post('/media/:id/trim', perm('media.update'), async (c) => {
+    const [m] = await c.var.db.select().from(t.media).where(eq(t.media.id, c.req.param('id')));
+    if (!m) throw new AppError(404, 'Media not found.');
+    const box = await trimBox(c.var.cfg, m);
+    if (!box) return c.json({ ...m, ...urls(m), trimmed: false });
+    const row = await C.cropMedia(c.var.db, c.var.cfg, m, box);
+    await audit(c.var.db, actor(c), 'media.crop', { type: 'media', id: m.id }, `Trimmed the empty margins of ${m.originalName} to ${row.width}×${row.height}`);
+    return c.json({ ...row, ...urls(row), trimmed: true });
   });
 
   api.get('/media/:id/original', perm('media.read'), async (c) => {

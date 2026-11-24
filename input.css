@@ -2032,12 +2032,8 @@ button.pj-cover-i.is-poster:hover img { transform: scale(1.02); }
 .pj-stat dd { margin: 0; font-size: clamp(22px, 2.4vw, 30px); font-weight: 600; line-height: 1.1; letter-spacing: -.03em; color: #000; }
 .pj-stat dt { font-size: 11px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: #737373; }
 
-/* Project page: logo beside the title, summary with a sticky "at a glance" panel, numbered objectives,
+/* Project page: summary with a sticky "at a glance" panel, numbered objectives,
    outputs and a photo wall. Built by src/content.py project_details(). */
-.pj-h1 { display: inline-flex; align-items: center; gap: .45em; flex-wrap: wrap; }
-.pj-h1-logo.pj-logo { margin: 0; height: 1.05em; min-width: 1.05em; border-radius: .22em; flex-shrink: 0; }
-.pj-h1-logo.pj-logo.round { border-radius: 9999px; }
-.pj-h1-logo.tall { height: 1.3em; }
 
 .pjs2 { display: grid; gap: 28px; }
 @media (min-width: 1024px) { .pjs2 { grid-template-columns: minmax(0, 1fr) 340px; gap: 56px; align-items: start; } }

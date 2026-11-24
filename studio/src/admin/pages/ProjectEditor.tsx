@@ -7,6 +7,7 @@ import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
 import { ActivityList } from '../ActivityEditor.tsx';
+import { DurationPicker, TagInput, splitTags } from '../projectFields.tsx';
 import '../project-editor.css';
 
 type Pillar = { key: string; name: string; colour: string; number: string };
@@ -76,7 +77,7 @@ export function ProjectEditor({ id }: { id: string }) {
   const [form, setForm] = useState<Form>(EMPTY);
   const [media, setMedia] = useState<Record<string, MediaItem>>({});
   const [pillars, setPillars] = useState<Pillar[]>([]); const [objectives, setObjectives] = useState<Objective[]>([]);
-  const [partnersAll, setPartnersAll] = useState<PartnerOpt[]>([]); const [pq, setPq] = useState(''); const [pOpen, setPOpen] = useState(false);
+  const [partnersAll, setPartnersAll] = useState<PartnerOpt[]>([]);
   const [tab, setTab] = useState<(typeof TABS)[number]>('Summary');
   const [errors, setErrors] = useState<Record<string, string>>({}); const [banner, setBanner] = useState<{ kind: string; text: ReactNode } | null>(null);
   const [busy, setBusy] = useState(''); const [dirty, setDirty] = useState(false); const [slugTouched, setSlugTouched] = useState(!isNew);
@@ -87,7 +88,7 @@ export function ProjectEditor({ id }: { id: string }) {
   const [changed, setChanged] = useState<Set<string>>(new Set());   // fields edited since the last save (tab dots)
   const [categories, setCategories] = useState<string[]>([]);       // categories already used by projects (suggestions)
   const [copied, setCopied] = useState(false);
-  useEffect(() => { api<{ category: string | null }[]>('/projects').then((r) => setCategories([...new Set(r.map((x) => (x.category ?? '').trim()).filter(Boolean))].sort())).catch(() => {}); }, []);
+  useEffect(() => { api<{ category: string | null }[]>('/projects').then((r) => setCategories([...new Set(r.flatMap((x) => splitTags(x.category ?? '')))].sort())).catch(() => {}); }, []);
 
   const load = useCallback(async () => {
     const [p, o] = await Promise.all([api<Pillar[]>('/pillars'), api<Objective[]>('/objectives')]);
@@ -311,28 +312,23 @@ export function ProjectEditor({ id }: { id: string }) {
                 <Field name="summary" label="One-line summary" hint="Shown on project cards, the listing and as the page intro." err={errors.summary} count={[form.summary.length, 400]}>
                   <textarea className="textarea" style={{ minHeight: 64 }} value={form.summary} onChange={(e) => set('summary', e.target.value)} maxLength={400} disabled={ro} />
                 </Field>
-                <div className="row">
-                  <Field name="category" label="Category" hint={categories.length ? 'Pick one already in use, or type a new one.' : 'e.g. Youth Leadership, Climate Action'} err={errors.category}>
-                    <input className="input" list="pe-categories" value={form.category} onChange={(e) => set('category', e.target.value)} maxLength={80} disabled={ro} />
-                  </Field>
-                  <Field name="reference" label="Internal reference" optional hint="Only visible in Studio." err={errors.reference}><input className="input" value={form.reference} onChange={(e) => set('reference', e.target.value)} maxLength={40} disabled={ro} /></Field>
-                </div>
-                <datalist id="pe-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
+                <Field group name="category" label="Categories" hint="Tags shown with the pillar at the top of the page. Pick ones already in use, or type a new one and press Enter." err={errors.category}>
+                  <TagInput value={form.category} onChange={(v) => set('category', v)} suggestions={categories} disabled={ro} />
+                </Field>
+                <Field name="reference" label="Internal reference" optional hint="Only visible in Studio." err={errors.reference}><input className="input" value={form.reference} onChange={(e) => set('reference', e.target.value)} maxLength={40} disabled={ro} /></Field>
               </PeSection>
 
-              <PeSection title="Details" desc="Shown in the facts bar on the project page.">
-                <div className="row">
-                  <Field name="location" label="Location" optional err={errors.location}><input className="input" value={form.location} onChange={(e) => set('location', e.target.value)} maxLength={120} disabled={ro} placeholder="e.g. Ait Ourir" /></Field>
-                  <Field name="years" label="Duration" optional hint={yearsOk ? 'A year, a month and year, or a range: 2020 – 2021, January – November 2026, March 2024 – present.' : undefined} warn={yearsOk ? undefined : 'Write it as a year or a range, e.g. 2020 – 2021 or January – November 2026.'} err={errors.years}>
-                    <input className="input" value={form.years} onChange={(e) => set('years', e.target.value)} maxLength={60} disabled={ro} placeholder="e.g. January – November 2026" />
-                  </Field>
-                </div>
+              <PeSection title="Details" desc="Shown in the “At a glance” panel on the project page.">
+                <Field name="location" label="Location" optional err={errors.location}><input className="input" value={form.location} onChange={(e) => set('location', e.target.value)} maxLength={120} disabled={ro} placeholder="e.g. Ait Ourir" /></Field>
+                <Field group name="years" label="Duration" optional hint="Pick the start and end dates. The website shows months and years; a full January–December span shows as years (2025 – 2026)." warn={yearsOk ? undefined : 'Pick the dates again so the website can show them.'} err={errors.years}>
+                  <DurationPicker value={form.years} onChange={(v) => set('years', v)} disabled={ro} />
+                </Field>
                 <Field group name="partnerSlugs" label="Partners" optional hint="Chosen from Studio → Partners, the same links the partner pages use. Only published partners show on the website." err={errors.partnerSlugs}>
                   {(() => {
                     const chosen = form.partnerSlugs.map((sl) => partnersAll.find((x) => x.slug === sl) ?? { slug: sl, name: sl, scope: '', status: '', publishedRevisionId: null, id: sl });
-                    const q = pq.trim().toLowerCase();
-                    const options = partnersAll.filter((x) => !form.partnerSlugs.includes(x.slug) && (!q || x.name.toLowerCase().includes(q))).slice(0, 8);
-                    const add = (sl: string) => { set('partnerSlugs', [...form.partnerSlugs, sl].slice(0, 12)); setPq(''); };
+                    const left = partnersAll.filter((x) => !form.partnerSlugs.includes(x.slug)).sort((a, b) => a.name.localeCompare(b.name));
+                    const live = left.filter((x) => x.publishedRevisionId), draft = left.filter((x) => !x.publishedRevisionId);
+                    const add = (sl: string) => { if (sl) set('partnerSlugs', [...form.partnerSlugs, sl].slice(0, 12)); };
                     // a partner typed as an extra fact that matches a real partner: offer to link it instead
                     const typed = form.extraFacts.findIndex((f) => /^partners?$/i.test(f.label.trim()));
                     const typedMatch = typed >= 0 ? partnersAll.find((x) => !form.partnerSlugs.includes(x.slug) && (form.extraFacts[typed].value.toLowerCase().includes(x.name.toLowerCase()) || x.name.toLowerCase().includes(form.extraFacts[typed].value.trim().toLowerCase()))) : undefined;
@@ -340,13 +336,11 @@ export function ProjectEditor({ id }: { id: string }) {
                       {chosen.length > 0 && <ul className="pe-pchips">{chosen.map((x) => <li key={x.slug}><span className="pe-pchip-n">{x.name}</span>
                         {x.scope && <small>{x.scope}</small>}{!x.publishedRevisionId && <em title="This partner is not published yet, so it isn't shown on the website">not published</em>}
                         {!ro && <button type="button" aria-label={`Remove ${x.name}`} onClick={() => set('partnerSlugs', form.partnerSlugs.filter((s2) => s2 !== x.slug))}>×</button>}</li>)}</ul>}
-                      {!ro && <div className="pe-psearch" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setPOpen(false); }}>
-                        <input className="input" value={pq} placeholder={partnersAll.length ? 'Add a partner: type to search' : 'No partners yet: add them in Partners'} disabled={!partnersAll.length}
-                          onFocus={() => setPOpen(true)} onChange={(e) => { setPq(e.target.value); setPOpen(true); }}
-                          onKeyDown={(e) => { if (e.key === 'Enter' && options[0]) { e.preventDefault(); add(options[0].slug); } if (e.key === 'Escape') setPOpen(false); }} aria-label="Add a partner" />
-                        {pOpen && options.length > 0 && <ul className="pe-plist" role="listbox">{options.map((x) => <li key={x.slug}><button type="button" role="option" onMouseDown={(e) => e.preventDefault()} onClick={() => add(x.slug)}>
-                          <b>{x.name}</b><small>{x.scope}{x.publishedRevisionId ? '' : ' · not published'}</small></button></li>)}</ul>}
-                      </div>}
+                      {!ro && <select className="select pe-pselect" value="" disabled={!left.length || form.partnerSlugs.length >= 12} onChange={(e) => add(e.target.value)} aria-label="Add a partner">
+                        <option value="">{!partnersAll.length ? 'No partners yet: add them in Partners' : left.length ? 'Add a partner…' : 'All partners are linked'}</option>
+                        {live.length > 0 && <optgroup label="Published partners">{live.map((x) => <option key={x.slug} value={x.slug}>{x.name}{x.scope ? ` · ${x.scope}` : ''}</option>)}</optgroup>}
+                        {draft.length > 0 && <optgroup label="Not published yet (hidden on the website)">{draft.map((x) => <option key={x.slug} value={x.slug}>{x.name}</option>)}</optgroup>}
+                      </select>}
                       {!ro && typedMatch && <div className="pe-plink"><span>“{form.extraFacts[typed].value}” is typed as an extra fact. Link the partner <b>{typedMatch.name}</b> instead, so it stays in step with the Partners page?</span>
                         <button type="button" className="btn btn-sm btn-primary" onClick={() => { set('partnerSlugs', [...form.partnerSlugs, typedMatch.slug]); set('extraFacts', form.extraFacts.filter((_, i) => i !== typed)); }}>Link partner</button></div>}
                     </div>;
@@ -370,15 +364,15 @@ export function ProjectEditor({ id }: { id: string }) {
                   </div>
                 </Field>
                 {(() => {
-                  // what the project page will show: the facts bar on the cover, then the extra facts as key figures (same rules as src/content.py)
+                  // what the project page will show: partner, duration and location in the At a glance panel, the extra facts as key figures (same rules as src/content.py)
                   const linked = form.partnerSlugs.map((sl) => partnersAll.find((x) => x.slug === sl)).filter((x) => x && x.publishedRevisionId).map((x) => x!.name);
                   const typed = form.extraFacts.find((f) => /^partners?$/i.test(f.label.trim()))?.value.trim() ?? '';
                   const pn = linked.length ? linked : typed ? [typed] : [];
-                  const bar = ([['Project', form.name], [pn.length > 1 ? 'Partners' : 'Partner', pn.join(', ')], ['Duration', form.years.trim()], ['Location', form.location.trim()]] as [string, string][]).filter(([, v]) => v);
+                  const bar = ([[pn.length > 1 ? 'Partners' : 'Partner', pn.join(', ')], ['Duration', form.years.trim()], ['Location', form.location.trim()]] as [string, string][]).filter(([, v]) => v);
                   const stats = form.extraFacts.filter((f) => f.label.trim() && f.value.trim() && !/^partners?$/i.test(f.label.trim()));
                   return <div className="pe-fpreview" aria-label="Preview of the project page facts">
                     <span className="pe-fp-k">On the project page</span>
-                    <dl className="pe-fp-bar">{bar.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+                    {bar.length > 0 && <dl className="pe-fp-bar">{bar.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
                     {stats.length > 0 && <dl className="pe-fp-stats">{stats.map((f, i) => <div key={i}><dd>{f.value}</dd><dt>{f.label}</dt></div>)}</dl>}
                     {form.partnerSlugs.length > linked.length && <small className="muted">Partners that aren't published yet are left out until they are.</small>}
                   </div>;

@@ -867,17 +867,13 @@ def project_details():
                 + (f'<ul hidden data-lb-items>{items}</ul>' if real else '') + '</div>')
         gal = d.get('gallery') or []
         rev = d.get('revision') or ''
-        dot = f'<span class="pj-dot" style="--c:{tone}"></span>'
-        # the bar on the cover: project, partner(s), duration and location, all from published data.
+        # partner(s), duration and location appear once, in the "At a glance" panel (no facts bar on the cover).
         # Partners: the published partners linked in Studio's project editor; else a "Partner" extra fact; else the partners that list this project.
         fmap = {k: v for k, v in d['facts']}
         linked = [x.get('name') for x in (d.get('partners') or []) if x.get('name')]
         typed = next((v for k, v in d['facts'] if k in ('Partner', 'Partners')), '')
         pnames = linked or ([typed] if typed else [n for n, x in PARTNER_DETAILS.items() if any((pr or {}).get('file') == file for pr in (x.get('projects') or []))])
         years = fmap.get('Duration') or fmap.get('Years') or ''
-        bar = [('Project', d['name']), ('Partners' if len(pnames) > 1 else 'Partner', ', '.join(pnames)), ('Duration', years), ('Location', fmap.get('Location', ''))]
-        bar = [(k, v) for k, v in bar if v]
-        facts = ''.join(f'<div class="pj-fact"><dt>{k}</dt><dd>{dot if k == "Project" else ""}{v}</dd></div>' for k, v in bar)
         rowmap = {k: v for k, v in d['rows']}
         summ_rows = [(k, v) for k, v in d['rows'] if k not in ('Activities', 'Results') and v]
         pobj = [o for o in (d.get('programObjectives') or []) if (o.get('title') or '').strip()]
@@ -892,7 +888,7 @@ def project_details():
         impact_html = ('<dl class="pj-stats" style="--n:' + str(len(impact)) + '">' + ''.join(f'<div class="pj-stat"><dd>{v}</dd><dt>{k}</dt></div>' for v, k in impact) + '</dl>') if impact else ''
 
         # project logo (Studio): its own shape or a frame (1:1, circle, 3:1, 2:1, 4:3, 16:9, 3:4, 1:3), whole or cropped, on a background
-        lg = d.get('logo'); logo_html = ''; head_logo = ''
+        lg = d.get('logo'); logo_html = ''
         if lg and lg.get('src'):
             shape = lg.get('shape') if lg.get('shape') in ('original', '1:1', 'circle', '3:1', '2:1', '4:3', '16:9', '3:4', '1:3') else 'original'
             ratio = f'{lg["w"]} / {lg["h"]}' if shape == 'original' else '1 / 1' if shape == 'circle' else shape.replace(':', ' / ')
@@ -901,9 +897,6 @@ def project_details():
             tall = shape in ('3:4', '1:3') or (shape == 'original' and lg['h'] > lg['w'])
             look = f'bg-{bg}' + (' round' if shape == 'circle' else '') + (' cover' if lg.get('fit') == 'cover' else '') + (' tall' if tall else '')
             logo_html = f'<span class="pj-logo s-{size} {look}" style="aspect-ratio:{ratio}">{media_img(lg, "pj-logo-img", "240px")}</span>'
-            # beside the title: the same logo, small; the title already names the project, so the picture is decorative here
-            head_logo = f'<span class="pj-logo pj-h1-logo {look}" style="aspect-ratio:{ratio}" aria-hidden="true"><img src="{lg["src"]}" alt="" class="pj-logo-img" decoding="async"></span>'
-        title = f'<span class="pj-h1">{head_logo}<span>{d["name"]}</span></span>' if head_logo else d['name']
 
         # sections that have content, numbered in order; empty ones are left out (and so are their tabs)
         secs = []
@@ -919,7 +912,7 @@ def project_details():
         if outputs:
             dl_html = ('<div class="pjg-dl"><span class="pjg-k">Downloads</span><ul>' + ''.join(
                 f'<li><a href="{o["file"]}"><span class="pjg-doc" aria-hidden="true"></span><span class="min-w-0 flex-1 truncate">{o["title"]}</span><span aria-hidden="true">↗</span></a></li>' for o in outputs[:3])
-                + '</ul>' + (f'<a href="#outputs" class="pjg-all">All {len(outputs)} outputs</a>' if len(outputs) > 3 else '') + '</div>')
+                + '</ul>' + (f'<a href="#publications" class="pjg-all">All {len(outputs)} publications</a>' if len(outputs) > 3 else '') + '</div>')
         n1 = sec('about', 'Summary')
         about = f"""
 <section id="about" class="pl-sec py-8 lg:py-10">
@@ -1003,15 +996,15 @@ def project_details():
   </div>
 </section>"""
 
-        # outputs: published publications (Studio: Publications → Projects) that come from this project
+        # publications: published publications (Studio: Publications → Projects) that come from this project
         outp_sec = ''
         if outputs:
-            nn = sec('outputs', 'Outputs')
+            nn = sec('publications', 'Publications')
             rows = ''.join(f'<li><a href="{o["file"]}" class="pjd"><span class="pjd-ico" aria-hidden="true"></span><span class="min-w-0 flex-1"><span class="pjd-type">{o["type"]}{(" · " + o["year"]) if o.get("year") else ""}</span>'
                            f'<span class="pjd-t">{o["title"]}</span></span><span class="pjd-go">Read &amp; download <span aria-hidden="true">↗</span></span></a></li>' for o in outputs)
             outp_sec = f"""
-<section id="outputs" class="pl-sec py-8 lg:py-10">
-  <div class="wrap">{sec_head(f'{nn} / Outputs', 'Papers and reports <span class="sh-soft">from the programme.</span>', f'{len(outputs)} publication' + ('s' if len(outputs) != 1 else ''), ('All publications', 'publications.html'))}
+<section id="publications" class="pl-sec py-8 lg:py-10">
+  <div class="wrap">{sec_head(f'{nn} / Publications', 'Papers and reports <span class="sh-soft">from the programme.</span>', f'{len(outputs)} publication' + ('s' if len(outputs) != 1 else ''), ('All publications', 'publications.html'))}
     <ul class="pjd-list mt-8 lg:mt-10">{rows}</ul>
   </div>
 </section>"""
@@ -1057,13 +1050,12 @@ def project_details():
   <div class="wrap grid gap-3 md:grid-cols-2">{more}</div>
 </nav>''' if more else ''
 
-        body = page_header([('Projects', 'projects.html'), (d['name'], file)], f'{d["pillar"]} · {d["cat"]}', title, d['lede']) + f"""
+        body = page_header([('Projects', 'projects.html'), (d['name'], file)], f'{d["pillar"]} · {d["cat"]}', d['name'], d['lede']) + f"""
 <div class="pl-page" style="--pc:{tone}">
 <section id="summary" class="pl-sec pt-8 lg:pt-10" data-studio-rev="{rev}">
   <div class="wrap">
     <div class="pj-hero">
       {hero}
-      <dl class="pj-facts" style="--f:{len(bar)}">{facts}</dl>
     </div>
     {impact_html}
   </div>

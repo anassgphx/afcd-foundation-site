@@ -281,12 +281,12 @@ describe('pillar pages through the real generator', () => {
     const fifth = { id: 'rev-new', sort: 10, snap: { ...live[3].snap, key: 'health-wellbeing', publicFile: 'health-wellbeing.html', name: 'Health and Well-being', short: 'Health', summary: 'A new pillar summary.', intro: 'A new pillar.', highlights: [] } };
     const five = realBuild(join(root, 'five'), await write(join(root, 'five.json'), [...live, fifth]));
     const newPage = readFileSync(join(five, 'health-wellbeing.html'), 'utf8');
-    expect(newPage).toContain('Pillar 05<span class="text-black/40"> / 05</span>');
+    expect(newPage).toContain('Pillar 05 / 05');
     expect(existsSync(join(five, 'fr/health-wellbeing.html'))).toBe(true);
     const hub = readFileSync(join(five, 'pillars.html'), 'utf8');
     expect(hub).toContain('Five pillars.'); expect(hub).toContain('href="health-wellbeing.html"');
     expect(hub).toContain('Digital Inclusion and Innovation and Health and Well-being: the five pillars');
-    expect(readFileSync(join(five, 'youth-empowerment.html'), 'utf8')).toContain('Pillar 01<span class="text-black/40"> / 05</span>');
+    expect(readFileSync(join(five, 'youth-empowerment.html'), 'utf8')).toContain('Pillar 01 / 05');
     expect(readFileSync(join(five, 'sitemap.xml'), 'utf8')).toContain('health-wellbeing.html');
   }, 180_000);
 });

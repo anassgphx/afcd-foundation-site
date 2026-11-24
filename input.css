@@ -2024,7 +2024,7 @@ button.pj-cover-i.is-poster:hover img { transform: scale(1.02); }
 .pjs-more[open] summary { display: none; }
 .pjs-more p { margin-top: 0; }
 
-.pjg { padding: 22px; border-radius: 28px; border: 1px solid #ECECEA; background: color-mix(in srgb, var(--pc, #EFEFED) 9%, #fff); }
+.pjg { padding: 22px; border-radius: 28px; border: 1px solid #ECECEA; background: #F6F6F5; }
 @media (min-width: 1024px) { .pjg { position: sticky; top: 140px; } }
 .pjg-logo .pj-logo { margin: 0 0 18px; }
 .pjg-k { display: block; font-size: 11px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: #78716C; }
@@ -2034,6 +2034,7 @@ button.pj-cover-i.is-poster:hover img { transform: scale(1.02); }
 .pjg-row dd { text-align: end; font-weight: 600; letter-spacing: -.01em; }
 .pjg-link { display: inline-flex; align-items: center; gap: 8px; text-decoration: underline; text-decoration-color: #D6D3D1; text-underline-offset: 4px; }
 .pjg-link:hover { text-decoration-color: currentColor; }
+.pjg .pjs-pillar-dot { width: 9px; height: 9px; background: #000; }
 .pjg-dl { margin-top: 18px; }
 .pjg-dl ul { display: grid; gap: 6px; margin-top: 8px; }
 .pjg-dl a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: #fff; border: 1px solid #ECECEA; font-size: 14px; font-weight: 600; transition: border-color .2s ease; }
@@ -2048,7 +2049,7 @@ button.pj-cover-i.is-poster:hover img { transform: scale(1.02); }
 .pjn-i { display: flex; flex-direction: column; padding: 22px; border-radius: 24px; background: #fff; border: 1px solid #ECECEA; }
 @media (min-width: 1024px) {
   .pjn-i { position: relative; padding: 28px 28px 8px 0; border: 0; border-radius: 0; background: none; }
-  .pjn-i::before { content: ""; position: absolute; top: -7px; left: 0; width: 12px; height: 12px; border-radius: 9999px; background: var(--pc, #000); box-shadow: 0 0 0 3px #fff, 0 0 0 4px #000; }
+  .pjn-i::before { content: ""; position: absolute; top: -7px; left: 0; width: 12px; height: 12px; border-radius: 9999px; background: #000; box-shadow: 0 0 0 3px #fff; }
   [dir="rtl"] .pjn-i { padding: 28px 0 8px 28px; } [dir="rtl"] .pjn-i::before { left: auto; right: 0; }
 }
 .pjn-n { font-size: 44px; font-weight: 600; line-height: 1; letter-spacing: -.05em; color: #D6D3D1; font-variant-numeric: tabular-nums; }

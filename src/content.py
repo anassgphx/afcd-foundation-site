@@ -948,12 +948,12 @@ def project_details():
         obj_sec = ''
         if pobj:
             nn = sec('objectives', 'Objectives')
-            row = ''.join(f'<li class="pjn-i"><span class="pjn-n">{j:02d}</span><span class="pjn-t">{_esc(o["title"])}</span>'
-                          + (f'<span class="pjn-d">{_esc(o.get("text") or "")}</span>' if (o.get('text') or '').strip() else '') + '</li>' for j, o in enumerate(pobj, 1))
+            row = ''.join(f'<li class="pjn-i"><span class="pjn-n">{j:02d}</span><span class="pjn-c"><span class="pjn-t">{_esc(o["title"])}</span>'
+                          + (f'<span class="pjn-d">{_esc(o.get("text") or "")}</span>' if (o.get('text') or '').strip() else '') + '</span></li>' for j, o in enumerate(pobj, 1))
             obj_sec = f"""
 <section id="objectives" class="pl-sec py-8 lg:py-10">
   <div class="wrap">{sec_head(f'{nn} / Program Objectives', 'What the programme <span class="sh-soft">sets out to do.</span>', f'{len(pobj)} objective' + ('s' if len(pobj) != 1 else ''), desc='The objectives this programme works towards.')}
-    <ol class="pjn mt-8 lg:mt-10" style="--n:{min(len(pobj), 4)}">{row}</ol>
+    <ol class="pjn{' is-many' if len(pobj) > 4 else ''} mt-8 lg:mt-10">{row}</ol>
   </div>
 </section>"""
 
@@ -982,12 +982,12 @@ def project_details():
         def act_photos(x, j):
             imgs = [m for m in (x.get('images') or ([x['image']] if x.get('image') else [])) if m]
             if not imgs:
-                return '<div class="pja-ph n1">' + ph(_esc(x['title']) + ' · photo', 'h-full w-full rounded-[20px]', '#E6E6E5') + '</div>'
+                return '<div class="pja-ph n1">' + ph(_esc(x['title']) + ' · photo', 'h-full w-full rounded-[14px]', '#E6E6E5') + '</div>'
             k = min(len(imgs), 3)
             full = lambda m: (m.get('srcset') or '').split(',')[-1].strip().split(' ')[0] or m['src']
             n = len(imgs)
             tiles = ''.join(
-                f'<button type="button" class="pja-pi" data-lb-open="{i}" aria-label="Open photo {i + 1} of {n}">{media_img(m, "h-full w-full rounded-[20px]", "(min-width:1024px) 40vw, 100vw")}'
+                f'<button type="button" class="pja-pi" data-lb-open="{i}" aria-label="Open photo {i + 1} of {n}">{media_img(m, "h-full w-full rounded-[14px]", "(min-width:1024px) 40vw, 100vw")}'
                 + (f'<span class="pja-more">+{n - 3}</span>' if i == 2 and n > 3 else '') + '</button>' for i, m in enumerate(imgs[:3]))
             items = ''.join(f'<li><img src="{full(m)}" alt="{_esc(m.get("alt") or "")}" width="{m.get("w", "")}" height="{m.get("h", "")}" loading="lazy" decoding="async"></li>' for m in imgs)
             return (f'<div class="pja-ph n{k}" data-lb data-lb-title="{_esc(x["title"])}">{tiles}'

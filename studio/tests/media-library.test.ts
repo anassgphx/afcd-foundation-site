@@ -138,4 +138,66 @@ describe('media library', () => {
     const [log] = await h.db.select().from(t.auditLog).where(eq(t.auditLog.action, 'media.bulk_update'));
     expect(log.summary).toMatch(/licence “Used with permission”; rights until 2999-12-31/);
   });
+
+  it('deletes an image that is in use when asked to, and restores it from the trash', async () => {
+    const ed = await client(h.app, 'ed@afcd.test'), mm = await client(h.app, 'mm@afcd.test'), ro = await client(h.app, 'ro@afcd.test');
+    const a = (await send(ed, '/media', await gradient('up'), 'test-trash-a.png')).body;
+    const b = (await send(ed, '/media', await gradient('down'), 'test-trash-b.png')).body;
+    const p = (await ed.post('/projects', projectInput({ heroMediaId: a.id, galleryMediaIds: [a.id, b.id], activityItems: [{ title: 'Test activity', mediaIds: [a.id, b.id] }] }))).body;
+
+    expect((await mm.raw('DELETE', `/media/${a.id}`)).status).toBe(409);              // in use: needs force
+    expect((await ro.raw('DELETE', `/media/${a.id}?force=1`)).status).toBe(403);
+    const del = await mm.raw('DELETE', `/media/${a.id}?force=1`);
+    expect(del.status).toBe(200);
+    expect(del.body.wasUsedIn).toBeGreaterThanOrEqual(3);
+
+    // the project keeps working, without the image: no main photo, gallery and activity keep only the other photo
+    let proj = (await ed.get(`/projects/${p.id}`)).body;
+    expect(proj.heroMediaId).toBeNull();
+    expect(proj.gallery.map((m: any) => m.id)).toEqual([b.id]);
+    expect(proj.activityItems[0].mediaIds).toEqual([b.id]);
+    expect((await ed.raw('PUT', `/projects/${p.id}`, projectInput({ heroMediaId: null, galleryMediaIds: [b.id], activityItems: proj.activityItems }))).status).toBe(200);
+
+    // files are in the trash, not in the library
+    expect(readdirSync(h.cfg.mediaDir).some((f) => f.startsWith(a.storageKey))).toBe(false);
+    expect(readdirSync(join(h.cfg.mediaDir, '.trash', a.id))).toContain('record.json');
+    expect((await ed.get('/media/library')).body.items.map((m: any) => m.id)).not.toContain(a.id);
+    const trash = (await ed.get('/media/trash')).body;
+    expect(trash.items).toHaveLength(1);
+    expect(trash.items[0]).toMatchObject({ row: { id: a.id, originalName: 'test-trash-a.png' } });
+    expect(trash.items[0].usedOn.length).toBeGreaterThanOrEqual(3);
+    const [log] = await h.db.select().from(t.auditLog).where(eq(t.auditLog.action, 'media.delete'));
+    expect(log.summary).toMatch(/was used in \d+ places; moved to the trash/);
+
+    // restore: the image comes back where nothing else was chosen meanwhile
+    expect((await ro.post(`/media/trash/${a.id}/restore`, {})).status).toBe(403);
+    const r = await mm.post(`/media/trash/${a.id}/restore`, {});
+    expect(r.status).toBe(200);
+    proj = (await ed.get(`/projects/${p.id}`)).body;
+    expect(proj.heroMediaId).toBe(a.id);
+    expect(proj.gallery.map((m: any) => m.id)).toEqual(expect.arrayContaining([a.id, b.id]));
+    expect(proj.activityItems[0].mediaIds).toEqual([a.id, b.id]);
+    expect(readdirSync(h.cfg.mediaDir).some((f) => f === `${a.storageKey}-480.webp`)).toBe(true);
+    expect(existsSync(join(h.cfg.mediaDir, '.trash', a.id))).toBe(false);
+    expect((await ed.get('/media/trash')).body.items).toEqual([]);
+    expect((await mm.post(`/media/trash/${a.id}/restore`, {})).status).toBe(404);
+
+    // unused images go to the trash too, without force
+    expect((await mm.raw('DELETE', `/media/${(await send(ed, '/media', await gradient('up', 200, 200), 'test-trash-c.png')).body.id}`)).status).toBe(200);
+    expect((await ed.get('/media/trash')).body.items).toHaveLength(1);
+  });
+
+  it('restores images deleted together one by one, back into the same activity', async () => {
+    const ed = await client(h.app, 'ed@afcd.test'), mm = await client(h.app, 'mm@afcd.test');
+    const a = (await send(ed, '/media', await gradient('up'), 'test-pair-a.png')).body;
+    const b = (await send(ed, '/media', await gradient('down'), 'test-pair-b.png')).body;
+    const p = (await ed.post('/projects', projectInput({ activityItems: [{ title: 'Test activity', mediaIds: [a.id, b.id] }] }))).body;
+    for (const m of [a, b]) expect((await mm.raw('DELETE', `/media/${m.id}?force=1`)).status).toBe(200);
+    expect((await ed.get(`/projects/${p.id}`)).body.activityItems[0].mediaIds).toEqual([]);
+    expect((await mm.post(`/media/trash/${a.id}/restore`, {})).body).toMatchObject({ notRestored: 0 });
+    expect((await ed.get(`/projects/${p.id}`)).body.activityItems[0].mediaIds).toEqual([a.id]);
+    expect((await mm.post(`/media/trash/${b.id}/restore`, {})).body).toMatchObject({ notRestored: 0 });
+    const ids = (await ed.get(`/projects/${p.id}`)).body.activityItems[0].mediaIds;   // both back (order may differ)
+    expect(ids).toHaveLength(2); expect(ids).toEqual(expect.arrayContaining([a.id, b.id]));
+  });
 });

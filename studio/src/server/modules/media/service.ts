@@ -96,14 +96,8 @@ export async function usageCounts(db: DB, ids: string[]) {
   return Object.fromEntries(Object.entries(u).map(([id, l]) => [id, l.length])) as Record<string, number>;
 }
 
+/** Moves an unused image to the trash (restorable for 30 days). In use: refused, see trashMedia({ force }) in trash.ts. */
 export async function deleteMedia(db: DB, cfg: Config, id: string) {
-  const [m] = await db.select().from(media).where(eq(media.id, id));
-  if (!m) throw new AppError(404, 'Media not found.');
-  const used = (await usageCounts(db, [id]))[id] ?? 0;
-  if (used) throw new AppError(409, `This image is used in ${used} place${used === 1 ? '' : 's'} (see “Used on”). Remove it there first.`);
-  await db.delete(media).where(eq(media.id, id));
-  for (const f of [...derivativeFiles(m), ...DERIVATIVE_WIDTHS.map((w) => `${m.storageKey}-${w}.webp`)]) {
-    const p = resolve(cfg.mediaDir, f); if (existsSync(p)) rmSync(p);
-  }
-  return m;
+  const { trashMedia } = await import('./trash.ts');
+  return (await trashMedia(db, cfg, id)).row;
 }

@@ -55,7 +55,8 @@ async function copy(text: string) { try { await navigator.clipboard.writeText(te
 
 // ================================================================= Library
 type Job = { id: string; file: File; p: number; state: 'wait' | 'up' | 'done' | 'err'; error?: string; replaceOf?: string };
-type Filter = 'all' | 'needs' | 'used' | 'unused' | 'dupes';
+type Filter = 'all' | 'needs' | 'used' | 'unused' | 'dupes' | 'trash';
+type TrashItem = { row: LibItem; deletedAt: string; deletedBy: string | null; usedOn: Use[]; reattach: number; thumb: string | null };
 type Sort = 'new' | 'name' | 'size' | 'used';
 
 export function MediaLibrary() {
@@ -77,7 +78,9 @@ export function MediaLibrary() {
   const fileInput = useRef<HTMLInputElement>(null); const replaceInput = useRef<HTMLInputElement>(null); const replaceTarget = useRef<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(() => api<{ items: LibItem[] }>('/media/library').then((r) => { setItems(r.items.map(stamp)); setFailed(false); }).catch(() => { setFailed(true); setItems((x) => x ?? []); }), []);
+  const [trash, setTrash] = useState<TrashItem[]>([]);
+  const loadTrash = useCallback(() => api<{ items: TrashItem[] }>('/media/trash').then((r) => setTrash(r.items)).catch(() => { /* the library still works */ }), []);
+  const load = useCallback(() => { loadTrash(); return api<{ items: LibItem[] }>('/media/library').then((r) => { setItems(r.items.map(stamp)); setFailed(false); }).catch(() => { setFailed(true); setItems((x) => x ?? []); }); }, [loadTrash]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { store.set('media.sort', sort); store.set('media.view', view); store.set('media.size', size); }, [sort, view, size]);
   useEffect(() => { const u = new URL(location.href); if (openId) u.searchParams.set('id', openId); else u.searchParams.delete('id'); history.replaceState(null, '', u); }, [openId]);
@@ -95,7 +98,7 @@ export function MediaLibrary() {
     };
     return l.sort(by[sort]);
   }, [items, q, filter, type, shape, sort]);
-  const counts = useMemo(() => { const l = items ?? []; return { all: l.length, needs: l.filter((m) => m.issues.length).length, used: l.filter((m) => m.usedOn.length).length, unused: l.filter((m) => !m.usedOn.length).length, dupes: l.filter((m) => m.duplicateOf).length }; }, [items]);
+  const counts = useMemo(() => { const l = items ?? []; return { all: l.length, needs: l.filter((m) => m.issues.length).length, used: l.filter((m) => m.usedOn.length).length, unused: l.filter((m) => !m.usedOn.length).length, dupes: l.filter((m) => m.duplicateOf).length , trash: trash.length }; }, [items, trash]);
   const open = items?.find((m) => m.id === openId) ?? null;
   const filtered = !!q || filter !== 'all' || type !== 'all' || shape !== 'all';
 
@@ -189,8 +192,8 @@ export function MediaLibrary() {
       </div>
 
       <div className="ml-filters" role="tablist" aria-label="Show">
-        {([['all', 'All'], ['needs', 'Needs info'], ['used', 'In use'], ['unused', 'Unused'], ['dupes', 'Duplicates']] as [Filter, string][]).map(([k, l]) =>
-          (k !== 'dupes' || counts.dupes > 0) && <button key={k} role="tab" aria-selected={filter === k} className={`ml-chip${filter === k ? ' on' : ''}${k === 'needs' && counts.needs ? ' warn' : ''}`} onClick={() => setFilter(k)}>{l}<b>{counts[k]}</b></button>)}
+        {([['all', 'All'], ['needs', 'Needs info'], ['used', 'In use'], ['unused', 'Unused'], ['dupes', 'Duplicates'], ['trash', 'Recently deleted']] as [Filter, string][]).map(([k, l]) =>
+          (k !== 'dupes' || counts.dupes > 0) && (k !== 'trash' || trash.length > 0) && <button key={k} role="tab" aria-selected={filter === k} className={`ml-chip${filter === k ? ' on' : ''}${k === 'needs' && counts.needs ? ' warn' : ''}`} onClick={() => setFilter(k)}>{l}<b>{counts[k]}</b></button>)}
       </div>
 
       <div className="ml-body">
@@ -200,7 +203,7 @@ export function MediaLibrary() {
             <select className="select" aria-label="File type" value={type} onChange={(e) => setType(e.target.value)}><option value="all">All types</option>{types.map((t) => <option key={t} value={t}>{fmt(t)}</option>)}</select>
             <select className="select" aria-label="Orientation" value={shape} onChange={(e) => setShape(e.target.value)}><option value="all">Any shape</option><option value="landscape">Landscape</option><option value="portrait">Portrait</option><option value="square">Square</option></select>
             <select className="select" aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)}><option value="new">Newest first</option><option value="name">Name</option><option value="size">Largest files</option><option value="used">Most used</option></select>
-            <span className="ml-count">{items ? <>{filtered ? `${shown.length} of ${items.length}` : `${items.length} image${items.length === 1 ? '' : 's'}`}{counts.needs > 0 && <> · <button className="ml-count-l" onClick={() => setFilter('needs')}>{counts.needs} need{counts.needs === 1 ? 's' : ''} info</button></>}</> : '…'}</span>
+            <span className="ml-count">{filter === 'trash' ? `${trash.length} recently deleted` : items ? <>{filtered ? `${shown.length} of ${items.length}` : `${items.length} image${items.length === 1 ? '' : 's'}`}{counts.needs > 0 && <> · <button className="ml-count-l" onClick={() => setFilter('needs')}>{counts.needs} need{counts.needs === 1 ? 's' : ''} info</button></>}</> : '…'}</span>
             <div className="ml-seg" role="group" aria-label="Layout">
               <button className={view === 'grid' ? 'on' : ''} aria-pressed={view === 'grid'} onClick={() => setView('grid')} title="Grid"><MI n="grid" /></button>
               <button className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} onClick={() => setView('list')} title="List"><MI n="list" /></button>
@@ -213,7 +216,8 @@ export function MediaLibrary() {
           {sel.size > 0 && <BulkBar items={selItems} onClear={() => setSel(new Set())} onSelectAll={() => setSel(new Set(shown.map((m) => m.id)))} allSelected={shown.every((m) => sel.has(m.id))} onDone={load} onDelete={() => act.remove(selItems)} />}
 
           {failed && <div className="ml-err">Could not load the library. <button className="btn btn-sm" onClick={load}>Try again</button></div>}
-          {!items ? <Skeleton size={size} />
+          {filter === 'trash' ? <TrashList items={trash} onRestored={load} />
+            : !items ? <Skeleton size={size} />
             : items.length === 0 ? <EmptyLibrary onPick={() => fileInput.current?.click()} canUpload={can('media.upload')} />
             : shown.length === 0 ? <div className="ml-empty"><div className="ml-empty-i"><Icon n="search" /></div><b>No images match</b><p>Try another search or clear the filters.</p><button className="btn btn-sm" onClick={() => { setQ(''); setFilter('all'); setType('all'); setShape('all'); }}>Clear filters</button></div>
             : <div ref={gridRef} className={view === 'grid' ? `ml-grid sz-${size}` : 'ml-list'} role="listbox" aria-multiselectable="true" aria-label="Images" onKeyDown={onKey}>
@@ -258,7 +262,7 @@ function Card({ m, list, on, picked, tab, onFocus, onOpen, onPick, act, can }: {
     <button title="Copy URL" aria-label={`Copy URL of ${name}`} onClick={() => act.copy(m)}><MI n="copy" /></button>
     <button title="Download original" aria-label={`Download ${name}`} onClick={() => act.download(m)}><MI n="download" /></button>
     {can('media.update') && <button title="Replace file" aria-label={`Replace the file of ${name}`} onClick={() => act.replace(m)}><MI n="replace" /></button>}
-    {can('media.delete') && <button className="bad" title={m.usedOn.length ? 'In use: remove it from its pages first' : 'Delete'} aria-label={`Delete ${name}`} onClick={() => act.remove([m])}><MI n="trash" /></button>}
+    {can('media.delete') && <button className="bad" title={m.usedOn.length ? 'Delete (in use: a placeholder shows there instead)' : 'Delete'} aria-label={`Delete ${name}`} onClick={() => act.remove([m])}><MI n="trash" /></button>}
   </div>;
   const check = <label className="ml-pick" onClick={(e) => e.stopPropagation()} title="Select"><input type="checkbox" checked={picked} onChange={onPick} tabIndex={-1} aria-label={`Select ${name}`} /></label>;
   const common = { 'data-card': '', role: 'option', 'aria-selected': picked, tabIndex: tab ? 0 : -1, onFocus, onClick: onOpen, title: m.originalName } as const;
@@ -331,7 +335,7 @@ function BulkBar({ items, allSelected, onClear, onSelectAll, onDone, onDelete }:
       <button className="btn btn-sm" onClick={() => { setMode('licence'); setV(''); setUntil(''); }}>Set licence</button>
       <button className="btn btn-sm" disabled={busy} onClick={() => { if (confirm(`Confirm usage rights and consent for ${items.length} image${items.length > 1 ? 's' : ''}? Only do this if AFCD may publish all of them and the people shown agreed.`)) run({ rightsConfirmed: true }, 'Rights confirmed'); }}>Confirm rights</button>
     </>}
-    {!mode && can('media.delete') && <button className="btn btn-sm btn-danger" disabled={!unused} title={unused ? '' : 'Every selected image is in use'} onClick={onDelete}><MI n="trash" size={14} /> Delete unused{unused ? ` (${unused})` : ''}</button>}
+    {!mode && can('media.delete') && <button className="btn btn-sm btn-danger" onClick={onDelete} title={unused < items.length ? `${items.length - unused} of them are in use: you can choose to show a placeholder there` : ''}><MI n="trash" size={14} /> Delete {items.length}</button>}
     </div>
   </div>;
 }
@@ -339,21 +343,54 @@ function BulkBar({ items, allSelected, onClear, onSelectAll, onDone, onDelete }:
 function DeleteDialog({ list, onClose, onDone }: { list: LibItem[]; onClose: () => void; onDone: (ids: string[]) => void }) {
   const toast = useToast(); const [busy, setBusy] = useState(false);
   const inUse = list.filter((m) => m.usedOn.length); const free = list.filter((m) => !m.usedOn.length);
-  async function go() {
+  // in-use images are only deleted after an explicit choice; unused ones always go
+  const [alsoUsed, setAlsoUsed] = useState(false);
+  const go = alsoUsed ? list : free;
+  const live = inUse.some((m) => m.usedOn.some((u) => u.live));
+  async function run() {
     setBusy(true); const gone: string[] = [];
-    for (const m of free) { try { await del(`/media/${m.id}`); gone.push(m.id); } catch (e) { toast(`${cleanName(m.originalName)}: ${(e as Error).message}`, true); } }
-    setBusy(false); if (gone.length) toast(`${gone.length} image${gone.length > 1 ? 's' : ''} deleted.`); onDone(gone);
+    for (const m of go) { try { await del(`/media/${m.id}${m.usedOn.length ? '?force=1' : ''}`); gone.push(m.id); } catch (e) { toast(`${cleanName(m.originalName)}: ${(e as Error).message}`, true); } }
+    setBusy(false);
+    if (gone.length) toast(`${gone.length} image${gone.length > 1 ? 's' : ''} moved to Recently deleted. You can restore ${gone.length > 1 ? 'them' : 'it'} for 30 days.`);
+    onDone(gone);
   }
   const one = list.length === 1;
-  return <Modal size="sm" title={!free.length ? 'This image is in use' : one ? 'Delete this image?' : `Delete ${free.length} unused image${free.length > 1 ? 's' : ''}?`} onClose={onClose} footer={<>
-    <button className="btn" onClick={onClose}>{free.length ? 'Cancel' : 'Close'}</button>
-    {free.length > 0 && <button className="btn ml-del-btn" disabled={busy} onClick={go}>{busy ? 'Deleting…' : `Delete${one ? '' : ` ${free.length}`}`}</button>}</>}>
+  const title = one ? (inUse.length ? 'This image is in use' : 'Delete this image?') : `Delete ${list.length} images?`;
+  return <Modal size="sm" title={title} onClose={onClose} footer={<>
+    <button className="btn" onClick={onClose}>Cancel</button>
+    <button className="btn ml-del-btn" disabled={busy || !go.length} onClick={run}>{busy ? 'Deleting…' : !go.length || go.length === list.length ? `Delete${one || !go.length ? '' : ` ${go.length}`}` : `Delete ${go.length} unused`}</button></>}>
     <div className="modal-b stack">
-      {free.length > 0 && <p style={{ margin: 0 }}>{one ? <><b>{cleanName(free[0].originalName)}</b> and its resized copies are removed for good.</> : `The originals and resized copies are removed for good.`} This cannot be undone; download the original first if you may need it.</p>}
-      {inUse.length > 0 && <div className="ml-warn"><b>{inUse.length === list.length && one ? 'Remove it from these places first:' : `${inUse.length} selected image${inUse.length > 1 ? 's are' : ' is'} in use and will be kept:`}</b>
-        <ul>{inUse.slice(0, 6).flatMap((m) => m.usedOn.slice(0, one ? 8 : 2).map((u, i) => <li key={m.id + i}>{!one && <>{cleanName(m.originalName)} → </>}{u.kind === u.title ? u.title : `${u.kind}: ${u.title}`} <span className="muted">({u.where})</span></li>))}</ul></div>}
+      {free.length > 0 && <p style={{ margin: 0 }}>{one ? <><b>{cleanName(free[0].originalName)}</b> is not used anywhere.</> : `${free.length} of them ${free.length > 1 ? 'are' : 'is'} not used anywhere.`} Deleted images stay in <b>Recently deleted</b> for 30 days, where you can restore them.</p>}
+      {inUse.length > 0 && <div className="ml-warn"><b>{one ? 'Used in these places:' : `${inUse.length} ${inUse.length > 1 ? 'are' : 'is'} in use:`}</b>
+        <ul>{inUse.slice(0, 6).flatMap((m) => m.usedOn.slice(0, one ? 8 : 3).map((u, i) => <li key={m.id + i}>{!one && <>{cleanName(m.originalName)} → </>}{u.kind === u.title ? u.title : `${u.kind}: ${u.title}`} <span className="muted">({u.where})</span></li>))}</ul>
+        {inUse.length > 6 && <small className="muted">and {inUse.length - 6} more</small>}</div>}
+      {inUse.length > 0 && <label className={`check ml-rights${alsoUsed ? ' on' : ''}`}><input type="checkbox" checked={alsoUsed} onChange={(e) => setAlsoUsed(e.target.checked)} />
+        <span><b>Delete {one ? 'it' : `the ${inUse.length} in use`} too, and show a placeholder there</b>
+          <small className="muted">{one ? 'It is' : 'They are'} taken out of every project, story, page and setting listed above. Studio shows an empty spot to fill; {live ? 'the website keeps the current photo until the next publish, then shows its placeholder.' : 'nothing on the website changes until those pages are published.'} You can restore {one ? 'it' : 'them'} from Recently deleted for 30 days.</small></span></label>}
     </div>
   </Modal>;
+}
+
+function TrashList({ items, onRestored }: { items: TrashItem[]; onRestored: () => void }) {
+  const can = useCan(); const toast = useToast(); const [busy, setBusy] = useState<string | null>(null);
+  if (!items.length) return <div className="ml-empty"><div className="ml-empty-i"><MI n="trash" /></div><b>Nothing deleted recently</b><p>Deleted images stay here for 30 days.</p></div>;
+  async function restore(it: TrashItem) {
+    setBusy(it.row.id);
+    try {
+      const r = await post<{ restored: number; notRestored: number }>(`/media/trash/${it.row.id}/restore`, {});
+      toast(r.notRestored ? `${cleanName(it.row.originalName)} restored. ${r.notRestored} place${r.notRestored > 1 ? 's were' : ' was'} edited since, so choose the photo there again.` : `${cleanName(it.row.originalName)} restored${r.restored ? ' and put back where it was used' : ''}.`);
+      onRestored();
+    } catch (e) { toast((e as Error).message, true); } finally { setBusy(null); }
+  }
+  return <div className="ml-trash">
+    <p className="muted ml-none">Images deleted in the last 30 days. After that they are removed for good.</p>
+    <ul>{items.map((it) => { const left = Math.max(0, 30 - Math.floor((Date.now() - Date.parse(it.deletedAt)) / 864e5)); return <li key={it.row.id}>
+      {it.thumb ? <img src={it.thumb} alt="" loading="lazy" /> : <span className="ml-trash-ph" />}
+      <span className="ml-trash-n"><b title={it.row.originalName}>{cleanName(it.row.originalName)}</b>
+        <small>Deleted {ago(it.deletedAt)}{it.deletedBy ? ` by ${it.deletedBy}` : ''} · {left} day{left === 1 ? '' : 's'} left{it.usedOn.length ? ` · was used in ${it.usedOn.length} place${it.usedOn.length > 1 ? 's' : ''}` : ''}</small></span>
+      {can('media.delete') && <button className="btn btn-sm" disabled={busy === it.row.id} onClick={() => restore(it)}>{busy === it.row.id ? 'Restoring…' : 'Restore'}</button>}
+    </li>; })}</ul>
+  </div>;
 }
 
 // ================================================================= Detail panel
@@ -436,7 +473,7 @@ function Detail({ m, all, onClose, onOpen, onDirty, onSaved, act }: { m: LibItem
     </dl>
 
     <div className="ml-p-f">
-      {can('media.delete') && <button className="btn btn-ghost btn-danger btn-sm" onClick={() => act.remove([m])} title={m.usedOn.length ? 'In use: remove it from its pages first' : ''}><MI n="trash" size={14} /> Delete</button>}
+      {can('media.delete') && <button className="btn btn-ghost btn-danger btn-sm" onClick={() => act.remove([m])} title={m.usedOn.length ? 'In use: you can still delete it, a placeholder then shows there' : ''}><MI n="trash" size={14} /> Delete</button>}
       <span style={{ flex: 1 }} />
       {!ro && <>{dirty && <button className="btn btn-ghost btn-sm" onClick={() => setF(init)}>Discard</button>}
         <button className="btn btn-primary" disabled={!dirty || busy} onClick={save}>{busy ? 'Saving…' : dirty ? 'Save details' : 'Saved'}</button></>}

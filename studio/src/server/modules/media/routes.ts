@@ -8,6 +8,7 @@ import { audit } from '../../audit.ts';
 import { AppError, perm, type Env } from '../../http.ts';
 import * as M from './service.ts';
 import * as L from './library.ts';
+import * as T from './trash.ts';
 
 const urls = (m: M.MediaRow) => ({ url: `/studio/media-file/${m.storageKey}-480.webp`, large: `/studio/media-file/${M.publicRef(m).src.split('/').pop()}` });
 /** What a reviewer would ask for before this image can be used publicly. */
@@ -29,6 +30,28 @@ export function registerMediaLibraryRoutes(api: Hono<Env>) {
         usedOn: used[m.id] ?? [], issues: issues(m), duplicateOf: dup.get(m.id) ? { ids: dup.get(m.id)!.ids.filter((x) => x !== m.id), exact: dup.get(m.id)!.exact } : null })),
       total: rows.length,
     });
+  });
+
+  // Delete: unused images go to the trash; images in use only with ?force=1, which takes them out of every page first
+  // (the website shows its empty state there from the next publish). Registered before app.ts's DELETE /media/:id.
+  api.delete('/media/:id', perm('media.delete'), async (c) => {
+    const force = c.req.query('force') === '1';
+    const rec = await T.trashMedia(c.var.db, c.var.cfg, c.req.param('id'), { force, by: c.var.user!.email });
+    const n = rec.usedOn.length;
+    await audit(c.var.db, actor(c), 'media.delete', { type: 'media', id: rec.row.id },
+      n ? `${rec.row.originalName} (was used in ${n} place${n === 1 ? '' : 's'}; moved to the trash for ${T.TRASH_DAYS} days)` : `${rec.row.originalName} (moved to the trash for ${T.TRASH_DAYS} days)`,
+      { force, usedOn: rec.usedOn.map((u) => `${u.kind}: ${u.title} (${u.where})`) });
+    return c.json({ ok: true, wasUsedIn: n });
+  });
+  api.get('/media/trash', perm('media.read'), (c) => c.json({ items: T.listTrash(c.var.cfg), days: T.TRASH_DAYS }));
+  api.get('/media/trash/:id/thumb', perm('media.read'), (c) => {
+    const b = T.trashThumb(c.var.cfg, c.req.param('id')); if (!b) throw new AppError(404, 'Not found.');
+    c.header('Content-Type', 'image/webp'); c.header('Cache-Control', 'no-store'); return c.body(new Uint8Array(b));
+  });
+  api.post('/media/trash/:id/restore', perm('media.delete'), async (c) => {
+    const r = await T.restoreMedia(c.var.db, c.var.cfg, c.req.param('id'));
+    await audit(c.var.db, actor(c), 'media.restore', { type: 'media', id: r.row.id }, `${r.row.originalName} restored from the trash${r.notRestored ? ` (${r.notRestored} place${r.notRestored === 1 ? '' : 's'} changed meanwhile and need the photo chosen again)` : ''}`);
+    return c.json({ ok: true, restored: r.restored, notRestored: r.notRestored });
   });
 
   api.post('/media/:id/replace', perm('media.update'), bodyLimit({ maxSize: 40 * 1024 * 1024, onError: () => { throw new AppError(422, 'The file is too large.'); } }), async (c) => {

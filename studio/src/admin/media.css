@@ -176,3 +176,12 @@
 .ml-count-l { background: none; border: 0; padding: 0; font: inherit; color: var(--warn, #b45309); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .ml-bulk-f .input.ml-bulk-d { width: 150px; }
 @media (max-width: 720px) { .ml-two { grid-template-columns: 1fr; } .ml-bulk-f .input.ml-bulk-d { flex: 0 0 140px; } }
+
+/* Recently deleted */
+.ml-trash { padding: 6px 16px 16px; }
+.ml-trash ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.ml-trash li { display: flex; align-items: center; gap: 12px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface, #fff); }
+.ml-trash img, .ml-trash-ph { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; flex: none; background: var(--line); }
+.ml-trash-n { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.ml-trash-n b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-trash-n small { color: var(--muted); font-size: 12px; }

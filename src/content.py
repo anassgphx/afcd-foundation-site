@@ -1120,7 +1120,7 @@ def home_projects():
             return (m.group(1) if m else first), bool(m) or len(first) < len(' '.join((text or '').split()))
 
         tiles = [(k,) + lead(rows[k]) for k in ('Context', 'Approach') if rows.get(k)]
-        # key facts, only those Studio has: published partners, then the project's own facts (duration, location, ...)
+        # key facts, only those Studio has (rows, facts and partner names arrive HTML-escaped from Studio's publish): published partners, then the project's own facts (duration, location, ...)
         facts = []
         partners = [p['name'] for p in (d.get('partners') or []) if p.get('name')]
         if partners:
@@ -1137,9 +1137,9 @@ def home_projects():
             f'<article data-n="{i + 1:02d}" data-href="{x["file"]}" data-dot="{PILLAR_TONE.get(x.get("pillar"), "#111")}" data-surface="pc-{i % 3 + 1}" data-ph="{["#E2E2E2", "#E6E6E6", "#DADADA"][i % 3]}" data-fit="{fit}">'
             f'<h3>{_esc(x["name"])}</h3><span class="pp">{_PILLAR_NAMES.get(x.get("pillar"), "")}</span><span class="pk">Case study</span><span class="pc">{_esc(x.get("category") or "")}</span>'
             f'<p class="ph">{_esc(d.get("photo") or (x["name"] + " · project photo"))}</p>{img}'
-            + ('<ul class="pf">' + ''.join(f'<li><b>{_esc(k)}</b><span>{_esc(v)}</span></li>' for k, v in facts[:3]) + '</ul>' if facts else '')
+            + ('<ul class="pf">' + ''.join(f'<li><b>{k}</b><span>{v}</span></li>' for k, v in facts[:3]) + '</ul>' if facts else '')
             + ('<ul class="po">' + ''.join(f'<li><b>{_esc(y["figure"])}</b><span>{_esc(y.get("title") or y.get("text") or "")}</span></li>' for y in figs) + '</ul>' if figs else '')
-            + '<dl>' + ''.join(f'<div{" data-more" if more else ""}><dt>{k}</dt><dd>{_esc(v)}</dd></div>' for k, v, more in tiles) + '</dl></article>')
+            + '<dl>' + ''.join(f'<div{" data-more" if more else ""}><dt>{k}</dt><dd>{v}</dd></div>' for k, v, more in tiles) + '</dl></article>')
     block = f'{a}\n    <template id="home-projects-data">{"".join(cards)}</template>\n    {b}'
     new = html[:html.index(a)] + block + html[html.index(b) + len(b):]
     if new != html:

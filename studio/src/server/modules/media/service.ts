@@ -1,5 +1,5 @@
 // Media library: validated uploads, WebP derivatives, metadata and reuse tracking.
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import sharp, { type Metadata, type Sharp } from 'sharp';
@@ -12,8 +12,15 @@ import { AppError } from '../../http.ts';
 
 // 2400 and 3200 keep full-width photos (hero slider, photo viewer) sharp on high-density laptop and phone screens.
 export const DERIVATIVE_WIDTHS = [480, 960, 1600, 2400, 3200] as const;
-/** WebP settings for every resized copy: high enough quality that photos with text or fine detail stay crisp. */
-export const toWebp = (img: Sharp) => img.webp({ quality: 86, smartSubsample: true, effort: 5 });
+/** Compression levels for the website copies (WebP). New uploads use 'best' (sharp slider and full-width photos);
+ * lighter levels are chosen per image in the Media Library. The original upload is never touched. */
+export const QUALITY = { best: 86, balanced: 78, smaller: 68 } as const;
+export type Level = keyof typeof QUALITY;
+export const LEVELS = Object.keys(QUALITY) as Level[];
+const level = (q: string | null | undefined): Level => (q && q in QUALITY ? q as Level : 'best');
+export const toWebp = (img: Sharp, q?: string | null) => img.webp({ quality: QUALITY[level(q)], smartSubsample: true, effort: 5 });
+/** Bytes of the copies the website uses (all sizes). */
+export const webBytes = (cfg: Config, m: Pick<MediaRow, 'storageKey'>) => DERIVATIVE_WIDTHS.reduce((n, w) => { const p = resolve(cfg.mediaDir, `${m.storageKey}-${w}.webp`); return n + (existsSync(p) ? statSync(p).size : 0); }, 0);
 const ALLOWED = new Set(['jpeg', 'png', 'webp', 'avif', 'tiff']);   // decoded formats; SVG/GIF/HTML etc. are refused
 
 export type MediaRow = typeof media.$inferSelect;
@@ -37,7 +44,7 @@ export async function ingestUpload(db: DB, cfg: Config, file: { name: string; by
   const { width: w0 = meta.width, height: h0 = meta.height } = await base.clone().toBuffer({ resolveWithObject: true }).then((r) => r.info);
   for (const w of DERIVATIVE_WIDTHS) {
     if (w > w0 && w !== DERIVATIVE_WIDTHS[0]) continue;
-    await toWebp(base.clone().resize({ width: Math.min(w, w0), withoutEnlargement: true }))
+    await toWebp(base.clone().resize({ width: Math.min(w, w0), withoutEnlargement: true }), 'best')
       .toFile(resolve(cfg.mediaDir, `${key}-${w}.webp`));
   }
   const [row] = await db.insert(media).values({

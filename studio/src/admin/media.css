@@ -203,3 +203,10 @@
 .ml-zoom { display: flex; align-items: center; gap: 8px; font-size: 13px; } .ml-zoom input { width: 180px; }
 @media (max-width: 720px) { .ml-crop-box .h { width: 24px; height: 24px; } .ml-crop-box .nw { left: -12px; top: -12px; } .ml-crop-box .se { right: -12px; bottom: -12px; } .ml-crop-box .ne { right: -12px; top: -12px; } .ml-crop-box .sw { left: -12px; bottom: -12px; } .ml-zoom input { width: 140px; } }
 .ml-info { padding: 10px 12px; border-radius: 10px; background: var(--surface-2, #f6f6f4); border: 1px solid var(--line); font-size: 12.5px; display: grid; gap: 4px; } .ml-info ul { margin: 2px 0 0; padding-left: 18px; }
+
+/* Compression */
+.ml-compress { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.ml-compress-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; } .ml-compress-h span { font-size: 12px; }
+.ml-levels { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; } .ml-levels button { width: auto; padding: 0 8px; font-size: 12.5px; white-space: nowrap; }
+.ml-compress small { font-size: 12px; }
+.ml-bulk-f .select { height: 30px; background: #fff; color: var(--ink); }

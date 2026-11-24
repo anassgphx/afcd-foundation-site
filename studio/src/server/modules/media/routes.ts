@@ -27,7 +27,7 @@ export function registerMediaLibraryRoutes(api: Hono<Env>) {
     const used = await L.usage(db, rows.map((r) => r.id));
     const dup = await L.duplicates(cfg, rows);
     return c.json({
-      items: rows.map((m) => ({ ...m, ...urls(m), uploadedByName: m.uploadedBy ? users.get(m.uploadedBy) ?? 'Former user' : null,
+      items: rows.map((m) => ({ ...m, ...urls(m), webBytes: M.webBytes(cfg, m), uploadedByName: m.uploadedBy ? users.get(m.uploadedBy) ?? 'Former user' : null,
         usedOn: used[m.id] ?? [], issues: issues(m), duplicateOf: dup.get(m.id) ? { ids: dup.get(m.id)!.ids.filter((x) => x !== m.id), exact: dup.get(m.id)!.exact } : null })),
       total: rows.length,
     });
@@ -67,6 +67,16 @@ export function registerMediaLibraryRoutes(api: Hono<Env>) {
   });
 
   // the original, shown inline (for the crop tool); the download below is the same file as an attachment
+  api.post('/media/optimise', perm('media.update'), async (c) => {
+    const p = C.optimiseSchema.safeParse(await c.req.json());
+    if (!p.success) throw new AppError(422, 'Choose images and a compression level.', p.error.issues);
+    const r = await C.optimiseMedia(c.var.db, c.var.cfg, p.data.ids, p.data.level);
+    const ok = r.filter((x) => !x.error); const before = ok.reduce((n, x) => n + x.before, 0), after = ok.reduce((n, x) => n + x.after, 0);
+    const mb = (b: number) => `${(b / 1048576).toFixed(1)} MB`;
+    if (ok.length) await audit(c.var.db, actor(c), 'media.optimise', { type: 'media', ...(ok.length === 1 ? { id: ok[0].id } : {}) },
+      `Compressed ${ok.length === 1 ? ok[0].name : `${ok.length} images`} (${p.data.level}): ${mb(before)} → ${mb(after)}`, { ids: ok.map((x) => x.id), level: p.data.level });
+    return c.json({ items: r, before, after });
+  });
   api.get('/media/:id/source', perm('media.read'), async (c) => {
     const [m] = await c.var.db.select().from(t.media).where(eq(t.media.id, c.req.param('id')));
     if (!m) throw new AppError(404, 'Media not found.');

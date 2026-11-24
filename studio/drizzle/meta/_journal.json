@@ -176,6 +176,13 @@
       "when": 1795526414768,
       "tag": "0024_media_crop",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795534400720,
+      "tag": "0025_media_quality",
+      "breakpoints": true
     }
   ]
 }

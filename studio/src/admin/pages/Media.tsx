@@ -12,6 +12,7 @@ export type MediaItem = {
 };
 type Use = { kind: string; title: string; href: string; where: string; live: boolean };
 type LibItem = MediaItem & {
+  quality?: Level; webBytes?: number;
   crop?: { x: number; y: number; w: number; h: number } | null;
   tags: string[]; storageKey: string; updatedAt: string; uploadedByName: string | null; licence: string; rightsExpiresOn: string | null;
   usedOn: Use[]; issues: ('alt' | 'credit' | 'rights' | 'expired')[]; duplicateOf: { ids: string[]; exact: boolean } | null;
@@ -28,6 +29,19 @@ const pages = (m: LibItem) => new Set(m.usedOn.map((u) => u.href)).size;
 /** A replaced file keeps its name, so the address carries a version and the browser does not show the old one from its cache. */
 const stamp = (m: LibItem): LibItem => { const v = `?v=${Date.parse(m.updatedAt)}`; return { ...m, url: m.url + v, large: m.large ? m.large + v : m.large }; };
 const fileOf = (m: MediaItem) => (m.large ?? m.url).split('?')[0].split('/').pop();
+type Level = 'best' | 'balanced' | 'smaller';
+const LEVEL: Record<Level, { l: string; d: string }> = {
+  best: { l: 'Best quality', d: 'Sharpest, largest files. Used for new uploads; right for slider and full-width photos.' },
+  balanced: { l: 'Balanced', d: 'Lighter, little visible difference on most photos. Good for cards and small images.' },
+  smaller: { l: 'Smaller', d: 'Fastest pages. Fine detail can look slightly soft.' },
+};
+/** Runs the compression and returns a short "2.4 MB → 1.6 MB (−33%)" line. */
+async function compress(ids: string[], level: Level) {
+  const r = await post<{ before: number; after: number; items: { error?: string }[] }>('/media/optimise', { ids, level });
+  const pct = r.before ? Math.round((1 - r.after / r.before) * 100) : 0;
+  const errs = r.items.filter((x) => x.error).length;
+  return `${mb(r.before)} → ${mb(r.after)} (${pct >= 0 ? '−' : '+'}${Math.abs(pct)}%)${errs ? `. ${errs} could not be compressed (original file missing).` : ''}`;
+}
 const ISSUE: Record<string, string> = { alt: 'Needs alt text', credit: 'Needs credit', rights: 'Needs rights', expired: 'Rights expired' };
 const today = () => new Date().toISOString().slice(0, 10);
 const store = { get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
@@ -318,7 +332,7 @@ function UploadQueue({ jobs, onRetry, onDismiss }: { jobs: Job[]; onRetry: (id: 
 // ================================================================= Bulk
 function BulkBar({ items, allSelected, onClear, onSelectAll, onDone, onDelete }: { items: LibItem[]; allSelected: boolean; onClear: () => void; onSelectAll: () => void; onDone: () => void; onDelete: () => void }) {
   const can = useCan(); const toast = useToast();
-  const [mode, setMode] = useState<null | 'tags' | 'credit' | 'licence'>(null); const [v, setV] = useState(''); const [until, setUntil] = useState(''); const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<null | 'tags' | 'credit' | 'licence' | 'compress'>(null); const [lvl, setLvl] = useState<Level>('balanced'); const [v, setV] = useState(''); const [until, setUntil] = useState(''); const [busy, setBusy] = useState(false);
   const unused = items.filter((m) => !m.usedOn.length).length;
   async function run(body: Record<string, unknown>, msg: string) {
     setBusy(true);
@@ -331,7 +345,10 @@ function BulkBar({ items, allSelected, onClear, onSelectAll, onDone, onDelete }:
     {!allSelected && <button className="btn btn-ghost btn-sm" onClick={onSelectAll}>Select all shown</button>}
     <span className="ml-bulk-sp" />
     <div className="ml-bulk-a">
-    {mode ? <form className="ml-bulk-f" onSubmit={(e) => { e.preventDefault(); if (mode === 'tags') { const tags = v.split(',').map((x) => x.trim()).filter(Boolean); if (tags.length) run({ addTags: tags }, `Added ${tags.length > 1 ? 'tags' : `tag “${tags[0]}”`}`); } else if (mode === 'licence') run({ licence: v.trim(), rightsExpiresOn: until || null }, v.trim() ? `Licence “${v.trim()}”${until ? ` until ${until}` : ''} set` : 'Licence cleared'); else run({ credit: v.trim() }, v.trim() ? 'Credit set' : 'Credit cleared'); }}>
+    {mode === 'compress' ? <form className="ml-bulk-f" onSubmit={async (e) => { e.preventDefault(); setBusy(true); try { toast(`Compressed ${items.length} image${items.length > 1 ? 's' : ''}: ${await compress(items.map((m) => m.id), lvl)}. Pages use the new copies from their next publish.`); setMode(null); onDone(); } catch (er) { toast((er as Error).message, true); } finally { setBusy(false); } }}>
+      <select className="select" value={lvl} onChange={(e) => setLvl(e.target.value as Level)} aria-label="Compression level">{(Object.keys(LEVEL) as Level[]).map((k) => <option key={k} value={k}>{LEVEL[k].l}</option>)}</select>
+      <button className="btn btn-primary btn-sm" disabled={busy}>{busy ? 'Compressing…' : 'Compress'}</button><button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setMode(null)}>Cancel</button>
+    </form> : mode ? <form className="ml-bulk-f" onSubmit={(e) => { e.preventDefault(); if (mode === 'tags') { const tags = v.split(',').map((x) => x.trim()).filter(Boolean); if (tags.length) run({ addTags: tags }, `Added ${tags.length > 1 ? 'tags' : `tag “${tags[0]}”`}`); } else if (mode === 'licence') run({ licence: v.trim(), rightsExpiresOn: until || null }, v.trim() ? `Licence “${v.trim()}”${until ? ` until ${until}` : ''} set` : 'Licence cleared'); else run({ credit: v.trim() }, v.trim() ? 'Credit set' : 'Credit cleared'); }}>
       <input className="input" autoFocus value={v} onChange={(e) => setV(e.target.value)} maxLength={mode === 'tags' ? 200 : 200} list={mode === 'licence' ? 'ml-licences-b' : undefined} placeholder={mode === 'tags' ? 'Tags, separated by commas' : mode === 'licence' ? 'Licence, e.g. Used with permission' : 'Photographer or source'} aria-label={mode === 'tags' ? 'Tags to add' : mode === 'licence' ? 'Licence' : 'Credit'} />
       {mode === 'licence' && <><datalist id="ml-licences-b">{['AFCD own photo', 'Used with permission', 'CC BY 4.0', 'CC BY-SA 4.0', 'CC0 / public domain', 'Partner photo'].map((x) => <option key={x} value={x} />)}</datalist>
         <input className="input ml-bulk-d" type="date" value={until} onChange={(e) => setUntil(e.target.value)} aria-label="Rights end (optional)" title="Rights end (optional)" /></>}
@@ -340,6 +357,7 @@ function BulkBar({ items, allSelected, onClear, onSelectAll, onDone, onDelete }:
       <button className="btn btn-sm" onClick={() => { setMode('tags'); setV(''); }}><MI n="tag" size={14} /> Add tags</button>
       <button className="btn btn-sm" onClick={() => { setMode('credit'); setV(''); }}>Set credit</button>
       <button className="btn btn-sm" onClick={() => { setMode('licence'); setV(''); setUntil(''); }}>Set licence</button>
+      <button className="btn btn-sm" onClick={() => { setMode('compress'); setLvl('balanced'); }} title="Make the website copies lighter for faster pages. Originals are kept.">Compress</button>
       <button className="btn btn-sm" disabled={busy} onClick={() => { if (confirm(`Confirm usage rights and consent for ${items.length} image${items.length > 1 ? 's' : ''}? Only do this if AFCD may publish all of them and the people shown agreed.`)) run({ rightsConfirmed: true }, 'Rights confirmed'); }}>Confirm rights</button>
     </>}
     {!mode && can('media.delete') && <button className="btn btn-sm btn-danger" onClick={onDelete} title={unused < items.length ? `${items.length - unused} of them are in use: a placeholder shows there` : ''}><MI n="trash" size={14} /> Delete {items.length}</button>}
@@ -392,6 +410,26 @@ function TrashList({ items, onRestored }: { items: TrashItem[]; onRestored: () =
         <small>Deleted {ago(it.deletedAt)}{it.deletedBy ? ` by ${it.deletedBy}` : ''} · {left} day{left === 1 ? '' : 's'} left{it.usedOn.length ? ` · was used in ${it.usedOn.length} place${it.usedOn.length > 1 ? 's' : ''}` : ''}</small></span>
       {can('media.delete') && <button className="btn btn-sm" disabled={busy === it.row.id} onClick={() => restore(it)}>{busy === it.row.id ? 'Restoring…' : 'Restore'}</button>}
     </li>; })}</ul>
+  </div>;
+}
+
+// ================================================================= Compression
+/** Compression of the website copies: pick a level and it is applied at once (from the original, so it can be changed back). */
+function Compression({ m, ro, onDone }: { m: LibItem; ro: boolean; onDone: () => void }) {
+  const toast = useToast(); const [busy, setBusy] = useState<Level | null>(null);
+  const cur = m.quality ?? 'best';
+  async function go(l: Level) {
+    if (l === cur || busy) return;
+    setBusy(l);
+    try { toast(`${LEVEL[l].l}: ${await compress([m.id], l)}. Pages use the new copies from their next publish.`); onDone(); }
+    catch (e) { toast((e as Error).message, true); } finally { setBusy(null); }
+  }
+  return <div className="ml-compress">
+    <div className="ml-compress-h"><b>Compression</b>{m.webBytes !== undefined && <span className="muted">{mb(m.webBytes)} on the website</span>}</div>
+    <div className="ml-seg ml-levels" role="radiogroup" aria-label="Compression">
+      {(Object.keys(LEVEL) as Level[]).map((k) => <button key={k} role="radio" aria-checked={cur === k} className={cur === k ? 'on' : ''} disabled={ro || !!busy} title={LEVEL[k].d} onClick={() => go(k)}>{busy === k ? 'Working…' : LEVEL[k].l}</button>)}
+    </div>
+    <small className="muted">{LEVEL[cur].d} The original upload is kept.</small>
   </div>;
 }
 
@@ -526,6 +564,8 @@ function Detail({ m, all, onClose, onOpen, onDirty, onSaved, act }: { m: LibItem
       {!ro && <button className="btn btn-sm" onClick={() => act.replace(m)} title="Upload a new file in its place. Every page keeps using it."><MI n="replace" size={14} /> Replace</button>}
     </div>
 
+    <Compression m={m} ro={ro} onDone={() => onSaved({ id: m.id })} />
+
     {m.issues.length > 0 && <div className="ml-todo"><b>Before this image goes on the website</b><ul>
       {m.issues.includes('alt') && <li className={f.alt.trim() ? 'done' : ''}>Describe it in the alt text</li>}
       {m.issues.includes('credit') && <li className={f.credit.trim() ? 'done' : ''}>Credit the photographer or source</li>}
@@ -563,7 +603,8 @@ function Detail({ m, all, onClose, onOpen, onDirty, onSaved, act }: { m: LibItem
 
     <dl className="ml-kv">
       <dt>Dimensions</dt><dd>{m.width} × {m.height} px ({orient(m)})</dd>
-      <dt>File</dt><dd>{fmt(m.mime)} · {mb(m.bytes)}</dd>
+      <dt>File</dt><dd>{fmt(m.mime)} · {mb(m.bytes)} original</dd>
+      {m.webBytes !== undefined && <><dt>On the website</dt><dd>{mb(m.webBytes)} in all sizes · {LEVEL[m.quality ?? 'best'].l}</dd></>}
       {(m.licence || m.rightsExpiresOn) && <><dt>Rights</dt><dd>{[m.licence, m.rightsExpiresOn ? `until ${fmtDate(m.rightsExpiresOn)}` : ''].filter(Boolean).join(' · ')}</dd></>}
       <dt>Uploaded</dt><dd>{fmtDate(m.createdAt)}{m.uploadedByName ? ` by ${m.uploadedByName}` : ''}</dd>
       {m.updatedAt !== m.createdAt && <><dt>Last changed</dt><dd>{fmtDate(m.updatedAt)}</dd></>}

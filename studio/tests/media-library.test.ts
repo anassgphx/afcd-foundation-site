@@ -230,4 +230,36 @@ describe('media library', () => {
     await ed.post(`/media/${a.id}/crop`, { crop: { x: 0, y: 0, w: 100, h: 100 } });
     expect((await send(ed, `/media/${a.id}/replace`, await gradient('down', 800, 600), 'test-crop-new.png')).body).toMatchObject({ crop: null, width: 800, height: 600 });
   });
+
+  it('compresses the website copies at a chosen level, keeping the original and the crop', async () => {
+    const ed = await client(h.app, 'ed@afcd.test'), ro = await client(h.app, 'ro@afcd.test');
+    // a busy test pattern compresses differently at each level (a smooth gradient would barely change)
+    const w = 1800, hh = 1200, px = Buffer.alloc(w * hh * 3);
+    for (let i = 0; i < px.length; i++) px[i] = (i * 2654435761 >>> 24) & 255;
+    const noise = await sharp(px, { raw: { width: w, height: hh, channels: 3 } }).png().toBuffer();
+    const a = (await send(ed, '/media', noise, 'test-noise.png')).body;
+    expect(a.quality).toBe('best');                                       // new uploads stay sharp
+    await ed.post(`/media/${a.id}/crop`, { crop: { x: 0, y: 0, w: 1600, h: 1000 } });
+    const lib = (await ed.get('/media/library')).body.items.find((m: any) => m.id === a.id);
+    expect(lib.webBytes).toBeGreaterThan(0);
+
+    const sizes = () => readdirSync(h.cfg.mediaDir).filter((f) => f.startsWith(`${a.storageKey}-`)).sort();
+    const had = sizes();
+    const best = await ed.post('/media/optimise', { ids: [a.id], level: 'best' });
+    expect(sizes()).toEqual(had);   // compression re-encodes the sizes the image has; it adds none
+    expect(best.status).toBe(200);
+    const small = (await ed.post('/media/optimise', { ids: [a.id], level: 'smaller' })).body;
+    expect(small.items[0].before).toBe(best.body.after);
+    expect(small.after).toBeLessThan(small.before);
+    const row = (await h.db.select().from(t.media).where(eq(t.media.id, a.id)))[0];
+    expect(row).toMatchObject({ quality: 'smaller', width: 1600, height: 1000, crop: { x: 0, y: 0, w: 1600, h: 1000 } });
+    // the original upload is untouched
+    const dl = await h.app.request(`/studio/api/media/${a.id}/original`, { headers: { Cookie: ed.cookie } });
+    expect((await sharp(Buffer.from(await dl.arrayBuffer())).metadata()).width).toBe(1800);
+
+    expect((await ed.post('/media/optimise', { ids: [a.id], level: 'tiny' })).status).toBe(422);
+    expect((await ro.post('/media/optimise', { ids: [a.id], level: 'smaller' })).status).toBe(403);
+    const [log] = await h.db.select().from(t.auditLog).where(eq(t.auditLog.action, 'media.optimise')).orderBy(t.auditLog.at);
+    expect(log.summary).toMatch(/test-noise\.png \(best\): [\d.]+ MB → [\d.]+ MB/);
+  });
 });

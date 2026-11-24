@@ -624,109 +624,143 @@ for _p in STUDIO_PILLARS:   # Studio pillar content (see STUDIO_PILLARS above)
 
 def pillars():
     # ---- one page per pillar
+    # Monochrome by design: no pillar colours. Only real content: published projects, stories and events linked to the
+    # pillar; sections without content (objectives, related) are left out instead of showing placeholders.
+    ICO = lambda d_: f'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{d_}</svg>'
+    proj_by_name = {p_['name']: p_ for p_ in _PROJECT_DATA}
+    stories_all = news_items()
     for i, (slug, n, t, d, rel) in enumerate(PILLARS):
-        tone = '#EFEFED'   # pillar pages are neutral: no pillar colour
         projs = [p for p in PROJECTS if slug in PROJECT_PILLARS.get(p[0], [p[1]])]
         pobj = [o for o in (STUDIO_PILLAR_BY_KEY.get(slug, {}).get('objectives') or []) if (o.get('title') or '').strip()]
-        pobj_html = (f'<ol class="po-grid mt-8 lg:mt-10">' + ''.join(f'<li class="po-card"><span class="po-n">{j:02d}</span><span class="po-t">{_esc(o["title"])}</span>' + (f'<span class="po-d">{_esc(o.get("text") or "")}</span>' if (o.get('text') or '').strip() else '') + '</li>' for j, o in enumerate(pobj, 1)) + '</ol>') if pobj else '<div class="po-empty mt-8 lg:mt-10"><span class="po-empty-ico" aria-hidden="true"></span><span><span class="block text-[17px] font-semibold tracking-[-0.015em]">This pillar’s objectives are being finalised.</span><span class="mt-1 block text-[14.5px] text-ink-dark">They will appear here once AFCD publishes them.</span></span></div>'
-        def pcard(pr):
-            name, _sl, _pn, cat, href, summ = pr
-            inner = f'''{ph(name, 'aspect-[16/10] w-full rounded-[20px]')}<span class="nw-type">{cat}</span>'''
-            body_ = f'''<span class="mt-5 block px-2.5 text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">{name}</span><span class="mt-2 block px-2.5 text-[14.5px] leading-relaxed text-ink-dark">{summ or 'Project details coming soon.'}</span><span class="nw-read px-2.5">{'Explore project' if href else 'Details coming soon'} <span aria-hidden="true">↗</span></span>'''
-            if href:
-                return f'<li><a href="{href}" class="nw-card group"><div class="relative">{inner}</div>{body_}</a></li>'
-            return f'<li><div class="nw-card is-ph"><div class="relative">{inner}</div>{body_}</div></li>'
-        proj_html = ''.join(pcard(p) for p in projs)
-        for k in range(max(0, 3 - len(projs))):
-            proj_html += f'''<li><div class="nw-card is-ph"><div class="relative">{ph('Upcoming project', 'aspect-[16/10] w-full rounded-[20px]', '#E6E6E6')}<span class="nw-type">Placeholder</span></div><span class="mt-5 block px-2.5 text-[21px] font-semibold leading-[1.2] tracking-[-0.025em]">Lorem ipsum dolor sit amet</span><span class="mt-2 block px-2.5 text-[14.5px] leading-relaxed text-ink-dark">Consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus.</span><span class="nw-read px-2.5">Coming soon <span aria-hidden="true">↗</span></span></div></li>'''
-        acts = ''.join(f'''<li class="wd-card" style="--c:{tone}"><span class="flex items-start justify-between"><span class="wd-ico"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{ACT_ICONS[a]}</svg></span><span class="wd-n">{j:02d}</span></span><span class="mt-8 block text-[16.5px] font-medium leading-[1.45] tracking-[-0.01em]">{ACTIVITIES[a]}</span></li>''' for j, a in enumerate(PILLAR_ACTS[slug], 1))
-        groups = ''.join(f'<li class="wd-person"><span class="wd-av" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="7" r="3"/><path d="M4 16.5c.8-3 3.2-4.6 6-4.6s5.2 1.6 6 4.6"/></svg></span><span>{BENEFICIARIES[g]}</span></li>' for g in PILLAR_GROUPS[slug])
+        stories = [x for x in stories_all if slug in [q.get('key') for q in (x.get('pillars') or []) if isinstance(q, dict)] or x.get('pillar') == t][:3]
+        evs = [e for e in EVENTS if not ev_sample(e) and (e.get('pillar') == slug or slug in (e.get('pillars') or []))]
+        evs = sorted(evs, key=lambda e: (not e.get('upcoming'), e.get('iso') or ''))[:3]
         ap = PILLAR_APPROACH[slug]
-        steps = ''.join(f'<li class="ap-step" style="--c:{tone}"><span class="ap-step-n">{j:02d}</span><span class="min-w-0"><span class="block text-[18px] font-semibold tracking-[-0.02em]">{a}</span><span class="mt-1 block text-[14px] leading-relaxed text-ink-dark">{b}</span></span></li>' for j, (a, b) in enumerate(ap['steps'], 1))
-        hw_steps = ''.join(f'<li class="hw-step"><span class="hw-n">{j:02d}</span><span class="hw-t">{a}</span><span class="hw-d">{b}</span></li>' for j, (a, b) in enumerate(ap['steps'], 1))
-        princ = ''.join(f'<li class="ap-pr"><span class="pj-dot" style="--c:#000"></span>{x}</li>' for x in ap['principles'])
-        others = ''.join(f'''<li><a href="{PILLAR_FILE[s2]}" class="pl-other group" style="--c:#F4F4F3;--pc:{PILLAR_TONE[s2]}"><span class="pl-other-n">{n2}</span><span class="mt-8 block text-[22px] font-semibold leading-[1.1] tracking-[-0.03em]">{t2}</span><span class="pj-nav-arr" aria-hidden="true">↗</span></a></li>'''
-                         for s2, n2, t2, _d2, _r2 in PILLARS if s2 != slug)
-        brand = f'<span class="pg-tag">Programme brand: {PILLAR_BRAND[slug]}</span>' if PILLAR_BRAND.get(slug) else ''
-        steps_nav = ''.join(f'<a href="{PILLAR_FILE[s2]}" class="pl-step{" is-on" if s2 == slug else ""}" title="{_esc(t2)}"{" aria-current=" + chr(34) + "page" + chr(34) if s2 == slug else ""}>{n2}</a>' for s2, n2, t2, _d2, _r2 in PILLARS)
-        photo = media_img(PILLAR_IMAGE[slug], 'h-full w-full rounded-[22px]', '(min-width: 1024px) 40vw, 100vw') if PILLAR_IMAGE.get(slug) else ph(t + ' · programme photo', 'h-full w-full rounded-[22px]', '#FFFFFF')
-        body = page_header([('Our Pillars', 'pillars.html'), (t, PILLAR_FILE[slug])], f'Pillar {n} / {PILLARS_TOTAL}', t, PILLAR_INTRO[slug]) + f'''
-<div class="pl-page" style="--pc:{PILLAR_TONE[slug]}">
 
-<section id="overview" class="pl-sec pt-8 lg:pt-10">
+        # -- overview: flagship programmes (the pillar's highlights) link to their project page when it exists
+        def flag(name):
+            pr = proj_by_name.get(name); href = pr.get('file') if pr and pr.get('detail') else None
+            row = f'<span class="plx-flag-t">{_esc(name)}</span>' + (f'<span class="plx-flag-c">{_esc(pr["category"])}</span>' if pr and pr.get('category') else '')
+            return f'<li><a href="{href}" class="plx-flag">{row}<span class="plx-arr" aria-hidden="true">↗</span></a></li>' if href else f'<li><span class="plx-flag">{row}</span></li>'
+        flags = ''.join(flag(r) for r in rel)
+        cover = PILLAR_IMAGE.get(slug)
+        side = (f'<figure class="plx-photo">{media_img(cover, "h-full w-full", "(min-width: 1024px) 40vw, 100vw", eager=True)}</figure>' if cover else
+                f'<div class="plx-side"><p class="plx-k">Flagship programmes</p><ul class="plx-flags">{flags}</ul></div>' if flags else '')
+        facts = [('Projects', len(projs)), ('Activities', len(PILLAR_ACTS[slug]))] + ([('Objectives', len(pobj))] if pobj else []) + ([('Stories', len(stories))] if stories else [])
+        facts_html = ''.join(f'<div class="plx-fact"><dt>{k}</dt><dd>{v:02d}</dd></div>' for k, v in facts)
+        brand = f'<span class="plx-chip">Programme brand: {PILLAR_BRAND[slug]}</span>' if PILLAR_BRAND.get(slug) else ''
+        steps_nav = ''.join(f'<a href="{PILLAR_FILE[s2]}" class="plx-pn{" is-on" if s2 == slug else ""}" title="{_esc(t2)}"{" aria-current=" + chr(34) + "page" + chr(34) if s2 == slug else ""}>{n2}</a>' for s2, n2, t2, _d2, _r2 in PILLARS)
+
+        # -- perspective
+        princ = ''.join(f'<li><span class="plx-pr-n">{j:02d}</span>{x}</li>' for j, x in enumerate(ap['principles'], 1))
+        # -- objectives (only when published)
+        pobj_html = ''.join(f'<li class="plx-obj"><span class="plx-obj-n">{j:02d}</span><span class="min-w-0"><span class="plx-obj-t">{_esc(o["title"])}</span>' + (f'<span class="plx-obj-d">{_esc(o.get("text") or "")}</span>' if (o.get('text') or '').strip() else '') + '</span></li>' for j, o in enumerate(pobj, 1))
+        # -- how we work: steps, activities, people
+        steps = ''.join(f'<li class="plx-step"><span class="plx-step-n">{j:02d}</span><span class="plx-step-t">{a}</span><span class="plx-step-d">{b}</span></li>' for j, (a, b) in enumerate(ap['steps'], 1))
+        acts = ''.join(f'<li class="plx-act"><span class="plx-act-ico">{ICO(ACT_ICONS[a])}</span><span>{ACTIVITIES[a]}</span></li>' for a in PILLAR_ACTS[slug])
+        groups = ''.join(f'<li>{_esc(BENEFICIARIES[g])}</li>' for g in PILLAR_GROUPS[slug])
+
+        # -- projects: real ones only
+        def pcard(pr, j):
+            name, _sl, _pn, cat, href, summ = pr
+            data = proj_by_name.get(name) or {}
+            img = ((data.get('detail') or {}).get('cover') or [None])[0]
+            st = project_status(name)
+            visual = media_img(img, 'h-full w-full', '(min-width: 1024px) 30vw, 100vw') if img else f'<span class="plx-pj-mono" aria-hidden="true">{j:02d}</span>'
+            meta = ''.join(x for x in [status_badge(st, 'is-sm') if st else '', f'<span class="plx-pj-cat">{cat}</span>' if cat else ''])
+            inner = f'''<div class="plx-pj-vis{' has-img' if img else ''}">{visual}</div><div class="plx-pj-b"><div class="plx-pj-meta">{meta}</div><span class="plx-pj-t">{name}</span>{f'<span class="plx-pj-d">{summ}</span>' if summ else ''}<span class="plx-pj-go">{'Explore project' if href else 'Project page coming soon'}{' <span aria-hidden="true">↗</span>' if href else ''}</span></div>'''
+            return f'<li><a href="{href}" class="plx-pj">{inner}</a></li>' if href else f'<li><div class="plx-pj is-static">{inner}</div></li>'
+        proj_html = ''.join(pcard(p, j) for j, p in enumerate(projs, 1))
+        proj_block = (f'<ul class="plx-pjs mt-8 lg:mt-10">{proj_html}</ul>' if projs else
+                      f'<div class="plx-empty mt-8 lg:mt-10"><p class="plx-empty-t">No projects are published under this pillar yet.</p><p class="plx-empty-d">They appear here as soon as AFCD publishes them.</p><a href="projects.html" class="link-arrow mt-4">All projects <span class="arr" aria-hidden="true">↗</span></a></div>')
+
+        # -- related: this pillar's stories and events
+        def rel_row(href, kind, date, title_):
+            return f'<li><a href="{href}" class="plx-rel"><span class="plx-rel-k">{kind}</span><span class="plx-rel-t">{title_}</span><span class="plx-rel-d">{date}</span><span class="plx-arr" aria-hidden="true">↗</span></a></li>'
+        rel_rows = ''.join(rel_row(x.get('file') or f'news-{x["slug"]}.html', _esc(x.get('type') or 'Story'), _esc(x.get('dateLabel') or ''), _esc(x['title'])) for x in stories)
+        rel_rows += ''.join(rel_row(event_file(e), 'Upcoming event' if e.get('upcoming') else 'Event', f'{e.get("day", "")} {e.get("mon", "")} {e.get("year", "")}'.strip(), e['title']) for e in evs)
+
+        others = ''.join(f'''<li><a href="{PILLAR_FILE[s2]}" class="plx-other"><span class="plx-other-n">{n2}</span><span class="min-w-0"><span class="plx-other-t">{t2}</span><span class="plx-other-d">{PILLAR_INTRO.get(s2, d2)}</span></span><span class="plx-arr" aria-hidden="true">↗</span></a></li>'''
+                         for s2, n2, t2, d2, _r2 in PILLARS if s2 != slug)
+
+        tabs = [('overview', 'Overview'), ('perspective', 'Perspective')] + ([('objectives', 'Objectives')] if pobj else []) + [('how-we-work', 'How we work'), ('projects', 'Projects')] + ([('related', 'Related')] if rel_rows else []) + [('other-pillars', 'Other pillars')]
+        num = iter(range(1, 20))
+        body = page_header([('Our Pillars', 'pillars.html'), (t, PILLAR_FILE[slug])], f'Pillar {n} / {PILLARS_TOTAL}', t, PILLAR_INTRO[slug]) + f'''
+<div class="plx">
+
+<section id="overview" class="plx-sec pt-8 lg:pt-10">
   <div class="wrap">
-    <div class="pl-hero pl-hero-2 pl-hero-n2">
-      <div class="flex min-w-0 flex-col">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="flex flex-wrap items-center gap-2"><span class="pl-hero-n">Pillar {n}<span class="text-black/40"> / {PILLARS_TOTAL}</span></span>{brand}</div>
-          <nav class="pl-steps" aria-label="All pillars">{steps_nav}</nav>
+    <div class="plx-hero{' has-side' if side else ''}">
+      <div class="plx-hero-main">
+        <div class="plx-hero-top">
+          <span class="plx-big" aria-hidden="true">{n}</span>
+          <div class="plx-hero-meta">{brand}<nav class="plx-pns" aria-label="All pillars">{steps_nav}</nav></div>
         </div>
-        <p class="pl-hero-lead">{d}</p>
-        <dl class="pl-facts">
-          <div class="pl-fact"><dt>Projects</dt><dd>{len(projs)}</dd></div>
-          <div class="pl-fact"><dt>Activities</dt><dd>{len(PILLAR_ACTS[slug])}</dd></div>
-          {f'<div class="pl-fact"><dt>Objectives</dt><dd>{len(pobj)}</dd></div>' if pobj else ''}
-        </dl>
-        <div class="pl-who"><span class="pl-who-k">Who we work with</span><ul>{''.join(f'<li>{_esc(BENEFICIARIES[g])}</li>' for g in PILLAR_GROUPS[slug])}</ul></div>
-        <div class="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3 lg:mt-auto lg:pt-8">
-          <a href="#projects" class="btn-dark btn-cta min-h-[46px] px-6 text-[14px]">See projects <span class="arr" aria-hidden="true">↓</span></a>
-          <a href="#objectives" class="link-arrow">Strategic objectives <span class="arr" aria-hidden="true">↓</span></a>
+        <p class="plx-lead">{d}</p>
+        <dl class="plx-facts">{facts_html}</dl>
+        <div class="plx-cta">
+          <a href="#projects" class="plx-btn">See projects <span aria-hidden="true">↓</span></a>
+          <a href="#how-we-work" class="plx-link">How we work <span aria-hidden="true">↓</span></a>
         </div>
-        {share_bar(PILLAR_FILE[slug], t, 'Share this pillar', 'mt-6')}
+        {share_bar(PILLAR_FILE[slug], t, 'Share this pillar', 'plx-share')}
       </div>
-      <div class="pl-hero-photo">{photo}</div>
+      {side}
     </div>
   </div>
 </section>
 
 <nav class="pl-tabs" aria-label="On this page" data-pl-tabs>
-  <div class="wrap"><div class="pl-tabs-in">
-    <a href="#overview" class="pl-tab">Overview</a><a href="#perspective" class="pl-tab">Our perspective</a><a href="#objectives" class="pl-tab">Objectives</a><a href="#how-we-work" class="pl-tab">How we work</a><a href="#projects" class="pl-tab">Projects</a>
-  </div></div>
+  <div class="wrap"><div class="pl-tabs-in">{''.join(f'<a href="#{a}" class="pl-tab">{b}</a>' for a, b in tabs)}</div></div>
 </nav>
 
-<section id="perspective" class="pl-sec py-14 lg:py-20">
+<section id="perspective" class="plx-sec py-14 lg:py-20">
   <div class="wrap">
-    <div class="pv">
-      <div class="pv-side">
-        <div class="sh-top"><span class="sh-num">01</span><span class="sh-label">Our Perspective</span></div>
-        <p class="pv-title">{ap['title'].replace('text-white/45', 'text-ink-mid')}</p>
+    <div class="plx-pv">
+      <div>
+        <div class="sh-top"><span class="sh-num">{next(num):02d}</span><span class="sh-label">Our Perspective</span></div>
+        <h2 class="plx-pv-title">{ap['title'].replace('text-white/45', 'text-ink-mid')}</h2>
       </div>
-      <div class="pv-main">
-        <span class="pv-mark" aria-hidden="true">“</span>
-        <blockquote class="pv-quote">{ap['view']}</blockquote>
-        <p class="pv-by"><span class="pv-by-ico" aria-hidden="true"></span>AFCD Foundation · {t}</p>
-        <div class="pv-pr"><p class="label text-ink-mid">Guiding principles</p><ul class="mt-3 flex flex-wrap gap-2">{princ}</ul></div>
+      <div>
+        <blockquote class="plx-pv-quote">{ap['view']}</blockquote>
+        <p class="plx-k mt-8">Guiding principles</p>
+        <ol class="plx-prs">{princ}</ol>
       </div>
     </div>
   </div>
 </section>
-
-<section id="objectives" class="pl-sec py-8 lg:py-10">
-  <div class="wrap">{sec_head('02 / Objectives', 'What this pillar <span class="sh-soft">aims to achieve.</span>', (f'{len(pobj)} objective' + ('s' if len(pobj) != 1 else '')) if pobj else 'Coming soon', desc='What AFCD works toward under this pillar.')}
-    {pobj_html}
+{f"""
+<section id="objectives" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">{sec_head(f'{next(num):02d} / Objectives', 'What this pillar <span class="sh-soft">aims to achieve.</span>', f'{len(pobj)} objective' + ('s' if len(pobj) != 1 else ''), desc='What AFCD works toward under this pillar.')}
+    <ol class="plx-objs mt-8 lg:mt-10">{pobj_html}</ol>
   </div>
-</section>
+</section>""" if pobj else ''}
 
-<section id="how-we-work" class="pl-sec py-8 lg:py-10">
+<section id="how-we-work" class="plx-sec py-10 lg:py-14">
   <span id="approach" class="pl-anchor" aria-hidden="true"></span><span id="what-we-do" class="pl-anchor" aria-hidden="true"></span>
-  <div class="wrap">{sec_head('03 / How We Work', 'How this pillar <span class="sh-soft">comes to life.</span>', 'Approach · Activities', desc='The steps we follow and the activities we run under this pillar.')}
-    <ol class="hw-steps mt-8 lg:mt-10">{hw_steps}</ol>
-    <p class="label mt-12 text-ink-mid lg:mt-14">What it looks like</p>
-    <ul class="wd-grid mt-4">{acts}</ul>
+  <div class="wrap">{sec_head(f'{next(num):02d} / How We Work', 'How this pillar <span class="sh-soft">comes to life.</span>', 'Approach · Activities', desc='The steps we follow and the activities we run under this pillar.')}
+    <ol class="plx-steps mt-8 lg:mt-10">{steps}</ol>
+    <div class="plx-work mt-10 lg:mt-14">
+      <div><p class="plx-k">What it looks like</p><ul class="plx-acts mt-4">{acts}</ul></div>
+      <div><p class="plx-k">Who we work with</p><ul class="plx-who mt-4">{groups}</ul></div>
+    </div>
   </div>
 </section>
 
-<section id="projects" class="pl-sec py-8 lg:py-10">
-  <div class="wrap">{sec_head('04 / Projects', f'Projects in <span class="sh-soft">{PILLAR_SHORT[slug].lower()}.</span>', ('All projects', f'projects.html?pillar={slug}#by-pillar'), desc=f'Programmes AFCD has run under the {t} pillar.')}
-    <ul class="nw-grid mt-8 lg:mt-10">{proj_html}
-    </ul>
+<section id="projects" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">{sec_head(f'{next(num):02d} / Projects', f'Projects in <span class="sh-soft">{PILLAR_SHORT[slug].lower()}.</span>', ('All projects', f'projects.html?pillar={slug}#by-pillar'), desc=f'Programmes AFCD runs under the {t} pillar.')}
+    {proj_block}
   </div>
 </section>
+{f"""
+<section id="related" class="plx-sec py-10 lg:py-14">
+  <div class="wrap">{sec_head(f'{next(num):02d} / Related', 'Stories and events <span class="sh-soft">from this pillar.</span>', ('All stories', 'news.html'))}
+    <ul class="plx-rels mt-8 lg:mt-10">{rel_rows}</ul>
+  </div>
+</section>""" if rel_rows else ''}
 
-<nav id="other-pillars" class="border-t border-ink-light py-14 lg:py-16" aria-label="Other pillars">
-  <div class="wrap">{sec_head('05 / Other Pillars', f'{PILLARS_WORD_CAP} pillars, <span class="sh-soft">one shared future.</span>', ('All pillars', 'pillars.html'))}
-    <ul class="mt-8 grid gap-3 md:grid-cols-3 lg:mt-10">{others}</ul>
+<nav id="other-pillars" class="plx-sec border-t border-ink-light py-14 lg:py-16" aria-label="Other pillars">
+  <div class="wrap">{sec_head(f'{next(num):02d} / Other Pillars', f'{PILLARS_WORD_CAP} pillars, <span class="sh-soft">one shared future.</span>', ('All pillars', 'pillars.html'))}
+    <ul class="plx-others mt-8 lg:mt-10">{others}</ul>
   </div>
 </nav>
 </div>
@@ -736,7 +770,7 @@ def pillars():
 
     # ---- hub
     cards = ''.join(f'''
-      <li id="{slug}" class="scroll-mt-32"><a href="{PILLAR_FILE[slug]}" class="pl-card group" style="--c:{PILLAR_TONE[slug]}">
+      <li id="{slug}" class="scroll-mt-32"><a href="{PILLAR_FILE[slug]}" class="pl-card group" style="--c:#F4F4F3">
         <span class="flex items-start justify-between"><span class="pl-hero-n">{n}</span><span class="pj-nav-arr" style="position:static" aria-hidden="true">↗</span></span>
         <span class="mt-10 block text-[30px] font-semibold leading-[1.02] tracking-[-0.04em] md:text-[38px]">{t}</span>
         <span class="mt-4 block text-[15px] leading-relaxed text-black/70">{d}</span>

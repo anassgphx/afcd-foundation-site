@@ -801,6 +801,14 @@ def pillars():
         evs = [e for e in EVENTS if not ev_sample(e) and (e.get('pillar') == slug or slug in (e.get('pillars') or []))]
         evs = sorted(evs, key=lambda e: (not e.get('upcoming'), e.get('iso') or ''))[:3]
         ap = PILLAR_APPROACH[slug]
+        sp = STUDIO_PILLAR_BY_KEY.get(slug, {})
+        pg = sp.get('page') or {}   # page texts edited in Studio (already escaped); empty = the wording below
+        def head(k, title, soft):
+            t_, s_ = pg.get(k + 'Title'), pg.get(k + 'Soft')
+            if not t_ and not s_:
+                t_, s_ = title, soft
+            return (t_ or '') + (f' <span class="sh-soft">{s_}</span>' if s_ else '')
+        extra_acts, extra_groups = sp.get('extraActivities') or [], sp.get('extraGroups') or []
 
         # -- overview: flagship programmes (the pillar's highlights) link to their project page when it exists
         def flag(name):
@@ -808,9 +816,18 @@ def pillars():
             row = f'<span class="plx-flag-t">{_esc(name)}</span>' + (f'<span class="plx-flag-c">{_esc(pr["category"])}</span>' if pr and pr.get('category') else '')
             return f'<li><a href="{href}" class="plx-flag">{row}<span class="plx-arr" aria-hidden="true">↗</span></a></li>' if href else f'<li><span class="plx-flag">{row}</span></li>'
         flags = ''.join(flag(r) for r in rel)
-        cover = PILLAR_IMAGE.get(slug)
-        side = (f'<figure class="plx-photo">{media_img(cover, "h-full w-full", "(min-width: 1024px) 40vw, 100vw", eager=True)}</figure>' if cover else
-                f'<div class="plx-side"><p class="plx-k">Flagship programmes</p><ul class="plx-flags">{flags}</ul></div>' if flags else '')
+        # the picture: the pillar's own photo, else the cover photo of its first live project that has one
+        cover, cover_from = PILLAR_IMAGE.get(slug), None
+        if not cover:
+            for pr in projs:
+                c_ = ((proj_by_name.get(pr[0]) or {}).get('detail') or {}).get('cover') or []
+                if c_ and pr[4]:
+                    cover, cover_from = c_[0], pr
+                    break
+        photo_html = (f'<figure class="plx-photo">{media_img(cover, "h-full w-full", "(min-width: 1024px) 40vw, 100vw", eager=True)}'
+                      + (f'<figcaption class="plx-cap"><a href="{cover_from[4]}">{cover_from[0]} <span aria-hidden="true">↗</span></a></figcaption>' if cover_from else '') + '</figure>') if cover else ''
+        flags_html = f'<div class="plx-side"><p class="plx-k">{pg.get("flagshipLabel") or "Flagship programmes"}</p><ul class="plx-flags">{flags}</ul></div>' if flags else ''
+        side = f'<div class="plx-col">{photo_html}{flags_html}</div>' if (photo_html or flags_html) else ''
         facts = [('Projects', len(projs)), ('Activities', len(PILLAR_ACTS[slug]))] + ([('Objectives', len(pobj))] if pobj else []) + ([('Stories', len(stories))] if stories else [])
         facts_html = ''.join(f'<div class="plx-fact"><dt>{k}</dt><dd>{v:02d}</dd></div>' for k, v in facts)
         brand = f'<span class="plx-chip">Programme brand: {PILLAR_BRAND[slug]}</span>' if PILLAR_BRAND.get(slug) else ''
@@ -823,7 +840,8 @@ def pillars():
         # -- how we work: steps, activities, people
         steps = ''.join(f'<li class="plx-step"><span class="plx-step-n">{j:02d}</span><span class="plx-step-t">{a}</span><span class="plx-step-d">{b}</span></li>' for j, (a, b) in enumerate(ap['steps'], 1))
         acts = ''.join(f'<li class="plx-act"><span class="plx-act-ico">{ICO(ACT_ICONS[a])}</span><span>{ACTIVITIES[a]}</span></li>' for a in PILLAR_ACTS[slug])
-        groups = ''.join(f'<li>{_esc(BENEFICIARIES[g])}</li>' for g in PILLAR_GROUPS[slug])
+        acts += ''.join(f'<li class="plx-act"><span class="plx-act-ico">{ICO(ACT_ICONS[1])}</span><span>{x}</span></li>' for x in extra_acts)
+        groups = ''.join(f'<li>{_esc(BENEFICIARIES[g])}</li>' for g in PILLAR_GROUPS[slug]) + ''.join(f'<li>{x}</li>' for x in extra_groups)
 
         # -- projects: real ones only
         def pcard(pr, j):
@@ -895,14 +913,14 @@ def pillars():
 </section>
 {f"""
 <section id="objectives" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{sec_head(f'{next(num):02d} / Objectives', 'What this pillar <span class="sh-soft">aims to achieve.</span>', f'{len(pobj)} objective' + ('s' if len(pobj) != 1 else ''), desc='What AFCD works toward under this pillar.')}
+  <div class="wrap">{sec_head(f'{next(num):02d} / Objectives', head('objectives', 'What this pillar', 'aims to achieve.'), f'{len(pobj)} objective' + ('s' if len(pobj) != 1 else ''), desc=pg.get('objectivesDesc') or 'What AFCD works toward under this pillar.')}
     <ol class="plx-objs mt-8 lg:mt-10">{pobj_html}</ol>
   </div>
 </section>""" if pobj else ''}
 
 <section id="how-we-work" class="plx-sec py-10 lg:py-14">
   <span id="approach" class="pl-anchor" aria-hidden="true"></span><span id="what-we-do" class="pl-anchor" aria-hidden="true"></span>
-  <div class="wrap">{sec_head(f'{next(num):02d} / How We Work', 'How this pillar <span class="sh-soft">comes to life.</span>', 'Approach · Activities', desc='The steps we follow and the activities we run under this pillar.')}
+  <div class="wrap">{sec_head(f'{next(num):02d} / How We Work', head('how', 'How this pillar', 'comes to life.'), 'Approach · Activities', desc=pg.get('howDesc') or 'The steps we follow and the activities we run under this pillar.')}
     <ol class="plx-steps mt-8 lg:mt-10">{steps}</ol>
     <div class="plx-work mt-10 lg:mt-14">
       <div><p class="plx-k">What it looks like</p><ul class="plx-acts mt-4">{acts}</ul></div>
@@ -912,13 +930,13 @@ def pillars():
 </section>
 
 <section id="projects" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{sec_head(f'{next(num):02d} / Projects', f'Projects in <span class="sh-soft">{PILLAR_SHORT[slug].lower()}.</span>', ('All projects', f'projects.html?pillar={slug}#by-pillar'), desc=f'Programmes AFCD runs under the {t} pillar.')}
+  <div class="wrap">{sec_head(f'{next(num):02d} / Projects', head('projects', 'Projects in', f'{PILLAR_SHORT[slug].lower()}.'), ('All projects', f'projects.html?pillar={slug}#by-pillar'), desc=pg.get('projectsDesc') or f'Programmes AFCD runs under the {t} pillar.')}
     {proj_block}
   </div>
 </section>
 {f"""
 <section id="related" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{sec_head(f'{next(num):02d} / Related', 'Stories and events <span class="sh-soft">from this pillar.</span>', ('All stories', 'news.html'))}
+  <div class="wrap">{sec_head(f'{next(num):02d} / Related', head('related', 'Stories and events', 'from this pillar.'), ('All stories', 'news.html'))}
     <ul class="plx-rels mt-8 lg:mt-10">{rel_rows}</ul>
   </div>
 </section>""" if rel_rows else ''}
@@ -929,7 +947,7 @@ def pillars():
   </div>
 </nav>
 </div>
-''' + cta_band('Find your place in our work.', 'Volunteer, join a programme when calls open, or partner with us on this pillar.',
+''' + cta_band(pg.get('ctaTitle') or 'Find your place in our work.', pg.get('ctaText') or 'Volunteer, join a programme when calls open, or partner with us on this pillar.',
                   ('Get Involved', 'get-involved.html'), ('Partner with us', 'get-involved.html#partner'))
         page(PILLAR_FILE[slug], f'{t} · AFCD Foundation', f'{t}: {d}', 'pillars', body, parent=('Our Pillars', 'pillars.html'))
 

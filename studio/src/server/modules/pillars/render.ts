@@ -32,6 +32,9 @@ export async function pillarEntries(db: DB, live: { id: string; snap: PillarSnap
       // objectives go out as plain text: content.py escapes them itself (empty titles are skipped there too)
       objectives: (s.objectives ?? []).filter((o) => o.title).map((o) => ({ title: o.title, text: o.text ?? '' })),
       activities: s.activities, groups: s.groups, image: image(s.mediaId),
+      // custom items and page texts (escaped like every other string); empty page texts keep the site's wording
+      extraActivities: (s.extraActivities ?? []).map(esc), extraGroups: (s.extraGroups ?? []).map(esc),
+      page: Object.fromEntries(Object.entries(s.page ?? {}).filter(([, v]) => v).map(([k, v]) => [k, esc(v)])),
     }));
 }
 export type PillarEntry = Awaited<ReturnType<typeof pillarEntries>>[number];

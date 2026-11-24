@@ -92,3 +92,11 @@ a.pl-item:hover { background: var(--canvas); }
 /* solid destructive button for confirmations (studio.css only has a red-text .btn-danger) */
 .pl-btn-danger { background: var(--bad); border-color: var(--bad); color: #fff; }
 .pl-btn-danger:hover { filter: brightness(.94); }
+/* Page texts: one small group per page section, the site's wording as placeholder */
+.pl-pt { padding-top: 4px; }
+.pl-pt + .pl-pt { border-top: 1px solid var(--line); padding-top: 14px; }
+.pl-pt-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.pl-pt-grid .field > span { font-size: 12px; font-weight: 500; color: var(--muted); }
+.pl-pt-long { grid-column: 1 / -1; }
+.pl-pt-grid .input::placeholder, .pl-pt-grid .textarea::placeholder { color: var(--faint); }
+@media (max-width: 640px) { .pl-pt-grid { grid-template-columns: minmax(0, 1fr); } }

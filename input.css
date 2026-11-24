@@ -2532,3 +2532,11 @@ a.abx-chip:hover { background: #000; color: #fff; border-color: #000; }
   .abx .plx-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
   .abx .plx-fact, .abx .plx-fact + .plx-fact { padding: 14px 0 0; border-left: 0; }
 }
+/* pillar overview: the picture above the flagship programmes */
+.plx-col { display: grid; gap: 10px; align-content: start; }
+.plx-col .plx-photo { position: relative; min-height: 0; aspect-ratio: 4 / 3; }
+.plx-col .plx-photo img { filter: none; }
+.plx-cap { position: absolute; left: 12px; bottom: 12px; }
+.plx-cap a { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border-radius: 9999px; background: rgba(255,255,255,.92); font-size: 12.5px; font-weight: 600; }
+.plx-cap a:hover { background: #fff; }
+@media (min-width: 1024px) { .plx-hero.has-side .plx-col .plx-photo { aspect-ratio: auto; height: 340px; } }

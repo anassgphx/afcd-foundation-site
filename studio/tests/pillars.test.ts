@@ -119,6 +119,28 @@ describe('pillars', () => {
     expect(other.objectives).toEqual([]);                                                       // a pillar imported before objectives existed
   });
 
+  it('lets editors change every page text and add their own activities and groups; empty keeps the site wording', async () => {
+    await importPillars(h.db, h.cfg, null, SITE_PILLARS);
+    const id = (await c.ed.get('/pillars/records')).body[0].id;
+    const { body: p } = await c.ed.get(`/pillars/${id}`);
+    expect(p.content.page.howTitle).toBe('');                                                   // imported pillars start with the site's wording
+    expect(p.content.extraActivities).toEqual([]);
+    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), page: { ...p.content.page, howTitle: 'How <b>' } })).status).toBe(422);
+    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), page: { ...p.content.page, unknownText: 'x' } })).status).toBe(422);
+    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), extraActivities: Array(7).fill('Something') })).status).toBe(422);
+    const page = { ...p.content.page, howTitle: 'Learning & leading', howSoft: 'together.', ctaTitle: 'Join “the” lab.' };
+    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), page, extraActivities: ['Hackathons & meetups'], extraGroups: ['University students'] })).status).toBe(200);
+    expect((await c.ed.get(`/pillars/${id}`)).body.content.page.ctaTitle).toBe('Join “the” lab.');
+    await c.ed.post(`/pillars/${id}/transition`, { action: 'submit' }); await c.rev.post(`/pillars/${id}/transition`, { action: 'approve' });
+    expect((await c.admin.post(`/pillars/${id}/publish`)).status).toBe(200);
+    const all = JSON.parse(readFileSync(join(h.siteRoot, 'src/data/pillars.json'), 'utf8')).pillars;
+    const entry = all.find((x: any) => x.key === 'youth-empowerment');
+    expect(entry.page).toEqual({ howTitle: 'Learning &amp; leading', howSoft: 'together.', ctaTitle: 'Join “the” lab.' });   // escaped; empty texts left out
+    expect(entry.extraActivities).toEqual(['Hackathons &amp; meetups']);
+    expect(entry.extraGroups).toEqual(['University students']);
+    expect(all.find((x: any) => x.key === 'green-thumbs').page).toEqual({});                   // untouched pillars keep the site wording
+  });
+
   it('blocks a photo without alt text or confirmed rights', async () => {
     await importPillars(h.db, h.cfg, null, SITE_PILLARS);
     const id = (await c.ed.get('/pillars/records')).body[0].id;
@@ -261,7 +283,9 @@ describe('pillar pages through the real generator', () => {
     const before = realBuild(join(root, 'without'), join(root, 'none.json'));                 // no pillars.json: today's site
     const same = realBuild(join(root, 'imported'), await write(join(root, 'imported.json'), live));
     const files = readdirSync(before, { recursive: true }).map(String).filter((f) => f.endsWith('.html')).sort();
-    expect(files.length).toBeGreaterThan(80);                                                  // English, French and Arabic
+    const en = files.filter((f) => !f.includes('/'));                                          // every English page has its French and Arabic version
+    expect(en.length).toBeGreaterThan(10);
+    for (const f of en) for (const l of ['fr/', 'ar/']) expect(files).toContain(l + f);
     for (const f of PILLAR_PAGES) for (const l of ['', 'fr/', 'ar/']) expect(files).toContain(l + f);
     const changed = files.filter((f) => !readFileSync(join(before, f)).equals(readFileSync(join(same, f))));
     expect(changed).toEqual([]);                                                               // every page, byte for byte

@@ -227,8 +227,35 @@
 
   /* ---------- Desktop dropdowns ---------- */
   var dds = $$('.dd');
-  function syncScrim() { document.body.classList.toggle('mega-open', dds.some(function (d) { return d.classList.contains('open'); })); }
-  function closeAll(except) { dds.forEach(function (d) { if (d !== except) { d.classList.remove('open'); $('.dd-btn', d).setAttribute('aria-expanded', 'false'); } }); syncScrim(); }
+  // One shared white box (and a small arrow under the open item) sits behind every menu. Switching menus slides the
+  // arrow and resizes the box to the new menu's height while the contents cross-fade sideways, so the menu morphs
+  // instead of closing and reopening. Panels are clipped to the box (--dd-h) so nothing spills while it resizes.
+  var ddHost = dds.length && $('.dd-panel', dds[0]).offsetParent, ddBg, ddArrow, ddCur = null;
+  if (ddHost) {
+    ddBg = document.createElement('div'); ddBg.className = 'dd-bg'; ddBg.setAttribute('aria-hidden', 'true');
+    ddArrow = document.createElement('span'); ddArrow.className = 'dd-arrow'; ddArrow.setAttribute('aria-hidden', 'true');
+    ddHost.appendChild(ddBg); ddHost.appendChild(ddArrow); ddHost.classList.add('dd-morph');
+  }
+  function snap(els, fn) { els.forEach(function (e) { e.classList.add('is-snap'); }); fn(); void ddHost.offsetWidth; els.forEach(function (e) { e.classList.remove('is-snap'); }); }
+  function morph(dd) {
+    if (!ddHost) return;
+    var prev = ddCur; ddCur = dd;
+    if (!dd) { ddHost.classList.remove('dd-on'); return; }
+    var panel = $('.dd-panel', dd), btn = $('.dd-btn', dd), hr = ddHost.getBoundingClientRect(), br = btn.getBoundingClientRect();
+    var place = function () { ddHost.style.setProperty('--dd-h', panel.offsetHeight + 'px'); ddHost.style.setProperty('--dd-ax', (br.left + 10 - hr.left) + 'px'); ddHost.style.setProperty('--dd-aw', Math.max(0, br.width - 20) + 'px'); };
+    if (!prev || !ddHost.classList.contains('dd-on')) { snap([ddBg, ddArrow], function () { panel.style.setProperty('--dx', '0px'); place(); }); ddHost.classList.add('dd-on'); return; }
+    if (prev === dd) { place(); return; }
+    // the new menu slides in from the side it sits on; the old one leaves the other way
+    var dir = br.left > $('.dd-btn', prev).getBoundingClientRect().left ? 1 : -1;
+    $('.dd-panel', prev).style.setProperty('--dx', (-24 * dir) + 'px');
+    panel.style.setProperty('--dx', '0px');
+    if (panel.animate && !matchMedia('(prefers-reduced-motion: reduce)').matches)
+      $$('.wrap > *', panel).forEach(function (el) { el.animate([{ opacity: 0, transform: 'translateX(' + (24 * dir) + 'px)' }, { opacity: 1, transform: 'none' }], { duration: 280, delay: 60, easing: 'cubic-bezier(.32,.72,0,1)', fill: 'backwards' }); });
+    place();
+  }
+  window.addEventListener('resize', function () { if (ddCur) morph(ddCur); });
+  function syncScrim() { var on = dds.filter(function (d) { return d.classList.contains('open'); })[0] || null; document.body.classList.toggle('mega-open', !!on); morph(on); }
+  function closeAll(except) { dds.forEach(function (d) { if (d !== except) { d.classList.remove('open'); $('.dd-btn', d).setAttribute('aria-expanded', 'false'); } }); if (!except) syncScrim(); }
   var hoverT, openT;
   dds.forEach(function (dd) {
     var btn = $('.dd-btn', dd);

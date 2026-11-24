@@ -111,6 +111,30 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .dd.open .dd-panel .wrap > * { opacity: 1; transform: none; }
 .dd.open .dd-panel .wrap > *:nth-child(2) { transition-delay: .04s; }
 .dd.open .dd-panel .wrap > *:nth-child(3) { transition-delay: .08s; }
+/* Morphing menu (assets/main.js adds .dd-morph): one shared white box and arrow behind every panel. Opening fades the
+   box in from 98.5%; switching menus resizes it to the new panel's height (--dd-h) and slides the arrow to the open item
+   (--dd-ax), while panels cross-fade and stay clipped to the box. Same easing as the movement of iOS sheets. */
+.dd-morph { --dd-ease: cubic-bezier(.32,.72,0,1); }
+.dd-morph .dd-panel { z-index: 2; transform: none; background: transparent !important; border-color: transparent !important; box-shadow: none;
+  clip-path: inset(0 0 max(0px, calc(100% - var(--dd-h, 0px))) 0);
+  transition: opacity .16s ease, visibility 0s linear .28s, clip-path .28s var(--dd-ease); }
+.dd-morph .dd.open .dd-panel { transition: opacity .2s ease 60ms, visibility 0s, clip-path .28s var(--dd-ease); }
+.dd-morph .dd-panel .wrap > * { transform: translate(var(--dx, 0px), 6px); transition: opacity .2s ease, transform .28s var(--dd-ease); }
+.dd-morph .dd.open .dd-panel .wrap > * { transform: none; }
+.dd-bg, .dd-arrow { position: absolute; top: 100%; opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .16s ease, visibility 0s linear .16s, transform .28s var(--dd-ease), height .28s var(--dd-ease); }
+.dd-bg { z-index: 1; inset-inline: 0; height: var(--dd-h, 0px); background: #fff; border-bottom: 1px solid #EDEDEC;
+  box-shadow: 0 32px 48px -36px rgba(0,0,0,.35); transform: scale(.985); transform-origin: 50% 0; }
+.dd-arrow { z-index: 3; left: 0; width: 1px; height: 2px; margin-top: -1px; background: #0A0A0A; border-radius: 2px; transform-origin: 0 50%;
+  transform: translateX(var(--dd-ax, 0px)) scaleX(0);
+  transition: opacity .16s ease, visibility 0s linear .16s, transform .28s var(--dd-ease), width .28s var(--dd-ease); }
+.dd-morph.dd-on .dd-bg, .dd-morph.dd-on .dd-arrow { opacity: 1; visibility: visible; transition-delay: 0s; }
+.dd-morph.dd-on .dd-bg { transform: none; }
+.dd-morph.dd-on .dd-arrow { transform: translateX(var(--dd-ax, 0px)) scaleX(1); width: var(--dd-aw, 0px); }
+.dd-bg.is-snap, .dd-arrow.is-snap { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .dd-bg, .dd-arrow, .dd-morph .dd-panel, .dd-morph .dd.open .dd-panel, .dd-morph .dd-panel .wrap > * { transition: none; }
+}
 .mega-link .mega-arr { opacity: 0; transform: translateX(-6px); transition: opacity .25s ease, transform .25s ease; margin-top: 4px; }
 .mega-link:hover .mega-arr, .mega-link:focus-visible .mega-arr { opacity: 1; transform: none; }
 .mega-link:hover > span:nth-child(2) > span:first-child { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }

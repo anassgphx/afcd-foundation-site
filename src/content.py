@@ -1096,6 +1096,29 @@ def home_events():
     if new != html:
         idx.write_text(new, encoding='utf-8')
 
+
+# ---------------------------------------------------------------- Homepage partner strip (from the Partners module)
+def home_partners():
+    """Writes the homepage partner strip's names, logos and counts into src/pages/index.html (assets/main.js draws the strip)."""
+    idx = Path(__file__).parent / 'pages' / 'index.html'
+    if not idx.exists():
+        return
+    html = idx.read_text(encoding='utf-8')
+    if '<template id="partner-data">' not in html:
+        return
+    def li(n):
+        lg = (PARTNER_DETAILS.get(n) or {}).get('logo') or {}
+        # names, alt text and paths arrive HTML-escaped from Studio
+        return f'<li data-logo="{lg["src"]}" data-alt="{lg.get("alt") or ""}">{n}</li>' if lg.get('src') else f'<li>{n}</li>'
+    data = ''.join(f'<ul data-g="{g}">' + ''.join(li(n) for n in names) + '</ul>' for g, names in PARTNERS)
+    new = re.sub(r'<template id="partner-data">.*?</template>', lambda m: f'<template id="partner-data">{data}</template>', html, count=1, flags=re.S)
+    counts = {g: len(n) for g, n in PARTNERS}
+    new = re.sub(r'(tabular-nums">)\d+(</span><span class="text-sm text-ink-dark">partners since)', lambda m: f'{m.group(1)}{sum(counts.values())}{m.group(2)}', new, count=1)
+    for g in ('International', 'National', 'Local'):
+        new = re.sub(rf'(data-g="{g}" aria-pressed="false">{g} <span>)\d+(</span>)', lambda m: f'{m.group(1)}{counts.get(g, 0)}{m.group(2)}', new, count=1)
+    if new != html:
+        idx.write_text(new, encoding='utf-8')
+
 # ---------------------------------------------------------------- Homepage project cards (from the project module)
 def home_projects():
     """Writes the featured project cards' data into src/pages/index.html (between the home-projects markers)."""
@@ -2048,5 +2071,5 @@ def studio_contact_fields(s):
 
 
 if __name__ == '__main__':
-    about(); pillars(); projects(); project_details(); home_projects(); home_events(); news(); news_articles(); events(); partners(); involved(); contact()
+    about(); pillars(); projects(); project_details(); home_projects(); home_events(); home_partners(); news(); news_articles(); events(); partners(); involved(); contact()
     print('pages written to', OUT)

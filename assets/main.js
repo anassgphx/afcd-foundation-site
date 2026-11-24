@@ -601,7 +601,7 @@
   ];
   (function () {   /* names come from the page's <template id="partner-data"> so each language version shows its own */
     var t = document.getElementById('partner-data'); if (!t || !t.content) return;
-    var g = Array.prototype.map.call(t.content.querySelectorAll('ul[data-g]'), function (u) { return [u.dataset.g, Array.prototype.map.call(u.children, function (li) { return li.textContent.trim(); })]; });
+    var g = Array.prototype.map.call(t.content.querySelectorAll('ul[data-g]'), function (u) { return [u.dataset.g, Array.prototype.map.call(u.children, function (li) { return { name: li.textContent.trim(), logo: li.dataset.logo || '', alt: li.dataset.alt || '' }; })]; });
     if (g.length) PARTNER_GROUPS = g;
   })();
 
@@ -613,8 +613,10 @@
       var b = $('.pt-filter[data-g="' + key + '"]'); if (!b) return key;
       var n = b.firstChild; return (n && n.nodeType === 3 ? n.textContent : b.textContent).trim() || key;
     }
-    function tile(name, group) {
-      return '<li class="pt-tile"><span class="pt-logo">Logo</span><span class="pt-name">' + esc(name) + '</span><span class="pt-tag">' + esc(label(group)) + '</span></li>';
+    function tile(p, group) {   /* p: a name, or {name, logo, alt} from the template (logo: the partner's logo from Studio) */
+      if (typeof p === 'string') p = { name: p, logo: '' };
+      var logo = /^assets\/media\/[\w.-]+$/.test(p.logo) ? '<span class="pt-logo has-img"><img src="' + esc(p.logo) + '" alt="' + esc(p.alt || p.name) + '" loading="lazy" decoding="async"></span>' : '<span class="pt-logo">Logo</span>';
+      return '<li class="pt-tile">' + logo + '<span class="pt-name">' + esc(p.name) + '</span><span class="pt-tag">' + esc(label(group)) + '</span></li>';
     }
     function list(groups) {
       var out = [];

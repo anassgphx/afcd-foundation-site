@@ -509,9 +509,11 @@
     var list = Array.prototype.map.call(t.content.querySelectorAll('article'), function (a) {
       var q = function (s) { var e = a.querySelector(s); return e ? e.innerHTML : ''; };
       var img = a.querySelector('img');
+      var pairs = function (s) { return Array.prototype.map.call(a.querySelectorAll(s + ' > li'), function (li) { return [li.querySelector('b').innerHTML, li.querySelector('span').innerHTML]; }); };
       return { n: a.dataset.n, name: q('h3'), dot: a.dataset.dot, href: a.dataset.href, pillar: q('.pp'), kind: q('.pk'), cat: q('.pc'),
-        surface: a.dataset.surface, phTone: a.dataset.ph, photo: q('.ph'), img: img ? img.outerHTML : '', lede: q('.pl'),
-        rows: Array.prototype.map.call(a.querySelectorAll('dl > div'), function (r) { return [r.querySelector('dt').innerHTML, r.querySelector('dd').innerHTML]; }) };
+        surface: a.dataset.surface, phTone: a.dataset.ph, photo: q('.ph'), img: img ? img.outerHTML : '', fit: a.dataset.fit || 'cover',
+        facts: pairs('.pf'), outcomes: pairs('.po'),
+        rows: Array.prototype.map.call(a.querySelectorAll('dl > div'), function (r) { return [r.querySelector('dt').innerHTML, r.querySelector('dd').innerHTML, r.hasAttribute('data-more')]; }) };
     });
     PROJECTS = list;   /* Studio is the source: no projects published means no cards */
   })();
@@ -538,15 +540,19 @@
         '</header>' +
         '<div class="mt-5 flex flex-wrap gap-2"><span class="pc-pill">' + (p.kind || 'Case study') + '</span>' + (p.cat ? '<span class="pc-pill">' + p.cat + '</span>' : '') + '</div>' +
         '<div class="mt-6 grid min-h-0 flex-1 gap-5 md:grid-cols-12 md:gap-6">' +
-          '<div class="pc-inner flex min-h-[280px] flex-col rounded-[24px] p-4 md:col-span-5 md:p-5">' +
-            (p.img ? '<div class="pc-photo aspect-[4/3] w-full overflow-hidden rounded-[18px] md:aspect-auto md:flex-1">' + p.img + '</div>' : '<div class="ph aspect-[4/3] w-full rounded-[18px] md:aspect-auto md:flex-1" style="--ph:' + p.phTone + ';--ph-line:rgba(0,0,0,.08)"><span class="ph-cap"><b>Photo</b> · ' + p.photo + '</span></div>') +
-            '<p class="mt-4 px-1 text-[17px] font-medium leading-snug tracking-[-0.01em] md:text-[19px]">' + p.lede + '</p>' +
+          '<div class="pc-inner flex flex-col rounded-[24px] p-3 md:col-span-5 md:p-4">' +
+            /* 1:1 frame: a poster or document is shown whole on a neutral ground, a photo fills the square */
+            (p.img ? '<figure class="pc-photo pc-fit-' + p.fit + ' w-full overflow-hidden rounded-[18px]">' + p.img + '</figure>' : '<div class="ph aspect-square w-full rounded-[18px]" style="--ph:' + p.phTone + ';--ph-line:rgba(0,0,0,.08)"><span class="ph-cap"><b>Photo</b> · ' + p.photo + '</span></div>') +
+            ((p.facts || []).length ? '<div class="pc-glance"><p class="pc-label">At a glance</p><dl>' + p.facts.map(function (f) { return '<div><dt>' + f[0] + '</dt><dd>' + f[1] + '</dd></div>'; }).join('') + '</dl></div>' : '') +
           '</div>' +
-          '<div class="flex min-w-0 flex-col md:col-span-7">' +
-            '<dl class="grid flex-1 gap-3 sm:grid-cols-2">' + p.rows.map(function (r, k) {
-              return '<div class="pc-tile"><dt class="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-black/55"><span class="pc-tile-n tabular-nums">0' + (k + 1) + '</span>' + r[0] + '</dt><dd class="mt-3 text-[15px] leading-relaxed">' + r[1] + '</dd></div>';
+          '<div class="flex min-w-0 flex-col gap-3 md:col-span-7">' +
+            ((p.outcomes || []).length ? '<ul class="pc-impact">' + p.outcomes.map(function (o) { return '<li><b>' + o[0] + '</b><span>' + o[1] + '</span></li>'; }).join('') + '</ul>' : '') +
+            '<dl class="grid content-start gap-3 sm:grid-cols-2">' + p.rows.map(function (r) {
+              /* one lead sentence on the card; the full text is on the project page */
+              return '<div class="pc-tile"><dt class="pc-label">' + r[0] + '</dt><dd class="mt-3 text-[16px] leading-relaxed">' + r[1] + '</dd>' +
+                (r[2] ? '<a class="pc-more" href="' + p.href + '#about">Read more <span aria-hidden="true">→</span></a>' : '') + '</div>';
             }).join('') + '</dl>' +
-            '<div class="mt-5 flex flex-wrap items-center justify-end gap-x-6 gap-y-3">' +
+            '<div class="mt-auto flex flex-wrap items-center justify-end gap-x-6 gap-y-3 pt-4">' +
               '<a href="projects.html" class="link-arrow text-[14px]">All projects <span class="arr" aria-hidden="true">↗</span></a>' +
               '<a href="' + p.href + '" class="pc-btn">Explore project <span class="pc-arr" aria-hidden="true">→</span></a>' +
             '</div>' +

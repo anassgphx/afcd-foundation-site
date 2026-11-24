@@ -1113,25 +1113,33 @@ def home_projects():
         rows = {k: v for k, v in (d.get('rows') or [])}
         acts = [y for y in (d.get('activities') or []) if (y.get('title') or '').strip()]
         outs = [y for y in (d.get('outcomes') or []) if (y.get('title') or y.get('text') or '').strip()]
-        tiles = []
-        for k in ('Context', 'Approach'):
-            if rows.get(k):
-                tiles.append((k, rows[k]))
-        if acts:
-            tiles.append(('Activities', ' · '.join(_esc(y['title']) for y in acts[:3])))
-        elif rows.get('Activities'):
-            tiles.append(('Activities', rows['Activities']))
-        if outs:
-            tiles.append(('Outcomes', ' · '.join(_esc(((y.get('figure') or '') + ' ' + (y.get('title') or y.get('text') or '')).strip()) for y in outs[:2])))
-        elif rows.get('Results'):
-            tiles.append(('Results', rows['Results']))
-        hero = d.get('hero')
-        img = media_img(hero, 'pc-img', '(min-width:1024px) 40vw, 100vw') if hero else ''
+
+        def lead(text):   # the card keeps it short: the first sentence; the full text is on the project page
+            first = next((' '.join(p.split()) for p in re.split(r'\n\s*\n', text or '') if p.strip()), '')
+            m = re.match(r'(.{40,}?[.!?])\s', first)
+            return (m.group(1) if m else first), bool(m) or len(first) < len(' '.join((text or '').split()))
+
+        tiles = [(k,) + lead(rows[k]) for k in ('Context', 'Approach') if rows.get(k)]
+        # key facts, only those Studio has: published partners, then the project's own facts (duration, location, ...)
+        facts = []
+        partners = [p['name'] for p in (d.get('partners') or []) if p.get('name')]
+        if partners:
+            facts.append(('Partner' if len(partners) == 1 else 'Partners', ', '.join(partners)))
+        facts += [(k, v) for k, v in (d.get('facts') or []) if v and k not in ('Pillar', 'Category')]
+        # outcomes with a figure ("2 workshops") make the impact strip; the title says what it was
+        figs = [y for y in outs if (y.get('figure') or '').strip()][:4]
+        # 1:1 image: the poster when Studio has one (shown whole), else the main photo
+        # (cropped to the square at its focal point, unless it is a tall document-like image, which is shown whole)
+        pic = d.get('poster') or d.get('hero')
+        fit = 'contain' if d.get('poster') or (pic and pic.get('h', 0) > 1.1 * pic.get('w', 1)) else 'cover'
+        img = media_img(pic, 'pc-img', '(min-width:1024px) 30vw, 100vw') if pic else ''
         cards.append(
-            f'<article data-n="{i + 1:02d}" data-href="{x["file"]}" data-dot="{PILLAR_TONE.get(x.get("pillar"), "#111")}" data-surface="pc-{i % 3 + 1}" data-ph="{["#E2E2E2", "#E6E6E6", "#DADADA"][i % 3]}">'
+            f'<article data-n="{i + 1:02d}" data-href="{x["file"]}" data-dot="{PILLAR_TONE.get(x.get("pillar"), "#111")}" data-surface="pc-{i % 3 + 1}" data-ph="{["#E2E2E2", "#E6E6E6", "#DADADA"][i % 3]}" data-fit="{fit}">'
             f'<h3>{_esc(x["name"])}</h3><span class="pp">{_PILLAR_NAMES.get(x.get("pillar"), "")}</span><span class="pk">Case study</span><span class="pc">{_esc(x.get("category") or "")}</span>'
-            f'<p class="pl">{_esc(d.get("lede") or x.get("summary") or "")}</p><p class="ph">{_esc(d.get("photo") or (x["name"] + " · project photo"))}</p>{img}'
-            '<dl>' + ''.join(f'<div><dt>{k}</dt><dd>{v}</dd></div>' for k, v in tiles) + '</dl></article>')
+            f'<p class="ph">{_esc(d.get("photo") or (x["name"] + " · project photo"))}</p>{img}'
+            + ('<ul class="pf">' + ''.join(f'<li><b>{_esc(k)}</b><span>{_esc(v)}</span></li>' for k, v in facts[:3]) + '</ul>' if facts else '')
+            + ('<ul class="po">' + ''.join(f'<li><b>{_esc(y["figure"])}</b><span>{_esc(y.get("title") or y.get("text") or "")}</span></li>' for y in figs) + '</ul>' if figs else '')
+            + '<dl>' + ''.join(f'<div{" data-more" if more else ""}><dt>{k}</dt><dd>{_esc(v)}</dd></div>' for k, v, more in tiles) + '</dl></article>')
     block = f'{a}\n    <template id="home-projects-data">{"".join(cards)}</template>\n    {b}'
     new = html[:html.index(a)] + block + html[html.index(b) + len(b):]
     if new != html:

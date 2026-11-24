@@ -566,6 +566,25 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .pc-tile-n { display: inline-grid; place-items: center; min-width: 24px; height: 18px; padding: 0 5px; border-radius: 9999px; background: #fff; border: 1px solid #E6E6E6; font-size: 10px; letter-spacing: 0; color: var(--dark); }
 .pc-2 .pc-tile, .pc-3 .pc-tile { background: rgba(255,255,255,.7); }
 @media (min-width: 640px) { .pc-tile:last-child:nth-child(odd) { grid-column: span 2 / span 2; } }
+/* Project card: lead sentences, at a glance, impact figures (all from Studio; empty parts are not rendered) */
+.pc-label { font-size: 11px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: rgba(0,0,0,.55); }
+.pc-more { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; margin-top: auto; padding-top: 14px; font-size: 14px; font-weight: 600; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.pc-more span { text-decoration: none; transition: transform .2s ease; }
+.pc-more:hover span { transform: translateX(3px); }
+[dir="rtl"] .pc-more span { transform: scaleX(-1); }
+.pc-glance { margin-top: 14px; padding: 4px 8px 0; }
+.pc-glance dl { margin-top: 6px; }
+.pc-glance dl > div { display: flex; justify-content: space-between; gap: 16px; padding: 11px 0; border-bottom: 1px solid #E6E6E6; font-size: 14px; line-height: 1.4; }
+.pc-glance dl > div:last-child { border-bottom: 0; }
+.pc-glance dt { flex-shrink: 0; color: rgba(0,0,0,.55); }
+.pc-glance dd { font-weight: 600; text-align: end; }
+.pc-impact { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-bottom: 12px; overflow: hidden; border-radius: 18px; border: 1px solid #EEEEEE; background: #EEEEEE; }
+.pc-impact li { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; background: #F7F7F7; }
+.pc-impact li:last-child:nth-child(odd) { grid-column: span 2 / span 2; }
+.pc-2 .pc-impact li, .pc-3 .pc-impact li { background: rgba(255,255,255,.85); }
+.pc-impact b { font-size: 20px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
+@media (max-width: 639.98px) { .pc-impact li { padding: 12px 13px; } .pc-impact b { font-size: 17px; overflow-wrap: anywhere; } }
+.pc-impact span { font-size: 12.5px; line-height: 1.35; color: rgba(0,0,0,.62); }
 
 /* Inner pages */
 .proj-filter { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 9999px; border: 1px solid var(--light); background: #fff; font-size: 13px; font-weight: 500; transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
@@ -661,8 +680,9 @@ body.mega-open #mega-scrim { opacity: 1; visibility: visible; transition-delay: 
 /* Stacked project cards (desktop) */
 .stack { position: relative; }
 @media (min-width: 1024px) {
-  .stack { height: 720px; }
-  .pcard { position: absolute; top: 0; bottom: 0; width: 78%; transition: transform .6s cubic-bezier(.2,.7,.2,1), left .6s cubic-bezier(.2,.7,.2,1), filter .6s ease, box-shadow .6s ease; transform-origin: right center; }
+  /* all cards share one grid cell, so the stack is as tall as its tallest card (nothing is cut off) */
+  .stack { display: grid; }
+  .pcard { grid-area: 1 / 1; position: relative; width: 78%; transition: transform .6s cubic-bezier(.2,.7,.2,1), left .6s cubic-bezier(.2,.7,.2,1), filter .6s ease, box-shadow .6s ease; transform-origin: right center; }
   [dir="rtl"] .pcard { transform-origin: left center; }
   .pcard[data-pos="0"] { left: 0; transform: scale(1); z-index: 30; box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 24px 48px -32px rgba(0,0,0,.35); }
   .pcard[data-pos="1"] { left: 11%; transform: scale(.955); z-index: 20; }
@@ -1803,7 +1823,10 @@ button[type="submit"][aria-busy="true"] { opacity: .6; cursor: progress; }
 .vl-row .vl-prog { display: none; }
 
 /* Homepage project cards: real project photo from the project module */
-.pc-photo .pc-img { width: 100%; height: 100%; object-fit: cover; }
+/* project card image: a 1:1 frame. Posters and documents are shown whole on a neutral ground; photos fill it at their focal point */
+.pc-photo { margin: 0; aspect-ratio: 1 / 1; background: #ECECEC; }
+.pc-photo .pc-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.pc-photo.pc-fit-contain .pc-img { object-fit: contain !important; object-position: center !important; }
 
 /* Project logo in the summary (Studio: Project logo; shape, fit, background, size) */
 .pj-logo { display: grid; place-items: center; margin-top: 22px; overflow: hidden; border-radius: 18px; max-width: 100%; }

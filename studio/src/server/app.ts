@@ -20,6 +20,7 @@ import * as M from './modules/media/service.ts';
 import * as G from './modules/pages/service.ts';
 import * as N from './modules/news/service.ts';
 import * as PT from './modules/partners/service.ts';
+import { trimIfUncropped } from './modules/media/trim.ts';
 import * as EV from './modules/events/service.ts';
 import * as OP from './modules/opportunities/service.ts';
 import * as FM from './modules/forms/service.ts';
@@ -295,14 +296,15 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
 
   // ---------------------------------------------------------------- Partners
   api.get('/partners', perm('partner.read'), async (c) => c.json(await PT.listPartners(db)));
-  api.post('/partners', perm('partner.create'), async (c) => c.json(await PT.createPartner(db, actor(c), await c.req.json()), 201));
+  // a partner's logo is trimmed of empty margins when it is first chosen (media/trim.ts), so every logo shows at full size
+  api.post('/partners', perm('partner.create'), async (c) => { const p = await PT.createPartner(db, actor(c), await c.req.json()); await trimIfUncropped(db, cfg, p.logoMediaId).catch(() => null); return c.json(p, 201); });
   api.post('/partners/import', perm('partner.publish'), async (c) => c.json(await importPartners(db, cfg, actor(c))));
   api.get('/partners/:id', perm('partner.read'), async (c) => {
     const p = await PT.loadPartner(db, c.req.param('id'));
     const mediaRows = p.logoMediaId ? await db.select().from(t.media).where(eq(t.media.id, p.logoMediaId)) : [];
     return c.json({ ...p, media: mediaRows.map(withUrl), problems: await PT.partnerProblems(db, p), history: await PT.partnerHistory(db, p.id) });
   });
-  api.put('/partners/:id', perm('partner.update'), async (c) => c.json(await PT.updatePartner(db, actor(c), c.req.param('id'), await c.req.json())));
+  api.put('/partners/:id', perm('partner.update'), async (c) => { const p = await PT.updatePartner(db, actor(c), c.req.param('id'), await c.req.json()); await trimIfUncropped(db, cfg, (p as { logoMediaId?: string | null }).logoMediaId).catch(() => null); return c.json(p); });
   api.post('/partners/:id/transition', async (c) => {
     const body = z.object({ action: z.string().max(30), comment: z.string().max(2000).default('') }).safeParse(await c.req.json());
     if (!body.success || !PT.partnerTransitionPerm(body.data.action)) throw new AppError(422, 'Unknown action.');

@@ -951,6 +951,10 @@ def project_details():
         glance = [('partner', 'Partners' if len(pnames) > 1 else 'Partner', ', '.join(pnames)), ('pin', 'Location', fmap.get('Location', '')),
                   ('pillar', 'Pillar', f'<a href="{PILLAR_FILE.get(d["slug"], "pillars.html")}" class="pjg-link">{d["pillar"]}</a>'),
                   ('tag', 'Categories' if ',' in d['cat'] else 'Category', d['cat'])]
+        plogos = [(n, partner_logo(n)) for n in pnames if partner_logo(n)]
+        if plogos:   # the partners' own logos (Studio → Partners), shown with the names
+            glance[0] = ('partner', glance[0][1], '<span class="pjg-plogos">' + ''.join(
+                f'<span class="pjg-plogo {logo_shape(lg)}"><img src="{lg["src"]}" alt="{lg.get("alt") or n}" loading="lazy" decoding="async"></span>' for n, lg in plogos) + '</span>' + glance[0][2])
         glance_rows = ''.join(f'<div class="pjg-row">{gico(i)}<div class="min-w-0"><dt>{k}</dt><dd>{v}</dd></div></div>' for i, k, v in glance if v)
         status_html = ((f'<div class="pjg-status">' + (f'<span class="pjg-badge is-{status.lower()}"><span class="pjg-pulse" aria-hidden="true"></span>{status}</span>' if status else '')
                         + (f'<span class="pjg-dates"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 7h12M5.5 1.5v3M10.5 1.5v3"/></svg>{years}</span>' if years else '') + '</div>')
@@ -1152,6 +1156,18 @@ def home_events():
         idx.write_text(new, encoding='utf-8')
 
 
+
+def logo_shape(lg):
+    """Partner logos are sized by shape so they look equally weighted: square ones tallest, wide ones shortest."""
+    w, h = (lg or {}).get('w') or 0, (lg or {}).get('h') or 0
+    r = (w / h) if w and h else 2
+    return 'is-square' if r < 1.35 else 'is-mid' if r < 2.6 else 'is-wide'
+
+
+def partner_logo(name):
+    lg = (PARTNER_DETAILS.get(name) or {}).get('logo') or {}
+    return lg if lg.get('src') else None
+
 # ---------------------------------------------------------------- Homepage partner strip (from the Partners module)
 def home_partners():
     """Writes the homepage partner strip's names, logos and counts into src/pages/index.html (assets/main.js draws the strip)."""
@@ -1164,7 +1180,7 @@ def home_partners():
     def li(n):
         lg = (PARTNER_DETAILS.get(n) or {}).get('logo') or {}
         # names, alt text and paths arrive HTML-escaped from Studio
-        return f'<li data-logo="{lg["src"]}" data-alt="{lg.get("alt") or ""}">{n}</li>' if lg.get('src') else f'<li>{n}</li>'
+        return f'<li data-logo="{lg["src"]}" data-alt="{lg.get("alt") or ""}" data-shape="{logo_shape(lg)}">{n}</li>' if lg.get('src') else f'<li>{n}</li>'
     data = ''.join(f'<ul data-g="{g}">' + ''.join(li(n) for n in names) + '</ul>' for g, names in PARTNERS)
     new = re.sub(r'<template id="partner-data">.*?</template>', lambda m: f'<template id="partner-data">{data}</template>', html, count=1, flags=re.S)
     counts = {g: len(n) for g, n in PARTNERS}
@@ -1808,15 +1824,28 @@ def partners():
     def logo(n):
         lg = (PARTNER_DETAILS.get(n) or {}).get('logo')
         if lg and lg.get('src'):
-            return f'<span class="pr-logo has-img">{media_img(lg, "pr-logo-img", "220px")}</span>'
+            return f'<span class="pr-logo has-img {logo_shape(lg)}">{media_img(lg, "pr-logo-img", "220px")}</span>'
         return f'<span class="pr-logo" aria-hidden="true"><span>{initials(n)}</span></span>'
     with_logo = sum(1 for _g, names in PARTNERS for n in names if ((PARTNER_DETAILS.get(n) or {}).get('logo') or {}).get('src'))
-    cards = ''.join(f'''
-      <li class="pr-card" data-group="{g}" data-name="{n.lower()}">
-        {logo(n)}
-        <span class="mt-5 block text-[16px] font-semibold leading-snug tracking-[-0.015em]">{n}</span>
-        <span class="pr-scope">{ico(g)}{g}</span>
-      </li>''' for g, names in PARTNERS for n in names)
+    # a card per partner: the logo on a calm stage (sized by its shape), then what Studio knows about the partnership
+    def card(g, n):
+        x = PARTNER_DETAILS.get(n) or {}
+        status = ('Current partner' if x.get('current') else 'Past partner') if 'current' in x else ''
+        since = f'since {x["since"]}' if x.get('since') else ''
+        meta = ''.join(f'<span class="pr-meta-i">{v}</span>' for v in (status, since) if v)
+        projs = [(pr.get('file'), pr.get('name') or (DETAILS.get(pr.get('file')) or {}).get('name')) for pr in (x.get('projects') or []) if isinstance(pr, dict) and pr.get('file')]
+        projs = [(f, nm) for f, nm in projs if nm]
+        url = x.get('url') or ''
+        return (f'<li class="pr-card" data-group="{g}" data-name="{n.lower()}">'
+                f'<div class="pr-stage">{logo(n)}</div>'
+                f'<div class="pr-body"><span class="pr-scope">{ico(g)}{g}</span>'
+                f'<span class="pr-name">{n}</span>'
+                + (f'<span class="pr-meta">{meta}</span>' if meta else '')
+                + (f'<span class="pr-desc">{x["description"]}</span>' if (x.get('description') or '').strip() else '')
+                + (f'<span class="pr-projs"><span class="pr-projs-k">Projects</span>' + ''.join(f'<a href="{f}" class="pr-proj">{nm}</a>' for f, nm in projs) + '</span>' if projs else '')
+                + (f'<a href="{url}" class="pr-web" target="_blank" rel="noopener noreferrer">Website <span aria-hidden="true">↗</span></a>' if url.startswith('https://') else '')
+                + '</div></li>')
+    cards = ''.join(card(g, n) for g, names in PARTNERS for n in names)
     models = [('fund', 'Fund', f'Support a programme under one of our {PILLARS_WORD} pillars, from a single cohort to multi-year work.'),
               ('design', 'Co-design', 'Build an initiative with AFCD and the community, from the first idea to the final report.'),
               ('share', 'Share expertise', 'Train, mentor or host participants, and bring your organisation’s know-how to a programme.')]

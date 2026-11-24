@@ -19,7 +19,8 @@
     "test": "vitest run",
     "user:password": "tsx src/server/cli/set-password.ts",
     "content:reset": "tsx src/server/cli/reset-content.ts",
-    "media:rebuild": "tsx src/server/cli/rebuild-media.ts"
+    "media:rebuild": "tsx src/server/cli/rebuild-media.ts",
+    "logos:trim": "tsx src/server/cli/trim-logos.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.17",

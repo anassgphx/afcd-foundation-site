@@ -908,6 +908,13 @@ def project_details():
                   ('Pillar', f'<a href="{PILLAR_FILE.get(d["slug"], "pillars.html")}" class="pjg-link"><span class="pjs-pillar-dot" aria-hidden="true"></span>{d["pillar"]}</a>'),
                   ('Category', d['cat'])]
         glance_rows = ''.join(f'<div class="pjg-row"><dt>{k}</dt><dd>{v}</dd></div>' for k, v in glance if v)
+        # the project's most relevant event: the next upcoming one, else the most recent past one
+        nxt = sorted([e for e in pevents if e.get('upcoming')], key=lambda e: e.get('iso') or '')
+        past = sorted([e for e in pevents if not e.get('upcoming')], key=lambda e: e.get('iso') or '', reverse=True)
+        ev = (nxt or past or [None])[0]
+        ev_html = (f'<a href="{event_file(ev)}" class="pjg-ev"><span class="pjg-ev-d"><b>{ev["day"]}</b>{ev["mon"]} {ev["year"]}</span>'
+                   f'<span class="min-w-0 flex-1"><span class="pjg-k">{"Next event" if ev.get("upcoming") else "Latest event"}</span><span class="pjg-ev-t">{ev["title"]}</span></span>'
+                   f'<span aria-hidden="true">↗</span></a>') if ev else ''
         dl_html = ''
         if outputs:
             dl_html = ('<div class="pjg-dl"><span class="pjg-k">Downloads</span><ul>' + ''.join(
@@ -927,6 +934,7 @@ def project_details():
         {f'<div class="pjg-logo">{logo_html}</div>' if logo_html else ''}
         <span class="pjg-k">At a glance</span>
         <dl class="pjg-list">{glance_rows}</dl>
+        {ev_html}
         {dl_html}
         {share_bar(file, d['name'], 'Share', 'pjg-share')}
       </aside>

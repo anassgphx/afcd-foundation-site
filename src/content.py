@@ -1282,10 +1282,6 @@ def project_details():
         glance = [('partner', 'Partners' if len(pnames) > 1 else 'Partner', ', '.join(pnames)), ('pin', 'Location', fmap.get('Location', '')),
                   ('pillar', 'Pillar', f'<a href="{PILLAR_FILE.get(d["slug"], "pillars.html")}" class="pjg-link">{d["pillar"]}</a>'),
                   ('tag', 'Categories' if ',' in d['cat'] else 'Category', d['cat'])]
-        plogos = [(n, partner_logo(n)) for n in pnames if partner_logo(n)]
-        if plogos:   # the partners' own logos (Studio → Partners), shown with the names
-            glance[0] = ('partner', glance[0][1], '<span class="pjg-plogos">' + ''.join(
-                f'<span class="pjg-plogo {logo_shape(lg)}"><img src="{lg["src"]}" alt="{lg.get("alt") or n}"{_dims(lg)} loading="lazy" decoding="async"></span>' for n, lg in plogos) + '</span>' + glance[0][2])
         glance_rows = ''.join(f'<div class="pjg-row">{gico(i)}<div class="min-w-0"><dt>{k}</dt><dd>{v}</dd></div></div>' for i, k, v in glance if v)
         status_html = ((f'<div class="pjg-status">' + (f'<span class="pjg-badge is-{status.lower()}"><span class="pjg-pulse" aria-hidden="true"></span>{status}</span>' if status else '')
                         + (f'<span class="pjg-dates"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 7h12M5.5 1.5v3M10.5 1.5v3"/></svg>{years}</span>' if years else '') + '</div>')

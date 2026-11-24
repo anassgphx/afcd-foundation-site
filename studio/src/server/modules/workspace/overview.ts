@@ -6,6 +6,7 @@ import { can, type Role } from '../../rbac.ts';
 import { TEXT_PAGES } from '../home/service.ts';
 import { todayMorocco } from '../events/render.ts';
 import { notifications, openFailures } from './service.ts';
+import { placeholderAlt } from '../media/alt.ts';
 
 type Mod = { key: string; label: string; href: string; icon: string; live: number; drafts: number; review: number; note?: string; scheduled?: number };
 type Recent = { kind: string; title: string; status: string; live: boolean; href: string; at: string };
@@ -87,12 +88,13 @@ export async function overview(db: DB, user: { id: string; role: Role }) {
     const c = r?.counts ?? {}; const score = r?.score ?? r?.scores?.overall;
     const errors = (c.errors ?? 0) + (c.critical ?? 0) + (c.high ?? 0); const warnings = (c.warnings ?? 0) + (c.medium ?? 0) + (c.low ?? 0);
     const checked = a ? `checked ${a.createdAt.toISOString()}` : '';
-    health.push({ key: 'seo', label: 'SEO', value: r && score != null ? `${score}/100` : 'Not checked', tone: !r || score == null ? 'warn' : errors ? 'bad' : score >= 90 ? 'ok' : 'warn', href: '/studio/seo',
-      detail: r ? `${errors ? `${errors} serious issue${errors === 1 ? '' : 's'}` : 'No serious issues'}${warnings ? `, ${warnings} to improve` : ''} · ${checked}` : 'Run the site audit' });
+    health.push({ key: 'seo', label: 'Technical SEO', value: r && score != null ? `${score}/100` : 'Not checked', tone: !r || score == null ? 'warn' : errors ? 'bad' : score >= 90 ? 'ok' : 'warn', href: '/studio/seo',
+      detail: r ? `Studio’s check of titles, links and indexing, not a Google score. ${errors ? `${errors} serious issue${errors === 1 ? '' : 's'}` : 'No serious issues'}${warnings ? `, ${warnings} to improve` : ''} · ${checked}` : 'Run the site audit' });
   }
   if (can(role, 'media.read')) {
-    const [{ total }] = await db.select({ total: count() }).from(media);
-    const [{ need }] = await db.select({ need: count() }).from(media).where(sql`not ${media.rightsConfirmed} or ${media.alt} = ''`);
+    // placeholder alt text ("zzzzz") counts as missing: it needs fixing just as much as an empty one
+    const rows = await db.select({ alt: media.alt, originalName: media.originalName, rightsConfirmed: media.rightsConfirmed }).from(media);
+    const total = rows.length, need = rows.filter((m) => !m.rightsConfirmed || !m.alt.trim() || placeholderAlt(m.alt, m.originalName)).length;
     health.push({ key: 'media', label: 'Media', value: need ? `${need} to fix` : `${total} ready`, tone: need ? 'warn' : 'ok', href: '/studio/media', detail: need ? 'Need alt text or confirmed usage rights before they can be published.' : `${total} images, all with alt text and rights` });
   }
   if (can(role, 'forms.read')) {

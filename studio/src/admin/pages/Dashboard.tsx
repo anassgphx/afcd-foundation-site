@@ -225,7 +225,7 @@ export function Dashboard() {
                 <div className="dsh-lang-top"><b>{l.name} <span lang={l.lang} dir={l.dir}>{l.native}</span></b><span className="dsh-pct">{pct}%</span></div>
                 <div className="dsh-bar" role="progressbar" aria-valuemin={0} aria-valuemax={l.total} aria-valuenow={l.translated} aria-label={`${l.name} coverage`}><span style={{ width: `${pct}%` }} /></div>
                 <div className="dsh-lang-sub"><small>{nf.format(l.translated)} of {nf.format(l.total)} texts · {nf.format(l.total - l.translated)} missing</small>
-                  <span className="pills">{l.status && <Badge s={l.status} />}<span className={`badge ${l.publishedLive ? 'b-live' : 'dsh-off'}`}>{l.publishedLive ? 'On the site' : 'Not on the site'}</span></span></div>
+                  <span className="pills">{l.status && !(l.status === 'published' && !l.publishedLive) && <Badge s={l.status} />}<span className={`badge ${l.publishedLive ? 'b-live' : 'dsh-off'}`}>{l.publishedLive ? 'On the site' : 'Not on the site'}</span></span></div>
               </li>; })}</ul>}
           </Panel>}
 

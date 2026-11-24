@@ -296,10 +296,11 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
                 : <input className="input" maxLength={max} value={f.page[k]} placeholder={def} onChange={(x) => set('page', { ...f.page, [k]: x.target.value })} />}</label>)}</div></div>)}
         </Section>
         <Section id="projects" title="Projects" desc="What the website lists for this pillar.">
-          <Field label="Programmes on the Our Pillars card" span={3} hint="Names shown as tags on this pillar’s card. Up to 8."><ListEditor value={f.highlights} onChange={(v) => set('highlights', v)} label="Programmes on the Our Pillars card" max={8} placeholder="Programme name" disabled={!editable} /></Field>
+          <Field label="Programmes on the Our Pillars card" span={3} hint="Text only, shown as tags on this pillar’s card and page. They are not linked to project records and do not add projects to the pillar. Up to 8."><ListEditor value={f.highlights} onChange={(v) => set('highlights', v)} label="Programmes on the Our Pillars card" max={8} placeholder="Programme name" disabled={!editable} /></Field>
           <div className="field ed-f s3"><span className="ed-lbl">Linked projects</span>
             {p.projects.length === 0 ? <p className="muted" style={{ margin: 0 }}>No project is linked to this pillar yet.</p>
               : <ul className="pl-projects">{p.projects.map((x) => <li key={x.id}><Link to={`/studio/projects/${x.id}`}>{x.name}</Link>{x.primary && <span className="pill">Main pillar</span>}{!x.live && <span className="pill">Not live</span>}</li>)}</ul>}
+            {p.projects.length > 0 && !p.projects.some((x) => x.live) && <p style={{ margin: '6px 0 0', color: 'var(--warn)' }}>None of these projects is published, so the pillar page says “No projects are published under this pillar yet”. Publish one of them to list it there.</p>}
             <small>The pillar page lists the live projects linked here. A project chooses its pillars in its own record.</small></div>
         </Section>
         <Section id="internal" title="Internal" desc="Not shown on the website.">

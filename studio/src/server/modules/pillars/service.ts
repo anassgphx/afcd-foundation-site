@@ -18,6 +18,7 @@ import { articlePillars, articles, events, media, objectivePillars, objectives, 
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
+import { altProblem } from '../media/alt.ts';
 
 type Status = typeof pillars.$inferSelect['status'];
 const plain = (max: number) => z.string().trim().max(max).refine((v) => !/[<>]/.test(v), 'Use plain text without < or >.');
@@ -140,7 +141,7 @@ export async function pillarProblems(db: DB, p: FullPillar) {
     const [m] = await db.select().from(media).where(eq(media.id, p.mediaId));
     if (!m) out.push('The photo no longer exists in the media library.');
     else {
-      if (!m.alt) out.push(`Add alt text to the photo “${m.originalName}” in the media library.`);
+      { const ap = altProblem(m, `Add alt text to the photo “${m.originalName}” in the media library.`); if (ap) out.push(ap); }
       if (!m.rightsConfirmed) out.push(`Confirm AFCD may use the photo “${m.originalName}” (usage rights and consent of the people shown).`);
     }
   }

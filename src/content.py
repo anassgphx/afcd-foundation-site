@@ -948,7 +948,8 @@ def pillars():
         facts = [('Projects', len(projs)), ('Activities', len(PILLAR_ACTS[slug]))] + ([('Objectives', len(pobj))] if pobj else []) + ([('Stories', len(stories))] if stories else [])
         facts_html = ''.join(f'<div class="plx-fact"><dd>{v}</dd><dt>{k if v != 1 else k[:-1] if k.endswith("s") else k}</dt></div>' for k, v in facts if v)   # a zero is not shown
         brand = f'<span class="plx-chip">Programme brand: {PILLAR_BRAND[slug]}</span>' if PILLAR_BRAND.get(slug) else ''
-        steps_nav = ''.join(f'<a href="{PILLAR_FILE[s2]}" class="plx-pn{" is-on" if s2 == slug else ""}" title="{_esc(t2)}"{" aria-current=" + chr(34) + "page" + chr(34) if s2 == slug else ""}>{n2}</a>' for s2, n2, t2, _d2, _r2 in PILLARS)
+        # pillar names are HTML already ("&amp;", escaped by Studio on export): escaping again showed "&amp;amp;"
+        steps_nav = ''.join(f'<a href="{PILLAR_FILE[s2]}" class="plx-pn{" is-on" if s2 == slug else ""}" title="{t2}"{" aria-current=" + chr(34) + "page" + chr(34) if s2 == slug else ""}>{n2}</a>' for s2, n2, t2, _d2, _r2 in PILLARS)
 
         # -- perspective
         princ = ''.join(f'<li><span class="plx-pr-n">{j:02d}</span>{x}</li>' for j, x in enumerate(ap['principles'], 1))

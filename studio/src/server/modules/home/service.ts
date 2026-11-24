@@ -13,6 +13,7 @@ import type { Role } from '../../rbac.ts';
 import { readFields, type FieldDef } from './fields.ts';
 import { currentLayout, layoutBlocks, validateLayout, type LayoutEntry } from './layout.ts';
 import { docMediaIds } from '../pages/render.ts';
+import { altProblem } from '../media/alt.ts';
 
 export const HOME = 'index.html';
 /** Hand-written pages whose marked text is edited in Studio. Only the homepage also has a section layout. */
@@ -125,7 +126,7 @@ export async function contentIssues(db: DB, cfg: Config, values: Record<string, 
       const m = rows.find((r) => r.id === id); const at = usedBy.get(id)!;
       const each = (message: string) => at.forEach((w) => out.push({ message, ...w }));
       if (!m) each('A chosen photo no longer exists in the media library.');
-      else { if (!m.alt) each(`Add alt text to “${m.originalName}”.`); if (!m.rightsConfirmed) each(`Confirm usage rights and consent for “${m.originalName}”.`); }
+      else { { const ap = altProblem(m, `Add alt text to “${m.originalName}”.`); if (ap) each(ap); } if (!m.rightsConfirmed) each(`Confirm usage rights and consent for “${m.originalName}”.`); }
     }
   }
   const changedLayout = page.layout && Array.isArray(layout) && JSON.stringify(currentLayout(cfg.siteRoot, file, layout)) !== JSON.stringify(currentLayout(cfg.siteRoot, file, null));

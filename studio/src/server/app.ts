@@ -21,6 +21,7 @@ import * as G from './modules/pages/service.ts';
 import * as N from './modules/news/service.ts';
 import * as PT from './modules/partners/service.ts';
 import { trimIfUncropped } from './modules/media/trim.ts';
+import { placeholderAlt } from './modules/media/alt.ts';
 import * as EV from './modules/events/service.ts';
 import * as OP from './modules/opportunities/service.ts';
 import * as FM from './modules/forms/service.ts';
@@ -231,6 +232,11 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   api.patch('/media/:id', perm('media.update'), async (c) => {
     const body = M.mediaUpdateSchema.safeParse(await c.req.json());
     if (!body.success) throw new AppError(422, 'Some fields need attention.', body.error.issues);
+    if (body.data.alt) {   // text typed only to get past "Add alt text" is refused here, where the editor can still fix it
+      const [cur] = await db.select({ originalName: t.media.originalName }).from(t.media).where(eq(t.media.id, c.req.param('id')));
+      const why = placeholderAlt(body.data.alt, cur?.originalName);
+      if (why) throw new AppError(422, `This alt text describes nothing (${why}).`, [{ path: 'alt', message: `Describe what the image shows, for example “Young people at a Leadership Lab workshop” or the organisation’s name for a logo. Leave it empty only for a purely decorative image.` }]);
+    }
     const [row] = await db.update(t.media).set({ ...body.data, updatedAt: new Date() }).where(eq(t.media.id, c.req.param('id'))).returning();
     if (!row) throw new AppError(404, 'Media not found.');
     await audit(db, actor(c), 'media.update', { type: 'media', id: row.id }, row.originalName, { fields: Object.keys(body.data) });

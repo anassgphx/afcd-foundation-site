@@ -9,6 +9,7 @@ import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import { publicRef, type MediaRow } from '../media/service.ts';
 import type { Role } from '../../rbac.ts';
+import { altProblem } from '../media/alt.ts';
 
 export type Status = typeof projects.$inferSelect['status'];
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -63,7 +64,7 @@ export function publishProblems(p: FullProject): string[] {
   if (!p.pillars.length) out.push('Link at least one pillar.');
   if (p.hasDetailPage && !(p.context || p.activities)) out.push('Add the context or the activities for the project page.');
   for (const m of [p.hero, p.logo, p.poster, ...p.gallery, ...Object.values(p.activityMedia)].filter(Boolean) as MediaRow[]) {
-    if (!m.alt) out.push(`Add alt text to “${m.originalName}”.`);
+    { const ap = altProblem(m, `Add alt text to “${m.originalName}”.`); if (ap) out.push(ap); }
     if (!m.rightsConfirmed) out.push(`Confirm usage rights and consent for “${m.originalName}”.`);
   }
   return out;

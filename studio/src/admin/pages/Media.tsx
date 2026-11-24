@@ -567,7 +567,7 @@ function Detail({ m, all, onClose, onOpen, onDirty, onSaved, act }: { m: LibItem
     <Compression m={m} ro={ro} onDone={() => onSaved({ id: m.id })} />
 
     {m.issues.length > 0 && <div className="ml-todo"><b>Before this image goes on the website</b><ul>
-      {m.issues.includes('alt') && <li className={f.alt.trim() ? 'done' : ''}>Describe it in the alt text</li>}
+      {m.issues.includes('alt') && <li className={f.alt.trim() && f.alt.trim() !== m.alt.trim() ? 'done' : ''}>{m.alt.trim() ? <>Replace the alt text “{m.alt.trim()}” with what the image shows</> : 'Describe it in the alt text'}</li>}
       {m.issues.includes('credit') && <li className={f.credit.trim() ? 'done' : ''}>Credit the photographer or source</li>}
       {m.issues.includes('rights') && <li className={f.rightsConfirmed ? 'done' : ''}>Confirm usage rights and consent</li>}
       {m.issues.includes('expired') && <li className={!f.rightsExpiresOn || f.rightsExpiresOn >= today() ? 'done' : ''}>The usage right ended on {fmtDate(m.rightsExpiresOn!)}: renew it or stop using the image</li>}

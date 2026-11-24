@@ -7,6 +7,7 @@ import { events, eventRevisions, pillars, projects, articles, media, reviewComme
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
+import { altProblem } from '../media/alt.ts';
 
 type Status = typeof events.$inferSelect['status'];
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -77,7 +78,7 @@ export async function eventProblems(db: DB, e: FullEvent) {
     const [m] = await db.select().from(media).where(eq(media.id, e.posterMediaId));
     if (!m) out.push('The poster no longer exists in the media library.');
     else {
-      if (!m.alt) out.push(`Add alt text to “${m.originalName}”.`);
+      { const ap = altProblem(m, `Add alt text to “${m.originalName}”.`); if (ap) out.push(ap); }
       if (!m.rightsConfirmed) out.push(`Confirm usage rights and consent for “${m.originalName}”.`);
     }
   }

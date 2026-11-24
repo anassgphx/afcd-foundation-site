@@ -20,6 +20,7 @@ import { aboutPages, aboutPageRevisions, media, objectivePillars, objectives, pi
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
+import { altProblem } from '../media/alt.ts';
 
 export const ABOUT_KEYS = ['our-story', 'mission-vision', 'strategy', 'team', 'partners'] as const;
 export type AboutKey = (typeof ABOUT_KEYS)[number];
@@ -180,7 +181,7 @@ export async function aboutProblems(db: DB, p: FullAbout): Promise<string[]> {
     const [m] = await db.select().from(media).where(eq(media.id, id));
     if (!m) out.push('A photo no longer exists in the media library.');
     else {
-      if (!m.alt) out.push(`Add alt text to the photo “${m.originalName}” in the media library.`);
+      { const ap = altProblem(m, `Add alt text to the photo “${m.originalName}” in the media library.`); if (ap) out.push(ap); }
       if (!m.rightsConfirmed) out.push(`Confirm AFCD may use the photo “${m.originalName}” (usage rights and consent of the people shown).`);
     }
   }

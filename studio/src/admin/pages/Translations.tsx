@@ -101,7 +101,7 @@ export function TranslationsPage() {
 
     <div className="tr-langs" role="tablist" aria-label="Language">
       {langs.map((l) => { const p = Math.round((l.translated / Math.max(1, l.total)) * 100); return <button key={l.lang} role="tab" aria-selected={lang === l.lang} className={`card tr-lang${lang === l.lang ? ' on' : ''}`} onClick={() => switchLang(l.lang)}>
-        <span className="tr-lang-h"><b>{l.name}</b><span className="tr-native" lang={l.lang}>{l.native}</span>{l.status && <Badge s={l.status} />}</span>
+        <span className="tr-lang-h"><b>{l.name}</b><span className="tr-native" lang={l.lang}>{l.native}</span>{l.status && <Badge s={l.status} label={l.status === 'published' && !l.publishedLive ? 'Saved, not public' : undefined} />}</span>
         <span className="tr-bar" aria-hidden="true"><i style={{ width: `${p}%` }} /></span>
         <span className="tr-lang-f"><span>{l.translated} of {l.total} texts · {p}%</span><span className={`tr-vis${l.publishedLive ? ' pub' : ''}`}>{l.publishedLive ? 'Public on the live site' : 'Preview only'}</span></span>
       </button>; })}
@@ -160,7 +160,7 @@ export function TranslationsPage() {
       </section>
 
       <aside className="card tr-side">
-        <div className="tr-side-h"><b>{v.name} on the website</b><Badge s={status} /></div>
+        <div className="tr-side-h"><b>{v.name} on the website</b><Badge s={status} label={status === 'published' && !v.publishedLive ? 'Saved, not public' : undefined} /></div>
         <div className="tr-big"><b>{pct}%</b><span className="muted">{translated} of {c.total} texts translated</span></div>
         <dl className="kv">
           <dt>Edited, not published</dt><dd>{c.edited + c.removed}</dd>

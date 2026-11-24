@@ -45,7 +45,9 @@ function withPillarProjects(html) {
   const pillars = [...(JSON.parse(readFileSync(pf, 'utf8')).pillars ?? [])].sort((a, b) => String(a.number).localeCompare(String(b.number)));
   const projects = JSON.parse(readFileSync(jf, 'utf8')).projects ?? [];
   if (!pillars.length) return html;
-  const e = (s) => escapeAttr(escapeText(String(s ?? '')));
+  // Studio writes these files already HTML-escaped ("Youth Empowerment &amp; Civic Engagement"), so existing entities are
+  // kept as they are (escapeAttr), and only a stray <, >, & or " is escaped. escapeText would turn &amp; into &amp;amp;.
+  const e = (s) => escapeAttr(String(s ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
   const colour = (c) => (/^#[0-9a-f]{3,8}$/i.test(c ?? '') ? c : '#E5E5E5');
   const listOf = (key) => `projects.html?pillar=${encodeURIComponent(key)}#proj-grid`;
   const safeFile = (f) => (/^[a-z0-9-]+\.html$/.test(f ?? '') ? f : null);

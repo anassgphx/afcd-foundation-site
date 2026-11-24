@@ -29,6 +29,15 @@ const HEALTH_ICON: Record<string, string> = { delivery: 'globe', seo: 'search', 
 const isoAgo = (s: string) => s.replace(/(\d{4}-\d{2}-\d{2}T[\d:.]+Z)/, (m) => ago(m));
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const nf = new Intl.NumberFormat('en-GB');
+/** A failed delivery's cause in plain words, so repeated failures with the same cause read as one problem. */
+function causeOf(err: string) {
+  if (/Missing image file/i.test(err)) return { key: 'image', title: 'A resized copy of an image is missing on the server', help: 'Studio keeps several sizes of each photo, and one of them isn’t on the server. An administrator can regenerate the image sizes there; then publish again.' };
+  if (/timed? ?out|ETIMEDOUT/i.test(err)) return { key: 'timeout', title: 'The website build took too long', help: 'Publish again in a minute. If it keeps happening, an administrator should check the server.' };
+  const first = err.split(/(?<=\.)\s/)[0].replace(/\s+/g, ' ').trim();
+  return { key: first.replace(/[0-9a-f-]{8,}\S*/gi, '…'), title: first.replace(/\.$/, '') || 'The update didn’t reach the website', help: '' };
+}
+/** "Publishing failed (publish partner)" → "partner" */
+const jobWhat = (title: string) => (title.match(/\((?:un)?publish(?:ing)? ([a-z ]+)\)/i)?.[1] ?? 'website').trim();
 
 export function Dashboard() {
   const me = useMe(); const can = useCan(); const toast = useToast();
@@ -101,14 +110,25 @@ export function Dashboard() {
     : pending === 0 ? (unread ? `Nothing to review or publish.${inboxNote}` : 'You’re all caught up. Nothing is waiting for you.')
     : `${plural(pending, 'item')} need${pending === 1 ? 's' : ''} you: ${[counts.review && `${counts.review} to review`, counts.publish && `${counts.publish} ready to publish`, counts.changes && `${counts.changes} with changes requested`, counts.failed && plural(counts.failed, 'failed publish', 'failed publishes')].filter(Boolean).join(', ')}.${inboxNote}`;
 
-  const tiles = [
-    any('.approve') && { key: 'review', label: 'To review', n: counts.review, href: '/studio/approvals', icon: 'inbox', empty: 'Nothing submitted', tone: 'info' },
-    any('.publish') && { key: 'publish', label: 'Ready to publish', n: counts.publish, href: '/studio/approvals', icon: 'rocket', empty: 'Nothing approved', tone: 'ok' },
-    (any('.update') || any('.create')) && { key: 'changes', label: 'Changes requested', n: counts.changes, href: '/studio/approvals', icon: 'undo', empty: 'None on your work', tone: 'warn' },
-    can('news.read') && { key: 'scheduled', label: 'Scheduled stories', n: scheduled, href: '/studio/news?status=scheduled', icon: 'clock', empty: 'None scheduled', tone: 'neutral' },
-    canInbox && { key: 'inbox', label: 'Unread messages', n: unread ?? 0, href: '/studio/inbox', icon: 'mail', empty: 'Inbox is clear', tone: 'info' },
-    can('dashboard.read') && { key: 'failed', label: 'Failed publishes', n: counts.failed, href: '/studio/publishing', icon: 'alert', empty: 'None in 3 days', tone: 'bad' },
+  // failures, grouped by cause (three photos missing the same size are one problem, not three)
+  const failures = d?.decisions.filter((x) => x.kind === 'failed') ?? [];
+  const groups = [...failures.reduce((m, f) => { const c = causeOf(f.sub); const g = m.get(c.key) ?? { ...c, items: [] as typeof failures }; g.items.push(f); return m.set(c.key, g); }, new Map<string, ReturnType<typeof causeOf> & { items: typeof failures }>()).values()];
+  const failedTotal = Math.max(counts.failed, failures.length);
+  const allTiles = [
+    any('.approve') && { key: 'review', label: 'To review', n: counts.review, href: '/studio/approvals', icon: 'inbox', empty: 'Nothing to review', tone: 'info' },
+    any('.publish') && { key: 'publish', label: 'Ready to publish', n: counts.publish, href: '/studio/approvals', icon: 'rocket', empty: 'Nothing ready to publish', tone: 'ok' },
+    (any('.update') || any('.create')) && { key: 'changes', label: 'Changes requested', n: counts.changes, href: '/studio/approvals', icon: 'undo', empty: 'No changes requested', tone: 'warn' },
+    can('news.read') && { key: 'scheduled', label: 'Scheduled stories', n: scheduled, href: '/studio/news?status=scheduled', icon: 'clock', empty: 'No scheduled stories', tone: 'neutral' },
+    canInbox && { key: 'inbox', label: 'Unread messages', n: unread ?? 0, href: '/studio/inbox', icon: 'mail', empty: 'No unread messages', tone: 'info' },
+    can('dashboard.read') && { key: 'failed', label: 'Failed publishes', n: counts.failed, href: '/studio/publishing', icon: 'alert', empty: 'No failed publishes', tone: 'bad' },
   ].filter(Boolean) as { key: string; label: string; n: number; href: string; icon: string; empty: string; tone: string }[];
+  // what needs action gets a tile (most urgent first); what is clear folds into one quiet line
+  const URGENCY = ['failed', 'changes', 'review', 'publish', 'inbox', 'scheduled'];
+  const tiles = allTiles.filter((t) => !d || (t.n > 0 && t.key !== 'failed')).sort((a, b) => URGENCY.indexOf(a.key) - URGENCY.indexOf(b.key));
+  const clear = d ? allTiles.filter((t) => !t.n) : [];
+  // the attention list shows failures once per cause; the alert above explains them
+  const attention = d ? [...groups.map((g) => ({ id: `grp:${g.key}`, kind: 'failed' as Kind, title: g.items.length > 1 ? `${g.items.length} ${jobWhat(g.items[0].title)} updates didn’t reach the website` : `A ${jobWhat(g.items[0].title)} update didn’t reach the website`, sub: g.title, href: '/studio/publishing', at: g.items[0].at })), ...d.decisions.filter((x) => x.kind !== 'failed')] : [];
+  const others = pending - counts.failed;
 
   if (err && !d) return <div className="notice n-bad" role="alert">{err} <button className="btn btn-sm" onClick={refresh}>Try again</button></div>;
 
@@ -132,29 +152,45 @@ export function Dashboard() {
       </div>
     </header>
 
-    {tiles.length > 0 && <section aria-labelledby="dsh-pri">
+    {/* a problem on the live website comes first, explained once, with what to do */}
+    {groups.length > 0 && <section className="dsh-alert" role="alert" aria-labelledby="dsh-alert-h">
+      <span className="dsh-alert-ico"><Icon n="alert" /></span>
+      <div className="dsh-alert-b">
+        <h2 id="dsh-alert-h">{failedTotal === 1 ? 'An update didn’t reach the website' : `${failedTotal} updates didn’t reach the website`}</h2>
+        {groups.map((g) => <p key={g.key}><b>{g.title}.</b>{g.help && ` ${g.help}`} <span className="dsh-alert-n">{g.items.length > 1 ? `${g.items.length} updates, latest ${ago(g.items[0].at)}` : ago(g.items[0].at)}</span></p>)}
+        <p className="dsh-alert-live">The website keeps showing the last version that was delivered.</p>
+      </div>
+      <Link to="/studio/publishing" className="btn btn-sm dsh-alert-go">See what failed<Icon n="chev" /></Link>
+    </section>}
+
+    {(tiles.length > 0 || clear.length > 0) && <section className="dsh-pri" aria-labelledby="dsh-pri">
       <h2 id="dsh-pri" className="sr-only">Today’s priorities</h2>
-      <ul className="dsh-tiles" style={{ ['--n' as string]: tiles.length }}>{tiles.map((t) => <li key={t.key}>
+      {tiles.length > 0 && <ul className="dsh-tiles" style={{ ['--n' as string]: Math.max(2, Math.min(tiles.length, 4)) }}>{tiles.map((t) => <li key={t.key}>
         <Link to={t.href} className={`dsh-tile t-${t.tone}${t.n && d ? ' is-on' : ''}`} aria-label={d ? `${t.label}: ${t.n}` : t.label}>
           <span className="dsh-tile-top"><span>{t.label}</span><Icon n={t.icon} aria-hidden="true" /></span>
           {!d ? <span className="skeleton" style={{ width: 40, height: 24 }} /> : <b>{t.n}</b>}
-          <small>{!d ? ' ' : t.n ? 'Open' : t.empty}</small>
-        </Link></li>)}</ul>
+          <small>{!d ? '\u00a0' : 'Open'}</small>
+        </Link></li>)}</ul>}
+      {clear.length > 0 && <p className={`dsh-clear${tiles.length ? '' : ' all'}`}>
+        <span className="dsh-clear-ico"><Icon n="check" /></span>
+        {tiles.length ? <span className="dsh-clear-l">All clear:</span> : <b>All caught up.</b>}
+        {clear.map((t) => <Link key={t.key} to={t.href} className="dsh-clear-i" title={t.label}>{t.empty}</Link>)}
+      </p>}
     </section>}
 
     {/* 2 · items that need you, and what's coming */}
-    <div className="dsh-row r-main">
-      <Panel id="dsh-need" title="Needs your attention" count={d ? pending : undefined} action={can('project.read') && <Link to="/studio/approvals" className="btn btn-sm btn-ghost">Approval queue<Icon n="chev" /></Link>}>
-        {!d ? <Rows /> : d.decisions.length === 0
+    <div className={`dsh-row r-main${d && attention.length === 0 ? ' solo' : ''}`}>
+      {!(d && attention.length === 0) && <Panel id="dsh-need" title="Needs your attention" count={d ? others + groups.length : undefined} action={can('project.read') && <Link to="/studio/approvals" className="btn btn-sm btn-ghost">Approval queue<Icon n="chev" /></Link>}>
+        {!d ? <Rows /> : attention.length === 0
           ? <Empty icon="check" title="All clear" text="Submissions to review, approved items and publishing problems will show up here." ok />
           : <>
-            <ul className="dsh-list">{d.decisions.map((n) => <li key={n.id}><Link to={n.href} className={`dsh-item k-${n.kind}`}>
+            <ul className="dsh-list">{attention.map((n) => <li key={n.id}><Link to={n.href} className={`dsh-item k-${n.kind}`}>
               <span className="dsh-ico"><Icon n={DECISION[n.kind].icon} /></span>
               <span className="dsh-item-t"><b>{n.title}</b><small>{n.sub} · {ago(n.at)}</small></span>
               <span className="dsh-cta">{DECISION[n.kind].cta}<Icon n="chev" /></span></Link></li>)}</ul>
-            {pending > d.decisions.length && <p className="dsh-more">Showing {d.decisions.length} of {pending}. <Link to="/studio/approvals">See everything in the approval queue</Link></p>}
+            {others > attention.length - groups.length && <p className="dsh-more">Showing {attention.length - groups.length} of {others}. <Link to="/studio/approvals">See everything in the approval queue</Link></p>}
           </>}
-      </Panel>
+      </Panel>}
 
       <Panel id="dsh-soon" title="Coming up" hint="Next 45 days">
         {!d ? <Rows /> : d.upcoming.length === 0 ? <Empty icon="calendar" title="Nothing scheduled" text="Events, application deadlines and scheduled stories will appear here." />

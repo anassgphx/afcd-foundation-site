@@ -7,6 +7,18 @@ import { aboutPages, articles, events, formSubmissions, opportunities, pageConte
 import { can, type Role } from '../../rbac.ts';
 import { TEXT_PAGES } from '../home/service.ts';
 
+/** Failed website deliveries in the last `ms` that are still open: a later successful delivery of the same kind for
+ *  the same item (or, for site-wide jobs, of the same kind) means the problem was fixed, so it no longer needs anyone. */
+export async function openFailures(db: DB, ms: number) {
+  const since = new Date(Date.now() - ms);
+  const failed = await db.select({ id: publishJobs.id, kind: publishJobs.kind, entityId: publishJobs.entityId, error: publishJobs.error, at: publishJobs.createdAt })
+    .from(publishJobs).where(and(eq(publishJobs.status, 'failed'), gte(publishJobs.createdAt, since))).orderBy(desc(publishJobs.createdAt)).limit(50);
+  if (!failed.length) return [];
+  const ok = await db.select({ kind: publishJobs.kind, entityId: publishJobs.entityId, at: publishJobs.createdAt })
+    .from(publishJobs).where(and(eq(publishJobs.status, 'succeeded'), gte(publishJobs.createdAt, since)));
+  return failed.filter((f) => !ok.some((o) => o.kind === f.kind && o.entityId === f.entityId && o.at > f.at));
+}
+
 export type Hit = { kind: string; id: string; title: string; sub: string; href: string; status: string };
 const LIMIT = 6;
 
@@ -69,7 +81,7 @@ export async function notifications(db: DB, user: { id: string; role: Role }): P
     }
   }
   if (can(role, 'dashboard.read')) {
-    for (const j of await db.select({ id: publishJobs.id, kind: publishJobs.kind, error: publishJobs.error, at: publishJobs.createdAt }).from(publishJobs).where(and(eq(publishJobs.status, 'failed'), gte(publishJobs.createdAt, new Date(Date.now() - 3 * 864e5)))).orderBy(desc(publishJobs.createdAt)).limit(5)) {
+    for (const j of (await openFailures(db, 3 * 864e5)).slice(0, 5)) {
       notes.push({ id: `job:${j.id}`, kind: 'failed', title: `Publishing failed (${j.kind.replace(/_/g, ' ')})`, sub: (j.error ?? 'See the Publishing page.').slice(0, 140), href: '/studio/publishing', at: j.at.toISOString() });
     }
   }

@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { and, eq } from 'drizzle-orm';
@@ -176,6 +176,25 @@ describe('about pages', () => {
 });
 
 describe('about pages in the real generator (src/content.py)', () => {
+  it('builds the homepage pillar explorer from the published pillars (name, summary, programmes, colour, count)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'home-pillars-'));
+    copyFileSync(join(REPO, 'src/pages/index.html'), join(dir, 'index.html'));
+    const src = JSON.parse(execFileSync('python3', ['-I', '-c', "import sys, json, os; os.environ['STUDIO_PILLARS_JSON'] = '/nonexistent'; sys.path.insert(0, 'src'); import content as c; print(json.dumps([dict(key=k, name=t, summary=d, highlights=r) for k, n, t, d, r in c.PILLARS]))"], { cwd: REPO, encoding: 'utf8' }));
+    const file = join(dir, 'pillars.json');
+    const pillars = src.map((x: any, i: number) => ({ key: x.key, number: String(i + 1).padStart(2, '0'), file: `${x.key}.html`, name: i === 1 ? 'Women &amp; Girls (test)' : x.name, short: '', summary: i === 1 ? 'Test summary.' : x.summary,
+      intro: '', colour: ['#FFB2B9', '#82E591', '#A8DDFB', '#FBE38A'][i % 4], brand: '', highlights: i === 1 ? ['Test programme (fake)'] : x.highlights,
+      approach: { title: 'T', view: '', principles: [], steps: [] }, objectives: [], activities: [], groups: [], image: null }));
+    writeFileSync(file, JSON.stringify({ version: 1, pillars }));
+    execFileSync('python3', ['-I', '-c', 'import sys; sys.path.insert(0, "src"); import content as c; c.home_pillars()'], { cwd: REPO, env: { ...process.env, STUDIO_PILLARS_JSON: file, STUDIO_OUT: dir }, stdio: 'pipe' });
+    const html = readFileSync(join(dir, 'index.html'), 'utf8');
+    const box = html.slice(html.indexOf('id="pillar-explorer"'), html.indexOf('<!-- ============ 6.'));
+    expect(box).toContain('<span class="pl-title">Women &amp; Girls (test)</span>');
+    expect(box).toContain('Test summary.'); expect(box).toContain('<li>Test programme (fake)</li>');
+    expect(box).toMatch(/pl-panel pl-tone-3" data-i="1"/);                                 // the colour chosen in Studio (green)
+    expect(box).toContain(`01 / ${String(pillars.length).padStart(2, '0')}`);
+    expect((box.match(/class="pl-panel /g) ?? []).length).toBe(pillars.length);
+  });
+
   it('renders Studio content, escaped, and falls back to the built-in text without about.json', () => {
     const dir = mkdtempSync(join(tmpdir(), 'about-gen-'));
     const file = join(dir, 'about.json');

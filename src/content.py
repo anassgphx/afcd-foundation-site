@@ -1510,6 +1510,95 @@ def home_partners():
     if new != html:
         idx.write_text(new, encoding='utf-8')
 
+# ---------------------------------------------------------------- Homepage pillar explorer (from the Pillars module)
+HOME_PILLAR_ICO = {
+    'youth-empowerment': '<path d="M12 21v-9"/><path d="M12 12c0-4 3-7 7-7 0 4-3 7-7 7Z"/><path d="M12 14c0-3.3-2.5-6-6-6 0 3.3 2.5 6 6 6Z"/>',
+    'women-empowerment': '<circle cx="8.5" cy="8" r="3"/><circle cx="16" cy="9" r="2.5"/><path d="M3 19c.6-3.2 2.9-5 5.5-5s4.9 1.8 5.5 5"/><path d="M14.5 14.6c.5-.2 1-.3 1.5-.3 2.2 0 4 1.5 4.5 4.7"/>',
+    'green-thumbs': '<path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14Z"/><path d="M5 19 13 11"/>',
+    'digital-empowerment': '<rect x="3.5" y="4.5" width="17" height="11" rx="2"/><path d="M9 19.5h6M12 15.5v4"/>',
+}
+HOME_PILLAR_TONE = {'#FFB2B9': 1, '#A8DDFB': 2, '#82E591': 3, '#FBE38A': 4}
+
+
+def home_pillars():
+    """Writes the homepage pillar explorer (#pillar-explorer) from the live pillars: Studio's when they are published
+    there (src/data/pillars.json), otherwise the ones written above. Number, name, summary, the programmes on the pillar's
+    card, the number of published projects, the photo, the colour and the links all follow the Pillars module."""
+    idx = OUT / 'index.html'   # the build's own copy of the homepage (src/pages in a live build; a preview's folder otherwise)
+    if not idx.exists():
+        return
+    html = idx.read_text(encoding='utf-8')
+    rx = re.compile(r'(<div class="pl-wrap[^"]*" id="pillar-explorer">)(.*?)(\n    </div>\n  </div>\n</section>)', re.S)
+    if not rx.search(html):
+        return
+    total = len(PILLARS)
+    proj = {x['name']: x for x in _PROJECT_DATA}
+
+    def ico(slug, lg=False):
+        d = HOME_PILLAR_ICO.get(slug, HOME_PILLAR_ICO['youth-empowerment'])
+        return (f'<span class="pl-ico{" pl-ico-lg" if lg else ""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" '
+                f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{d}</svg></span>')
+
+    def related(name):
+        x = proj.get(name)
+        return f'<li><a href="{x["file"]}" class="hover:underline">{name}</a></li>' if x and x.get('file') and x.get('detail') else f'<li>{name}</li>'
+
+    step = ('<button type="button" class="pl-step" data-step="-1" aria-label="Previous pillar"><svg class="h-4 w-4 rtl:-scale-x-100" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>'
+            '<button type="button" class="pl-step" data-step="1" aria-label="Next pillar"><svg class="h-4 w-4 rtl:-scale-x-100" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg></button>')
+    panels = []
+    for i, (slug, _n, t, d, rel) in enumerate(PILLARS):
+        num = f'{i + 1:02d}'
+        tone = HOME_PILLAR_TONE.get((PILLAR_TONE.get(slug) or '').upper(), i % 4 + 1)
+        count = sum(1 for keys in PROJECT_PILLARS.values() if slug in keys)
+        chips = '<li class="pl-chip">Pillar</li>' + (f'<li class="pl-chip">{count} project{"s" if count != 1 else ""}</li>' if count else '')
+        rel_html = ''
+        if rel:
+            rel_html = ('\n              <div class="mt-6 border-l-2 border-black/15 pl-5 rtl:border-l-0 rtl:border-r-2 rtl:pl-0 rtl:pr-5">'
+                        '\n                <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-black/55">Related projects</p>'
+                        f'\n                <ul class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[14px]">{"".join(related(r) for r in rel)}</ul>'
+                        '\n              </div>')
+        img = PILLAR_IMAGE.get(slug)
+        if img:
+            photo = f'<div class="pl-photo relative h-full min-h-[240px] w-full overflow-hidden rounded-2xl">{media_img(img, "absolute inset-0 h-full w-full", "(min-width: 1024px) 40vw, 100vw")}<span class="pl-tag">{t}</span></div>'
+        else:
+            photo = f'<div class="ph pl-photo relative h-full min-h-[240px] w-full rounded-2xl" style="--ph-line:rgba(0,0,0,.08)"><span class="ph-cap"><b>Photo</b> · {t}</span><span class="pl-tag">{t}</span></div>'
+        file = PILLAR_FILE.get(slug, f'pillars.html#{slug}')
+        is_open = ' is-open' if i == 0 else ''
+        expanded = 'true' if i == 0 else 'false'
+        panels.append(
+            f'\n      <div class="pl-panel pl-tone-{tone}{is_open}" data-i="{i}">'
+            '\n        <h3 class="pl-h">'
+            f'\n          <button type="button" class="pl-head" id="pl-head-{i}" aria-expanded="{expanded}" aria-controls="pl-body-{i}">'
+            f'\n            <span class="pl-num tabular-nums">{num}</span>'
+            f'\n            {ico(slug)}'
+            f'\n            <span class="pl-title">{t}</span>'
+            '\n            <span class="pl-plus" aria-hidden="true"></span>'
+            '\n          </button>'
+            '\n        </h3>'
+            f'\n        <div class="pl-body" id="pl-body-{i}" role="region" aria-labelledby="pl-head-{i}">'
+            '\n          <div class="pl-content grid h-full gap-6 p-5 pt-0 md:p-8 lg:grid-cols-12 lg:gap-8 lg:p-10">'
+            '\n            <div class="flex min-w-0 flex-col lg:col-span-6">'
+            f'\n              <div class="hidden items-center justify-between lg:flex"><span class="flex items-center gap-3"><span class="text-[26px] font-medium tabular-nums">{num}</span>{ico(slug, True)}</span>'
+            f'<span class="flex items-center gap-2"><span class="mr-1 text-[13px] font-medium tabular-nums text-black/60">{num} / {total:02d}</span>{step}</span></div>'
+            f'\n              <ul class="flex flex-wrap gap-2 lg:mt-6">{chips}</ul>'
+            f'\n              <p class="mt-6 text-[32px] font-semibold leading-[1.02] tracking-tightest md:text-[44px] lg:mt-auto">{t}</p>'
+            f'\n              <p class="mt-4 max-w-[44ch] text-[15px] leading-relaxed text-black/75 md:text-base">{d}</p>{rel_html}'
+            '\n              <div class="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">'
+            f'\n                <a href="{file}" class="pc-btn">Explore {t} <span class="pc-arr" aria-hidden="true">→</span></a>'
+            f'\n                <a href="projects.html?pillar={slug}#by-pillar" class="link-arrow">See projects <span class="arr" aria-hidden="true">↗</span></a>'
+            '\n              </div>'
+            '\n            </div>'
+            '\n            <div class="pl-inner rounded-[22px] p-4 lg:col-span-6 lg:p-5">'
+            f'\n              {photo}'
+            '\n            </div>'
+            '\n          </div>'
+            '\n        </div>'
+            '\n      </div>')
+    new = rx.sub(lambda m: m.group(1) + ''.join(panels) + m.group(3), html, count=1)
+    if new != html:
+        idx.write_text(new, encoding='utf-8')
+
+
 # ---------------------------------------------------------------- Homepage project cards (from the project module)
 def home_projects():
     """Writes the featured project cards' data into src/pages/index.html (between the home-projects markers)."""
@@ -2476,5 +2565,5 @@ def studio_contact_fields(s):
 
 
 if __name__ == '__main__':
-    about(); pillars(); projects(); project_details(); home_projects(); home_events(); home_partners(); news(); news_articles(); events(); partners(); involved(); contact()
+    about(); pillars(); projects(); project_details(); home_projects(); home_events(); home_partners(); home_pillars(); news(); news_articles(); events(); partners(); involved(); contact()
     print('pages written to', OUT)

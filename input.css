@@ -2540,3 +2540,7 @@ a.abx-chip:hover { background: #000; color: #fff; border-color: #000; }
 .plx-cap a { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border-radius: 9999px; background: rgba(255,255,255,.92); font-size: 12.5px; font-weight: 600; }
 .plx-cap a:hover { background: #fff; }
 @media (min-width: 1024px) { .plx-hero.has-side .plx-col .plx-photo { aspect-ratio: auto; height: 340px; } }
+
+/* Homepage pillar explorer: the closed panels' vertical titles are laid fully sideways, so punctuation such as the
+   apostrophe in "Women’s" stays in line instead of standing upright as a separate mark. */
+@media (min-width: 1024px) { .pl-title { text-orientation: sideways; } }

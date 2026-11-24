@@ -120,6 +120,10 @@ describe('participant stories: editing, review and publishing', () => {
     const sub = await ed.post('/home/transition', { action: 'submit' });
     expect(sub.status).toBe(422);
     expect(JSON.stringify(sub.body)).toContain('Story 1 is still a sample');
+    // the editor learns where each problem is: section, field and the story's position
+    const issues = (await ed.get('/home')).body.issues;
+    const sec = f.sectionId;
+    expect(issues).toEqual(expect.arrayContaining([{ message: 'Story 1 is still a sample. Replace its text or delete it.', section: sec, field: 'impact.stories', item: 0 }]));
   });
 
   it('edit, add, delete and reorder go through review, then publish into page-fields.json', async () => {
@@ -164,6 +168,7 @@ describe('participant stories: photos from the Media Library', () => {
     expect(home.media.map((m: any) => m.id)).toContain(id);   // the editor can show the thumbnail
     expect(home.problems.join(' ')).toMatch(/Add alt text/);
     expect(home.problems.join(' ')).toMatch(/Confirm usage rights/);
+    expect(home.issues.filter((i: any) => /Add alt text/.test(i.message))).toEqual([{ message: 'Add alt text to “story.png”.', section: f.sectionId, field: 'impact.stories', item: 0 }]);
     expect((await ed.post('/home/transition', { action: 'submit' })).status).toBe(422);
 
     await h.db.update(media).set({ alt: 'Sara speaking at a workshop', rightsConfirmed: true, focalX: 40, focalY: 25 });

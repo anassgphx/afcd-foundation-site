@@ -13,7 +13,7 @@ type FieldDef = { key: string; type: 'text' | 'split' | 'rich' | 'link' | 'tail'
 type Entry = { kind: 'section'; id: string; hidden: boolean } | { kind: 'block'; id: string; type: string; v: number; hidden: boolean; props: Record<string, any>; design?: Design };
 type PageInfo = { file: string; label: string; noun: string; layout: boolean };
 const HOME_PAGE: PageInfo = { file: 'index.html', label: 'Homepage', noun: 'homepage', layout: true };
-type Data = { page?: PageInfo; fields: FieldDef[]; siteSections: { id: string; label: string }[]; layout: Entry[]; catalog: BlockDef[]; media: MediaItem[]; problems: string[];
+type Data = { page?: PageInfo; fields: FieldDef[]; siteSections: { id: string; label: string }[]; layout: Entry[]; catalog: BlockDef[]; media: MediaItem[]; problems: string[]; issues?: Issue[];
   content: null | { id: string; status: string; values: Record<string, any>; layout: Entry[] | null; publishedRevisionId: string | null; publishedAt: string | null; updatedAt: string };
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] } };
 type State = { values: Record<string, any>; layout: Entry[] };
@@ -43,6 +43,7 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
   const base = useRef<string | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const [focusKey, setFocusKey] = useState<{ key: string; n: number } | null>(null);   // field clicked in the canvas
+  const [issuesOpen, setIssuesOpen] = useState(false);
   const scrollY = useRef(0);
   const fromCanvas = useRef(false);
   const actionsRef = useRef<(id: string) => Act[]>(() => []); const runActRef = useRef<(id: string, a: string) => void>(() => {});
@@ -224,10 +225,27 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
     : status === 'approved' ? { text: 'Approved · ready to publish', tone: 'ok' }
     : !reviewable || save !== 'saved' ? null
     : nothing || !d.content ? { text: 'No changes', tone: 'muted', tip: 'Edit a section to start a draft.' }
-    : d.problems.length ? { text: `${d.problems.length} to fix before review`, tone: 'warn', tip: d.problems.join('\n') }
+    : d.problems.length ? { text: `${d.problems.length} to fix before review`, tone: 'warn' }
     : { text: 'Ready for review', tone: 'ok' };
   const scale = Math.min(1, Math.max(0.1, (size.w - 8) / device)); const canvasH = Math.max(400, size.h - 28); scaleRef.current = scale;
   const selEntry = st.layout.find((e) => e.id === sel) ?? null;
+  // problems from the last save, each with its place: shown on the chip, as dots on the sections, and as a list
+  const issues = chip?.tone === 'warn' ? (d.issues ?? d.problems.map((message) => ({ message, section: null, field: null }))) : [];
+  const issuesIn = (id: string) => issues.filter((i) => i.section === id).length;
+  const where = (i: Issue) => {
+    const e = i.section ? st.layout.find((x) => x.id === i.section) : null;
+    if (!e) return 'Whole page';
+    const f = i.field ? d.fields.find((x) => x.key === i.field) : null;
+    const prop = !f && i.field && e.kind === 'block' ? defs.get(e.type)?.fields.find((x) => x.key === i.field)?.label : null;
+    const slide = f?.section.match(/^hero\.(\d+)$/)?.[1];
+    return [label(e), slide && `Slide ${slide}`, f?.label ?? prop, i.item !== undefined && `item ${i.item + 1}`].filter(Boolean).join(' · ');
+  };
+  const goTo = (i: Issue) => {
+    setIssuesOpen(false); if (!i.section) return;
+    if (sel !== i.section) setSel(i.section); else reveal();
+    setTab('content');
+    if (i.field) setFocusKey((x) => ({ key: i.field!, n: (x?.n ?? 0) + 1 }));
+  };
   const nChanges = Object.keys(st.values).length + (!layoutOn || same(st.layout, d.siteSections.map((s) => ({ kind: 'section', id: s.id, hidden: false }))) ? 0 : 1);
   const saveLabel = { saved: 'All changes saved', saving: 'Saving…', unsaved: 'Unsaved changes', failed: 'Save failed' }[save];
 
@@ -236,7 +254,10 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
       <div className="b-title"><b>{P.label}</b><span className="mono muted">{P.file}</span></div>
       <span className="pills">{live && status !== 'published' && <LiveBadge />}{d.content ? <Badge s={status} /> : <span className="pill">Original</span>}</span>
       <span className={`muted hp-save is-${save}`} role="status" style={{ fontSize: 12 }}>{saveLabel}</span>
-      {chip && <span className={`b-chip is-${chip.tone}`} title={chip.tip}>{chip.text}</span>}
+      {chip && (chip.tone === 'warn'
+        ? <span className="b-issues"><button className="b-chip is-warn" aria-expanded={issuesOpen} aria-haspopup="dialog" onClick={() => setIssuesOpen(!issuesOpen)}><Icon n="alert" width={13} height={13} />{chip.text}</button>
+          {issuesOpen && <IssueList issues={issues} where={where} onGo={goTo} onClose={() => setIssuesOpen(false)} />}</span>
+        : <span className={`b-chip is-${chip.tone}`} title={chip.tip}>{chip.text}</span>)}
       <span style={{ flex: 1 }} />
       <div className="seg" role="group" aria-label="Device">{DEVICES.map(([w, ic, l]) => <button key={w} className={device === w ? 'on' : ''} onClick={() => setDevice(w)} title={l} aria-label={l}><Icon n={ic} width={15} height={15} style={{ verticalAlign: -3 }} /></button>)}</div>
       <button className="btn btn-ghost icon-btn" onClick={undo} disabled={!past.length || !editable} title="Undo (⌘Z)" aria-label="Undo"><Icon n="undo" /></button>
@@ -261,6 +282,7 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
             onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', String(i)); ev.dataTransfer.effectAllowed = 'move'; }}
             onDragOver={(ev) => { if (editable && layoutOn) { ev.preventDefault(); ev.currentTarget.classList.add('drop'); } }} onDragLeave={(ev) => ev.currentTarget.classList.remove('drop')}
             onDrop={(ev) => { ev.preventDefault(); ev.currentTarget.classList.remove('drop'); move(Number(ev.dataTransfer.getData('text/plain')), i); }}>
+            {issuesIn(e.id) > 0 && <i className="b-warn" title={`${issuesIn(e.id)} to fix in this section`} aria-label={`${issuesIn(e.id)} to fix`} />}
             <button className="b-layer-main" data-tip={label(e)} onClick={() => { if (sel === e.id) reveal(); else setSel(e.id); }} aria-current={sel === e.id}>
               <span className="b-grip" aria-hidden="true">⋮⋮</span>
               <span className="hp-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
@@ -295,7 +317,7 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
             : <>
               <div className="seg ds-tabs" role="tablist">{(['content', 'design'] as const).map((t) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t === 'content' ? 'Content' : 'Design'}</button>)}</div>
               {tab === 'design' ? <DesignFields value={selEntry.design} onChange={(d) => setLayout(st.layout.map((x) => (x.id === selEntry.id && x.kind === 'block' ? { ...x, design: d } : x)))} />
-                : (defs.get(selEntry.type)?.fields ?? []).map((f) => <FieldEditor key={f.key} f={f} value={selEntry.props[f.key]} links={links} onChange={(v) => setProps(selEntry.id, { ...selEntry.props, [f.key]: v })} />)}</>}
+                : (defs.get(selEntry.type)?.fields ?? []).map((f) => <div key={f.key} data-field={f.key}><FieldEditor f={f} value={selEntry.props[f.key]} links={links} onChange={(v) => setProps(selEntry.id, { ...selEntry.props, [f.key]: v })} /></div>)}</>}
         </fieldset>}
       </aside>
     </div>
@@ -397,6 +419,27 @@ function StoryPhoto({ story, i, media, editable, onPick, onRemove }: { story: St
       <button type="button" className="btn btn-sm" disabled={!editable} onClick={onPick} aria-label={`Choose a photo for story ${i + 1}`}><Icon n="image" />{src ? 'Change photo' : 'Choose photo'}</button>
       {src && <button type="button" className="btn btn-ghost btn-sm" disabled={!editable} onClick={onRemove} aria-label={`Remove the photo of story ${i + 1}`}>Remove photo</button>}
     </span>
+  </div>;
+}
+
+type Issue = { message: string; section: string | null; field: string | null; item?: number };
+
+/** What to fix before review: each problem with its place; a click opens that section and its field. */
+function IssueList({ issues, where, onGo, onClose }: { issues: Issue[]; where: (i: Issue) => string; onGo: (i: Issue) => void; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>('button')?.focus();
+    const out = (e: MouseEvent) => { const t = e.target as Element; if (!ref.current?.contains(t) && !t.closest?.('.b-issues')) onClose(); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    document.addEventListener('mousedown', out); document.addEventListener('keydown', key, true);
+    return () => { document.removeEventListener('mousedown', out); document.removeEventListener('keydown', key, true); };
+  }, []);
+  return <div ref={ref} className="b-issue-list" role="dialog" aria-label="To fix before review">
+    <b className="b-issue-h">To fix before review</b>
+    <ul>{issues.map((i, n) => <li key={n}>
+      {i.section ? <button onClick={() => onGo(i)}><small>{where(i)}</small><span>{i.message}</span><Icon n="chev" width={13} height={13} /></button>
+        : <div className="b-issue-page"><small>{where(i)}</small><span>{i.message}</span></div>}
+    </li>)}</ul>
   </div>;
 }
 

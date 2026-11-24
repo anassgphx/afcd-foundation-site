@@ -548,7 +548,8 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
       const extra = blockIds.length ? await db.select().from(t.media).where(inArray(t.media.id, blockIds)) : [];
       return c.json({ page: { file, ...page }, fields, sections: SECTION_LABEL, siteSections: sections, layout, content, media: [...mediaRows, ...extra].map(withUrl),
         catalog: page.layout ? blockCatalog().filter((b) => HOME_BLOCKS.includes(b.type)) : [],
-        problems: content ? await HM.contentProblems(db, cfg, content.values, content.layout, file) : [], history: content ? await HM.contentHistory(db, content.id) : { revisions: [], comments: [] } });
+        problems: content ? await HM.contentProblems(db, cfg, content.values, content.layout, file) : [],
+        issues: content ? await HM.contentIssues(db, cfg, content.values, content.layout, file) : [], history: content ? await HM.contentHistory(db, content.id) : { revisions: [], comments: [] } });
     });
     api.put(prefix, perm('page.update'), async (c) => c.json(await HM.saveContent(db, cfg, actor(c), await c.req.json(), file)));
     // Live canvas of the unsaved working copy (no files written): the real page, composed by the same code as the build.

@@ -9,7 +9,7 @@ import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
 import * as t from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
-import { DERIVATIVE_WIDTHS, isoDate, type MediaRow } from './service.ts';
+import { DERIVATIVE_WIDTHS, toWebp, isoDate, type MediaRow } from './service.ts';
 import { RECORDS } from '../review/queue.ts';
 
 export type Use = { kind: string; title: string; href: string; where: string; live: boolean };
@@ -124,7 +124,7 @@ export async function replaceFile(db: DB, cfg: Config, m: MediaRow, file: { name
   // Same file names as before, so pages and published versions that point at them keep working.
   const had = DERIVATIVE_WIDTHS.filter((w) => existsSync(resolve(cfg.mediaDir, `${m.storageKey}-${w}.webp`)));
   for (const w of new Set([...had, ...DERIVATIVE_WIDTHS.filter((w, i) => i === 0 || w <= info.width)]))
-    await base.clone().resize({ width: Math.min(w, info.width), withoutEnlargement: true }).webp({ quality: 80 }).toFile(resolve(cfg.mediaDir, `${m.storageKey}-${w}.webp`));
+    await toWebp(base.clone().resize({ width: Math.min(w, info.width), withoutEnlargement: true })).toFile(resolve(cfg.mediaDir, `${m.storageKey}-${w}.webp`));
   fp.delete(m.storageKey);
   const [row] = await db.update(t.media).set({ mime: `image/${meta.format}`, width: info.width, height: info.height, bytes: file.bytes.byteLength, rightsConfirmed: false, crop: null, updatedAt: new Date() }).where(eq(t.media.id, m.id)).returning();   // a new file starts uncropped
   return row;

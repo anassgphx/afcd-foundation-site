@@ -9,7 +9,7 @@ import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
 import * as t from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
-import { DERIVATIVE_WIDTHS, type MediaRow } from './service.ts';
+import { DERIVATIVE_WIDTHS, toWebp, type MediaRow } from './service.ts';
 import { originalFile } from './library.ts';
 
 export const cropSchema = z.object({
@@ -38,7 +38,7 @@ export async function cropMedia(db: DB, cfg: Config, m: MediaRow, crop: Crop | n
   // Same file names as before. Widths that existed stay (published pages may use them until the next publish).
   const had = DERIVATIVE_WIDTHS.filter((w) => existsSync(resolve(cfg.mediaDir, `${m.storageKey}-${w}.webp`)));
   for (const w of new Set([...had, ...DERIVATIVE_WIDTHS.filter((w, i) => i === 0 || w <= box.w)]))
-    await base.clone().resize({ width: Math.min(w, box.w), withoutEnlargement: true }).webp({ quality: 80 }).toFile(resolve(cfg.mediaDir, `${m.storageKey}-${w}.webp`));
+    await toWebp(base.clone().resize({ width: Math.min(w, box.w), withoutEnlargement: true })).toFile(resolve(cfg.mediaDir, `${m.storageKey}-${w}.webp`));
 
   // keep the focal point on the same spot of the photo when it is inside the new crop, else centre it
   const old = m.crop ?? { x: 0, y: 0, w: full.w, h: full.h };

@@ -2,7 +2,7 @@
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import sharp, { type Metadata } from 'sharp';
+import sharp, { type Metadata, type Sharp } from 'sharp';
 import { desc, eq, ilike, or, count } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
@@ -10,7 +10,10 @@ import type { Config } from '../../config.ts';
 import { media } from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 
-export const DERIVATIVE_WIDTHS = [480, 960, 1600] as const;
+// 2400 and 3200 keep full-width photos (hero slider, photo viewer) sharp on high-density laptop and phone screens.
+export const DERIVATIVE_WIDTHS = [480, 960, 1600, 2400, 3200] as const;
+/** WebP settings for every resized copy: high enough quality that photos with text or fine detail stay crisp. */
+export const toWebp = (img: Sharp) => img.webp({ quality: 86, smartSubsample: true, effort: 5 });
 const ALLOWED = new Set(['jpeg', 'png', 'webp', 'avif', 'tiff']);   // decoded formats; SVG/GIF/HTML etc. are refused
 
 export type MediaRow = typeof media.$inferSelect;
@@ -34,7 +37,7 @@ export async function ingestUpload(db: DB, cfg: Config, file: { name: string; by
   const { width: w0 = meta.width, height: h0 = meta.height } = await base.clone().toBuffer({ resolveWithObject: true }).then((r) => r.info);
   for (const w of DERIVATIVE_WIDTHS) {
     if (w > w0 && w !== DERIVATIVE_WIDTHS[0]) continue;
-    await base.clone().resize({ width: Math.min(w, w0), withoutEnlargement: true }).webp({ quality: 80 })
+    await toWebp(base.clone().resize({ width: Math.min(w, w0), withoutEnlargement: true }))
       .toFile(resolve(cfg.mediaDir, `${key}-${w}.webp`));
   }
   const [row] = await db.insert(media).values({

@@ -27,7 +27,7 @@ import type { OpportunitySnapshot } from '../opportunities/service.ts';
 import { publications, publicationRevisions } from '../../db/schema.ts';
 import { detailSource as pubDetailSource, listingSource as pubListingSource, pubAssets, pubCtx, publicationFile, PUBLIC_DOC_DIR, type LivePub } from '../publications/render.ts';
 import { DOC_FILE, documentFile, documentPath, type DocumentRow } from '../publications/documents.ts';
-import type { PublicationSnapshot } from '../publications/service.ts';
+import { TYPE_LABEL as PUB_TYPE_LABEL, type PublicationSnapshot } from '../publications/service.ts';
 import { eventEntries, eventFile, isUpcoming } from '../events/render.ts';
 import type { EventSnapshot } from '../events/service.ts';
 import { partnerEntries } from '../partners/render.ts';
@@ -82,15 +82,22 @@ export class Publisher {
   get dataFile() { return resolve(this.cfg.siteRoot, 'src/data/projects.json'); }
 
   /** Entries for every live project, optionally overriding one project with another revision (publish) or removing it (unpublish). */
-  async liveEntries(override?: { projectId: string; revisionId: string | null }) {
+  async liveEntries(override?: { projectId: string; revisionId: string | null }, pubOverride?: { publicationId: string; revisionId: string | null }) {
     const live = await this.db.select({ id: projects.id, rev: projects.publishedRevisionId }).from(projects).where(isNotNull(projects.publishedRevisionId));
     const map = new Map(live.map((r) => [r.id, r.rev as string]));
     if (override) { if (override.revisionId) map.set(override.projectId, override.revisionId); else map.delete(override.projectId); }
     if (!map.size) return [];
     const revs = await this.db.select().from(projectRevisions).where(inArray(projectRevisions.id, [...map.values()]));
+    const pubs = await this.livePublications(pubOverride);   // a project's outputs: the published publications that list it (including one being published or removed now)
     return revs.map((r) => {
       const s = escapeSnapshot(structuredClone(r.snapshot) as unknown as Snapshot);
-      if (s.detail && Object.keys(s.detail).length) (s.detail as Record<string, unknown>).revision = r.id;
+      if (s.detail && Object.keys(s.detail).length) {
+        const d = s.detail as Record<string, unknown>; d.revision = r.id;
+        const outs = pubs.filter((p) => p.snap.projectSlugs.includes(s.slug))
+          .sort((a, b) => (b.snap.publishedOn ?? '').localeCompare(a.snap.publishedOn ?? ''))
+          .map((p) => ({ title: escapeHtml(p.snap.title), type: escapeHtml(PUB_TYPE_LABEL[p.snap.type] ?? 'Publication'), file: publicationFile(p.snap.slug), year: (p.snap.publishedOn ?? '').slice(0, 4) }));
+        if (outs.length) d.outputs = outs;
+      }
       return s;
     }).sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));
   }
@@ -345,7 +352,7 @@ export class Publisher {
   }
 
   private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; pillar?: { pillarId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; publication?: { publicationId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { file?: string; revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string }; settings?: { values: SET.Values; revision: string } } = {}) {
-    const entries = await this.liveEntries(o.project);
+    const entries = await this.liveEntries(o.project, o.publication);
     await this.writeRedirects(o.redirects === 'pending');
     this.writeData(this.dataFile, entries);
     const partnerMedia = await this.writePartners(this.partnersFile, o.partner, o.project);

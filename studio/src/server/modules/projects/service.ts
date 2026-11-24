@@ -30,7 +30,7 @@ export const projectInputSchema = z.object({
   programObjectives: z.array(z.object({ title: text(160).min(1, 'Give each programme objective a title.'), text: text(600).default('') }).strict()).max(12).default([]),
   outcomes: z.array(z.object({ title: text(160).default(''), text: text(600).default(''), figure: text(40).default('') }).strict()
     .refine((o) => !!(o.title || o.text), { message: 'Give each outcome a title or a description.' })).max(12).default([]),
-  activityItems: z.array(z.object({ title: text(160).min(1, 'Give each activity a title.'), text: text(800).default(''), mediaIds: z.array(z.string().uuid()).max(12, 'Use at most 12 photos per activity.').default([]) }).strict()).max(12).default([]),
+  activityItems: z.array(z.object({ title: text(160).min(1, 'Give each activity a title.'), text: text(800).default(''), when: text(40).default(''), place: text(80).default(''), mediaIds: z.array(z.string().uuid()).max(12, 'Use at most 12 photos per activity.').default([]) }).strict()).max(20).default([]),   // when and place place it on the project page's timeline
   context: text(2000).default(''),
   approach: text(2000).default(''),
   activities: text(2000).default(''),
@@ -137,7 +137,7 @@ export function toSnapshot(p: FullProject): Snapshot {
     ...(p.outcomes?.length ? { outcomes: p.outcomes.map((o) => ({ ...(o.title ? { title: o.title } : {}), ...(o.text ? { text: o.text } : {}), ...(o.figure ? { figure: o.figure } : {}) })) } : {}),
     ...(p.activityItems?.length ? { activities: p.activityItems.map((a) => {
       const imgs = (a.mediaIds ?? []).map((mid) => p.activityMedia[mid]).filter(Boolean).map((m) => publicRef(m));
-      return { title: a.title, ...(a.text ? { text: a.text } : {}), ...(imgs.length ? { images: imgs } : {}) };
+      return { title: a.title, ...(a.text ? { text: a.text } : {}), ...(a.when ? { when: a.when } : {}), ...(a.place ? { place: a.place } : {}), ...(imgs.length ? { images: imgs } : {}) };
     }) } : {}),
     revision: '',
   } : {};
@@ -301,7 +301,7 @@ export async function restoreRevision(db: DB, actor: NonNullable<Actor>, id: str
     if (!rev) throw new AppError(404, 'Revision not found.');
     const s = rev.snapshot as unknown as Snapshot;
     const d = s.detail as Record<string, unknown> & { facts?: [string, string][]; rows?: [string, string][]; hero?: { id: string } | null; logo?: { id: string; shape: string; fit: string; bg: string; size: string } | null; poster?: { id: string } | null; partners?: { slug: string; name: string }[]; gallery?: { id: string }[]; objectives?: string[]; photo?: string;
-      programObjectives?: { title: string; text?: string }[]; outcomes?: { title?: string; text?: string; figure?: string }[]; activities?: { title: string; text?: string; images?: { id: string }[]; image?: { id: string } }[] };
+      programObjectives?: { title: string; text?: string }[]; outcomes?: { title?: string; text?: string; figure?: string }[]; activities?: { title: string; text?: string; when?: string; place?: string; images?: { id: string }[]; image?: { id: string } }[] };
     const row = (k: string) => d.rows?.find((r) => r[0] === k)?.[1] ?? '';
     const fact = (k: string) => d.facts?.find((r) => r[0] === k)?.[1] ?? '';
     const input: ProjectInput = projectInputSchema.parse({
@@ -315,7 +315,7 @@ export async function restoreRevision(db: DB, actor: NonNullable<Actor>, id: str
       pillarKeys: s.pillars, primaryPillarKey: s.pillar, objectiveRefs: d.objectives ?? [],
       programObjectives: (d.programObjectives ?? []).map((o) => ({ title: o.title, text: o.text ?? '' })),
       outcomes: (d.outcomes ?? []).map((o) => ({ title: o.title ?? '', text: o.text ?? '', figure: o.figure ?? '' })),
-      activityItems: (d.activities ?? []).map((a) => ({ title: a.title, text: a.text ?? '', mediaIds: (a.images ?? (a.image ? [a.image] : [])).map((m) => m.id) })),
+      activityItems: (d.activities ?? []).map((a) => ({ title: a.title, text: a.text ?? '', when: a.when ?? '', place: a.place ?? '', mediaIds: (a.images ?? (a.image ? [a.image] : [])).map((m) => m.id) })),
       seoTitle: s.seo?.title ?? '', seoDescription: s.seo?.description ?? '',
     });
     const [cur] = await t.select().from(projects).where(eq(projects.id, id)).for('update');

@@ -71,4 +71,20 @@ describe('project page sections', () => {
     const many = await ed.put(`/projects/${plain.body.id}`, projectInput(sections(Array.from({ length: 13 }, () => photo2.id))));
     expect(many.status).toBe(422);
   });
+  it('keeps an activity’s date and place (the journey timeline and map) and leaves them out when empty', async () => {
+    h = await makeApp();
+    await addUser(h.db, 'ed@afcd.test', 'content_editor');
+    const ed = await client(h.app, 'ed@afcd.test');
+    const { body: p } = await ed.post('/projects', projectInput());
+    const items = [{ title: 'Bootcamp', text: '', when: 'March 2025', place: 'Marrakech', mediaIds: [] }, { title: 'Forum', text: 'Closing day.', mediaIds: [] }];
+    expect((await ed.put(`/projects/${p.id}`, projectInput({ activityItems: items }))).status).toBe(200);
+    const got = (await ed.get(`/projects/${p.id}`)).body;
+    expect(got.activityItems[0]).toMatchObject({ when: 'March 2025', place: 'Marrakech' });
+    expect(got.activityItems[1]).toMatchObject({ when: '', place: '' });
+    const snap = P.toSnapshot(await P.loadProject(h.db, p.id));
+    expect(snap.detail.activities).toEqual([{ title: 'Bootcamp', when: 'March 2025', place: 'Marrakech' }, { title: 'Forum', text: 'Closing day.' }]);
+    // short fields: a date or a place, not a paragraph
+    expect((await ed.put(`/projects/${p.id}`, projectInput({ activityItems: [{ title: 'A', text: '', when: 'x'.repeat(41), mediaIds: [] }] }))).status).toBe(422);
+    expect((await ed.put(`/projects/${p.id}`, projectInput({ activityItems: [{ title: 'A', text: '', place: 'x'.repeat(81), mediaIds: [] }] }))).status).toBe(422);
+  });
 });

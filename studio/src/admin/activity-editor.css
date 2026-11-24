@@ -80,3 +80,4 @@
   .ae-alt img { width: 100%; height: 160px; }
 }
 @media (prefers-reduced-motion: reduce) { .ae *, .ae-gal * { transition: none !important; } }
+.ae-meta { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; } @media (max-width: 600px) { .ae-meta { grid-template-columns: 1fr; } } .ae-meta-hint { display: block; margin-top: -4px; font-size: 12px; }

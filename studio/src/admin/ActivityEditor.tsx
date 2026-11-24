@@ -7,8 +7,8 @@ import { Icon, useToast } from './ui.tsx';
 import { upload, type MediaItem } from './pages/Media.tsx';
 import './activity-editor.css';
 
-export type Activity = { title: string; text: string; mediaIds: string[] };
-const MAX = 12, PHOTOS = 12, SHOWN = 3;
+export type Activity = { title: string; text: string; when?: string; place?: string; mediaIds: string[] };
+const MAX = 20, PHOTOS = 12, SHOWN = 3;
 const TITLE_MAX = 160, TEXT_MAX = 800;
 const IMAGE = /^image\/(jpeg|png|webp|avif|tiff)$/;
 
@@ -34,7 +34,7 @@ export function ActivityList({ items, onChange, ro, err, media, addMedia, onPick
     if ((a.title.trim() || a.text.trim() || a.mediaIds.length) && !confirm(`Remove “${a.title.trim() || `activity ${i + 1}`}”${a.mediaIds.length ? ` and its ${a.mediaIds.length} photo link${a.mediaIds.length === 1 ? '' : 's'}` : ''}? The photos stay in the Media Library.`)) return;
     onChange(items.filter((_, j) => j !== i)); setOpen((o) => o.filter((_, j) => j !== i));
   };
-  const add = () => { onChange([...items, { title: '', text: '', mediaIds: [] }]); setOpen((o) => [...o, true]); };
+  const add = () => { onChange([...items, { title: '', text: '', when: '', place: '', mediaIds: [] }]); setOpen((o) => [...o, true]); };
   const allOpen = open.length > 0 && open.every(Boolean);
 
   if (!items.length) return <div className="ae-empty">
@@ -63,7 +63,7 @@ export function ActivityList({ items, onChange, ro, err, media, addMedia, onPick
               <span className="ae-n">{String(i + 1).padStart(2, '0')}</span>
               {first ? <img className="ae-thumb" src={first.url} alt="" /> : <span className="ae-thumb is-empty" aria-hidden="true"><Icon n="image" /></span>}
               <span className="ae-head-t"><b>{a.title.trim() || <em>Untitled activity</em>}</b>
-                <small>{a.mediaIds.length ? `${a.mediaIds.length} photo${a.mediaIds.length === 1 ? '' : 's'}` : 'No photos'}{a.text.trim() ? ' · has a description' : ''}</small></span>
+                <small>{[a.when?.trim(), a.place?.trim()].filter(Boolean).join(' · ') || 'No date or place'} · {a.mediaIds.length ? `${a.mediaIds.length} photo${a.mediaIds.length === 1 ? '' : 's'}` : 'No photos'}</small></span>
               <span className="ae-chips">
                 {alts > 0 && <span className="ae-chip bad">{alts} alt text</span>}
                 {rights > 0 && <span className="ae-chip warn">{rights} rights</span>}
@@ -81,6 +81,13 @@ export function ActivityList({ items, onChange, ro, err, media, addMedia, onPick
               <input className="input" value={a.title} maxLength={TITLE_MAX} disabled={ro} placeholder="e.g. Leadership bootcamp in Marrakech" onChange={(e) => update(i, { ...a, title: e.target.value })} />
               <span className="between"><small>{!a.title.trim() ? 'Required.' : 'Short and specific.'}</small><small className={`count-hint${a.title.length > TITLE_MAX * 0.9 ? ' near' : ''}`}>{a.title.length} / {TITLE_MAX}</small></span>
             </label>
+            <div className="ae-meta">
+              <label className="field"><span className="pe-label">When <em>· optional</em></span>
+                <input className="input" value={a.when ?? ''} maxLength={40} disabled={ro} placeholder="e.g. April 2026, or 20 April 2026" onChange={(e) => update(i, { ...a, when: e.target.value })} /></label>
+              <label className="field"><span className="pe-label">Place <em>· optional</em></span>
+                <input className="input" value={a.place ?? ''} maxLength={80} disabled={ro} placeholder="e.g. Marrakech" onChange={(e) => update(i, { ...a, place: e.target.value })} /></label>
+            </div>
+            <small className="muted ae-meta-hint">The project page shows activities as a timeline: the date labels each step and the city is marked on the map.</small>
             <label className="field"><span className="pe-label">Description <em>· optional</em></span>
               <AutoText value={a.text} max={TEXT_MAX} disabled={ro} placeholder="What happened, who took part, what came out of it." onChange={(v) => update(i, { ...a, text: v })} />
               <span className="between"><small>Plain text. Use verified facts only.</small><small className={`count-hint${a.text.length > TEXT_MAX * 0.9 ? ' near' : ''}`}>{a.text.length} / {TEXT_MAX}</small></span>

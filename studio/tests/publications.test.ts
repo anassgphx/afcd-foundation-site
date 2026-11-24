@@ -145,6 +145,19 @@ describe('publications', () => {
     expect(after.status).toBe('draft');
   });
 
+  it('lists a published paper under its project ("outputs" in the project data) and drops it when unpublished', async () => {
+    const ed = await client(h.app, 'ed@afcd.test'), rev = await client(h.app, 'rev@afcd.test'), admin = await client(h.app, 'admin@afcd.test');
+    const up = await upload(h.app, ed, fakePdf());
+    const { body: p } = await ed.post('/publications', pub({ documentId: up.body.id, type: 'policy_brief', projectSlugs: ['eco-citizen'] }));
+    await ed.post(`/publications/${p.id}/transition`, { action: 'submit' });
+    await rev.post(`/publications/${p.id}/transition`, { action: 'approve' });
+    expect((await admin.post(`/publications/${p.id}/publish`)).status).toBe(200);
+    const data = () => JSON.parse(readFileSync(join(h.siteRoot, 'src/data/projects.json'), 'utf8')).projects.find((x: { slug: string }) => x.slug === 'eco-citizen');
+    expect(data().detail.outputs).toEqual([{ title: 'FAKE TEST Report on nothing &amp; more', type: 'Policy brief', file: 'publication-fake-test-report.html', year: '2026' }]);
+    expect((await admin.post(`/publications/${p.id}/unpublish`)).status).toBe(200);
+    expect(data().detail.outputs).toBeUndefined();
+  });
+
   it('does not let the author approve their own submission (except a super admin)', async () => {
     const admin = await client(h.app, 'admin@afcd.test');
     const { body: p } = await admin.post('/publications', pub({ externalUrl: 'https://example.org/fake-test-report' }));

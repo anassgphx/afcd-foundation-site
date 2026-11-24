@@ -153,7 +153,7 @@ describe('publications', () => {
     await rev.post(`/publications/${p.id}/transition`, { action: 'approve' });
     expect((await admin.post(`/publications/${p.id}/publish`)).status).toBe(200);
     const data = () => JSON.parse(readFileSync(join(h.siteRoot, 'src/data/projects.json'), 'utf8')).projects.find((x: { slug: string }) => x.slug === 'eco-citizen');
-    expect(data().detail.outputs).toEqual([{ title: 'FAKE TEST Report on nothing &amp; more', type: 'Policy brief', file: 'publication-fake-test-report.html', year: '2026' }]);
+    expect(data().detail.outputs).toEqual([{ title: 'FAKE TEST Report on nothing &amp; more', type: 'Policy brief', file: 'publication-fake-test-report.html', year: '2026', slug: 'fake-test-report', pdf: expect.stringMatching(/^assets\/documents\/[0-9a-f]{24}\.pdf$/) }]);   // pdf: the direct download
     expect((await admin.post(`/publications/${p.id}/unpublish`)).status).toBe(200);
     expect(data().detail.outputs).toBeUndefined();
   });
@@ -171,7 +171,7 @@ describe('publications', () => {
     await rev.post(`/publications/${p.id}/transition`, { action: 'approve' });
     expect((await admin.post(`/publications/${p.id}/publish`)).status).toBe(200);
     const d = JSON.parse(readFileSync(join(h.siteRoot, 'src/data/projects.json'), 'utf8')).projects.find((x: { slug: string }) => x.slug === 'eco-citizen').detail;
-    const ref = { title: 'FAKE TEST Report on nothing &amp; more', type: 'Report', file: 'publication-fake-test-report.html', year: '2026' };
+    const ref = { title: 'FAKE TEST Report on nothing &amp; more', type: 'Report', file: 'publication-fake-test-report.html', year: '2026', slug: 'fake-test-report', pdf: expect.stringMatching(/^assets\/documents\/[0-9a-f]{24}\.pdf$/) };
     expect(d.activities[0].publications).toEqual([ref]);
     expect(d.activities[1].publications).toBeUndefined();
     expect(d.outputs).toEqual([ref]);

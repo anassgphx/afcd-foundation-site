@@ -24,7 +24,7 @@ import { currentLayout, layoutBlocks, type LayoutEntry } from '../home/layout.ts
 import { publicRef } from '../media/service.ts';
 import { detailSource, listingSource, oppCtx, oppState, opportunityFile, type LiveOpp } from '../opportunities/render.ts';
 import type { OpportunitySnapshot } from '../opportunities/service.ts';
-import { publications, publicationRevisions } from '../../db/schema.ts';
+import { publications, publicationRevisions, documents } from '../../db/schema.ts';
 import { detailSource as pubDetailSource, listingSource as pubListingSource, pubAssets, pubCtx, publicationFile, PUBLIC_DOC_DIR, type LivePub } from '../publications/render.ts';
 import { DOC_FILE, documentFile, documentPath, type DocumentRow } from '../publications/documents.ts';
 import { TYPE_LABEL as PUB_TYPE_LABEL, type PublicationSnapshot } from '../publications/service.ts';
@@ -89,11 +89,15 @@ export class Publisher {
     if (!map.size) return [];
     const revs = await this.db.select().from(projectRevisions).where(inArray(projectRevisions.id, [...map.values()]));
     const pubs = await this.livePublications(pubOverride);   // a project's outputs: the published publications that list it (including one being published or removed now)
+    // their PDFs, for a direct "Download PDF" next to each one (the same file the publication page offers)
+    const dIds = [...new Set(pubs.map((p) => p.snap.documentId).filter(Boolean) as string[])];
+    const pdfOf = new Map((dIds.length ? await this.db.select().from(documents).where(inArray(documents.id, dIds)) : []).map((d) => [d.id, `${PUBLIC_DOC_DIR}/${documentFile(d)}`]));
     return revs.map((r) => {
       const s = escapeSnapshot(structuredClone(r.snapshot) as unknown as Snapshot);
       if (s.detail && Object.keys(s.detail).length) {
         const d = s.detail as Record<string, unknown>; d.revision = r.id;
-        const ref = (p: LivePub) => ({ title: escapeHtml(p.snap.title), type: escapeHtml(PUB_TYPE_LABEL[p.snap.type] ?? 'Publication'), file: publicationFile(p.snap.slug), year: (p.snap.publishedOn ?? '').slice(0, 4) });
+        const ref = (p: LivePub) => ({ title: escapeHtml(p.snap.title), type: escapeHtml(PUB_TYPE_LABEL[p.snap.type] ?? 'Publication'), file: publicationFile(p.snap.slug), year: (p.snap.publishedOn ?? '').slice(0, 4),
+          ...(p.snap.documentId && pdfOf.get(p.snap.documentId) ? { pdf: pdfOf.get(p.snap.documentId), slug: p.snap.slug } : {}) });
         // publications linked to an activity: shown under it, live ones only (a draft or unpublished one is left out)
         const acts = (d.activities ?? []) as { publications?: string[] }[];
         const bySlug = new Map(pubs.map((p) => [p.snap.slug, p]));

@@ -333,7 +333,7 @@ export async function listProjects(db: DB) {
   const pl = await db.select({ projectId: projectPillars.projectId, key: pillars.key, name: pillars.name, colour: pillars.colour, isPrimary: projectPillars.isPrimary })
     .from(projectPillars).innerJoin(pillars, eq(pillars.id, projectPillars.pillarId));
   // list extras: a small thumbnail of the main photo and who last edited the record
-  const mids = [...new Set(rows.map((r) => r.heroMediaId).filter(Boolean) as string[])];
+  const mids = [...new Set(rows.flatMap((r) => [r.heroMediaId, r.posterMediaId, r.logoMediaId]).filter(Boolean) as string[])];
   const thumbs = new Map((mids.length ? await db.select({ id: media.id, key: media.storageKey }).from(media).where(inArray(media.id, mids)) : []).map((m) => [m.id, `/studio/media-file/${m.key}-480.webp`]));
   const uids = [...new Set(rows.map((r) => r.updatedBy).filter(Boolean) as string[])];
   const names = new Map((uids.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, uids)) : []).map((u) => [u.id, u.name]));
@@ -344,7 +344,8 @@ export async function listProjects(db: DB) {
   const allIds = [...new Set([...used.values()].flat())];
   const incomplete = new Set((allIds.length ? await db.select({ id: media.id, alt: media.alt, ok: media.rightsConfirmed }).from(media).where(inArray(media.id, allIds)) : [])
     .filter((m) => !m.alt.trim() || !m.ok).map((m) => m.id));
-  return rows.map((r) => ({ ...r, thumb: r.heroMediaId ? thumbs.get(r.heroMediaId) ?? null : null, updatedByName: r.updatedBy ? names.get(r.updatedBy) ?? null : null,
+  const th = (id: string | null) => (id ? thumbs.get(id) ?? null : null);
+  return rows.map((r) => ({ ...r, thumb: th(r.heroMediaId) ?? th(r.posterMediaId), logoThumb: th(r.logoMediaId), updatedByName: r.updatedBy ? names.get(r.updatedBy) ?? null : null,
     photoCount: used.get(r.id)!.length, photoIssues: used.get(r.id)!.filter((x) => incomplete.has(x)).length,
     pillars: pl.filter((x) => x.projectId === r.id).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)) }));
 }

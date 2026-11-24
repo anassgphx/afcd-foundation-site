@@ -1047,9 +1047,12 @@ def project_details():
             pubs = [p for p in (x.get('publications') or []) if isinstance(p, dict) and p.get('file')]
             if not pubs:
                 return ''
+            # the publication card opens its page; "Download PDF" gets the file straight away (when it has one)
+            dl = lambda p: (f'<a href="{p["pdf"]}" download="{p.get("slug") or "publication"}.pdf" type="application/pdf" class="pja-dl"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13.5h10"/></svg>Download PDF</a>'
+                            if str(p.get('pdf') or '').startswith('assets/documents/') else '')
             return '<ul class="pja-pubs">' + ''.join(
-                f'<li><a href="{p["file"]}" class="pja-pub"><span class="pjd-ico" aria-hidden="true"></span><span class="min-w-0 flex-1"><span class="pja-pub-k">{p.get("type") or "Publication"}{(" · " + p["year"]) if p.get("year") else ""}</span>'
-                f'<span class="pja-pub-t">{p["title"]}</span></span><span aria-hidden="true">↗</span></a></li>' for p in pubs) + '</ul>'
+                f'<li class="pja-pub-li"><a href="{p["file"]}" class="pja-pub"><span class="pjd-ico" aria-hidden="true"></span><span class="min-w-0 flex-1"><span class="pja-pub-k">{p.get("type") or "Publication"}{(" · " + p["year"]) if p.get("year") else ""}</span>'
+                f'<span class="pja-pub-t">{p["title"]}</span></span><span aria-hidden="true">↗</span></a>{dl(p)}</li>' for p in pubs) + '</ul>'
         if acts:
             nn = sec('activities', 'Activities')
             act_block = '<ol class="pja-list mt-8 lg:mt-10">' + ''.join(
@@ -1067,8 +1070,10 @@ def project_details():
         outp_sec = ''
         if outputs:
             nn = sec('publications', 'Publications')
-            rows = ''.join(f'<li><a href="{o["file"]}" class="pjd"><span class="pjd-ico" aria-hidden="true"></span><span class="min-w-0 flex-1"><span class="pjd-type">{o["type"]}{(" · " + o["year"]) if o.get("year") else ""}</span>'
-                           f'<span class="pjd-t">{o["title"]}</span></span><span class="pjd-go">Read &amp; download <span aria-hidden="true">↗</span></span></a></li>' for o in outputs)
+            rows = ''.join(f'<li class="pjd-li"><a href="{o["file"]}" class="pjd"><span class="pjd-ico" aria-hidden="true"></span><span class="min-w-0 flex-1"><span class="pjd-type">{o["type"]}{(" · " + o["year"]) if o.get("year") else ""}</span>'
+                           f'<span class="pjd-t">{o["title"]}</span></span><span class="pjd-go">Read <span aria-hidden="true">↗</span></span></a>'
+                           + (f'<a href="{o["pdf"]}" download="{o.get("slug") or "publication"}.pdf" type="application/pdf" class="pja-dl pjd-dl"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13.5h10"/></svg>Download PDF</a>' if str(o.get('pdf') or '').startswith('assets/documents/') else '')
+                           + '</li>' for o in outputs)
             outp_sec = f"""
 <section id="publications" class="pl-sec py-8 lg:py-10">
   <div class="wrap">{sec_head(f'{nn} / Publications', 'Papers and reports <span class="sh-soft">from the programme.</span>', f'{len(outputs)} publication' + ('s' if len(outputs) != 1 else ''), ('All publications', 'publications.html'))}

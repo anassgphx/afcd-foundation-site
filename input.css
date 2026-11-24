@@ -2208,3 +2208,20 @@ button.pj-cover-i.is-poster:hover img { transform: scale(1.02); }
 .pt-logo.has-img.is-mid img { height: 84% !important; }
 .pt-logo.has-img.is-wide img { height: 66% !important; }
 .pt-logo.is-initials span { width: 64px; height: 64px; font-size: 16px; }
+
+/* Project activities: square photo tiles, so square photos (with their text and logos) show whole.
+   One photo: a square; two: two squares side by side; three or more: a big square with two small squares beside it. */
+.pja-ph { height: auto !important; }
+.pja-ph.n1 { aspect-ratio: 1 / 1; max-width: 560px; width: 100%; justify-self: center; }
+.pja-ph.n2 { grid-template-columns: 1fr 1fr; aspect-ratio: 2 / 1; }
+.pja-ph.n3 { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; aspect-ratio: 3 / 2; }
+.pja-ph .pja-pi { aspect-ratio: auto; }
+.pja-ph .pja-pi img { object-fit: cover; }
+
+/* publications under an activity and in the Publications section: the card opens the page, "Download PDF" gets the file */
+.pja-pub-li, .pjd-li { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; }
+.pja-pub-li .pja-pub, .pjd-li .pjd { flex: 1 1 260px; min-width: 0; }
+.pja-dl { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 16px; min-height: 44px; border-radius: 16px; background: #000; color: #fff; font-size: 13.5px; font-weight: 600; white-space: nowrap; transition: background-color .2s ease; }
+.pja-dl:hover { background: #262626; }
+.pja-dl svg { width: 15px; height: 15px; }
+.pjd-dl { border-radius: 22px; padding: 0 20px; }

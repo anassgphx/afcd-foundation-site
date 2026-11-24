@@ -930,3 +930,14 @@ button.b-chip.is-warn:hover, button.b-chip.is-warn[aria-expanded="true"] { borde
 .b-issue-list span { grid-column: 1; line-height: 1.4; }
 .b-issue-list svg { grid-column: 2; grid-row: 1 / span 2; color: var(--muted); }
 .b-warn { position: absolute; z-index: 2; top: 7px; left: 7px; width: 8px; height: 8px; border-radius: 50%; background: #F59E0B; box-shadow: 0 0 0 2px #fff; }
+
+/* Projects list: the project's logo as its thumbnail (shown whole on white), and its Ongoing/Completed/Upcoming status */
+.pjl-thumb { width: 56px; height: 56px; border-radius: 12px; }
+.pjl-thumb.is-logo { background: #fff; border: 1px solid var(--line); padding: 5px; }
+.pjl-thumb.is-logo img { object-fit: contain; }
+.pjl-st { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; vertical-align: 2px; }
+.pjl-st i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pjl-st.is-ongoing { background: #000; color: #fff; } .pjl-st.is-ongoing i { background: #22C55E; }
+.pjl-st.is-completed { background: var(--canvas); color: var(--ink-2); } .pjl-st.is-completed i { background: #A8A29E; }
+.pjl-st.is-upcoming { background: #FEF3C7; color: #92400E; } .pjl-st.is-upcoming i { background: #F59E0B; }
+.dt.dense .pjl-thumb { width: 32px; height: 32px; padding: 2px; }

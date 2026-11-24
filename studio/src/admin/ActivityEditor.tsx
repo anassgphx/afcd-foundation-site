@@ -13,6 +13,15 @@ const PUB_TYPES: Record<string, string> = { report: 'Report', study: 'Study', po
 const MAX = 20, PHOTOS = 12, SHOWN = 3;
 const TITLE_MAX = 160, TEXT_MAX = 800;
 const IMAGE = /^image\/(jpeg|png|webp|avif|tiff)$/;
+/** The activity's date for the calendar (YYYY-MM-DD). Reads dates typed before the calendar existed: 28/06/2025, 28-06-2025, 2025-06-28. */
+export function whenIso(v?: string) {
+  const t = (v ?? '').trim(); let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t); if (m) return t;
+  m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(t); if (!m) return '';
+  const d = +m[1], mo = +m[2]; if (mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+  return `${m[3]}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+/** "28 Jun 2025" for the card header; other text as it was typed. */
+const whenLabel = (v?: string) => { const iso = whenIso(v); if (!iso) return v?.trim() ?? ''; const [y, mo, d] = iso.split('-').map(Number); return `${d} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mo - 1]} ${y}`; };
 
 type Props = {
   items: Activity[]; onChange: (v: Activity[]) => void; ro: boolean; err?: string;
@@ -65,7 +74,7 @@ export function ActivityList({ items, onChange, ro, err, media, addMedia, onPick
               <span className="ae-n">{String(i + 1).padStart(2, '0')}</span>
               {first ? <img className="ae-thumb" src={first.url} alt="" /> : <span className="ae-thumb is-empty" aria-hidden="true"><Icon n="image" /></span>}
               <span className="ae-head-t"><b>{a.title.trim() || <em>Untitled activity</em>}</b>
-                <small>{[a.when?.trim(), a.place?.trim()].filter(Boolean).join(' · ') || 'No date or place'} · {a.mediaIds.length ? `${a.mediaIds.length} photo${a.mediaIds.length === 1 ? '' : 's'}` : 'No photos'}</small></span>
+                <small>{[whenLabel(a.when), a.place?.trim()].filter(Boolean).join(' · ') || 'No date or place'} · {a.mediaIds.length ? `${a.mediaIds.length} photo${a.mediaIds.length === 1 ? '' : 's'}` : 'No photos'}</small></span>
               <span className="ae-chips">
                 {alts > 0 && <span className="ae-chip bad">{alts} alt text</span>}
                 {rights > 0 && <span className="ae-chip warn">{rights} rights</span>}
@@ -85,7 +94,8 @@ export function ActivityList({ items, onChange, ro, err, media, addMedia, onPick
             </label>
             <div className="ae-meta">
               <label className="field"><span className="pe-label">When <em>· optional</em></span>
-                <input className="input" value={a.when ?? ''} maxLength={40} disabled={ro} placeholder="e.g. April 2026, or 20 April 2026" onChange={(e) => update(i, { ...a, when: e.target.value })} /></label>
+                <input className="input" type="date" value={whenIso(a.when)} disabled={ro} onChange={(e) => update(i, { ...a, when: e.target.value })} aria-label="Date of the activity" />
+                {a.when && !whenIso(a.when) && <small className="ae-when-old">Saved as “{a.when}”. Pick the date to replace it.</small>}</label>
               <label className="field"><span className="pe-label">Place <em>· optional</em></span>
                 <input className="input" value={a.place ?? ''} maxLength={80} disabled={ro} placeholder="e.g. Marrakech" onChange={(e) => update(i, { ...a, place: e.target.value })} /></label>
             </div>

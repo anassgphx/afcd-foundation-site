@@ -4,13 +4,14 @@
 // bulk bar in the header. Every action calls a real, permission-checked server route; menus only offer what the
 // user's role and the project's state allow. All filters live in the address bar.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { parseDuration } from '../projectFields.tsx';
 import { api, post } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, STATUS_LABEL, ago, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { DataTable, EmptyState, FilterTabs, TableSkeleton, applyColFilters, setValues, statusFilter, updatedFilter, useListActions, type Column } from '../DataTable.tsx';
 
 type Row = {
   id: string; name: string; slug: string; category: string; location: string; years: string; status: string; publishedRevisionId: string | null;
-  hasDetailPage: boolean; updatedAt: string; updatedBy: string | null; createdBy: string | null; updatedByName: string | null; thumb: string | null; sort: number;
+  hasDetailPage: boolean; updatedAt: string; updatedBy: string | null; createdBy: string | null; updatedByName: string | null; thumb: string | null; logoThumb?: string | null; sort: number;
   photoCount: number; photoIssues: number; pillars: { key: string; name: string; colour: string; isPrimary: boolean }[];
 };
 
@@ -76,8 +77,8 @@ export function ProjectsList() {
   const columns: Column<Row>[] = [
     { key: 'name', header: 'Project', sort: (r) => r.name, csv: (r) => r.name, filter: { type: 'set', title: 'Category', get: (r) => r.category },
       render: (r) => <div className="dt-main">
-        <span className="dt-thumb">{r.thumb ? <img src={r.thumb} alt="" loading="lazy" /> : <Icon n="folder" />}</span>
-        <span className="min-w-0"><Link className="title" to={`/studio/projects/${r.id}`}>{r.name}</Link>
+        <span className={`dt-thumb pjl-thumb${r.logoThumb ? ' is-logo' : ''}`}>{r.logoThumb ? <img src={r.logoThumb} alt="" loading="lazy" /> : r.thumb ? <img src={r.thumb} alt="" loading="lazy" /> : <Icon n="folder" />}</span>
+        <span className="min-w-0"><Link className="title" to={`/studio/projects/${r.id}`}>{r.name}</Link>{projectStatus(r.years) && <span className={`pjl-st is-${projectStatus(r.years)!.toLowerCase()}`}><i />{projectStatus(r.years)}</span>}
           <span className="sub">{[r.category, r.location, r.years].filter(Boolean).join(' · ') || '—'}
             {r.photoIssues > 0 && <> · <span className="lt-photo" title="Photos missing alt text or confirmed rights"><Icon n="alert" />{r.photoIssues} photo{r.photoIssues === 1 ? '' : 's'} to complete</span></>}</span></span></div> },
     { key: 'pillar', header: 'Pillars', sort: (r) => r.pillars[0]?.name ?? 'zzz', csv: (r) => r.pillars.map((p) => p.name).join('; '), hideBelow: 900,
@@ -232,4 +233,13 @@ function DuplicatePicker({ rows, onClose, onPick }: { rows: Row[]; onClose: () =
       <span className="dt-thumb">{r.thumb ? <img src={r.thumb} alt="" /> : <Icon n="folder" />}</span><span><b>{r.name}</b><small>{[r.category, r.location, r.years].filter(Boolean).join(' · ') || '—'}</small></span></button>)}
       {!list.length && <p className="muted" style={{ padding: 12, margin: 0 }}>No project matches “{q}”.</p>}</div>
   </Modal>;
+}
+
+/** Ongoing / Completed / Upcoming from the duration, the same way the website labels it (src/content.py _status). */
+function projectStatus(years: string): 'Ongoing' | 'Completed' | 'Upcoming' | null {
+  const t = (years ?? '').trim(); if (!t) return null;
+  if (/present|ongoing|today|now/i.test(t)) return 'Ongoing';
+  const d = parseDuration(t); if (!d || !d.start) return null;
+  const now = new Date().toISOString().slice(0, 7), start = d.start.slice(0, 7), end = d.ongoing ? '9999-12' : (d.end || d.start.slice(0, 4) + '-12').slice(0, 7);
+  return end < now ? 'Completed' : start > now ? 'Upcoming' : 'Ongoing';
 }

@@ -222,7 +222,7 @@ function seoTags(file, meta) {
   if (file === 'index.html') {
     ld.push(SCHEMA ? schemaOrg() : ORG, WEBSITE);
     if (SCHEMA?.revision) tags.push(`<meta name="studio-schema-rev" content="${escapeAttr(String(SCHEMA.revision))}">`);
-    tags.push('<link rel="preload" as="image" href="assets/img/hero-leadership-lab.webp" fetchpriority="high">');
+    // no image preload here: the hero's first photo already asks for high priority itself (preloading another file only slowed it down)
   }
   const bc = breadcrumbs(file, meta);
   if (bc) ld.push(bc);

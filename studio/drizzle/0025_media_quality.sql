@@ -1,0 +1,1 @@
+ALTER TABLE "media" ADD COLUMN "quality" text DEFAULT 'best' NOT NULL;

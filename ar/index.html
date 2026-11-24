@@ -10,8 +10,10 @@
 <link rel="apple-touch-icon" href="../assets/brand/afcd-mark.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="../assets/styles.css?v=6f81c88c">
+<!-- the font loads without holding up the page: text shows in the system font for a moment, then switches to Inter -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"></noscript>
+<link rel="stylesheet" href="../assets/styles.css?v=bafa9a28">
 <link rel="canonical" href="https://afcdfoundation.com/ar/">
 <meta name="robots" content="noindex, nofollow">
 <meta property="og:type" content="website">
@@ -30,7 +32,6 @@
 <meta name="twitter:description" content="مؤسسة AFCD جمعية مغربية غير ربحية تأسست سنة 2007 في آيت أورير، تعمل على تمكين الشباب والنساء والنهوض بالتربية البيئية والإدماج الرقمي.">
 <meta name="twitter:image" content="https://afcdfoundation.com/assets/img/og-default.jpg">
 <meta name="twitter:image:alt" content="جلسة نقاش ضمن برنامج Leadership Lab لمؤسسة AFCD">
-<link rel="preload" as="image" href="../assets/img/hero-leadership-lab.webp" fetchpriority="high">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"NGO","@id":"https://afcdfoundation.com/#organization","name":"AFCD Foundation","alternateName":"AFCD","legalName":"Association le Futur pour les Chantiers et le Développement","url":"https://afcdfoundation.com/","logo":"https://afcdfoundation.com/assets/brand/afcd-mark.png","description":"To promote sustainable development by strengthening the capacities of young people and women through environmental education, economic empowerment, and innovation.","email":"contact@afcdteam.com","telephone":"+212663618536","foundingDate":"2007","foundingLocation":{"@type":"Place","name":"Ait Ourir, Al Haouz, Morocco"},"address":{"@type":"PostalAddress","addressLocality":"Marrakech","postalCode":"40000","addressCountry":"MA"},"areaServed":{"@type":"Country","name":"Morocco"},"sameAs":["https://www.facebook.com/afcdfoundation","https://www.instagram.com/afcd.foundation","https://www.linkedin.com/company/afcd-foundation","https://x.com/afcd_foundation"]}</script>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","@id":"https://afcdfoundation.com/#website","name":"AFCD Foundation","url":"https://afcdfoundation.com/","inLanguage":"ar","publisher":{"@id":"https://afcdfoundation.com/#organization"}}</script>
 <meta name="studio-i18n-rev" content="beca3bcb-99b4-4bae-8b04-305770362e2b">
@@ -38,7 +39,8 @@
 <link rel="alternate" hreflang="fr" href="https://afcdfoundation.com/fr/">
 <link rel="alternate" hreflang="ar" href="https://afcdfoundation.com/ar/">
 <link rel="alternate" hreflang="x-default" href="https://afcdfoundation.com/">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="../assets/rtl.css">
 <style>a.lang-btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}</style>
 </head>
@@ -54,8 +56,8 @@
           <a class="tb-link" href="mailto:contact@afcdteam.com"><svg class="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.8" y="3.2" width="12.4" height="9.6" rx="1.6"/><path d="m2.5 4.5 5.5 4 5.5-4"/></svg><span class="max-md:sr-only">contact@afcdteam.com</span></a>
           <a class="tb-link tabular-nums" href="tel:+212663618536"><svg class="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.2 1.8h2.4l1.2 3-1.6 1a8 8 0 0 0 5 5l1-1.6 3 1.2v2.4a1.4 1.4 0 0 1-1.5 1.4C6.7 13.8 2.2 9.3 1.8 3.3a1.4 1.4 0 0 1 1.4-1.5Z"/></svg><span class="max-sm:sr-only">+212 663 618 536</span></a>
       </nav>
-      <div class="tb-mid hidden md:flex">
-        <a class="tb-super" href="get-involved.html#programs"><span class="tb-super-in"><span class="tb-super-pulse" aria-hidden="true"></span>دعوات مفتوحة<span class="tb-super-sep" aria-hidden="true"></span><span class="tb-super-sub">قدّم الآن</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="tb-super-arr rtl:-scale-x-100" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></span></a>
+      <div class="tb-mid flex">
+        <a class="tb-super" href="get-involved.html#programs"><span class="tb-super-in"><span class="tb-super-pulse" aria-hidden="true"></span>دعوات مفتوحة<span class="tb-super-sep" aria-hidden="true"></span><span class="tb-super-sub">قدّم الآن</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="tb-super-arr rtl:-scale-x-100" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg></span></a><a class="tb-pub" href="publications.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 2H4.5a1.2 1.2 0 0 0-1.2 1.2v9.6A1.2 1.2 0 0 0 4.5 14h7a1.2 1.2 0 0 0 1.2-1.2V5.2Z"/><path d="M9.5 2v3.2h3.2M6 8.5h4M6 11h2.5"/></svg>Publications</a>
       </div>
       <div class="flex shrink-0 items-center gap-2">
         <div class="tb-socs hidden md:flex" role="group" aria-label="AFCD على وسائل التواصل الاجتماعي"><a class="tb-soc" href="https://www.facebook.com/afcdfoundation" target="_blank" rel="noopener" aria-label="AFCD على فيسبوك"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.2 14.5V8.6h2l.3-2.3H9.2V4.8c0-.7.2-1.1 1.1-1.1h1.2V1.6a16 16 0 0 0-1.8-.1c-1.8 0-3 1.1-3 3.1v1.7h-2v2.3h2v5.9h2.5Z" fill="currentColor"/></svg></a><a class="tb-soc" href="https://www.instagram.com/afcd.foundation" target="_blank" rel="noopener" aria-label="AFCD على إنستغرام"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="3.5" stroke="currentColor" stroke-width="1.4" fill="none"/><circle cx="8" cy="8" r="2.8" stroke="currentColor" stroke-width="1.4" fill="none"/><circle cx="11.6" cy="4.4" r=".8" fill="currentColor"/></svg></a><a class="tb-soc" href="https://www.linkedin.com/company/afcd-foundation" target="_blank" rel="noopener" aria-label="AFCD على لينكدإن"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.6 6h2.3v7.5H3.6zM4.7 2.4a1.3 1.3 0 1 1 0 2.7 1.3 1.3 0 0 1 0-2.7ZM7.4 6h2.2v1c.3-.6 1.1-1.2 2.3-1.2 2.4 0 2.9 1.6 2.9 3.7v4H12.5V10c0-.9 0-2-1.2-2s-1.4.9-1.4 1.9v3.6H7.4z" fill="currentColor"/></svg></a><a class="tb-soc" href="https://x.com/afcd_foundation" target="_blank" rel="noopener" aria-label="AFCD على X"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.6 1.5h2.2L9.7 7.1 15.5 14.5h-4.6L7.8 9.8 4.2 14.5H2l5.4-6L.8 1.5h4.7l2.8 4.2 4.3-4.2Zm-.8 11.7h1.2L4.3 2.7H3l8.8 10.5Z" fill="currentColor"/></svg></a></div>
@@ -280,8 +282,9 @@
       <!-- Story -->
       <div class="min-w-0 lg:col-span-6">
         <h2 id="ab-title" class="sh-title sh-md reveal">جمعية مغربية غير ربحية، <span class="sh-soft">متجذرة في آيت أورير منذ 2007.</span></h2>
-        <p class="mt-4 text-[13px] uppercase tracking-[0.14em] text-ink-mid">Association le Futur pour les Chantiers et le Développement</p>
-        <p class="mt-6 max-w-[60ch] text-[16px] leading-[1.7] text-ink-dark md:text-[17px]"><span class="font-medium text-ink-pure">أسسها فريق من الشباب المتطوعين الملتزمين،</span> وتعمل مؤسسة AFCD على تمكين الأفراد وتقوية المجتمعات من خلال تمكين الشباب والنساء، والتربية البيئية، والإدماج الرقمي، والتنمية المحلية التشاركية.</p>
+        <p class="mt-4 text-[13px] uppercase tracking-[0.14em] text-ink-mid">Association le Futur pour les Chantiers et le Développement (AFCD Foundation)</p>
+        <p class="mt-6 max-w-[60ch] text-[16px] leading-[1.7] text-ink-dark md:text-[17px]"><span class="font-medium text-ink-pure">AFCD Foundation is a non-profit organization established in 2007</span> by a passionate group of young changemakers committed to uplifting their community, illuminating individual journeys, and reinforcing the value of collective effort in improving living conditions.</p>
+        <p class="mt-4 max-w-[60ch] text-[16px] leading-[1.7] text-ink-dark md:text-[17px]">With this mission in mind, AFCD directs its focus toward areas that produce tangible short-term, medium-term, and long-term impact on everyday life—across social, economic, and environmental dimensions.</p>
         <div class="mt-8 flex flex-wrap items-center gap-x-7 gap-y-4">
           <a href="about.html" class="btn-dark btn-cta min-h-[50px] px-7 text-[15px]">المزيد عنا <span class="arr" aria-hidden="true">↗</span></a>
           <a href="mission-vision.html" class="link-arrow">الرسالة والرؤية <span class="arr" aria-hidden="true">↗</span></a>
@@ -508,7 +511,7 @@
     <div class="mt-8 lg:mt-10">
       <div class="stack" id="stack"></div>
     <!-- home-projects:start -->
-    <template id="home-projects-data"><article data-n="01" data-href="project-leadership-lab.html" data-dot="#FFB2B9" data-surface="pc-1" data-ph="#E2E2E2"><h3>Leadership Lab 2.0</h3><span class="pp">تمكين الشباب</span><span class="pk">Case study</span><span class="pc">قيادة الشباب</span><p class="pl">دعم القادة الناشئين عبر ريادة الأعمال والمشاركة المدنية.</p><p class="ph">Leadership Lab 2.0 · project photo</p><dl><div><dt>السياق</dt><dd>يتجه عدد كبير من الشباب في المغرب نحو ريادة الأعمال، وتتغير النظرة إلى الابتكار والمخاطرة.</dd></div><div><dt>المقاربة</dt><dd>يستلهم ممارسات من منظومة ريادة الأعمال الأمريكية ومبادئ الديمقراطية التشاركية.</dd></div><div><dt>الأنشطة</dt><dd>مسارات تكوين لمدة سنة في المشاركة المدنية وريادة الأعمال لفائدة شباب منتقين.</dd></div><div><dt>النتائج</dt><dd>قصص مشاركين نُشرت على مدونة AFCD (2023).</dd></div></dl></article><article data-n="02" data-href="project-eco-citizen.html" data-dot="#82E591" data-surface="pc-2" data-ph="#E6E6E6"><h3>Eco Citizen</h3><span class="pp">البيئة والمناخ</span><span class="pk">Case study</span><span class="pc">البيئة</span><p class="pl">تشجيع الوعي البيئي والعمل بقيادة المجتمع.</p><p class="ph">Eco Citizen · آيت أورير 2021</p><dl><div><dt>السياق</dt><dd>يصف السكان وصناع القرار في آيت أورير تدبير النفايات المنزلية بأنه مشكلة مستمرة.</dd></div><div><dt>المقاربة</dt><dd>مسار تشاركي يجمع السكان والجمعيات المحلية والمنتخبين.</dd></div><div><dt>الأنشطة</dt><dd>حملات توعية (2020)، ثم ورشات حول فرز النفايات وإعادة تدويرها وتكوين لجان محلية جديدة (2021).</dd></div><div><dt>النتائج</dt><dd>مقترحات بديلة لتدبير النفايات أُعدّت بشراكة مع المجتمع.</dd></div></dl></article><article data-n="03" data-href="project-youth-green-generation.html" data-dot="#82E591" data-surface="pc-3" data-ph="#DADADA"><h3>Youth Green Generation</h3><span class="pp">البيئة والمناخ</span><span class="pk">Case study</span><span class="pc">العمل المناخي</span><p class="pl">دعم الشباب في بلورة حلول للتحديات المناخية.</p><p class="ph">Youth Green Generation · 2024 call</p><dl><div><dt>السياق</dt><dd>يبني على مشاريع AFCD المناخية السابقة، محليًا ووطنيًا (المدونة، نوفمبر 2023).</dd></div><div><dt>المقاربة</dt><dd>تمكين الشباب من قيادة العمل المناخي في مجتمعاتهم.</dd></div><div><dt>الأنشطة</dt><dd>دعوة للترشح لفوج 2024.</dd></div></dl></article></template>
+    <template id="home-projects-data"><article data-n="01" data-status="" data-href="project-leadership-lab.html" data-dot="#FFB2B9" data-surface="pc-1" data-ph="#E2E2E2" data-fit="cover"><h3>Leadership Lab 2.0</h3><span class="pp">تمكين الشباب</span><span class="pk">Case study</span><span class="pc">قيادة الشباب</span><p class="ph">Leadership Lab 2.0 · project photo</p><ul class="pf"><li><b>الصيغة</b><span>تكوين لمدة سنة</span></li></ul><dl><div><dt>السياق</dt><dd>يتجه عدد كبير من الشباب في المغرب نحو ريادة الأعمال، وتتغير النظرة إلى الابتكار والمخاطرة.</dd></div><div><dt>المقاربة</dt><dd>يستلهم ممارسات من منظومة ريادة الأعمال الأمريكية ومبادئ الديمقراطية التشاركية.</dd></div></dl></article><article data-n="02" data-status="Completed" data-href="project-eco-citizen.html" data-dot="#82E591" data-surface="pc-2" data-ph="#E6E6E6" data-fit="cover"><h3>Eco Citizen</h3><span class="pp">البيئة والمناخ</span><span class="pk">Case study</span><span class="pc">البيئة</span><p class="ph">Eco Citizen · آيت أورير 2021</p><ul class="pf"><li><b>المكان</b><span>آيت أورير</span></li><li><b>السنوات</b><span>2020 – 2021</span></li></ul><dl><div><dt>السياق</dt><dd>يصف السكان وصناع القرار في آيت أورير تدبير النفايات المنزلية بأنه مشكلة مستمرة.</dd></div><div><dt>المقاربة</dt><dd>مسار تشاركي يجمع السكان والجمعيات المحلية والمنتخبين.</dd></div></dl></article><article data-n="03" data-status="" data-href="project-youth-green-generation.html" data-dot="#82E591" data-surface="pc-3" data-ph="#DADADA" data-fit="cover"><h3>Youth Green Generation</h3><span class="pp">البيئة والمناخ</span><span class="pk">Case study</span><span class="pc">العمل المناخي</span><p class="ph">Youth Green Generation · 2024 call</p><ul class="pf"><li><b>الفوج</b><span>2024</span></li></ul><dl><div><dt>السياق</dt><dd>يبني على مشاريع AFCD المناخية السابقة، محليًا ووطنيًا (المدونة، نوفمبر 2023).</dd></div><div><dt>المقاربة</dt><dd>تمكين الشباب من قيادة العمل المناخي في مجتمعاتهم.</dd></div></dl></article></template>
     <!-- home-projects:end -->
 
       <!-- Controls (mobile + desktop) -->
@@ -559,7 +562,7 @@
       <!-- Participant stories (testimonials carousel) -->
       <figure class="im-photo tm order-2 relative min-h-[520px] overflow-hidden rounded-[28px] bg-ink-pure text-white on-dark lg:order-1 lg:col-span-7 lg:row-span-2 lg:row-start-1 lg:min-h-[560px]" data-tm aria-roledescription="carousel" aria-label="قصص المشاركين" data-reveal>
         <div class="tm-track" aria-live="off">
-          <div class="tm-slide is-on" role="group" aria-roledescription="slide" aria-label="1 of 3">
+          <article class="tm-slide is-on" role="group" aria-roledescription="slide" aria-label="1 of 1">
             <img class="tm-img" src="../assets/img/hero-slide-2.webp" alt="عضو من فريق AFCD يبتسم أثناء العمل على حاسوب محمول" width="2000" height="1435" loading="lazy" decoding="async" style="object-position:50% 30%">
             <div class="tm-shade" aria-hidden="true"></div>
             <div class="tm-body">
@@ -567,32 +570,14 @@
               <blockquote class="tm-quote">كانت تجربة جيدة أتيحت لي فيها فرصة تعلّم أشياء ومهارات جديدة، والتعرف على أشخاص جدد وتكوين صداقات.</blockquote>
               <p class="tm-who"><span class="tm-av" aria-hidden="true" data-tm-initials>IF</span><span class="text-sm"><span class="block font-medium">Ikram Fatna Elfenn</span><span class="block text-white/65">معسكر Let’s Dialogue · فبراير 2021</span></span></p>
             </div>
-          </div>
-          <div class="tm-slide" role="group" aria-roledescription="slide" aria-label="2 of 3" aria-hidden="true" inert>
-            <div class="ph is-dark absolute inset-0 rounded-none" style="--ph:#262626"><span class="ph-cap tm-cap"><b>Photo</b> · Programme participants</span></div>
-            <div class="tm-shade" aria-hidden="true"></div>
-            <div class="tm-body">
-              <span class="tm-sample">Sample</span><span class="tm-mark" aria-hidden="true">“</span>
-              <blockquote class="tm-quote">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore.</blockquote>
-              <p class="tm-who"><span class="tm-av" aria-hidden="true" data-tm-initials>PN</span><span class="text-sm"><span class="block font-medium">Participant name</span><span class="block text-white/65">Programme name · Year</span></span></p>
-            </div>
-          </div>
-          <div class="tm-slide" role="group" aria-roledescription="slide" aria-label="3 of 3" aria-hidden="true" inert>
-            <div class="ph is-dark absolute inset-0 rounded-none" style="--ph:#2E2E2E"><span class="ph-cap tm-cap"><b>صورة</b> · نشاط مجتمعي</span></div>
-            <div class="tm-shade" aria-hidden="true"></div>
-            <div class="tm-body">
-              <span class="tm-sample">Sample</span><span class="tm-mark" aria-hidden="true">“</span>
-              <blockquote class="tm-quote">Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</blockquote>
-              <p class="tm-who"><span class="tm-av" aria-hidden="true" data-tm-initials>PN</span><span class="text-sm"><span class="block font-medium">Participant name</span><span class="block text-white/65">Programme name · Year</span></span></p>
-            </div>
-          </div>
+          </article>
         </div>
         <div class="tm-top">
           <span class="tm-label">قصص المشاركين</span>
-          <div class="tm-bars"><button type="button" class="tm-bar is-on" data-tm-go="0" aria-label="Story 1" aria-current="true"><span></span></button><button type="button" class="tm-bar" data-tm-go="1" aria-label="Story 2"><span></span></button><button type="button" class="tm-bar" data-tm-go="2" aria-label="Story 3"><span></span></button></div>
+          <div class="tm-bars"><button type="button" class="tm-bar is-on" data-tm-go="0" aria-label="Story 1" aria-current="true"><span></span></button></div>
         </div>
         <div class="tm-ctrl">
-          <span class="tm-count" aria-hidden="true"><b data-tm-cur>01</b> / 03</span>
+          <span class="tm-count" aria-hidden="true"><b data-tm-cur>01</b> / 01</span>
           <button type="button" class="tm-btn" data-tm-pause aria-label="Pause stories"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path class="tm-i-pause" d="M4.5 3h2.2v10H4.5zM9.3 3h2.2v10H9.3z"/><path class="tm-i-play" d="M5 3.2v9.6L12.6 8z"/></svg></button>
           <button type="button" class="tm-btn" data-tm-prev aria-label="القصة السابقة"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="rtl:-scale-x-100" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg></button>
           <button type="button" class="tm-btn" data-tm-next aria-label="القصة التالية"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="rtl:-scale-x-100" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg></button>
@@ -689,20 +674,7 @@
       </div>
     </header>
     <!-- home-events:start -->
-    <ul class="ev-list mt-8 lg:mt-10">
-      <li class="ev-row" data-when="upcoming">
-        <time class="ev-date" datetime="2026-12"><span class="ev-day">Dec</span><span class="ev-mon"> 2026</span></time>
-        <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">Roadshow</span><span class="ev-pillar"><span class="pj-dot" style="--c:#111"></span>تمكين الشباب</span></div>
-          
-          <p class="mt-3 text-[19px] font-semibold leading-snug tracking-[-0.02em] md:text-[21px]"><a href="event-artemis-morocco-roadshow.html" class="ev-link">Artemis Morocco Roadshow</a></p>
-          <p class="mt-1.5 max-w-[62ch] text-[14.5px] leading-relaxed text-ink-dark">The first public event of Moonshot: Artemis Edition, an 18-month initiative empowering Moroccan youth through STEM, space innovation, entrepreneurship and U.S.–Morocco cooperation in emerging technologies.</p>
-          <p class="ev-meta mt-3"><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17s5-4.6 5-9a5 5 0 0 0-10 0c0 4.4 5 9 5 9Z"/><circle cx="10" cy="8" r="1.8"/></svg>Venue to be announced</span><span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2"/></svg>Time to be announced</span></p>
-        </div>
-        <div class="ev-poster" aria-hidden="true"><img src="../assets/img/events/moonshot-artemis-poster-1200.webp" srcset="../assets/img/events/moonshot-artemis-poster-600.webp 600w, ../assets/img/events/moonshot-artemis-poster-1200.webp 1200w" sizes="96px" width="1200" height="1200" alt="Moonshot: Artemis Edition poster with the AFCD Foundation, Moroccan Initiative for Space Industry and U.S. Embassy Morocco logos, describing the 18-month programme and its six activities." loading="lazy" decoding="async" class="aspect-square w-full rounded-[16px] object-cover" style="object-position:50% 50%"></div>
-        <a href="event-artemis-morocco-roadshow.html" class="ev-act">عرض التفاصيل <span aria-hidden="true">↗</span></a>
-      </li>
-    </ul>
+    <div class="po-empty mt-8 lg:mt-10"><span class="po-empty-ico" aria-hidden="true"></span><span><span class="block text-[17px] font-semibold tracking-[-0.015em]">New events will be announced here.</span><span class="mt-1 block text-[14.5px] text-ink-dark"><a class="link-arrow" href="events.html">See all events <span class="arr" aria-hidden="true">↗</span></a></span></span></div>
     <!-- home-events:end -->
   </div>
 </section>
@@ -869,6 +841,6 @@
 
 <div id="toast" class="pointer-events-none rounded-full fixed left-1/2 z-[95] -translate-x-1/2 bg-ink-pure px-4 py-3 text-sm text-white opacity-0 transition-opacity duration-300" style="bottom: calc(env(safe-area-inset-bottom,0px) + 76px); max-width: calc(100% - 32px)" role="status"></div>
 
-<script src="../assets/main.ar.js?v=2befe2a5" defer></script>
+<script src="../assets/main.ar.js?v=20f3afb2" defer></script>
 </body>
 </html>

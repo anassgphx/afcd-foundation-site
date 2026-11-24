@@ -1,7 +1,8 @@
 // Participant stories (the testimonials carousel in the homepage's "Our impact" section) are one Studio field, a list:
 // add, edit, delete and reorder; the slides, progress bars and "01 / NN" counter follow it. Uses the real page source.
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import sharp from 'sharp';
 import { join, resolve } from 'node:path';
 import { makeApp, addUser, client, ORIGIN } from './helpers.ts';
@@ -16,14 +17,20 @@ const figure = (html: string) => html.slice(html.indexOf('<figure class="im-phot
 const slides = (html: string) => figure(html).match(/<article class="tm-slide[\s\S]*?<\/article>/g) ?? [];
 
 describe('participant stories: field and build output', () => {
-  it('reads the stories written in the page, with the samples marked', () => {
+  it('reads the stories written in the page (the real one only: the lorem-ipsum samples were removed), and marks samples', () => {
     const f = readFields(SITE, 'index.html').find((x) => x.key === 'impact.stories')!;
     expect(f).toMatchObject({ type: 'stories', sectionId: 'impact', label: 'Participant stories' });
     const list = f.default as any[];
     expect(list[0]).toEqual({ quote: expect.stringMatching(/^It was a good experience/), name: 'Ikram Fatna Elfenn', role: 'Let’s Dialogue Bootcamp · February 2021', caption: '',
       image: { src: 'assets/img/hero-slide-2.webp', alt: 'AFCD team member smiling while working at a laptop', w: 2000, h: 1435, fx: 50, fy: 30 } });   // the page's own photo
-    expect(list[1].image).toBeUndefined();
-    expect(list.slice(1).every((s) => s.sample === true)).toBe(true);
+    expect(list).toHaveLength(1);   // no sample slides on the live homepage (the SEO audit flags placeholder text)
+    // a slide still tagged "Sample" is read as a sample
+    const sampleSlide = '<figure data-tm data-sf="x" data-sf-type="stories"><div class="tm-track"><article class="tm-slide" role="group"><div class="ph is-dark absolute inset-0 rounded-none" style="--ph:#262626"><span class="ph-cap tm-cap"><b>Photo</b> · Programme participants</span></div><div class="tm-body"><span class="tm-sample">Sample</span><blockquote class="tm-quote">Lorem ipsum.</blockquote><p class="tm-who"><span class="text-sm"><span class="block font-medium">Participant name</span><span class="block text-white/65">Programme name · Year</span></span></p></div></article></div></figure>';
+    const tmp = mkdtempSync(join(tmpdir(), 'stories-')); mkdirSync(join(tmp, 'src/pages'), { recursive: true });
+    writeFileSync(join(tmp, 'src/pages/index.html'), `---\ntitle: T\n---\n<section id="impact">${sampleSlide}</section>`);
+    const read = readFields(tmp, 'index.html').find((x) => x.type === 'stories')!.default as any[];
+    expect(read).toEqual([{ quote: 'Lorem ipsum.', name: 'Participant name', role: 'Programme name · Year', caption: 'Programme participants', sample: true }]);
+    rmSync(tmp, { recursive: true, force: true });
     expect(readFields(SITE, 'index.html').some((x) => /^impact\.quote/.test(x.key))).toBe(false);   // replaced by the list (photos included)
   });
 
@@ -49,7 +56,8 @@ describe('participant stories: field and build output', () => {
     expect(s[0]).not.toContain('class="ph ');
     expect(s[1]).toContain('<img class="tm-img" src="assets/img/hero-slide-2.webp" alt="AFCD team member smiling while working at a laptop" width="2000" height="1435" loading="lazy" decoding="async" style="object-position:50% 30%">');
     expect(s[2]).not.toContain('tm-img');
-    expect(s[2]).toContain('<div class="ph is-dark absolute inset-0 rounded-none" style="--ph:#262626"><span class="ph-cap tm-cap"><b>Photo</b> · Bootcamp, 2022</span></div>');
+    // the page has no placeholder slide of its own any more, so the standard dark placeholder is used
+    expect(s[2]).toContain('<div class="ph is-dark absolute inset-0 rounded-none" style="--ph:#2A2A2A"><span class="ph-cap tm-cap"><b>Photo</b> · Bootcamp, 2022</span></div>');
     expect(out).not.toContain('data-sf');
   });
 
@@ -115,11 +123,16 @@ describe('participant stories: editing, review and publishing', () => {
   it('cannot be sent for review while a sample story remains', async () => {
     const ed = await client(h.app, 'ed@afcd.test');
     const f = (await ed.get('/home')).body.fields.find((x: any) => x.key === 'impact.stories');
-    const reordered = [f.default[1], f.default[0]];   // a sample moved to the front, still a sample
+    const sample = { quote: 'Lorem ipsum dolor sit amet.', name: 'Participant name', role: 'Programme name · Year', caption: 'Programme participants', sample: true };
+    const reordered = [sample, f.default[0]];   // a sample story first
     expect((await ed.put('/home', { 'impact.stories': reordered })).status).toBe(200);
     const sub = await ed.post('/home/transition', { action: 'submit' });
     expect(sub.status).toBe(422);
     expect(JSON.stringify(sub.body)).toContain('Story 1 is still a sample');
+    // the editor learns where each problem is: section, field and the story's position
+    const issues = (await ed.get('/home')).body.issues;
+    const sec = f.sectionId;
+    expect(issues).toEqual(expect.arrayContaining([{ message: 'Story 1 is still a sample. Replace its text or delete it.', section: sec, field: 'impact.stories', item: 0 }]));
   });
 
   it('edit, add, delete and reorder go through review, then publish into page-fields.json', async () => {
@@ -164,6 +177,7 @@ describe('participant stories: photos from the Media Library', () => {
     expect(home.media.map((m: any) => m.id)).toContain(id);   // the editor can show the thumbnail
     expect(home.problems.join(' ')).toMatch(/Add alt text/);
     expect(home.problems.join(' ')).toMatch(/Confirm usage rights/);
+    expect(home.issues.filter((i: any) => /Add alt text/.test(i.message))).toEqual([{ message: 'Add alt text to “story.png”.', section: f.sectionId, field: 'impact.stories', item: 0 }]);
     expect((await ed.post('/home/transition', { action: 'submit' })).status).toBe(422);
 
     await h.db.update(media).set({ alt: 'Sara speaking at a workshop', rightsConfirmed: true, focalX: 40, focalY: 25 });

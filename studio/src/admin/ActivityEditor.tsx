@@ -7,21 +7,32 @@ import { Icon, useToast } from './ui.tsx';
 import { upload, type MediaItem } from './pages/Media.tsx';
 import './activity-editor.css';
 
-export type Activity = { title: string; text: string; mediaIds: string[] };
-const MAX = 12, PHOTOS = 12, SHOWN = 3;
+export type Activity = { title: string; text: string; when?: string; place?: string; mediaIds: string[]; publicationSlugs?: string[] };
+export type PubOpt = { id: string; slug: string; title: string; type: string; status: string; publishedRevisionId: string | null };
+const PUB_TYPES: Record<string, string> = { report: 'Report', study: 'Study', policy_brief: 'Policy brief', guide: 'Guide', annual_report: 'Annual report', toolkit: 'Toolkit', other: 'Publication' };
+const MAX = 20, PHOTOS = 12, SHOWN = 3;
 const TITLE_MAX = 160, TEXT_MAX = 800;
 const IMAGE = /^image\/(jpeg|png|webp|avif|tiff)$/;
+/** The activity's date for the calendar (YYYY-MM-DD). Reads dates typed before the calendar existed: 28/06/2025, 28-06-2025, 2025-06-28. */
+export function whenIso(v?: string) {
+  const t = (v ?? '').trim(); let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t); if (m) return t;
+  m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(t); if (!m) return '';
+  const d = +m[1], mo = +m[2]; if (mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+  return `${m[3]}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+/** "28 Jun 2025" for the card header; other text as it was typed. */
+const whenLabel = (v?: string) => { const iso = whenIso(v); if (!iso) return v?.trim() ?? ''; const [y, mo, d] = iso.split('-').map(Number); return `${d} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mo - 1]} ${y}`; };
 
 type Props = {
   items: Activity[]; onChange: (v: Activity[]) => void; ro: boolean; err?: string;
   media: Record<string, MediaItem>; addMedia: (m: MediaItem[]) => void;
-  onPickPhotos: (index: number) => void; canEditMedia: boolean;
+  onPickPhotos: (index: number) => void; canEditMedia: boolean; publications?: PubOpt[];
 };
 
 const move = <T,>(a: T[], from: number, to: number) => { const b = [...a]; const [x] = b.splice(from, 1); b.splice(to, 0, x); return b; };
 const needs = (m?: MediaItem) => (!m ? null : !m.alt ? 'alt' : !m.rightsConfirmed ? 'rights' : null);
 
-export function ActivityList({ items, onChange, ro, err, media, addMedia, onPickPhotos, canEditMedia }: Props) {
+export function ActivityList({ items, onChange, ro, err, media, addMedia, onPickPhotos, canEditMedia, publications = [] }: Props) {
   // open/closed per card; cards with a title start closed, empty ones open
   const [open, setOpen] = useState<boolean[]>(() => items.map((a) => !a.title.trim()));
   useEffect(() => { setOpen((o) => (o.length === items.length ? o : items.map((a, i) => o[i] ?? !a.title.trim()))); }, [items.length]);
@@ -34,7 +45,7 @@ export function ActivityList({ items, onChange, ro, err, media, addMedia, onPick
     if ((a.title.trim() || a.text.trim() || a.mediaIds.length) && !confirm(`Remove “${a.title.trim() || `activity ${i + 1}`}”${a.mediaIds.length ? ` and its ${a.mediaIds.length} photo link${a.mediaIds.length === 1 ? '' : 's'}` : ''}? The photos stay in the Media Library.`)) return;
     onChange(items.filter((_, j) => j !== i)); setOpen((o) => o.filter((_, j) => j !== i));
   };
-  const add = () => { onChange([...items, { title: '', text: '', mediaIds: [] }]); setOpen((o) => [...o, true]); };
+  const add = () => { onChange([...items, { title: '', text: '', when: '', place: '', mediaIds: [] }]); setOpen((o) => [...o, true]); };
   const allOpen = open.length > 0 && open.every(Boolean);
 
   if (!items.length) return <div className="ae-empty">
@@ -63,7 +74,7 @@ export function ActivityList({ items, onChange, ro, err, media, addMedia, onPick
               <span className="ae-n">{String(i + 1).padStart(2, '0')}</span>
               {first ? <img className="ae-thumb" src={first.url} alt="" /> : <span className="ae-thumb is-empty" aria-hidden="true"><Icon n="image" /></span>}
               <span className="ae-head-t"><b>{a.title.trim() || <em>Untitled activity</em>}</b>
-                <small>{a.mediaIds.length ? `${a.mediaIds.length} photo${a.mediaIds.length === 1 ? '' : 's'}` : 'No photos'}{a.text.trim() ? ' · has a description' : ''}</small></span>
+                <small>{[whenLabel(a.when), a.place?.trim()].filter(Boolean).join(' · ') || 'No date or place'} · {a.mediaIds.length ? `${a.mediaIds.length} photo${a.mediaIds.length === 1 ? '' : 's'}` : 'No photos'}</small></span>
               <span className="ae-chips">
                 {alts > 0 && <span className="ae-chip bad">{alts} alt text</span>}
                 {rights > 0 && <span className="ae-chip warn">{rights} rights</span>}
@@ -81,10 +92,18 @@ export function ActivityList({ items, onChange, ro, err, media, addMedia, onPick
               <input className="input" value={a.title} maxLength={TITLE_MAX} disabled={ro} placeholder="e.g. Leadership bootcamp in Marrakech" onChange={(e) => update(i, { ...a, title: e.target.value })} />
               <span className="between"><small>{!a.title.trim() ? 'Required.' : 'Short and specific.'}</small><small className={`count-hint${a.title.length > TITLE_MAX * 0.9 ? ' near' : ''}`}>{a.title.length} / {TITLE_MAX}</small></span>
             </label>
+            <div className="ae-meta">
+              <label className="field"><span className="pe-label">When <em>· optional</em></span>
+                <input className="input" type="date" value={whenIso(a.when)} disabled={ro} onChange={(e) => update(i, { ...a, when: e.target.value })} aria-label="Date of the activity" />
+                {a.when && !whenIso(a.when) && <small className="ae-when-old">Saved as “{a.when}”. Pick the date to replace it.</small>}</label>
+              <label className="field"><span className="pe-label">Place <em>· optional</em></span>
+                <input className="input" value={a.place ?? ''} maxLength={80} disabled={ro} placeholder="e.g. Marrakech" onChange={(e) => update(i, { ...a, place: e.target.value })} /></label>
+            </div>
             <label className="field"><span className="pe-label">Description <em>· optional</em></span>
               <AutoText value={a.text} max={TEXT_MAX} disabled={ro} placeholder="What happened, who took part, what came out of it." onChange={(v) => update(i, { ...a, text: v })} />
               <span className="between"><small>Plain text. Use verified facts only.</small><small className={`count-hint${a.text.length > TEXT_MAX * 0.9 ? ' near' : ''}`}>{a.text.length} / {TEXT_MAX}</small></span>
             </label>
+            <ActivityPubs value={a.publicationSlugs ?? []} all={publications} ro={ro} onChange={(v) => update(i, { ...a, publicationSlugs: v })} />
             <Gallery ids={a.mediaIds} media={media} ro={ro} label={`Activity ${i + 1}`} canEditMedia={canEditMedia} addMedia={addMedia}
               onChange={(ids) => update(i, { ...a, mediaIds: ids })} onPick={() => onPickPhotos(i)} />
           </div>}
@@ -181,5 +200,23 @@ function AltEditor({ item, onClose, onSaved }: { item: MediaItem; onClose: () =>
       {err && <small className="err" role="alert">{err}</small>}
       <div className="ae-alt-b"><button type="button" className="btn btn-sm" onClick={onClose} disabled={busy}>Cancel</button><button type="button" className="btn btn-sm btn-primary" onClick={save} disabled={busy || alt.trim().length < 3}>{busy ? 'Saving…' : 'Save'}</button></div>
     </div>
+  </div>;
+}
+
+/** Publications from this activity (reports, policy briefs…): chosen from Studio → Publications; only published ones show on the website. */
+function ActivityPubs({ value, all, ro, onChange }: { value: string[]; all: PubOpt[]; ro: boolean; onChange: (v: string[]) => void }) {
+  const chosen = value.map((sl) => all.find((p) => p.slug === sl) ?? { id: sl, slug: sl, title: sl, type: 'other', status: '', publishedRevisionId: null });
+  const left = all.filter((p) => !value.includes(p.slug)).sort((a, b) => a.title.localeCompare(b.title));
+  const live = left.filter((p) => p.publishedRevisionId), draft = left.filter((p) => !p.publishedRevisionId);
+  return <div className="field ae-pubs"><span className="pe-label">Publications <em>· optional</em></span>
+    {chosen.length > 0 && <ul className="ae-pub-chips">{chosen.map((p) => <li key={p.slug}><span className="ae-pub-doc" aria-hidden="true" /><b>{p.title}</b><small>{PUB_TYPES[p.type] ?? 'Publication'}</small>
+      {!p.publishedRevisionId && <em title="Not published yet, so it isn't shown on the website">not published</em>}
+      {!ro && <button type="button" aria-label={`Remove ${p.title}`} onClick={() => onChange(value.filter((x) => x !== p.slug))}>×</button>}</li>)}</ul>}
+    {!ro && <select className="select ae-pub-select" value="" disabled={!left.length || value.length >= 6} onChange={(e) => e.target.value && onChange([...value, e.target.value])} aria-label="Link a publication">
+      <option value="">{!all.length ? 'No publications yet: add them in Publications' : left.length ? 'Link a publication from this activity…' : 'All publications are linked'}</option>
+      {live.length > 0 && <optgroup label="Published">{live.map((p) => <option key={p.slug} value={p.slug}>{p.title} · {PUB_TYPES[p.type] ?? 'Publication'}</option>)}</optgroup>}
+      {draft.length > 0 && <optgroup label="Not published yet (hidden on the website)">{draft.map((p) => <option key={p.slug} value={p.slug}>{p.title}</option>)}</optgroup>}
+    </select>}
+    <small>Shown under the activity on the project page, and in the project’s Publications section.</small>
   </div>;
 }

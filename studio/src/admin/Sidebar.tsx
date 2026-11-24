@@ -23,7 +23,7 @@ export const NAV: { group: string; items: NavItem[] }[] = [
   { group: 'Website', items: [
     { to: '/studio/home', label: 'Homepage', icon: 'home', perm: 'page.read', match: /^\/studio\/home/, key: 'h' },
     { to: '/studio/contact', label: 'Contact page', icon: 'mail', perm: 'page.read', match: /^\/studio\/contact/ },
-    { to: '/studio/pages', label: 'Pages', icon: 'layers', perm: 'page.read', match: /^\/studio\/pages/ },
+    { to: '/studio/pages', label: 'Pages', icon: 'layers', perm: 'page.read', match: /^\/studio\/(pages|about)/ },
     { to: '/studio/menus', label: 'Menus', icon: 'menu', perm: 'page.read', match: /^\/studio\/menus/ },
     { to: '/studio/seo', label: 'SEO', icon: 'search', perm: 'seo.read', match: /^\/studio\/seo/, key: 's' },
     { to: '/studio/translations', label: 'Translations', icon: 'languages', perm: 'translation.read', match: /^\/studio\/translations/, key: 't' },
@@ -79,9 +79,12 @@ export function Sidebar({ path, collapsed, onToggle, unread, onCloseMobile }: { 
   useLayoutEffect(() => {
     const measure = () => { const nav = navRef.current; const el = nav?.querySelector<HTMLElement>('a[aria-current="page"]'); if (!nav || !el) { setInd(null); return; } setInd({ top: el.offsetTop, h: el.offsetHeight }); };
     measure();
+    // re-measure when the nav or the active row changes size (row height differs on phones, after a rotation, etc.)
     const ro = new ResizeObserver(measure); if (navRef.current) ro.observe(navRef.current);
+    const active = navRef.current?.querySelector<HTMLElement>('a[aria-current="page"]'); if (active) ro.observe(active);
+    addEventListener('resize', measure);
     document.fonts?.ready.then(measure).catch(() => {});
-    return () => ro.disconnect();
+    return () => { ro.disconnect(); removeEventListener('resize', measure); };
   }, [path, collapsed, queue, unread]);
 
   const badge = (i: NavItem) => {
@@ -97,7 +100,7 @@ export function Sidebar({ path, collapsed, onToggle, unread, onCloseMobile }: { 
         <img className="brand-logo" src="/studio/brand/afcd-logo.png" alt="" width="640" height="133" />
         <img className="brand-sym" src="/studio/brand/afcd-mark.png" alt="" width="30" height="30" />
       </Link>
-      <div className="sb-ws"><span className="sb-ws-name">Studio</span>{LOCAL && <span className="sb-env" title="Studio is running on this computer">Local</span>}</div>
+      <div className="sb-ws"><span className="sb-ws-name">Studio</span><span className="sb-ws-role" title="Your role">{me.user.roleLabel}</span>{LOCAL && <span className="sb-env" title="Studio is running on this computer">Local</span>}</div>
     </div>
 
     <nav className="nav sb-nav" ref={navRef} aria-label="Sections">
@@ -105,7 +108,7 @@ export function Sidebar({ path, collapsed, onToggle, unread, onCloseMobile }: { 
       {groups.map((g) => <div className="nav-group sb-group" key={g.group} role="group" aria-labelledby={`sb-${g.group}`}>
         {g.group !== 'Overview' && <span className="nav-label sb-label" id={`sb-${g.group}`}>{g.group}</span>}
         {g.items.map((i) => { const on = isOn(i); return <Link key={i.to} to={i.to} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined} title={collapsed ? i.label : undefined}>
-          <NavIcon n={i.icon} /><span className="nav-text">{i.label}</span>{badge(i)}
+          <NavIcon n={i.icon} /><span className="nav-text">{i.label}</span>{badge(i) ?? (i.key && !collapsed && <kbd className="sb-kbd" aria-hidden="true" title={`Shortcut: G then ${i.key.toUpperCase()}`}>G {i.key.toUpperCase()}</kbd>)}
         </Link>; })}
       </div>)}
     </nav>
@@ -114,8 +117,8 @@ export function Sidebar({ path, collapsed, onToggle, unread, onCloseMobile }: { 
       <a href={me.siteUrl} target="_blank" rel="noopener" className="sb-foot-btn" title={collapsed ? 'View website (opens in a new tab)' : undefined}>
         <NavIcon n="globe" /><span className="nav-text">View website</span><NavIcon n="ext" className="sb-ext" /><span className="sr-only"> (opens in a new tab)</span>
       </a>
-      <button type="button" className="sb-foot-btn sb-toggle" onClick={onToggle} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : undefined} aria-pressed={collapsed}>
-        <NavIcon n={collapsed ? 'sideOpen' : 'side'} /><span className="nav-text">Collapse sidebar</span>
+      <button type="button" className="sb-toggle" onClick={onToggle} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-pressed={collapsed}>
+        <NavIcon n={collapsed ? 'sideOpen' : 'side'} />
       </button>
     </div>
   </aside></>;

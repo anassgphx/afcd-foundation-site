@@ -5,7 +5,7 @@ import { articles, events, formSubmissions, media, opportunities, publications, 
 import { can, type Role } from '../../rbac.ts';
 import { TEXT_PAGES } from '../home/service.ts';
 import { todayMorocco } from '../events/render.ts';
-import { notifications } from './service.ts';
+import { notifications, openFailures } from './service.ts';
 
 type Mod = { key: string; label: string; href: string; icon: string; live: number; drafts: number; review: number; note?: string; scheduled?: number };
 type Recent = { kind: string; title: string; status: string; live: boolean; href: string; at: string };
@@ -77,7 +77,7 @@ export async function overview(db: DB, user: { id: string; role: Role }) {
   const health: { key: string; label: string; value: string; tone: 'ok' | 'warn' | 'bad'; href: string; detail: string }[] = [];
   if (can(role, 'dashboard.read')) {
     const [lastOk] = await db.select({ at: publishJobs.finishedAt }).from(publishJobs).where(eq(publishJobs.status, 'succeeded')).orderBy(desc(publishJobs.finishedAt)).limit(1);
-    const [{ failed }] = await db.select({ failed: count() }).from(publishJobs).where(and(eq(publishJobs.status, 'failed'), gte(publishJobs.createdAt, new Date(Date.now() - 864e5))));
+    const failed = (await openFailures(db, 864e5)).length;   // not counting failures a later delivery fixed
     health.push({ key: 'delivery', label: 'Publishing', value: failed ? `${failed} failed` : 'Working', tone: failed ? 'bad' : 'ok', href: '/studio/publishing', detail: failed ? 'In the last 24 hours. Open Publishing for details.' : lastOk?.at ? `Last update delivered ${lastOk.at.toISOString()}` : 'No delivery yet' });
   }
   if (can(role, 'seo.read')) {

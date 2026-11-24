@@ -132,6 +132,8 @@ export const media = pgTable('media', {
   rightsExpiresOn: date('rights_expires_on', { mode: 'string' }),          // optional end of the usage right (YYYY-MM-DD)
   focalX: integer('focal_x').notNull().default(50),
   focalY: integer('focal_y').notNull().default(50),
+  quality: text('quality').notNull().default('best'),   // compression of the website copies: 'best' | 'balanced' | 'smaller'
+  crop: jsonb('crop').$type<{ x: number; y: number; w: number; h: number } | null>(),   // crop of the original (pixels, after EXIF rotation); null = whole image
   tags: jsonb('tags').$type<string[]>().notNull().default([]),
   uploadedBy: uuid('uploaded_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: createdAt(),
@@ -155,7 +157,7 @@ export const projects = pgTable('projects', {
   // (optionally a short verified figure) and activities with their photos. Exported as detail.programObjectives/outcomes/activities.
   programObjectives: jsonb('program_objectives').$type<{ title: string; text: string }[]>().notNull().default([]),
   outcomes: jsonb('outcomes').$type<{ title: string; text: string; figure: string }[]>().notNull().default([]),
-  activityItems: jsonb('activity_items').$type<{ title: string; text: string; mediaIds: string[] }[]>().notNull().default([]),
+  activityItems: jsonb('activity_items').$type<{ title: string; text: string; when?: string; place?: string; mediaIds: string[]; publicationSlugs?: string[] }[]>().notNull().default([]),
   context: text('context').notNull().default(''),
   approach: text('approach').notNull().default(''),
   activities: text('activities').notNull().default(''),
@@ -801,3 +803,32 @@ export const settingsRevisions = pgTable('settings_revisions', {
   actorEmail: text('actor_email'),
   createdAt: createdAt(),
 }, (t) => [index('settings_revisions_cat_idx').on(t.category, t.createdAt)]);
+
+// ---------------------------------------------------------------- About pages (Our Story, Mission & Vision, Strategy, Team, Partners page texts)
+// One row per page, with a fixed key. The working copy lives in `draft` (the page content, plain text and media ids);
+// draft = null: not imported yet, the website keeps the text written in src/content.py. Published revisions are exported to
+// src/data/about.json. Same workflow as every reviewed record (draft → in review → approved → published).
+export const aboutPages = pgTable('about_pages', {
+  id: id(),
+  key: text('key').notNull(),                     // 'our-story' | 'mission-vision' | 'strategy' | 'team' | 'partners'
+  draft: jsonb('draft').$type<Record<string, unknown>>(),
+  provenance: text('provenance').notNull().default(''),
+  status: workflowEnum('status').notNull().default('draft'),
+  publishedRevisionId: uuid('published_revision_id'),
+  approvedRevisionId: uuid('approved_revision_id'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  verifiedAt: timestamp('verified_at', { withTimezone: true }),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('about_pages_key_uq').on(t.key)]);
+
+export const aboutPageRevisions = pgTable('about_page_revisions', {
+  id: id(),
+  pageId: uuid('page_id').notNull().references(() => aboutPages.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('about_page_revisions_num_uq').on(t.pageId, t.number)]);

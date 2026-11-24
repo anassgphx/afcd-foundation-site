@@ -1,10 +1,23 @@
 // Top-bar workspace features: search across Studio records, and notifications computed from real state
 // (nothing is stored). Every query is filtered by the signed-in user's permissions; form messages are never searched.
+import { ABOUT_META, type AboutKey } from '../about/service.ts';
 import { and, count, desc, eq, gte, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
-import { articles, events, formSubmissions, opportunities, pageContents, pages, partners, pillars, projects, publications, publishJobs, seoOverrides } from '../../db/schema.ts';
+import { aboutPages, articles, events, formSubmissions, opportunities, pageContents, pages, partners, pillars, projects, publications, publishJobs, seoOverrides } from '../../db/schema.ts';
 import { can, type Role } from '../../rbac.ts';
 import { TEXT_PAGES } from '../home/service.ts';
+
+/** Failed website deliveries in the last `ms` that are still open: a later successful delivery of the same kind for
+ *  the same item (or, for site-wide jobs, of the same kind) means the problem was fixed, so it no longer needs anyone. */
+export async function openFailures(db: DB, ms: number) {
+  const since = new Date(Date.now() - ms);
+  const failed = await db.select({ id: publishJobs.id, kind: publishJobs.kind, entityId: publishJobs.entityId, error: publishJobs.error, at: publishJobs.createdAt })
+    .from(publishJobs).where(and(eq(publishJobs.status, 'failed'), gte(publishJobs.createdAt, since))).orderBy(desc(publishJobs.createdAt)).limit(50);
+  if (!failed.length) return [];
+  const ok = await db.select({ kind: publishJobs.kind, entityId: publishJobs.entityId, at: publishJobs.createdAt })
+    .from(publishJobs).where(and(eq(publishJobs.status, 'succeeded'), gte(publishJobs.createdAt, since)));
+  return failed.filter((f) => !ok.some((o) => o.kind === f.kind && o.entityId === f.entityId && o.at > f.at));
+}
 
 export type Hit = { kind: string; id: string; title: string; sub: string; href: string; status: string };
 const LIMIT = 6;
@@ -52,6 +65,9 @@ export async function notifications(db: DB, user: { id: string; role: Role }): P
       rows: () => db.select({ id: partners.id, title: partners.name, status: partners.status, submittedBy: partners.submittedBy, updatedAt: partners.updatedAt }).from(partners).where(inArray(partners.status, ['in_review', 'approved', 'changes_requested'])) },
     { kind: 'Pillar', perm: { read: 'pillar.read', approve: 'pillar.approve', publish: 'pillar.publish' }, href: (id) => `/studio/pillars/${id}`,
       rows: () => db.select({ id: pillars.id, title: pillars.name, status: pillars.status, submittedBy: pillars.submittedBy, updatedAt: pillars.updatedAt }).from(pillars).where(inArray(pillars.status, ['in_review', 'approved', 'changes_requested'])) },
+    { kind: 'About page', perm: { read: 'about.read', approve: 'about.approve', publish: 'about.publish' }, href: (id) => `/studio/pages/site/${id}`,
+      rows: async () => (await db.select({ id: aboutPages.id, key: aboutPages.key, status: aboutPages.status, submittedBy: aboutPages.submittedBy, updatedAt: aboutPages.updatedAt }).from(aboutPages).where(inArray(aboutPages.status, ['in_review', 'approved', 'changes_requested'])))
+        .map(({ key, ...r }) => ({ ...r, title: ABOUT_META[key as AboutKey]?.title ?? key })) },
     { kind: 'SEO settings', perm: { read: 'seo.read', approve: 'seo.approve', publish: 'seo.publish' }, href: (_id) => '/studio/seo/pages',
       rows: () => db.select({ id: seoOverrides.id, title: seoOverrides.file, status: seoOverrides.status, submittedBy: seoOverrides.submittedBy, updatedAt: seoOverrides.updatedAt }).from(seoOverrides).where(inArray(seoOverrides.status, ['in_review', 'approved', 'changes_requested'])) },
   ];
@@ -65,7 +81,7 @@ export async function notifications(db: DB, user: { id: string; role: Role }): P
     }
   }
   if (can(role, 'dashboard.read')) {
-    for (const j of await db.select({ id: publishJobs.id, kind: publishJobs.kind, error: publishJobs.error, at: publishJobs.createdAt }).from(publishJobs).where(and(eq(publishJobs.status, 'failed'), gte(publishJobs.createdAt, new Date(Date.now() - 3 * 864e5)))).orderBy(desc(publishJobs.createdAt)).limit(5)) {
+    for (const j of (await openFailures(db, 3 * 864e5)).slice(0, 5)) {
       notes.push({ id: `job:${j.id}`, kind: 'failed', title: `Publishing failed (${j.kind.replace(/_/g, ' ')})`, sub: (j.error ?? 'See the Publishing page.').slice(0, 140), href: '/studio/publishing', at: j.at.toISOString() });
     }
   }

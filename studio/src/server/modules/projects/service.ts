@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, max, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
 import {
-  projects, projectPillars, projectObjectives, projectGallery, projectRevisions, pillars, objectives, media, reviewComments, users, events
+  projects, projectPillars, projectObjectives, projectGallery, projectRevisions, pillars, objectives, media, reviewComments, users, events, partners, partnerProjects
 } from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
@@ -30,7 +30,8 @@ export const projectInputSchema = z.object({
   programObjectives: z.array(z.object({ title: text(160).min(1, 'Give each programme objective a title.'), text: text(600).default('') }).strict()).max(12).default([]),
   outcomes: z.array(z.object({ title: text(160).default(''), text: text(600).default(''), figure: text(40).default('') }).strict()
     .refine((o) => !!(o.title || o.text), { message: 'Give each outcome a title or a description.' })).max(12).default([]),
-  activityItems: z.array(z.object({ title: text(160).min(1, 'Give each activity a title.'), text: text(800).default(''), mediaIds: z.array(z.string().uuid()).max(12, 'Use at most 12 photos per activity.').default([]) }).strict()).max(12).default([]),
+  activityItems: z.array(z.object({ title: text(160).min(1, 'Give each activity a title.'), text: text(800).default(''), when: text(40).default(''), place: text(80).default(''), mediaIds: z.array(z.string().uuid()).max(12, 'Use at most 12 photos per activity.').default([]),
+    publicationSlugs: z.array(z.string().max(120)).max(6, 'Link at most 6 publications per activity.').default([]) }).strict()).max(20).default([]),   // publications: shown under the activity once published
   context: text(2000).default(''),
   approach: text(2000).default(''),
   activities: text(2000).default(''),
@@ -48,6 +49,7 @@ export const projectInputSchema = z.object({
   pillarKeys: z.array(z.string()).min(1, 'Link the project to at least one pillar.').max(4),
   primaryPillarKey: z.string(),
   objectiveRefs: z.array(z.string().regex(/^SO-\d{2}$/)).max(6).default([]),
+  partnerSlugs: z.array(z.string().regex(SLUG)).max(12).default([]),   // partners of this project (the same links the Partners editor edits)
   seoTitle: text(70).default(''),
   seoDescription: text(170).default(''),
   sort: z.number().int().min(0).max(10000).default(100),
@@ -74,6 +76,8 @@ export type FullProject = typeof projects.$inferSelect & {
   hero: MediaRow | null;
   logo: MediaRow | null;
   poster: MediaRow | null;
+  partnerLinks: { slug: string; name: string; scope: string; live: boolean }[];
+  partnerSlugs: string[];   // partners linked to this project, live or not
   gallery: MediaRow[];
   activityMedia: Record<string, MediaRow>;   // photos used by activityItems, by id
   linkedEvents: { id: string; title: string; startDate: string; status: string; live: boolean }[];   // Studio events linked to this project (read-only here)
@@ -88,13 +92,16 @@ export async function loadProject(db: DB, id: string): Promise<FullProject> {
   const objs = await db.select({ ref: objectives.ref }).from(projectObjectives)
     .innerJoin(objectives, eq(objectives.id, projectObjectives.objectiveId)).where(eq(projectObjectives.projectId, id)).orderBy(asc(objectives.sort));
   const hero = p.heroMediaId ? (await db.select().from(media).where(eq(media.id, p.heroMediaId)))[0] ?? null : null;
+  const links = (await db.select({ slug: partners.slug, name: partners.name, scope: partners.scope, rev: partners.publishedRevisionId, sort: partners.sort })
+    .from(partnerProjects).innerJoin(partners, eq(partners.id, partnerProjects.partnerId)).where(eq(partnerProjects.projectId, id)))
+    .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name)).map(({ rev, sort: _s, ...r }) => ({ ...r, live: !!rev }));
   const logo = p.logoMediaId ? (await db.select().from(media).where(eq(media.id, p.logoMediaId)))[0] ?? null : null;
   const poster = p.posterMediaId ? (await db.select().from(media).where(eq(media.id, p.posterMediaId)))[0] ?? null : null;
   const gallery = await db.select({ m: media }).from(projectGallery).innerJoin(media, eq(media.id, projectGallery.mediaId))
     .where(eq(projectGallery.projectId, id)).orderBy(asc(projectGallery.sort));
   const actIds = [...new Set((p.activityItems ?? []).flatMap((a) => a.mediaIds ?? []))];
   const actRows = actIds.length ? await db.select().from(media).where(inArray(media.id, actIds)) : [];
-  return { ...p, pillars: pls.map(({ sort: _s, ...r }) => r), objectiveRefs: objs.map((o) => o.ref), hero, logo, poster, gallery: gallery.map((g) => g.m),
+  return { ...p, pillars: pls.map(({ sort: _s, ...r }) => r), objectiveRefs: objs.map((o) => o.ref), partnerSlugs: links.map((l) => l.slug), partnerLinks: links, hero, logo, poster, gallery: gallery.map((g) => g.m),
     activityMedia: Object.fromEntries(actRows.map((m) => [m.id, m])),
     linkedEvents: await db.select({ id: events.id, title: events.title, startDate: events.startDate, status: events.status, live: sql<boolean>`${events.publishedRevisionId} is not null` })
       .from(events).where(eq(events.projectId, id)).orderBy(desc(events.startDate)) };
@@ -124,13 +131,14 @@ export function toSnapshot(p: FullProject): Snapshot {
     // cover: up to five places, the main photo then the first gallery photos; the poster (shown whole, 1:1) takes one of the five
     cover: [p.hero, ...p.gallery].filter(Boolean).slice(0, p.poster ? 4 : 5).map((m) => publicRef(m as MediaRow)),
     poster: p.poster ? publicRef(p.poster) : null,
+    partners: p.partnerLinks.filter((x) => x.live).map((x) => ({ name: x.name, slug: x.slug })),   // published partners, shown as Partner(s) on the cover
     gallery: p.gallery.map((m) => publicRef(m)),
     objectives: p.objectiveRefs,
     ...(p.programObjectives?.length ? { programObjectives: p.programObjectives.map((o) => ({ title: o.title, ...(o.text ? { text: o.text } : {}) })) } : {}),
     ...(p.outcomes?.length ? { outcomes: p.outcomes.map((o) => ({ ...(o.title ? { title: o.title } : {}), ...(o.text ? { text: o.text } : {}), ...(o.figure ? { figure: o.figure } : {}) })) } : {}),
     ...(p.activityItems?.length ? { activities: p.activityItems.map((a) => {
       const imgs = (a.mediaIds ?? []).map((mid) => p.activityMedia[mid]).filter(Boolean).map((m) => publicRef(m));
-      return { title: a.title, ...(a.text ? { text: a.text } : {}), ...(imgs.length ? { images: imgs } : {}) };
+      return { title: a.title, ...(a.text ? { text: a.text } : {}), ...(a.when ? { when: a.when } : {}), ...(a.place ? { place: a.place } : {}), ...(imgs.length ? { images: imgs } : {}), ...(a.publicationSlugs?.length ? { publications: a.publicationSlugs } : {}) };
     }) } : {}),
     revision: '',
   } : {};
@@ -166,13 +174,18 @@ async function writeRelations(db: DB, id: string, input: ProjectInput) {
   await db.insert(projectPillars).values(pl.map((x) => ({ projectId: id, pillarId: x.id, isPrimary: x.key === input.primaryPillarKey })));
   await db.delete(projectObjectives).where(eq(projectObjectives.projectId, id));
   if (ob.length) await db.insert(projectObjectives).values(ob.map((o) => ({ projectId: id, objectiveId: o.id })));
+  // partners: the same links the Partners editor edits, so both stay in step
+  const pts = input.partnerSlugs.length ? await db.select({ id: partners.id }).from(partners).where(inArray(partners.slug, input.partnerSlugs)) : [];
+  if (pts.length !== new Set(input.partnerSlugs).size) throw new AppError(422, 'Unknown partner.');
+  await db.delete(partnerProjects).where(eq(partnerProjects.projectId, id));
+  if (pts.length) await db.insert(partnerProjects).values(pts.map((x) => ({ partnerId: x.id, projectId: id })));
   await db.delete(projectGallery).where(eq(projectGallery.projectId, id));
   const gal = [...new Set(input.galleryMediaIds)];
   if (gal.length) await db.insert(projectGallery).values(gal.map((m, i) => ({ projectId: id, mediaId: m, sort: i })));
 }
 
 function columns(input: ProjectInput) {
-  const { galleryMediaIds: _g, pillarKeys: _p, primaryPillarKey: _pp, objectiveRefs: _o, ...cols } = input;
+  const { galleryMediaIds: _g, pillarKeys: _p, primaryPillarKey: _pp, objectiveRefs: _o, partnerSlugs: _ps, ...cols } = input;
   return cols;
 }
 
@@ -288,8 +301,8 @@ export async function restoreRevision(db: DB, actor: NonNullable<Actor>, id: str
     const [rev] = await t.select().from(projectRevisions).where(and(eq(projectRevisions.id, revisionId), eq(projectRevisions.projectId, id)));
     if (!rev) throw new AppError(404, 'Revision not found.');
     const s = rev.snapshot as unknown as Snapshot;
-    const d = s.detail as Record<string, unknown> & { facts?: [string, string][]; rows?: [string, string][]; hero?: { id: string } | null; logo?: { id: string; shape: string; fit: string; bg: string; size: string } | null; poster?: { id: string } | null; gallery?: { id: string }[]; objectives?: string[]; photo?: string;
-      programObjectives?: { title: string; text?: string }[]; outcomes?: { title?: string; text?: string; figure?: string }[]; activities?: { title: string; text?: string; images?: { id: string }[]; image?: { id: string } }[] };
+    const d = s.detail as Record<string, unknown> & { facts?: [string, string][]; rows?: [string, string][]; hero?: { id: string } | null; logo?: { id: string; shape: string; fit: string; bg: string; size: string } | null; poster?: { id: string } | null; partners?: { slug: string; name: string }[]; gallery?: { id: string }[]; objectives?: string[]; photo?: string;
+      programObjectives?: { title: string; text?: string }[]; outcomes?: { title?: string; text?: string; figure?: string }[]; activities?: { title: string; text?: string; when?: string; place?: string; images?: { id: string }[]; image?: { id: string }; publications?: (string | { slug: string })[] }[] };
     const row = (k: string) => d.rows?.find((r) => r[0] === k)?.[1] ?? '';
     const fact = (k: string) => d.facts?.find((r) => r[0] === k)?.[1] ?? '';
     const input: ProjectInput = projectInputSchema.parse({
@@ -298,12 +311,12 @@ export async function restoreRevision(db: DB, actor: NonNullable<Actor>, id: str
       extraFacts: (d.facts ?? []).filter((f) => !['Pillar', 'Category', 'Location', 'Years'].includes(f[0])).map(([label, value]) => ({ label, value })),
       context: row('Context'), approach: row('Approach'), activities: row('Activities'), results: row('Results'),
       hasDetailPage: !!s.file, photoCaption: d.photo ?? '', heroMediaId: d.hero?.id ?? null,
-      logoMediaId: d.logo?.id ?? null, posterMediaId: d.poster?.id ?? null, ...(d.logo ? { logoStyle: { shape: d.logo.shape, fit: d.logo.fit, bg: d.logo.bg, size: d.logo.size } } : {}),
+      logoMediaId: d.logo?.id ?? null, posterMediaId: d.poster?.id ?? null, ...(d.partners ? { partnerSlugs: d.partners.map((x) => x.slug) } : {}), ...(d.logo ? { logoStyle: { shape: d.logo.shape, fit: d.logo.fit, bg: d.logo.bg, size: d.logo.size } } : {}),
       galleryMediaIds: (d.gallery ?? []).map((g) => g.id),
       pillarKeys: s.pillars, primaryPillarKey: s.pillar, objectiveRefs: d.objectives ?? [],
       programObjectives: (d.programObjectives ?? []).map((o) => ({ title: o.title, text: o.text ?? '' })),
       outcomes: (d.outcomes ?? []).map((o) => ({ title: o.title ?? '', text: o.text ?? '', figure: o.figure ?? '' })),
-      activityItems: (d.activities ?? []).map((a) => ({ title: a.title, text: a.text ?? '', mediaIds: (a.images ?? (a.image ? [a.image] : [])).map((m) => m.id) })),
+      activityItems: (d.activities ?? []).map((a) => ({ title: a.title, text: a.text ?? '', when: a.when ?? '', place: a.place ?? '', publicationSlugs: (a.publications ?? []).map((x) => (typeof x === 'string' ? x : x.slug)), mediaIds: (a.images ?? (a.image ? [a.image] : [])).map((m) => m.id) })),
       seoTitle: s.seo?.title ?? '', seoDescription: s.seo?.description ?? '',
     });
     const [cur] = await t.select().from(projects).where(eq(projects.id, id)).for('update');
@@ -320,7 +333,7 @@ export async function listProjects(db: DB) {
   const pl = await db.select({ projectId: projectPillars.projectId, key: pillars.key, name: pillars.name, colour: pillars.colour, isPrimary: projectPillars.isPrimary })
     .from(projectPillars).innerJoin(pillars, eq(pillars.id, projectPillars.pillarId));
   // list extras: a small thumbnail of the main photo and who last edited the record
-  const mids = [...new Set(rows.map((r) => r.heroMediaId).filter(Boolean) as string[])];
+  const mids = [...new Set(rows.flatMap((r) => [r.heroMediaId, r.posterMediaId, r.logoMediaId]).filter(Boolean) as string[])];
   const thumbs = new Map((mids.length ? await db.select({ id: media.id, key: media.storageKey }).from(media).where(inArray(media.id, mids)) : []).map((m) => [m.id, `/studio/media-file/${m.key}-480.webp`]));
   const uids = [...new Set(rows.map((r) => r.updatedBy).filter(Boolean) as string[])];
   const names = new Map((uids.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, uids)) : []).map((u) => [u.id, u.name]));
@@ -331,7 +344,10 @@ export async function listProjects(db: DB) {
   const allIds = [...new Set([...used.values()].flat())];
   const incomplete = new Set((allIds.length ? await db.select({ id: media.id, alt: media.alt, ok: media.rightsConfirmed }).from(media).where(inArray(media.id, allIds)) : [])
     .filter((m) => !m.alt.trim() || !m.ok).map((m) => m.id));
-  return rows.map((r) => ({ ...r, thumb: r.heroMediaId ? thumbs.get(r.heroMediaId) ?? null : null, updatedByName: r.updatedBy ? names.get(r.updatedBy) ?? null : null,
+  const th = (id: string | null) => (id ? thumbs.get(id) ?? null : null);
+  // for the list's "info entered" meter: how many partners and gallery photos each project has
+  const pp = await db.select({ projectId: partnerProjects.projectId }).from(partnerProjects);
+  return rows.map((r) => ({ ...r, partnerCount: pp.filter((x) => x.projectId === r.id).length, galleryCount: gal.filter((g) => g.projectId === r.id).length, thumb: th(r.heroMediaId) ?? th(r.posterMediaId), logoThumb: th(r.logoMediaId), updatedByName: r.updatedBy ? names.get(r.updatedBy) ?? null : null,
     photoCount: used.get(r.id)!.length, photoIssues: used.get(r.id)!.filter((x) => incomplete.has(x)).length,
     pillars: pl.filter((x) => x.projectId === r.id).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)) }));
 }

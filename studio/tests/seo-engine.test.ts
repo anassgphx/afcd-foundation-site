@@ -3,7 +3,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { makeApp, addUser, client } from './helpers.ts';
-import { runBuildAudit } from '../src/server/modules/seo/engine.ts';
+import { runBuildAudit, CHECKS, RULES } from '../src/server/modules/seo/engine.ts';
 import { seoIssues } from '../src/server/db/schema.ts';
 
 let h: Awaited<ReturnType<typeof makeApp>>;
@@ -87,4 +87,51 @@ describe('audit false positives (SEO Pro phase 1)', () => {
     expect(codes('about.html')).not.toContain('meta.title-vague');
     expect(codes('c.html')).toEqual(expect.arrayContaining(['meta.title-vague', 'content.thin']));
   });
+
+  describe('per-page checklist', () => {
+    it('covers every page-level rule, so nothing the audit finds is missing from a checklist', () => {
+      const covered = new Set(CHECKS.flatMap((c) => c.codes));
+      const siteWide = ['tech.sitemap-ghost', 'site.preview-build'];   // reported on sitemap.xml / robots.txt, not on a page
+      expect(Object.keys(RULES).filter((k) => !covered.has(k) && !siteWide.includes(k))).toEqual([]);
+    });
+
+    it('agrees with the findings: a page with problems fails or warns, a clean page passes with evidence', () => {
+      const dir = join(process.env.TMPDIR ?? '/tmp', `seo-chk-${Date.now()}`); site(dir, true);
+      const a = runBuildAudit(dir);
+      const checks = (f: string) => Object.fromEntries(a.pages.find((p) => p.file === f)!.checks!.map((c) => [c.id, c]));
+      const bad = checks('a.html');
+      expect(bad.h1.status).toBe('warn');                      // two h1 (low)
+      expect(bad.broken.status).toBe('fail');                  // broken link (high)
+      expect(bad.broken.detail).toContain('missing.html');
+      expect(bad.canonical.status).toBe('fail');
+      expect(bad.placeholder.status).toBe('warn');
+      expect(bad.schema.status).toBe('fail');
+      expect(bad.alt.status).toBe('warn');
+      expect(bad.title.codes).toEqual(expect.arrayContaining(['meta.title-dup']));
+      // every finding on the page shows up in some check that is not passed
+      const shown = new Set(Object.values(bad).filter((c) => c.status !== 'pass').flatMap((c) => c.codes));
+      for (const f of a.findings.filter((x) => x.file === 'a.html')) expect(shown.has(f.code)).toBe(true);
+      const good = checks('index.html');
+      expect(good.title).toMatchObject({ status: 'pass', detail: expect.stringContaining('characters') });
+      expect(good.schema).toMatchObject({ status: 'pass', detail: 'NGO' });
+      expect(good.words).toMatchObject({ status: 'pass', detail: expect.stringMatching(/^\d+ words/) });
+      expect(good.inbound.detail).toBe('Homepage');
+    });
+
+    it('says a preview build is noindex on purpose instead of passing or failing indexability', () => {
+      const dir = join(process.env.TMPDIR ?? '/tmp', `seo-chk-p-${Date.now()}`); site(dir, false);
+      const idx = runBuildAudit(dir).pages.find((p) => p.file === 'index.html')!.checks!.find((c) => c.id === 'indexable')!;
+      expect(idx.status).toBe('info');
+      expect(idx.detail).toMatch(/Preview build/);
+    });
+
+    it('leaves out checks that do not apply to the 404 page', () => {
+      const dir = join(process.env.TMPDIR ?? '/tmp', `seo-chk-404-${Date.now()}`); site(dir, true);
+      writeFileSync(join(dir, '404.html'), page('404.html', { title: 'Page not found · AFCD Foundation', main: '<p>Not here.</p>' }));
+      const ids = runBuildAudit(dir).pages.find((p) => p.file === '404.html')!.checks!.map((c) => c.id);
+      expect(ids).toContain('title');
+      expect(ids).not.toContain('h1'); expect(ids).not.toContain('canonical'); expect(ids).not.toContain('words');
+    });
+  });
 });
+

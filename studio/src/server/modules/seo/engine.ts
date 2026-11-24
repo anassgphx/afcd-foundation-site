@@ -12,7 +12,13 @@ export type PageScan = {
   file: string; url: string; title: string; description: string; lang: string; canonical: string; robots: string; inSitemap: boolean;
   h1: string[]; headings: { level: number; text: string }[]; words: number; og: { title: string; description: string; image: string };
   schema: { types: string[]; errors: string[] }; linksOut: string[]; inbound: string[]; images: number; size: number;
+  checks?: Check[];
 };
+/** One line of a page's checklist. `status` comes only from this audit's findings for the page (no finding = pass),
+ *  so the checklist and the issue list always agree. */
+export type CheckStatus = 'pass' | 'warn' | 'fail' | 'info';
+export type Check = { id: string; group: CheckGroup; label: string; status: CheckStatus; detail: string; codes: string[] };
+export type CheckGroup = 'basic' | 'advanced' | 'content' | 'performance';
 export type BuildAudit = { kind: 'build'; at: string; site: string; production: boolean; pages: PageScan[]; redirects?: { file: string; to: string }[]; findings: Finding[]; scores: Record<Category | 'overall', number>; counts: Record<Severity, number> };
 
 import { DEFAULT_SITE } from './site.ts';
@@ -168,6 +174,7 @@ export function runBuildAudit(root: string, now = new Date(), site = DEFAULT_SIT
 
   // scores per area: each page starts at 100 in each area and loses points for that area's findings
   const pages = scanned.map((s) => s.scan);
+  for (const p of pages) p.checks = pageChecklist(p, findings.filter((f) => f.file === p.file), production);
   const cats: Category[] = ['technical', 'metadata', 'content', 'structured', 'linking', 'performance'];
   const scores = Object.fromEntries(cats.map((c) => {
     const per = pages.map((p) => Math.max(0, 100 - findings.filter((f) => f.file === p.file && f.category === c).reduce((n, f) => n + WEIGHT[f.severity], 0)));
@@ -175,4 +182,46 @@ export function runBuildAudit(root: string, now = new Date(), site = DEFAULT_SIT
   })) as Record<Category, number>;
   const counts = Object.fromEntries(SEVERITY_ORDER.map((s) => [s, findings.filter((f) => f.severity === s).length])) as Record<Severity, number>;
   return { kind: 'build', at: now.toISOString(), site, production, pages, redirects: redirectsOut, findings, scores: { ...scores, overall: scores.technical }, counts };
+}
+
+// ---------------------------------------------------------------- Per-page checklist
+const STATUS_OF: Record<Severity, CheckStatus> = { critical: 'fail', high: 'fail', medium: 'warn', low: 'warn', info: 'info' };
+const WORST: CheckStatus[] = ['fail', 'warn', 'info', 'pass'];
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+type CheckDef = { id: string; group: CheckGroup; label: string; codes: string[]; pass: (p: PageScan) => string; skip404?: boolean };
+/** The checklist, in display order. A check passes when none of its rule codes was found on the page. */
+export const CHECKS: CheckDef[] = [
+  { id: 'title', group: 'basic', label: 'Page title', codes: ['tech.title-missing', 'meta.title-long', 'meta.title-vague', 'meta.title-dup'], pass: (p) => `“${clip(p.title, 70)}” (${p.title.length} characters)` },
+  { id: 'description', group: 'basic', label: 'Meta description', codes: ['meta.desc-missing', 'meta.desc-short', 'meta.desc-long', 'meta.desc-dup'], pass: (p) => `${p.description.length} characters, unique to this page` },
+  { id: 'h1', group: 'basic', label: 'Main heading (h1)', codes: ['content.h1-missing', 'content.h1-many'], pass: (p) => `“${clip(p.h1[0] ?? '', 70)}”`, skip404: true },
+  { id: 'headings', group: 'basic', label: 'Heading order', codes: ['content.heading-skip'], pass: (p) => p.headings.length > 1 ? `${p.headings.length} headings, no level skipped` : 'No sub-headings to check', skip404: true },
+  { id: 'alt', group: 'basic', label: 'Image alt text', codes: ['content.img-alt'], pass: (p) => p.images ? `All ${plural(p.images, 'image')} have alt text` : 'No images in the main content' },
+  { id: 'lang', group: 'basic', label: 'Page language', codes: ['tech.lang-missing'], pass: (p) => `lang="${p.lang}"` },
+  { id: 'indexable', group: 'advanced', label: 'Search engines may index it', codes: ['tech.noindex'], pass: (p) => /noindex/i.test(p.robots) ? 'Preview build: noindex on purpose' : 'No noindex' },
+  { id: 'canonical', group: 'advanced', label: 'Canonical link', codes: ['tech.canonical-missing', 'tech.canonical-mismatch'], pass: (p) => p.canonical, skip404: true },
+  { id: 'sitemap', group: 'advanced', label: 'Listed in the sitemap', codes: ['tech.not-in-sitemap'], pass: () => 'sitemap.xml lists it', skip404: true },
+  { id: 'og', group: 'advanced', label: 'Link preview (Open Graph)', codes: ['meta.og-missing'], pass: () => 'Title, description and image', skip404: true },
+  { id: 'schema', group: 'advanced', label: 'Structured data', codes: ['schema.invalid', 'schema.org-missing', 'schema.article-suggest'], pass: (p) => p.schema.types.length ? p.schema.types.join(', ') : 'None needed on this page' },
+  { id: 'escaping', group: 'advanced', label: 'Text in search results', codes: ['tech.double-escaped'], pass: () => 'Nothing escaped twice' },
+  { id: 'placeholder', group: 'content', label: 'No sample or placeholder text', codes: ['content.placeholder'], pass: () => 'None found', skip404: true },
+  { id: 'words', group: 'content', label: 'Amount of text', codes: ['content.thin'], pass: (p) => `${p.words} words in the main content`, skip404: true },
+  { id: 'inbound', group: 'content', label: 'Linked from other pages', codes: ['link.orphan'], pass: (p) => p.file === 'index.html' ? 'Homepage' : p.inbound.length ? `From ${plural(p.inbound.length, 'page')}` : 'From the menu or footer', skip404: true },
+  { id: 'broken', group: 'content', label: 'Links work', codes: ['tech.broken-links'], pass: (p) => p.linksOut.length ? `${plural(p.linksOut.length, 'internal link')}, none broken` : 'No internal links' },
+  { id: 'redirect-links', group: 'content', label: 'Links go straight to the page', codes: ['link.via-redirect'], pass: () => 'No link goes through a redirect' },
+  { id: 'img-dims', group: 'performance', label: 'Image width and height', codes: ['perf.img-dimensions'], pass: (p) => p.images ? 'Set on every image' : 'No images' },
+  { id: 'img-size', group: 'performance', label: 'Image file sizes', codes: ['perf.img-size'], pass: (p) => p.images ? 'No image over 400 KB' : 'No images' },
+];
+
+export function pageChecklist(p: PageScan, found: Finding[], production = true): Check[] {
+  const is404 = p.file === '404.html';
+  return CHECKS.filter((c) => !(is404 && c.skip404)).map((c) => {
+    const hits = found.filter((f) => c.codes.includes(f.code));
+    if (!hits.length) {
+      // on a preview build every page is noindex on purpose: say so instead of claiming it may be indexed
+      if (c.id === 'indexable' && !production) return { id: c.id, group: c.group, label: c.label, status: 'info' as const, detail: 'Preview build: noindex on purpose. Audit a production build to check.', codes: c.codes };
+      return { id: c.id, group: c.group, label: c.label, status: 'pass' as const, detail: c.pass(p), codes: c.codes };
+    }
+    const status = hits.map((f) => STATUS_OF[f.severity]).sort((x, y) => WORST.indexOf(x) - WORST.indexOf(y))[0];
+    return { id: c.id, group: c.group, label: c.label, status, detail: hits.map((f) => f.evidence[0] ? `${f.title}: ${f.evidence[0]}` : f.title).join(' · '), codes: hits.map((f) => f.code) };
+  });
 }

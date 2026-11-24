@@ -24,10 +24,10 @@ import { currentLayout, layoutBlocks, type LayoutEntry } from '../home/layout.ts
 import { publicRef } from '../media/service.ts';
 import { detailSource, listingSource, oppCtx, oppState, opportunityFile, type LiveOpp } from '../opportunities/render.ts';
 import type { OpportunitySnapshot } from '../opportunities/service.ts';
-import { publications, publicationRevisions } from '../../db/schema.ts';
+import { publications, publicationRevisions, documents } from '../../db/schema.ts';
 import { detailSource as pubDetailSource, listingSource as pubListingSource, pubAssets, pubCtx, publicationFile, PUBLIC_DOC_DIR, type LivePub } from '../publications/render.ts';
 import { DOC_FILE, documentFile, documentPath, type DocumentRow } from '../publications/documents.ts';
-import type { PublicationSnapshot } from '../publications/service.ts';
+import { TYPE_LABEL as PUB_TYPE_LABEL, type PublicationSnapshot } from '../publications/service.ts';
 import { eventEntries, eventFile, isUpcoming } from '../events/render.ts';
 import type { EventSnapshot } from '../events/service.ts';
 import { partnerEntries } from '../partners/render.ts';
@@ -35,6 +35,9 @@ import { pillars, pillarRevisions } from '../../db/schema.ts';
 import { pillarEntries } from '../pillars/render.ts';
 import type { PillarSnapshot } from '../pillars/service.ts';
 import type { PartnerSnapshot } from '../partners/service.ts';
+import { aboutPages, aboutPageRevisions, objectives } from '../../db/schema.ts';
+import { aboutEntries, type LiveAbout } from '../about/render.ts';
+import { ABOUT_META, type AboutKey, type AboutSnapshot } from '../about/service.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import { derivativeFiles } from '../media/service.ts';
@@ -52,7 +55,7 @@ import * as SET from '../settings/service.ts';
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
 
-export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string; partnersFile?: string; eventsFile?: string; fieldsFile?: string; pillarsFile?: string }) => Promise<string>;
+export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string; partnersFile?: string; eventsFile?: string; fieldsFile?: string; pillarsFile?: string; aboutFile?: string }) => Promise<string>;
 
 /** Default runner: the real generator and build. Tests inject a fake. */
 export const realRunner: BuildRunner = async (cfg, mode) => {
@@ -62,7 +65,7 @@ export const realRunner: BuildRunner = async (cfg, mode) => {
     const b = await run('npm', ['run', 'build'], { ...opts, env: { ...process.env } });
     return [a.stdout, b.stdout, b.stderr].join('\n');
   }
-  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}), ...(mode.partnersFile ? { STUDIO_PARTNERS_JSON: mode.partnersFile } : {}), ...(mode.eventsFile ? { STUDIO_EVENTS_JSON: mode.eventsFile } : {}), ...(mode.fieldsFile ? { PAGE_FIELDS_JSON: mode.fieldsFile } : {}), ...(mode.pillarsFile ? { STUDIO_PILLARS_JSON: mode.pillarsFile } : {}) };
+  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}), ...(mode.partnersFile ? { STUDIO_PARTNERS_JSON: mode.partnersFile } : {}), ...(mode.eventsFile ? { STUDIO_EVENTS_JSON: mode.eventsFile } : {}), ...(mode.fieldsFile ? { PAGE_FIELDS_JSON: mode.fieldsFile } : {}), ...(mode.pillarsFile ? { STUDIO_PILLARS_JSON: mode.pillarsFile } : {}), ...(mode.aboutFile ? { STUDIO_ABOUT_JSON: mode.aboutFile } : {}) };
   const a = mode.only === 'pages' ? { stdout: '' } : await run('python3', ['-I', 'src/content.py'], { ...opts, env });
   const b = await run('node', ['build.mjs'], { ...opts, env });
   return [a.stdout, b.stdout].join('\n');
@@ -82,15 +85,36 @@ export class Publisher {
   get dataFile() { return resolve(this.cfg.siteRoot, 'src/data/projects.json'); }
 
   /** Entries for every live project, optionally overriding one project with another revision (publish) or removing it (unpublish). */
-  async liveEntries(override?: { projectId: string; revisionId: string | null }) {
+  async liveEntries(override?: { projectId: string; revisionId: string | null }, pubOverride?: { publicationId: string; revisionId: string | null }) {
     const live = await this.db.select({ id: projects.id, rev: projects.publishedRevisionId }).from(projects).where(isNotNull(projects.publishedRevisionId));
     const map = new Map(live.map((r) => [r.id, r.rev as string]));
     if (override) { if (override.revisionId) map.set(override.projectId, override.revisionId); else map.delete(override.projectId); }
     if (!map.size) return [];
     const revs = await this.db.select().from(projectRevisions).where(inArray(projectRevisions.id, [...map.values()]));
+    const pubs = await this.livePublications(pubOverride);   // a project's outputs: the published publications that list it (including one being published or removed now)
+    // their PDFs, for a direct "Download PDF" next to each one (the same file the publication page offers)
+    const dIds = [...new Set(pubs.map((p) => p.snap.documentId).filter(Boolean) as string[])];
+    const pdfOf = new Map((dIds.length ? await this.db.select().from(documents).where(inArray(documents.id, dIds)) : []).map((d) => [d.id, `${PUBLIC_DOC_DIR}/${documentFile(d)}`]));
     return revs.map((r) => {
       const s = escapeSnapshot(structuredClone(r.snapshot) as unknown as Snapshot);
-      if (s.detail && Object.keys(s.detail).length) (s.detail as Record<string, unknown>).revision = r.id;
+      if (s.detail && Object.keys(s.detail).length) {
+        const d = s.detail as Record<string, unknown>; d.revision = r.id;
+        const ref = (p: LivePub) => ({ title: escapeHtml(p.snap.title), type: escapeHtml(PUB_TYPE_LABEL[p.snap.type] ?? 'Publication'), file: publicationFile(p.snap.slug), year: (p.snap.publishedOn ?? '').slice(0, 4),
+          ...(p.snap.documentId && pdfOf.get(p.snap.documentId) ? { pdf: pdfOf.get(p.snap.documentId), slug: p.snap.slug } : {}) });
+        // publications linked to an activity: shown under it, live ones only (a draft or unpublished one is left out)
+        const acts = (d.activities ?? []) as { publications?: string[] }[];
+        const bySlug = new Map(pubs.map((p) => [p.snap.slug, p]));
+        for (const a of acts) {
+          const list = (a.publications ?? []).map((sl) => bySlug.get(sl)).filter((p): p is LivePub => !!p).map(ref);
+          if (list.length) (a as Record<string, unknown>).publications = list; else delete a.publications;
+        }
+        const fromActs = new Set(acts.flatMap((a) => ((a.publications ?? []) as unknown as { file: string }[]).map((x) => x.file)));
+        // the project's Publications section: those that list the project, plus those linked to its activities
+        const outs = pubs.filter((p) => p.snap.projectSlugs.includes(s.slug) || fromActs.has(publicationFile(p.snap.slug)))
+          .sort((a, b) => (b.snap.publishedOn ?? '').localeCompare(a.snap.publishedOn ?? ''))
+          .map(ref);
+        if (outs.length) d.outputs = outs;
+      }
       return s;
     }).sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));
   }
@@ -190,6 +214,28 @@ export class Publisher {
     return live.map((x) => x.snap.mediaId).filter(Boolean) as string[];
   }
 
+  get aboutFile() { return resolve(this.cfg.siteRoot, 'src/data/about.json'); }
+
+  /** Live About page revisions (optionally overriding one). */
+  async liveAbout(override?: { pageId: string; revisionId: string | null }): Promise<LiveAbout[]> {
+    const rows = await this.db.select({ id: aboutPages.id, rev: aboutPages.publishedRevisionId }).from(aboutPages);
+    const map = new Map(rows.filter((r) => r.rev).map((r) => [r.id, r.rev as string]));
+    if (override) { if (override.revisionId) map.set(override.pageId, override.revisionId); else map.delete(override.pageId); }
+    if (!map.size) return [];
+    const revs = await this.db.select().from(aboutPageRevisions).where(inArray(aboutPageRevisions.id, [...map.values()]));
+    return revs.map((r) => ({ id: r.id, snap: r.snapshot as unknown as AboutSnapshot }));
+  }
+
+  /** about.json lists the About pages published from Studio; without any, the generator keeps its built-in text. */
+  private async writeAbout(file: string, live: LiveAbout[]) {
+    if (!live.length) { if (existsSync(file)) rmSync(file); return [] as string[]; }
+    const { pages: list, mediaIds } = await aboutEntries(this.db, live);
+    mkdirSync(resolve(file, '..'), { recursive: true });
+    const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), pages: list }, null, 2) + '\n'); renameSync(tmp, file);
+    return mediaIds;
+  }
+
   get eventsFile() { return resolve(this.cfg.siteRoot, 'src/data/events.json'); }
 
   /** Live events (optionally overriding one). */
@@ -206,11 +252,14 @@ export class Publisher {
    *  Event pages that no longer belong to the list are removed (the generator recreates the right ones). Returns poster media ids. */
   private async writeEvents(file: string, override?: { eventId: string; revisionId: string | null }, projectOverride?: { projectId: string; revisionId: string | null }) {
     const live = await this.liveEvents(override);
-    if (!live.length) { if (existsSync(file)) rmSync(file); return [] as string[]; }
-    const list = await eventEntries(this.db, live, { projectOverride });
-    mkdirSync(resolve(file, '..'), { recursive: true });
-    const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
-    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), events: list }, null, 2) + '\n'); renameSync(tmp, file);
+    const list = live.length ? await eventEntries(this.db, live, { projectOverride }) : [];
+    if (!list.length) { if (existsSync(file)) rmSync(file); }
+    else {
+      mkdirSync(resolve(file, '..'), { recursive: true });
+      const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
+      writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), events: list }, null, 2) + '\n'); renameSync(tmp, file);
+    }
+    // pages of events that are no longer live go too, also when none is left (else the last unpublished event's page lingers)
     const keep = new Set(list.map((e) => eventFile(e.slug)));
     for (const dir of [this.cfg.siteRoot, resolve(this.cfg.siteRoot, 'src/pages')]) {
       if (existsSync(dir)) for (const f of readdirSync(dir)) if (/^event-[a-z0-9-]+\.html$/.test(f) && !keep.has(f)) rmSync(resolve(dir, f));
@@ -344,12 +393,13 @@ export class Publisher {
     return ids;
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; pillar?: { pillarId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; publication?: { publicationId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { file?: string; revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string }; settings?: { values: SET.Values; revision: string } } = {}) {
-    const entries = await this.liveEntries(o.project);
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; pillar?: { pillarId: string; revisionId: string | null }; about?: { pageId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; publication?: { publicationId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { file?: string; revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string }; settings?: { values: SET.Values; revision: string } } = {}) {
+    const entries = await this.liveEntries(o.project, o.publication);
     await this.writeRedirects(o.redirects === 'pending');
     this.writeData(this.dataFile, entries);
     const partnerMedia = await this.writePartners(this.partnersFile, o.partner, o.project);
     const pillarMedia = await this.writePillars(this.pillarsFile, o.pillar);
+    const aboutMedia = await this.writeAbout(this.aboutFile, await this.liveAbout(o.about));
     const eventMedia = await this.writeEvents(this.eventsFile, o.event, o.project);
     const seoMedia = await this.writeSeo(o.seo);
     await this.writeSchema(o.schema, o.article, o.event);
@@ -372,7 +422,7 @@ export class Publisher {
       const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
       writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
     }
-    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...eventMedia, ...oppMedia, ...pub.mediaIds, ...seoMedia, ...homeMedia, ...settingsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...aboutMedia, ...eventMedia, ...oppMedia, ...pub.mediaIds, ...seoMedia, ...homeMedia, ...settingsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
     return { entries, live };
   }
 
@@ -521,7 +571,7 @@ export class Publisher {
       const msg = (e as Error).message;
       try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
       await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
-      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('settings') ? 'settings' : kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('pillar') ? 'pillar' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('publication') ? 'publication' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
+      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('settings') ? 'settings' : kind.includes('about') ? 'about_page' : kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('pillar') ? 'pillar' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('publication') ? 'publication' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
       throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
     }
     return { job, log };
@@ -764,6 +814,61 @@ export class Publisher {
       await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, newsFile: resolve(dir, 'news.json'), partnersFile });
       if (!existsSync(resolve(outDir, 'partners.html'))) throw new AppError(409, 'The preview could not be generated.');
       return { token, file: 'partners.html', mediaIds: snap.logoMediaId ? [snap.logoMediaId] : [] };
+    });
+  }
+
+  // ---------------------------------------------------------------- About pages
+  /** The strategic objectives' wording follows the published Strategy page (other modules read these rows). */
+  private async setObjectives(rows: { ref: string; title: string; description: string }[]) {
+    for (const r of rows) await this.db.update(objectives).set({ title: r.title, description: r.description }).where(eq(objectives.ref, r.ref));
+  }
+
+  async publishAboutPage(actor: NonNullable<Actor>, pageId: string) {
+    return this.locked(async () => {
+      const [p] = await this.db.select().from(aboutPages).where(eq(aboutPages.id, pageId));
+      if (!p) throw new AppError(404, 'Page not found.');
+      if (p.status !== 'approved' || !p.approvedRevisionId) throw new AppError(409, 'Only an approved page can be published.');
+      const [rev] = await this.db.select().from(aboutPageRevisions).where(eq(aboutPageRevisions.id, p.approvedRevisionId));
+      const snap = rev.snapshot as unknown as AboutSnapshot;
+      const meta = ABOUT_META[p.key as AboutKey];
+      const objs = snap.key === 'strategy' ? (snap.objectives as { ref: string; title: string; text: string }[]) : null;
+      const before = objs ? await this.db.select({ ref: objectives.ref, title: objectives.title, description: objectives.description }).from(objectives) : [];
+      const { job, log } = await this.deliver('publish_about', actor, pageId, rev.id, async (log) => {
+        if (objs) await this.setObjectives(objs.map((o) => ({ ref: o.ref, title: o.title, description: o.text })));
+        try {
+          await this.writeSite({ about: { pageId, revisionId: rev.id } });
+          log.push(await this.runner(this.cfg, { kind: 'live' }));
+          const f = resolve(this.cfg.siteRoot, meta.file);
+          if (!existsSync(f)) throw new Error(`${meta.file} was not generated.`);
+          if (!readFileSync(f, 'utf8').includes(`data-studio-rev="${rev.id}"`)) throw new Error(`${meta.file} does not contain the published revision.`);
+        } catch (e) { if (objs) await this.setObjectives(before); throw e; }
+      }, `Publishing ${meta.title} failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(aboutPages).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, updatedAt: new Date() }).where(eq(aboutPages.id, pageId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'about.publish', { type: 'about_page', id: pageId }, `Published ${meta.title} (revision ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file: meta.file };
+    });
+  }
+
+  /** Builds the page with the saved working copy in an isolated folder. */
+  async previewAboutPage(pageId: string, snap: AboutSnapshot) {
+    return this.locked(async () => {
+      this.cleanupPreviews();
+      const token = randomBytes(16).toString('hex');
+      const dir = resolve(this.cfg.previewDir, token);
+      const pagesDir = resolve(dir, 'pages'), outDir = resolve(dir, 'site'), dataFile = resolve(dir, 'projects.json'), aboutFile = resolve(dir, 'about.json');
+      mkdirSync(pagesDir, { recursive: true }); mkdirSync(outDir, { recursive: true });
+      this.writeData(dataFile, await this.liveEntries());
+      const live = (await this.liveAbout()).filter((x) => x.snap.key !== snap.key).concat({ id: 'preview', snap });
+      const { pages } = await aboutEntries(this.db, live);
+      writeFileSync(aboutFile, JSON.stringify({ version: 1, source: 'AFCD Studio (preview)', pages }, null, 2));
+      await this.writeNews(resolve(dir, 'news.json'), pagesDir, await this.liveArticles());
+      await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, newsFile: resolve(dir, 'news.json'), aboutFile });
+      const file = ABOUT_META[snap.key].file;
+      if (!existsSync(resolve(outDir, file))) throw new AppError(409, 'The preview could not be generated.');
+      return { token, file, mediaIds: [] as string[] };
     });
   }
 
@@ -1568,6 +1673,7 @@ export function escapeSnapshot(s: Snapshot): Snapshot {
       ...d, lede: e(String(d.lede ?? '')), photo: e(String(d.photo ?? '')),
       facts: (d.facts ?? []).map(([k, v]) => [e(k), e(v)]),
       rows: (d.rows ?? []).map(([k, v]) => [e(k), e(v)]),
+      ...(Array.isArray(d.partners) ? { partners: (d.partners as { name: string; slug: string }[]).map((x) => ({ name: e(x.name), slug: e(x.slug) })) } : {}),
       // media_img escapes alt itself; keep alt raw here to avoid double escaping
     } : {},
   };

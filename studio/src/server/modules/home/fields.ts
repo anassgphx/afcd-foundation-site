@@ -25,7 +25,7 @@ export const SECTION_LABEL: Record<string, string> = {
   about: 'Who we are', purpose: 'Our purpose', pillars: 'Pillars', projects: 'Featured projects', impact: 'Impact', news: 'News & stories', events: 'Events', partners: 'Partners', involved: 'Get involved',
 };
 const FIELD_LABEL: Record<string, string> = {
-  kicker: 'Small line above the title', title: 'Title', text: 'Text', cta1: 'Main button', cta2: 'Second link', image: 'Photo', chapter: 'Chapter label (bottom bar)',
+  kicker: 'Small line above the title', title: 'Title', text: 'Text', text2: 'Second paragraph', cta1: 'Main button', cta2: 'Second link', image: 'Photo', chapter: 'Chapter label (bottom bar)',
   desc: 'Introduction', quote: 'Quote', quote_name: 'Quote: name', quote_role: 'Quote: programme and date', benefit: '“Who has benefited” text',
   'stat1.label': 'Figure 1 · label', 'stat1.value': 'Figure 1 · value', 'stat2.label': 'Figure 2 · label', 'stat2.value': 'Figure 2 · value',
   'stat3.label': 'Figure 3 · label', 'stat3.value': 'Figure 3 · value', 'stat4.label': 'Figure 4 · label',

@@ -1,8 +1,8 @@
 // Media library: validated uploads, WebP derivatives, metadata and reuse tracking.
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import sharp, { type Metadata } from 'sharp';
+import sharp, { type Metadata, type Sharp } from 'sharp';
 import { desc, eq, ilike, or, count } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
@@ -10,7 +10,17 @@ import type { Config } from '../../config.ts';
 import { media } from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 
-export const DERIVATIVE_WIDTHS = [480, 960, 1600] as const;
+// 2400 and 3200 keep full-width photos (hero slider, photo viewer) sharp on high-density laptop and phone screens.
+export const DERIVATIVE_WIDTHS = [480, 960, 1600, 2400, 3200] as const;
+/** Compression levels for the website copies (WebP). New uploads use 'best' (sharp slider and full-width photos);
+ * lighter levels are chosen per image in the Media Library. The original upload is never touched. */
+export const QUALITY = { best: 86, balanced: 78, smaller: 68 } as const;
+export type Level = keyof typeof QUALITY;
+export const LEVELS = Object.keys(QUALITY) as Level[];
+const level = (q: string | null | undefined): Level => (q && q in QUALITY ? q as Level : 'best');
+export const toWebp = (img: Sharp, q?: string | null) => img.webp({ quality: QUALITY[level(q)], smartSubsample: true, effort: 5 });
+/** Bytes of the copies the website uses (all sizes). */
+export const webBytes = (cfg: Config, m: Pick<MediaRow, 'storageKey'>) => DERIVATIVE_WIDTHS.reduce((n, w) => { const p = resolve(cfg.mediaDir, `${m.storageKey}-${w}.webp`); return n + (existsSync(p) ? statSync(p).size : 0); }, 0);
 const ALLOWED = new Set(['jpeg', 'png', 'webp', 'avif', 'tiff']);   // decoded formats; SVG/GIF/HTML etc. are refused
 
 export type MediaRow = typeof media.$inferSelect;
@@ -34,7 +44,7 @@ export async function ingestUpload(db: DB, cfg: Config, file: { name: string; by
   const { width: w0 = meta.width, height: h0 = meta.height } = await base.clone().toBuffer({ resolveWithObject: true }).then((r) => r.info);
   for (const w of DERIVATIVE_WIDTHS) {
     if (w > w0 && w !== DERIVATIVE_WIDTHS[0]) continue;
-    await base.clone().resize({ width: Math.min(w, w0), withoutEnlargement: true }).webp({ quality: 80 })
+    await toWebp(base.clone().resize({ width: Math.min(w, w0), withoutEnlargement: true }), 'best')
       .toFile(resolve(cfg.mediaDir, `${key}-${w}.webp`));
   }
   const [row] = await db.insert(media).values({
@@ -96,14 +106,8 @@ export async function usageCounts(db: DB, ids: string[]) {
   return Object.fromEntries(Object.entries(u).map(([id, l]) => [id, l.length])) as Record<string, number>;
 }
 
+/** Moves an unused image to the trash (restorable for 30 days). In use: refused, see trashMedia({ force }) in trash.ts. */
 export async function deleteMedia(db: DB, cfg: Config, id: string) {
-  const [m] = await db.select().from(media).where(eq(media.id, id));
-  if (!m) throw new AppError(404, 'Media not found.');
-  const used = (await usageCounts(db, [id]))[id] ?? 0;
-  if (used) throw new AppError(409, `This image is used in ${used} place${used === 1 ? '' : 's'} (see “Used on”). Remove it there first.`);
-  await db.delete(media).where(eq(media.id, id));
-  for (const f of [...derivativeFiles(m), ...DERIVATIVE_WIDTHS.map((w) => `${m.storageKey}-${w}.webp`)]) {
-    const p = resolve(cfg.mediaDir, f); if (existsSync(p)) rmSync(p);
-  }
-  return m;
+  const { trashMedia } = await import('./trash.ts');
+  return (await trashMedia(db, cfg, id)).row;
 }

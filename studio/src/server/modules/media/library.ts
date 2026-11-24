@@ -3,13 +3,13 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import sharp, { type Metadata } from 'sharp';
-import { eq, inArray, isNotNull } from 'drizzle-orm';
+import { eq, inArray, isNotNull, like } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
 import * as t from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
-import { DERIVATIVE_WIDTHS, isoDate, type MediaRow } from './service.ts';
+import { DERIVATIVE_WIDTHS, toWebp, isoDate, type MediaRow } from './service.ts';
 import { RECORDS } from '../review/queue.ts';
 
 export type Use = { kind: string; title: string; href: string; where: string; live: boolean };
@@ -42,6 +42,14 @@ export async function usage(db: DB, ids: string[]): Promise<Record<string, Use[]
     add(r.m, { kind: 'Partner', title: r.name, href: `/studio/partners/${r.id}`, where: 'Logo', live: false });
   for (const r of await db.select({ id: t.seoOverrides.id, file: t.seoOverrides.file, m: t.seoOverrides.imageMediaId }).from(t.seoOverrides).where(inArray(t.seoOverrides.imageMediaId, ids)))
     add(r.m, { kind: 'SEO', title: r.file, href: '/studio/seo/pages', where: 'Share image', live: false });
+  for (const r of await db.select({ id: t.pillars.id, name: t.pillars.name, m: t.pillars.mediaId }).from(t.pillars).where(inArray(t.pillars.mediaId, ids)))
+    add(r.m, { kind: 'Pillar', title: r.name, href: `/studio/pillars/${r.id}`, where: 'Photo', live: false });
+  for (const r of await db.select({ id: t.pillars.id, name: t.pillars.name, draft: t.pillars.draft }).from(t.pillars))
+    for (const m of ids.filter((id) => JSON.stringify(r.draft ?? null).includes(id))) add(m, { kind: 'Pillar', title: r.name, href: `/studio/pillars/${r.id}`, where: 'Page content', live: false });
+  for (const r of await db.select({ id: t.projects.id, name: t.projects.name, items: t.projects.activityItems }).from(t.projects))
+    for (const m of ids.filter((id) => JSON.stringify(r.items ?? null).includes(id))) add(m, { kind: 'Project', title: r.name, href: `/studio/projects/${r.id}`, where: 'Activity photos', live: false });
+  for (const r of await db.select({ key: t.seoSettings.key, draft: t.seoSettings.draft }).from(t.seoSettings).where(like(t.seoSettings.key, 'settings:%')))
+    for (const m of ids.filter((id) => JSON.stringify(r.draft ?? null).includes(id))) add(m, { kind: 'Settings', title: `Site settings: ${r.key.slice(9)}`, href: '/studio/settings', where: 'Logo or share image', live: false });
   // photos placed inside a story's text (drafts; the published versions are covered below)
   for (const r of await db.select({ id: t.articles.id, name: t.articles.title, body: t.articles.body }).from(t.articles))
     for (const m of ids.filter((id) => r.body.includes(`media:${id}`))) add(m, { kind: 'Story', title: r.name, href: `/studio/news/${r.id}`, where: 'In the story text', live: false });
@@ -116,9 +124,9 @@ export async function replaceFile(db: DB, cfg: Config, m: MediaRow, file: { name
   // Same file names as before, so pages and published versions that point at them keep working.
   const had = DERIVATIVE_WIDTHS.filter((w) => existsSync(resolve(cfg.mediaDir, `${m.storageKey}-${w}.webp`)));
   for (const w of new Set([...had, ...DERIVATIVE_WIDTHS.filter((w, i) => i === 0 || w <= info.width)]))
-    await base.clone().resize({ width: Math.min(w, info.width), withoutEnlargement: true }).webp({ quality: 80 }).toFile(resolve(cfg.mediaDir, `${m.storageKey}-${w}.webp`));
+    await toWebp(base.clone().resize({ width: Math.min(w, info.width), withoutEnlargement: true }), m.quality).toFile(resolve(cfg.mediaDir, `${m.storageKey}-${w}.webp`));
   fp.delete(m.storageKey);
-  const [row] = await db.update(t.media).set({ mime: `image/${meta.format}`, width: info.width, height: info.height, bytes: file.bytes.byteLength, rightsConfirmed: false, updatedAt: new Date() }).where(eq(t.media.id, m.id)).returning();
+  const [row] = await db.update(t.media).set({ mime: `image/${meta.format}`, width: info.width, height: info.height, bytes: file.bytes.byteLength, rightsConfirmed: false, crop: null, updatedAt: new Date() }).where(eq(t.media.id, m.id)).returning();   // a new file starts uncropped
   return row;
 }
 

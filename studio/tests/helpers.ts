@@ -45,6 +45,15 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
       writeFileSync(join(out, 'pillars.html'), pls.map((p) => `<li style="--c:${p.colour}"><a href="${p.file}">${p.name}</a><p>${p.summary}</p></li>`).join('\n'));
       for (const p of pls) writeFileSync(join(out, p.file), `<h1>${p.name}</h1><p>${p.summary}</p><p>${p.intro}</p>${p.image ? `<img src="${p.image.src}">` : ''}`);
     }
+    // Stand-in for content.py's About pages (src/data/about.json): one page per published key, with its revision and title.
+    const aboutFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/about.json') : mode.aboutFile;
+    if (aboutFile && existsSync(aboutFile)) {
+      const files: Record<string, string> = { 'our-story': 'our-story.html', 'mission-vision': 'mission-vision.html', strategy: 'strategy.html', team: 'team.html', partners: 'partners-page.html' };
+      const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      for (const [k, pg] of Object.entries(JSON.parse(readFileSync(aboutFile, 'utf8')).pages as Record<string, any>))
+        writeFileSync(join(out, k === 'partners' ? 'partners.html' : files[k]), (k === 'partners' && existsSync(join(out, 'partners.html')) ? readFileSync(join(out, 'partners.html'), 'utf8') : '')
+          + `<div data-studio-rev="${pg.revision}"><h1>${esc(pg.hero?.title ?? '')}</h1>${(pg.people ?? []).map((p: any) => `<li>${esc(p.name)}${p.image ? `<img src="${p.image.src}">` : ''}</li>`).join('')}</div>`);
+    }
     // Stand-in for the events templates: listing + one page per event with the revision marker.
     const eventsFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/events.json') : mode.eventsFile;
     if (eventsFile && existsSync(eventsFile)) {

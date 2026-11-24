@@ -227,8 +227,35 @@
 
   /* ---------- Desktop dropdowns ---------- */
   var dds = $$('.dd');
-  function syncScrim() { document.body.classList.toggle('mega-open', dds.some(function (d) { return d.classList.contains('open'); })); }
-  function closeAll(except) { dds.forEach(function (d) { if (d !== except) { d.classList.remove('open'); $('.dd-btn', d).setAttribute('aria-expanded', 'false'); } }); syncScrim(); }
+  // One shared white box (and a small arrow under the open item) sits behind every menu. Switching menus slides the
+  // arrow and resizes the box to the new menu's height while the contents cross-fade sideways, so the menu morphs
+  // instead of closing and reopening. Panels are clipped to the box (--dd-h) so nothing spills while it resizes.
+  var ddHost = dds.length && $('.dd-panel', dds[0]).offsetParent, ddBg, ddArrow, ddCur = null;
+  if (ddHost) {
+    ddBg = document.createElement('div'); ddBg.className = 'dd-bg'; ddBg.setAttribute('aria-hidden', 'true');
+    ddArrow = document.createElement('span'); ddArrow.className = 'dd-arrow'; ddArrow.setAttribute('aria-hidden', 'true');
+    ddHost.appendChild(ddBg); ddHost.appendChild(ddArrow); ddHost.classList.add('dd-morph');
+  }
+  function snap(els, fn) { els.forEach(function (e) { e.classList.add('is-snap'); }); fn(); void ddHost.offsetWidth; els.forEach(function (e) { e.classList.remove('is-snap'); }); }
+  function morph(dd) {
+    if (!ddHost) return;
+    var prev = ddCur; ddCur = dd;
+    if (!dd) { ddHost.classList.remove('dd-on'); return; }
+    var panel = $('.dd-panel', dd), btn = $('.dd-btn', dd), hr = ddHost.getBoundingClientRect(), br = btn.getBoundingClientRect();
+    var place = function () { ddHost.style.setProperty('--dd-h', panel.offsetHeight + 'px'); ddHost.style.setProperty('--dd-ax', (br.left + 10 - hr.left) + 'px'); ddHost.style.setProperty('--dd-aw', Math.max(0, br.width - 20) + 'px'); };
+    if (!prev || !ddHost.classList.contains('dd-on')) { snap([ddBg, ddArrow], function () { panel.style.setProperty('--dx', '0px'); place(); }); ddHost.classList.add('dd-on'); return; }
+    if (prev === dd) { place(); return; }
+    // the new menu slides in from the side it sits on; the old one leaves the other way
+    var dir = br.left > $('.dd-btn', prev).getBoundingClientRect().left ? 1 : -1;
+    $('.dd-panel', prev).style.setProperty('--dx', (-24 * dir) + 'px');
+    panel.style.setProperty('--dx', '0px');
+    if (panel.animate && !matchMedia('(prefers-reduced-motion: reduce)').matches)
+      $$('.wrap > *', panel).forEach(function (el) { el.animate([{ opacity: 0, transform: 'translateX(' + (24 * dir) + 'px)' }, { opacity: 1, transform: 'none' }], { duration: 280, delay: 60, easing: 'cubic-bezier(.32,.72,0,1)', fill: 'backwards' }); });
+    place();
+  }
+  window.addEventListener('resize', function () { if (ddCur) morph(ddCur); });
+  function syncScrim() { var on = dds.filter(function (d) { return d.classList.contains('open'); })[0] || null; document.body.classList.toggle('mega-open', !!on); morph(on); }
+  function closeAll(except) { dds.forEach(function (d) { if (d !== except) { d.classList.remove('open'); $('.dd-btn', d).setAttribute('aria-expanded', 'false'); } }); if (!except) syncScrim(); }
   var hoverT, openT;
   dds.forEach(function (dd) {
     var btn = $('.dd-btn', dd);
@@ -508,66 +535,51 @@
     var t = document.getElementById('home-projects-data'); if (!t || !t.content) return;
     var list = Array.prototype.map.call(t.content.querySelectorAll('article'), function (a) {
       var q = function (s) { var e = a.querySelector(s); return e ? e.innerHTML : ''; };
-      var img = a.querySelector('img.pc-img');
-      var logo = a.querySelector('img.pc-logo');
-      return { n: a.dataset.n, name: q('h3'), dot: a.dataset.dot, href: a.dataset.href, pillar: q('.pp'), kind: q('.pk'), cat: q('.pc'),
-        surface: a.dataset.surface, phTone: a.dataset.ph, photo: q('.ph'), img: img ? img.outerHTML : '', logo: logo ? logo.outerHTML : '', lede: q('.pl'),
-        rows: Array.prototype.map.call(a.querySelectorAll('dl > div'), function (r) { return [r.querySelector('dt').innerHTML, r.querySelector('dd').innerHTML]; }) };
+      var img = a.querySelector('img');
+      var pairs = function (s) { return Array.prototype.map.call(a.querySelectorAll(s + ' > li'), function (li) { return [li.querySelector('b').innerHTML, li.querySelector('span').innerHTML]; }); };
+      return { n: a.dataset.n, status: a.dataset.status || '', name: q('h3'), dot: a.dataset.dot, href: a.dataset.href, pillar: q('.pp'), kind: q('.pk'), cat: q('.pc'),
+        surface: a.dataset.surface, phTone: a.dataset.ph, photo: q('.ph'), img: img ? img.outerHTML : '', fit: a.dataset.fit || 'cover',
+        facts: pairs('.pf'), outcomes: pairs('.po'),
+        rows: Array.prototype.map.call(a.querySelectorAll('dl > div'), function (r) { return [r.querySelector('dt').innerHTML, r.querySelector('dd').innerHTML, r.hasAttribute('data-more')]; }) };
     });
     PROJECTS = list;   /* Studio is the source: no projects published means no cards */
   })();
-  function plainText(html) { return String(html || '').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&rsquo;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>'); }
-  function attrText(html) { return plainText(html).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
-  function initials(name) {
-    var parts = plainText(name).split(/[^A-Za-z0-9]+/).filter(function (w) { return /[A-Za-z]/.test(w); });
-    if (!parts.length) return '•';
-    return ((parts[0][0] || '') + (parts[1] ? parts[1][0] : (parts[0][1] || ''))).toUpperCase();
-  }
   if (!PROJECTS.length) { var sec = $('#projects'); if (sec) sec.hidden = true; return; }
   var stack = $('#stack'), dotsWrap = $('#stack-dots'), sCur = 0;
   PROJECTS.forEach(function (p, i) {
     var card = document.createElement('article');
-    var nameText = plainText(p.name);
-    var mark = p.logo
-      ? '<span class="pc-mark has-img">' + p.logo + '</span>'
-      : '<span class="pc-mark" aria-hidden="true"><span class="pc-mono">' + initials(p.name) + '</span></span>';
-    var spineMark = p.logo
-      ? '<span class="pc-spine-logo" aria-hidden="true">' + p.logo.replace(/\salt="[^"]*"/, ' alt=""') + '</span>'
-      : '<span class="pc-spine-mono" aria-hidden="true">' + initials(p.name) + '</span>';
-    var photoLabel = attrText(p.photo || (nameText + ' project photo'));
     card.className = 'pcard overflow-hidden rounded-[28px] text-ink ' + p.surface;
     card.setAttribute('aria-roledescription', 'project card');
+    card.setAttribute('aria-label', p.name);
     card.innerHTML =
-      '<button class="pcard-spine pcard-spine-btn pointer-events-none absolute inset-y-0 right-0 z-[2] w-[15%] text-left rtl:left-0 rtl:right-auto rtl:text-right" aria-label="Show project ' + attrText(p.n) + ': ' + attrText(nameText) + '" tabindex="-1">' +
-        '<span class="pc-spine-face">' +
-          '<span class="pc-spine-n tabular-nums">' + p.n + '</span>' +
-          spineMark +
-          '<span class="pc-spine-name">' + p.name + '</span>' +
-          '<span class="pc-spine-go" aria-hidden="true">→</span>' +
-        '</span>' +
+      '<button class="pcard-spine pcard-spine-btn pointer-events-none absolute inset-y-0 right-0 z-[2] flex w-[14.1%] flex-col justify-between p-6 text-left rtl:left-0 rtl:right-auto rtl:text-right" aria-label="Show project ' + p.n + ': ' + p.name + '" tabindex="-1">' +
+        '<span class="text-[22px] font-medium tabular-nums">' + p.n + '</span>' +
+        '<span class="block origin-bottom-left text-lg font-semibold tracking-[-0.02em] [writing-mode:vertical-rl] rotate-180 self-start">' + p.name + '</span>' +
+        '<span class="grid h-10 w-10 place-items-center rounded-full bg-white/60 text-base" aria-hidden="true">→</span>' +
       '</button>' +
-      '<div class="pcard-body flex h-full flex-col p-5 sm:p-6 md:p-8 lg:p-10">' +
-        '<header class="pc-head">' +
-          '<div class="pc-ident">' +
-            mark +
-            '<div class="min-w-0">' +
-              '<p class="pc-kicker"><span class="pc-kicker-n tabular-nums">' + p.n + '</span> ' + (p.kind || 'Case study') + '</p>' +
-              '<h3 class="pc-title">' + p.name + '</h3>' +
-            '</div>' +
+      '<div class="pcard-body flex h-full flex-col p-6 md:p-8 lg:p-10">' +
+        '<header class="flex flex-wrap items-center justify-between gap-4">' +
+          '<div class="flex min-w-0 items-center gap-4">' +
+            '<span class="pc-no tabular-nums">' + p.n + '</span>' +
+            '<h3 class="text-[26px] font-semibold leading-[1.05] tracking-[-0.035em] md:text-[36px] lg:text-[42px]">' + p.name + '</h3>' +
           '</div>' +
           '<span class="pc-pillar"><span class="pc-pillar-dot" style="--c:' + p.dot + '" aria-hidden="true"></span>' + p.pillar + '</span>' +
         '</header>' +
-        '<div class="mt-4 flex flex-wrap gap-2">' + (p.cat ? '<span class="pc-pill">' + p.cat + '</span>' : '') + '</div>' +
-        '<div class="mt-5 grid min-h-0 flex-1 gap-5 md:grid-cols-12 md:gap-6">' +
-          '<div class="pc-inner flex min-h-[220px] flex-col rounded-[24px] p-4 md:col-span-5 md:min-h-[280px] md:p-5">' +
-            (p.img ? '<div class="pc-photo aspect-[4/3] w-full overflow-hidden rounded-[18px] md:aspect-auto md:flex-1">' + p.img + '</div>' : '<div class="ph pc-ph aspect-[4/3] w-full rounded-[18px] md:aspect-auto md:flex-1" style="--ph:' + p.phTone + ';--ph-line:rgba(0,0,0,.08)" role="img" aria-label="Photo placeholder. ' + photoLabel + '"><span class="ph-cap" aria-hidden="true"><b>Photo</b> · ' + p.photo + '</span></div>') +
-            '<p class="mt-4 px-1 text-[17px] font-medium leading-snug tracking-[-0.01em] md:text-[19px]">' + p.lede + '</p>' +
+        '<div class="mt-5 flex flex-wrap items-center gap-2">' + (/^(Ongoing|Completed|Upcoming)$/.test(p.status) ? '<span class="pjg-badge is-sm is-' + p.status.toLowerCase() + '"><span class="pjg-pulse" aria-hidden="true"></span>' + p.status + '</span>' : '') + '<span class="pc-pill">' + (p.kind || 'Case study') + '</span>' + (p.cat ? '<span class="pc-pill">' + p.cat + '</span>' : '') + '</div>' +
+        '<div class="mt-6 grid min-h-0 flex-1 gap-5 md:grid-cols-12 md:gap-6">' +
+          '<div class="pc-inner flex flex-col rounded-[24px] p-3 md:col-span-5 md:p-4">' +
+            /* 1:1 frame: a poster or document is shown whole on a neutral ground, a photo fills the square */
+            (p.img ? '<figure class="pc-photo pc-fit-' + p.fit + ' w-full overflow-hidden rounded-[18px]">' + p.img + '</figure>' : '<div class="ph aspect-square w-full rounded-[18px]" style="--ph:' + p.phTone + ';--ph-line:rgba(0,0,0,.08)"><span class="ph-cap"><b>Photo</b> · ' + p.photo + '</span></div>') +
+            ((p.facts || []).length ? '<div class="pc-glance"><p class="pc-label">At a glance</p><dl>' + p.facts.map(function (f) { return '<div><dt>' + f[0] + '</dt><dd>' + f[1] + '</dd></div>'; }).join('') + '</dl></div>' : '') +
           '</div>' +
-          '<div class="flex min-w-0 flex-col md:col-span-7">' +
-            '<dl class="grid flex-1 gap-3 sm:grid-cols-2">' + p.rows.map(function (r, k) {
-              return '<div class="pc-tile"><dt class="pc-tile-k"><span class="pc-tile-n tabular-nums">0' + (k + 1) + '</span>' + r[0] + '</dt><dd class="mt-3 text-[15px] leading-relaxed text-ink-pure">' + r[1] + '</dd></div>';
+          '<div class="flex min-w-0 flex-col gap-3 md:col-span-7">' +
+            ((p.outcomes || []).length ? '<ul class="pc-impact">' + p.outcomes.map(function (o) { return '<li><b>' + o[0] + '</b><span>' + o[1] + '</span></li>'; }).join('') + '</ul>' : '') +
+            '<dl class="grid content-start gap-3 sm:grid-cols-2">' + p.rows.map(function (r) {
+              /* one lead sentence on the card; the full text is on the project page */
+              return '<div class="pc-tile"><dt class="pc-label">' + r[0] + '</dt><dd class="mt-3 text-[16px] leading-relaxed">' + r[1] + '</dd>' +
+                (r[2] ? '<a class="pc-more" href="' + p.href + '#about">Read more <span aria-hidden="true">→</span></a>' : '') + '</div>';
             }).join('') + '</dl>' +
-            '<div class="mt-5 flex flex-wrap items-center justify-end gap-x-6 gap-y-3">' +
+            '<div class="mt-auto flex flex-wrap items-center justify-end gap-x-6 gap-y-3 pt-4">' +
               '<a href="projects.html" class="link-arrow text-[14px]">All projects <span class="arr" aria-hidden="true">↗</span></a>' +
               '<a href="' + p.href + '" class="pc-btn">Explore project <span class="pc-arr" aria-hidden="true">→</span></a>' +
             '</div>' +
@@ -616,7 +628,7 @@
   ];
   (function () {   /* names come from the page's <template id="partner-data"> so each language version shows its own */
     var t = document.getElementById('partner-data'); if (!t || !t.content) return;
-    var g = Array.prototype.map.call(t.content.querySelectorAll('ul[data-g]'), function (u) { return [u.dataset.g, Array.prototype.map.call(u.children, function (li) { return li.textContent.trim(); })]; });
+    var g = Array.prototype.map.call(t.content.querySelectorAll('ul[data-g]'), function (u) { return [u.dataset.g, Array.prototype.map.call(u.children, function (li) { return { name: li.textContent.trim(), logo: li.dataset.logo || '', alt: li.dataset.alt || '', shape: li.dataset.shape || '' }; })]; });
     if (g.length) PARTNER_GROUPS = g;
   })();
 
@@ -628,8 +640,13 @@
       var b = $('.pt-filter[data-g="' + key + '"]'); if (!b) return key;
       var n = b.firstChild; return (n && n.nodeType === 3 ? n.textContent : b.textContent).trim() || key;
     }
-    function tile(name, group) {
-      return '<li class="pt-tile"><span class="pt-logo">Logo</span><span class="pt-name">' + esc(name) + '</span><span class="pt-tag">' + esc(label(group)) + '</span></li>';
+    function tile(p, group) {   /* p: a name, or {name, logo, alt} from the template (logo: the partner's logo from Studio) */
+      if (typeof p === 'string') p = { name: p, logo: '' };
+      var shape = /^is-(square|mid|wide)$/.test(p.shape || '') ? ' ' + p.shape : '';
+      var initials = p.name.replace(/[()]/g, '').split(/\s+/).filter(function (w) { return /^[A-Za-zÀ-ÿ]/.test(w) && !/^(of|in|for|the|and)$/i.test(w); }).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase();
+      var logo = /^assets\/media\/[\w.-]+$/.test(p.logo) ? '<span class="pt-logo has-img' + shape + '"><img src="' + esc(p.logo) + '" alt="' + esc(p.alt || p.name) + '" loading="lazy" decoding="async"></span>'
+        : '<span class="pt-logo is-initials" aria-hidden="true"><span>' + esc(initials) + '</span></span>';   /* no logo yet: the initials */
+      return '<li class="pt-tile">' + logo + '<span class="pt-name">' + esc(p.name) + '</span><span class="pt-tag">' + esc(label(group)) + '</span></li>';
     }
     function list(groups) {
       var out = [];

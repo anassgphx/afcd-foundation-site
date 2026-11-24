@@ -4,14 +4,17 @@
 // bulk bar in the header. Every action calls a real, permission-checked server route; menus only offer what the
 // user's role and the project's state allow. All filters live in the address bar.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { parseDuration } from '../projectFields.tsx';
 import { api, post } from '../api.ts';
 import { Badge, Icon, Link, LiveBadge, Modal, STATUS_LABEL, ago, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { DataTable, EmptyState, FilterTabs, TableSkeleton, applyColFilters, setValues, statusFilter, updatedFilter, useListActions, type Column } from '../DataTable.tsx';
 
 type Row = {
   id: string; name: string; slug: string; category: string; location: string; years: string; status: string; publishedRevisionId: string | null;
-  hasDetailPage: boolean; updatedAt: string; updatedBy: string | null; createdBy: string | null; updatedByName: string | null; thumb: string | null; sort: number;
-  photoCount: number; photoIssues: number; pillars: { key: string; name: string; colour: string; isPrimary: boolean }[];
+  hasDetailPage: boolean; updatedAt: string; updatedBy: string | null; createdBy: string | null; updatedByName: string | null; thumb: string | null; logoThumb?: string | null; sort: number;
+  photoCount: number; photoIssues: number; partnerCount?: number; galleryCount?: number;
+  summary?: string; context?: string; approach?: string; heroMediaId?: string | null; logoMediaId?: string | null; posterMediaId?: string | null;
+  outcomes?: unknown[]; activityItems?: unknown[]; activities?: string; pillars: { key: string; name: string; colour: string; isPrimary: boolean }[];
 };
 
 const TABS = [['all', 'All'], ['live', 'Live'], ['draft', 'Drafts'], ['in_review', 'In review'], ['approved', 'Approved'], ['archived', 'Archived']] as const;
@@ -76,8 +79,8 @@ export function ProjectsList() {
   const columns: Column<Row>[] = [
     { key: 'name', header: 'Project', sort: (r) => r.name, csv: (r) => r.name, filter: { type: 'set', title: 'Category', get: (r) => r.category },
       render: (r) => <div className="dt-main">
-        <span className="dt-thumb">{r.thumb ? <img src={r.thumb} alt="" loading="lazy" /> : <Icon n="folder" />}</span>
-        <span className="min-w-0"><Link className="title" to={`/studio/projects/${r.id}`}>{r.name}</Link>
+        <span className={`dt-thumb pjl-thumb${r.logoThumb ? ' is-logo' : ''}`}>{r.logoThumb ? <img src={r.logoThumb} alt="" loading="lazy" /> : r.thumb ? <img src={r.thumb} alt="" loading="lazy" /> : <Icon n="folder" />}</span>
+        <span className="min-w-0"><Link className="title" to={`/studio/projects/${r.id}`}>{r.name}</Link>{projectStatus(r.years) && <span className={`pjl-st is-${projectStatus(r.years)!.toLowerCase()}`}><i />{projectStatus(r.years)}</span>}
           <span className="sub">{[r.category, r.location, r.years].filter(Boolean).join(' · ') || '—'}
             {r.photoIssues > 0 && <> · <span className="lt-photo" title="Photos missing alt text or confirmed rights"><Icon n="alert" />{r.photoIssues} photo{r.photoIssues === 1 ? '' : 's'} to complete</span></>}</span></span></div> },
     { key: 'pillar', header: 'Pillars', sort: (r) => r.pillars[0]?.name ?? 'zzz', csv: (r) => r.pillars.map((p) => p.name).join('; '), hideBelow: 900,
@@ -85,6 +88,8 @@ export function ProjectsList() {
       render: (r) => <div className="pills">{r.pillars.map((p) => <span key={p.key} className="pill" title={p.isPrimary ? 'Primary pillar' : 'Also linked'}><span className="dot" style={{ ['--c' as string]: p.colour }} />{p.name}{p.isPrimary && r.pillars.length > 1 ? ' ·' : ''}</span>)}</div> },
     { key: 'status', header: 'Status', sort: (r) => STATUS_ORDER[r.status] ?? 9, csv: (r) => r.status.replace('_', ' '), filter: statusFilter<Row>(),
       render: (r) => <div className="pills">{r.publishedRevisionId && r.status !== 'published' && <LiveBadge />}<Badge s={r.status} /></div> },
+    { key: 'info', header: 'Info entered', sort: (r) => infoDone(r), csv: (r) => `${infoDone(r)}/${infoOf(r).length}`, hideBelow: 800,
+      render: (r) => <InfoMeter r={r} /> },
     { key: 'page', header: 'On the website', sort: (r) => (r.publishedRevisionId ? (r.hasDetailPage ? 0 : 1) : 2), csv: (r) => (r.publishedRevisionId ? (r.hasDetailPage ? `project-${r.slug}.html` : 'listing only') : 'not live'), hideBelow: 1100,
       filter: { type: 'set', title: 'On the website', get: webOf, options: Object.entries(WEB).map(([value, label]) => ({ value, label })) },
       render: (r) => !r.publishedRevisionId ? <span className="sub">Not live</span> : r.hasDetailPage ? <span className="dt-page"><Icon n="globe" width={13} height={13} /><span className="mono">project-{r.slug}.html</span></span> : <span className="sub">Projects listing only</span> },
@@ -232,4 +237,35 @@ function DuplicatePicker({ rows, onClose, onPick }: { rows: Row[]; onClose: () =
       <span className="dt-thumb">{r.thumb ? <img src={r.thumb} alt="" /> : <Icon n="folder" />}</span><span><b>{r.name}</b><small>{[r.category, r.location, r.years].filter(Boolean).join(' · ') || '—'}</small></span></button>)}
       {!list.length && <p className="muted" style={{ padding: 12, margin: 0 }}>No project matches “{q}”.</p>}</div>
   </Modal>;
+}
+
+/** What a full project record has, for the "Info entered" meter: each part and whether it is filled in. */
+function infoOf(r: Row): [string, boolean][] {
+  const t = (v?: string | null) => !!(v ?? '').trim();
+  return [
+    ['Summary', t(r.summary)], ['Pillar', r.pillars.length > 0], ['Location', t(r.location)], ['Dates', t(r.years)],
+    ['Main photo', !!r.heroMediaId], ['Logo', !!r.logoMediaId], ['Poster', !!r.posterMediaId],
+    ['Context', t(r.context)], ['Approach', t(r.approach)], ['Outcomes', (r.outcomes?.length ?? 0) > 0],
+    ['Activities', (r.activityItems?.length ?? 0) > 0 || t(r.activities)], ['Partners', (r.partnerCount ?? 0) > 0], ['Gallery', (r.galleryCount ?? 0) > 0],
+  ];
+}
+const infoDone = (r: Row) => infoOf(r).filter(([, ok]) => ok).length;
+
+function InfoMeter({ r }: { r: Row }) {
+  const parts = infoOf(r); const done = parts.filter(([, ok]) => ok).length; const missing = parts.filter(([, ok]) => !ok).map(([k]) => k);
+  const full = !missing.length;
+  return <Link to={`/studio/projects/${r.id}`} className={`pjl-info${full ? ' is-full' : ''}`} title={full ? 'All project information is entered' : `Missing: ${missing.join(', ')}`}>
+    <span className="pjl-info-t">{full ? <><Icon n="check" width={13} height={13} />Complete</> : <><b>{done}</b>/{parts.length} entered</>}</span>
+    <span className="pjl-info-bar" aria-hidden="true"><i style={{ width: `${Math.round((done / parts.length) * 100)}%` }} /></span>
+    {!full && <small>{missing.length <= 2 ? `Add ${missing.join(' and ').toLowerCase()}` : `${missing.length} parts to add`}</small>}
+  </Link>;
+}
+
+/** Ongoing / Completed / Upcoming from the duration, the same way the website labels it (src/content.py _status). */
+function projectStatus(years: string): 'Ongoing' | 'Completed' | 'Upcoming' | null {
+  const t = (years ?? '').trim(); if (!t) return null;
+  if (/present|ongoing|today|now/i.test(t)) return 'Ongoing';
+  const d = parseDuration(t); if (!d || !d.start) return null;
+  const now = new Date().toISOString().slice(0, 7), start = d.start.slice(0, 7), end = d.ongoing ? '9999-12' : (d.end || d.start.slice(0, 4) + '-12').slice(0, 7);
+  return end < now ? 'Completed' : start > now ? 'Upcoming' : 'Ongoing';
 }

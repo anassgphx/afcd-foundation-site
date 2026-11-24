@@ -190,3 +190,48 @@ a.dsh-tr:hover { background: var(--sunken); }
 .dsh-spin { width: 10px; height: 10px; border: 1.5px solid var(--line-strong); border-top-color: var(--ink); border-radius: 50%; animation: dsh-rot .8s linear infinite; }
 @keyframes dsh-rot { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .dsh-spin { animation: none; } }
+
+/* ---------- live-site problem: one calm, specific alert above everything else */
+.dsh-alert { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 14px; padding: 16px 16px 16px 18px;
+  border: 1px solid #FECACA; border-left: 3px solid var(--bad); border-radius: var(--r); background: linear-gradient(180deg, #FEF2F2, #fff 140%); }
+.dsh-alert-ico { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: #fff; color: var(--bad); box-shadow: 0 0 0 1px #FECACA; }
+.dsh-alert-ico svg { width: 17px; height: 17px; }
+.dsh-alert-b { display: grid; gap: 4px; min-width: 0; }
+.dsh-alert h2 { margin: 0 0 2px; font-size: 15px; font-weight: 650; letter-spacing: -.01em; color: #7F1D1D; }
+.dsh-alert p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); max-width: 78ch; }
+.dsh-alert p b { font-weight: 600; color: var(--ink); }
+.dsh-alert-n { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.dsh-alert-live { font-size: 12px !important; color: var(--muted) !important; }
+.dsh-alert-go { align-self: center; background: #fff; border-color: #FCA5A5; color: #991B1B; }
+.dsh-alert-go:hover { background: var(--bad); border-color: var(--bad); color: #fff; }
+.dsh-alert-go svg { width: 13px; height: 13px; margin-right: -3px; }
+
+/* ---------- priorities: tiles only for what needs action, the rest as one quiet line */
+.dsh-pri { display: grid; gap: 10px; }
+.dsh-pri .dsh-tiles { grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); }
+.dsh-pri .dsh-tile.is-on small::after { content: '\00a0→'; }
+.dsh-pri .dsh-tile { padding: 14px 16px; gap: 8px; }
+.dsh-pri .dsh-tile b { font-size: 30px; }
+.dsh-pri .dsh-tile.is-on { box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.dsh-pri .dsh-tile.is-on small { display: inline-flex; align-self: flex-start; padding: 2px 8px; margin-left: -2px; border-radius: 999px; background: var(--canvas); font-size: 11.5px; }
+.dsh-pri .dsh-tile.is-on:hover small { background: var(--accent); color: var(--accent-ink); }
+.dsh-clear { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; padding: 2px 2px; font-size: 12.5px; color: var(--muted); }
+.dsh-clear-ico { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--ok-bg); color: var(--ok); }
+.dsh-clear-ico svg { width: 11px; height: 11px; stroke-width: 2.4; }
+.dsh-clear-l { font-weight: 500; color: var(--ink-2); }
+.dsh-clear-i { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 12px; text-decoration: none; transition: border-color .12s, color .12s; }
+.dsh-clear-i:hover { color: var(--ink); border-color: var(--line-strong); }
+.dsh-clear.all .dsh-clear-i { background: var(--sunken); }
+.dsh-clear.all { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.dsh-clear.all b { color: var(--ink); font-weight: 600; margin-right: 4px; }
+
+@media (max-width: 900px) { .dsh-pri .dsh-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+  .dsh-alert { grid-template-columns: auto minmax(0, 1fr); padding: 14px; }
+  .dsh-alert-go { grid-column: 1 / -1; justify-self: stretch; justify-content: center; height: 36px; }
+  .dsh-pri .dsh-tile b { font-size: 24px; }
+  .dsh-pri .dsh-tiles > li:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .dsh-pri .dsh-tiles > li:last-child:nth-child(odd) .dsh-tile { display: grid; grid-template-columns: 1fr auto; align-items: center; }
+  .dsh-pri .dsh-tiles > li:last-child:nth-child(odd) .dsh-tile-top { grid-column: 1 / -1; }
+}
+.dsh-row.r-main.solo { grid-template-columns: minmax(0, 1fr); }

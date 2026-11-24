@@ -81,40 +81,61 @@ export async function loadContent(db: DB, file = HOME) {
   return c ?? null;
 }
 
-export async function contentProblems(db: DB, cfg: Config, values: Record<string, unknown>, layout: unknown = null, file = HOME) {
+/** Something to fix before review, and where: `section` is the layout entry (site section or added block) and `field` the
+ *  field key or block property, so the editor can take the person straight to it. Both are null for page-wide problems. */
+export type ContentIssue = { message: string; section: string | null; field: string | null; item?: number };
+
+export async function contentIssues(db: DB, cfg: Config, values: Record<string, unknown>, layout: unknown = null, file = HOME): Promise<ContentIssue[]> {
   const page = pageOf(file);
-  const out: string[] = [];
-  let blockIds: string[] = [];
+  const out: ContentIssue[] = [];
+  const fields = readFields(cfg.siteRoot, file);
+  const sectionOf = (key: string) => fields.find((f) => f.key === key)?.sectionId ?? null;
+  // which section and field use each photo (fields, participant-story photos, added blocks)
+  const usedBy = new Map<string, { section: string | null; field: string | null; item?: number }[]>();
+  const use = (id: string, w: { section: string | null; field: string | null; item?: number }) => usedBy.set(id, [...(usedBy.get(id) ?? []), w]);
+  for (const [k, v] of Object.entries(values)) {
+    if (v && typeof v === 'object' && 'mediaId' in v) use(String((v as { mediaId: string }).mediaId), { section: sectionOf(k), field: k });
+    else if (Array.isArray(v)) v.forEach((s, i) => { if (s && typeof s === 'object' && s.image && typeof s.image === 'object' && 'mediaId' in s.image) use(String(s.image.mediaId), { section: sectionOf(k), field: k, item: i }); });
+  }
   if (Array.isArray(layout) && page.layout) {
     try {
       const v = validateLayout(cfg.siteRoot, file, currentLayout(cfg.siteRoot, file, layout));
-      out.push(...v.problems.map((p) => p.message));
-      blockIds = docMediaIds({ blocks: layoutBlocks(v.layout) });
-    } catch (e) { out.push((e as Error).message); }
+      const blocks = layoutBlocks(v.layout);
+      for (const p of v.problems) {
+        const m = p.path.match(/^blocks\.(\d+)(?:\.([^.]+))?/); const b = m ? blocks[Number(m[1])] : undefined;
+        out.push({ message: p.message, section: b?.id ?? null, field: m?.[2] ?? null });
+      }
+      for (const b of blocks) for (const id of docMediaIds({ blocks: [b] })) use(id, { section: b.id, field: null });
+    } catch (e) { out.push({ message: (e as Error).message, section: null, field: null }); }
   }
-  const fields = readFields(cfg.siteRoot, file);
   const gone = Object.keys(values).filter((k) => !fields.some((f) => f.key === k));
   // edited participant stories go live only as real stories: no sample left in the list
   for (const f of fields.filter((x) => x.type === 'stories')) {
     const list = values[f.key]; if (!Array.isArray(list)) continue;
     list.forEach((s: { sample?: boolean; quote?: string; image?: { src?: string } }, i) => {
-      if (s?.sample || /lorem|ipsum/i.test(s?.quote ?? '')) out.push(`Story ${i + 1} is still a sample. Replace its text or delete it.`);
-      if (s?.image?.src && !existsSync(resolve(cfg.siteRoot, s.image.src))) out.push(`Story ${i + 1}’s photo is no longer on the website. Choose one from the Media Library.`);
+      if (s?.sample || /lorem|ipsum/i.test(s?.quote ?? '')) out.push({ message: `Story ${i + 1} is still a sample. Replace its text or delete it.`, section: f.sectionId, field: f.key, item: i });
+      if (s?.image?.src && !existsSync(resolve(cfg.siteRoot, s.image.src))) out.push({ message: `Story ${i + 1}’s photo is no longer on the website. Choose one from the Media Library.`, section: f.sectionId, field: f.key, item: i });
     });
   }
-  if (gone.length) out.push(`These edited fields are no longer on the ${page.noun}: ${gone.join(', ')}. Reset them.`);
-  const ids = [...new Set([...valueMediaIds(values), ...blockIds])];
+  if (gone.length) out.push({ message: `These edited fields are no longer on the ${page.noun}: ${gone.join(', ')}. Reset them.`, section: null, field: null });
+  const ids = [...usedBy.keys()];
   if (ids.length) {
     const rows = await db.select().from(media).where(inArray(media.id, ids));
     for (const id of ids) {
-      const m = rows.find((r) => r.id === id);
-      if (!m) out.push('A chosen photo no longer exists in the media library.');
-      else { if (!m.alt) out.push(`Add alt text to “${m.originalName}”.`); if (!m.rightsConfirmed) out.push(`Confirm usage rights and consent for “${m.originalName}”.`); }
+      const m = rows.find((r) => r.id === id); const at = usedBy.get(id)!;
+      const each = (message: string) => at.forEach((w) => out.push({ message, ...w }));
+      if (!m) each('A chosen photo no longer exists in the media library.');
+      else { if (!m.alt) each(`Add alt text to “${m.originalName}”.`); if (!m.rightsConfirmed) each(`Confirm usage rights and consent for “${m.originalName}”.`); }
     }
   }
   const changedLayout = page.layout && Array.isArray(layout) && JSON.stringify(currentLayout(cfg.siteRoot, file, layout)) !== JSON.stringify(currentLayout(cfg.siteRoot, file, null));
-  if (!Object.keys(values).length && !changedLayout) out.push('Nothing is changed yet.');
+  if (!Object.keys(values).length && !changedLayout) out.push({ message: 'Nothing is changed yet.', section: null, field: null });
   return out;
+}
+
+/** The same checks as plain messages (each message once), for review and publishing. */
+export async function contentProblems(db: DB, cfg: Config, values: Record<string, unknown>, layout: unknown = null, file = HOME) {
+  return [...new Set((await contentIssues(db, cfg, values, layout, file)).map((i) => i.message))];
 }
 
 /** Saves the working copy: { values, layout, baseUpdatedAt }. A save based on an older copy than the stored one is refused. */

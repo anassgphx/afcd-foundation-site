@@ -3,7 +3,7 @@
 // Each item links to its own editor and uses its own module's transition/publish endpoints (the queue never changes
 // content itself). The diff compares what was submitted (the latest revision, or the draft for settings) with what the
 // website shows (the published revision), field by field.
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import type { DB } from '../../db/client.ts';
 import * as t from '../../db/schema.ts';
@@ -28,6 +28,7 @@ export const RECORDS: RecordSrc[] = [
   R('publication', 'Publication', 'publication', t.publications, t.publications.title, t.publicationRevisions, 'publicationId', (id) => `/studio/publications/${id}`, (id) => `/publications/${id}`),
   R('partner', 'Partner', 'partner', t.partners, t.partners.name, t.partnerRevisions, 'partnerId', (id) => `/studio/partners/${id}`, (id) => `/partners/${id}`),
   R('pillar', 'Pillar', 'pillar', t.pillars, t.pillars.name, t.pillarRevisions, 'pillarId', (id) => `/studio/pillars/${id}`, (id) => `/pillars/${id}`),
+  R('about', 'About page', 'about', t.aboutPages, sql<string>`case ${t.aboutPages.key} when 'our-story' then 'Our Story' when 'mission-vision' then 'Mission & Vision' when 'strategy' then 'Strategy & Objectives' when 'team' then 'Our Team' else 'Partners page' end`, t.aboutPageRevisions, 'pageId', (id) => `/studio/pages/site/${id}`, (id) => `/about/${id}`),
   R('page', 'Page', 'page', t.pages, t.pages.title, t.pageRevisions, 'pageId', (id) => `/studio/pages/${id}`, (id) => `/pages/${id}`),
   R('homepage', 'Homepage', 'page', t.pageContents, t.pageContents.file, t.pageContentRevisions, 'contentId', () => '/studio/home', () => '/home'),
   R('seo', 'SEO settings', 'seo', t.seoOverrides, t.seoOverrides.file, t.seoRevisions, 'overrideId', () => '/studio/seo/pages', (id) => `/seo/overrides/${id}`),

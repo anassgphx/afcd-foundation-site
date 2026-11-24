@@ -1,13 +1,14 @@
 // SEO studio: an audit of what the built website shows to search engines and link previews, and reviewed SEO
 // settings for the site's template pages. Pages managed elsewhere in Studio link to their own editor.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { useSite } from '../site.ts';
-import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
+import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, useCan, useMe, useToast } from '../ui.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 import { DataTable, EmptyState, FilterTabs, ListToolbar, type Column } from '../DataTable.tsx';
 import { Integrations, MasterOverview, SearchConsoleView } from './SeoPro.tsx';
+import { PageChecklist, type Check } from './SeoChecklist.tsx';
 
 type Owner = { kind: string; id?: string; label: string };
 const EDIT: Record<string, (o: Owner) => string | null> = {
@@ -30,16 +31,15 @@ type Tab = 'overview' | 'audit' | 'issues' | 'indexability' | 'links' | 'schema'
 const GROUPS: [string, [Tab, string][]][] = [
   ['', [['overview', 'Overview']]],
   ['Diagnose', [['audit', 'Site audit'], ['issues', 'Issues'], ['indexability', 'Indexability'], ['links', 'Internal links']]],
-  ['Google', [['search-console', 'Search Console']]],
   ['Optimize', [['schema', 'Structured data'], ['redirects', 'Redirects'], ['pages', 'Page settings']]],
-  ['Settings', [['integrations', 'Integrations']]],
+  ['Google', [['search-console', 'Search Console'], ['integrations', 'Integrations']]],
 ];
 const TABS: [Tab, string][] = GROUPS.flatMap(([, t]) => t);
 const NO_AUDIT: Tab[] = ['search-console', 'integrations', 'redirects'];
 export type Sev = 'critical' | 'high' | 'medium' | 'low' | 'info';
 type Rule = { code: string; severity: Sev; category: string; kind: 'standard' | 'heuristic'; title: string; why: string; fix: string };
 export type Issue = { id: string; code: string; file: string; severity: Sev; category: string; evidence: string[]; status: 'open' | 'reviewed' | 'resolved'; firstSeen: string; lastSeen: string; resolvedAt: string | null; note: string; reviewer: string | null; rule: Rule | null; owner: Owner };
-export type AuditPage = { file: string; url: string; title: string; description: string; words: number; inSitemap: boolean; robots: string; canonical: string; canonicalOk: boolean; lang: string; inbound: number; inboundFrom: string[]; linksOut: number; schema: string[]; schemaErrors: string[]; h1: string; owner: Owner; score: number };
+export type AuditPage = { file: string; url: string; title: string; description: string; words: number; inSitemap: boolean; robots: string; canonical: string; canonicalOk: boolean; lang: string; inbound: number; inboundFrom: string[]; linksOut: number; schema: string[]; schemaErrors: string[]; h1: string; owner: Owner; score: number; checks?: Check[] };
 export type AuditV2 = { id: string; kind?: string; at: string; production?: boolean; score: number; scores?: Record<string, number>; counts?: Record<Sev, number>; pages: AuditPage[]; redirects?: { file: string; to: string }[] };
 export const SEV: Record<Sev, { label: string; c: string }> = { critical: { label: 'Critical', c: '#b91c1c' }, high: { label: 'High', c: '#dc2626' }, medium: { label: 'Medium', c: '#d97706' }, low: { label: 'Low', c: '#2563eb' }, info: { label: 'Info', c: '#78716c' } };
 const CATS: [string, string][] = [['technical', 'Technical health'], ['metadata', 'Metadata'], ['content', 'Content checklist'], ['structured', 'Structured data'], ['linking', 'Internal linking'], ['performance', 'Performance (build)']];
@@ -55,12 +55,15 @@ function SeoHome({ tab }: { tab: Tab }) {
   useEffect(() => { load().catch((e) => toast(e.message, true)); }, [load]);
   async function run() { setBusy(true); try { await post('/seo/audit'); await load(); toast('Build audit finished'); } catch (e) { toast((e as Error).message, true); } finally { setBusy(false); } }
   const a = data?.last ?? null; const v2 = !!a?.scores;
+  // keep the current section visible in the tab row when it scrolls (phones)
+  const nav = useRef<HTMLElement>(null);
+  useEffect(() => { nav.current?.querySelector<HTMLElement>('a.on')?.scrollIntoView({ block: 'nearest', inline: 'center' }); }, [tab]);
   return <>
-    <div className="page-h"><div><h1>SEO Intelligence</h1><p>Technical health, Google performance and actionable optimization.</p></div>
-      <div className="pills"><Link to="/studio/seo/integrations" className="btn"><Icon n="globe" />Integrations</Link>{can('seo.read') && <button className="btn btn-primary" disabled={busy} onClick={run}><Icon n="search" />{busy ? 'Auditing the build…' : 'Run build audit'}</button>}</div></div>
-    <nav className="seo-tabs sp-nav" aria-label="SEO sections">{GROUPS.map(([g, tabs]) => <div key={g || 'top'} className="sp-navg">{g && <span>{g}</span>}
+    <div className="page-h"><div><h1>SEO Intelligence</h1><p>Studio’s checks of the website build, Google data once connected, and the SEO settings Studio publishes.</p></div>
+      {can('seo.read') && !NO_AUDIT.includes(tab) && <div className="pills"><button className="btn btn-primary" disabled={busy} onClick={run}><Icon n="search" />{busy ? 'Auditing the build…' : 'Run build audit'}</button></div>}</div>
+    <nav ref={nav} className="seo-tabs sp-nav" aria-label="SEO sections">{GROUPS.map(([g, tabs]) => <div key={g || 'top'} className="sp-navg">{g && <span>{g}</span>}
       {tabs.map(([k, l]) => <Link key={k} to={k === 'overview' ? '/studio/seo' : `/studio/seo/${k}`} className={tab === k ? 'on' : ''} aria-current={tab === k ? 'page' : undefined}>{l}</Link>)}</div>)}</nav>
-    {a && !NO_AUDIT.includes(tab) && <div className="seo-kind"><span className="seo-kind-tag">Build audit</span><span>Checked the pages the website build produced {ago(a.at)}{v2 && !a.production ? ' · preview build (every page is noindex on purpose)' : ''}. This is not Google’s view of the public site.</span></div>}
+    {a && !NO_AUDIT.includes(tab) && tab !== 'overview' && <div className="seo-kind"><span className="seo-kind-tag">Build audit</span><span>{ago(a.at)} · {v2 && !a.production ? 'preview build, noindex on purpose' : 'production build'} · Studio’s checks, not Google’s view</span></div>}
     {tab === 'redirects' ? <Redirects />
       : tab === 'search-console' ? <SearchConsoleView />
       : tab === 'integrations' ? <Integrations />
@@ -80,6 +83,10 @@ export const SEV_ORDER: Sev[] = ['critical', 'high', 'medium', 'low', 'info'];
 
 function SiteAudit({ a, issues }: { a: AuditV2; issues: Issue[] }) {
   const [f, setF] = useState('issues'); const [q, setQ] = useState('');
+  // the page whose checklist is open (?page=… keeps it linkable)
+  const [sel, setSel] = useState<string | null>(() => new URLSearchParams(location.search).get('page'));
+  const pick = (file: string | null) => { setSel(file); history.replaceState(null, '', file ? `/studio/seo/audit?page=${file}` : '/studio/seo/audit'); };
+  const selPage = sel ? a.pages.find((p) => p.file === sel) ?? null : null;
   const open = issues.filter((i) => i.status !== 'resolved');
   const per = (file: string) => open.filter((i) => i.file === file && i.severity !== 'info');
   const rows = a.pages.filter((p) => (f === 'all' || (f === 'issues' ? per(p.file).length > 0 : f === 'passed' ? per(p.file).length === 0 : per(p.file).some((i) => i.severity === f))) && (!q || `${p.title} ${p.file}`.toLowerCase().includes(q.toLowerCase())));
@@ -88,13 +95,14 @@ function SiteAudit({ a, issues }: { a: AuditV2; issues: Issue[] }) {
     { key: 'page', header: 'Page', sort: (p) => p.title || p.file, csv: (p) => p.file, render: (p) => <div className="min-w-0"><b className="title">{p.title || p.file}</b><div className="sub mono">{p.file}</div></div> },
     { key: 'issues', header: 'Issues', sort: (p) => -per(p.file).length, csv: (p) => per(p.file).map((i) => i.rule?.title ?? i.code).join('; '), render: (p) => { const l = per(p.file); return l.length ? <div className="pills">{SEV_ORDER.filter((s) => l.some((i) => i.severity === s)).map((s) => <span key={s} className="sev" style={{ ['--c' as string]: SEV[s].c }}>{l.filter((i) => i.severity === s).length} {SEV[s].label.toLowerCase()}</span>)}</div> : <span className="muted">Passed</span>; } },
     { key: 'words', header: 'Words', sort: (p) => p.words, csv: (p) => String(p.words), align: 'right', hideBelow: 1000, render: (p) => <span className="sub">{p.words}</span> },
-    { key: 'edit', header: 'Edit in', render: (p) => { const to = editorFor(p.owner, p.file); return to ? <Link to={to} className="btn btn-sm">{p.owner.kind === 'template' ? 'SEO settings' : `${p.owner.kind[0].toUpperCase()}${p.owner.kind.slice(1)} editor`}</Link> : <span className="muted">{p.owner.kind === 'sample' ? 'Website code' : p.owner.label}</span>; } },
+    { key: 'edit', header: 'Edit in', hideBelow: 720, render: (p) => { const to = editorFor(p.owner, p.file); return to ? <Link to={to} className="btn btn-sm">{p.owner.kind === 'template' ? 'SEO settings' : `${p.owner.kind[0].toUpperCase()}${p.owner.kind.slice(1)} editor`}</Link> : <span className="muted">{p.owner.kind === 'sample' ? 'Website code' : p.owner.label}</span>; } },
   ];
   return <section className="card">
     <ListToolbar tabs={[['issues', 'With issues', a.pages.filter((p) => per(p.file).length).length], ['critical', 'Critical', a.pages.filter((p) => per(p.file).some((i) => i.severity === 'critical')).length], ['high', 'High', a.pages.filter((p) => per(p.file).some((i) => i.severity === 'high')).length], ['passed', 'Passed', a.pages.filter((p) => !per(p.file).length).length], ['all', 'All', a.pages.length]]}
       value={f} onChange={setF} q={q} setQ={setQ} placeholder="Search pages" />
     <DataTable id="seo-audit" rows={rows} total={a.pages.length} rowKey={(p) => p.file} columns={cols} csvName="afcd-seo-audit" initialSort={{ key: 'score', dir: 'asc' }}
-      onOpen={(p) => navigate(`/studio/seo/issues?file=${p.file}`)} empty={<EmptyState icon="check" text="No pages here" />} />
+      onOpen={(p) => pick(p.file)} empty={<EmptyState icon="check" text="No pages here" />} />
+    {selPage && <PageChecklist page={selPage} onClose={() => pick(null)} />}
   </section>;
 }
 
@@ -228,7 +236,7 @@ function SchemaStudio() {
     <div className="sch-grid">
       <fieldset className="sch-form" disabled={!editable}>
         <h3>Organization profile <small className="muted">homepage · NGO</small></h3>
-        <p className="muted sch-help">Leave a field empty to keep what the website already says. Only public contact details belong here: tax identifiers, CNSS numbers and internal registration records are never published.</p>
+        <p className="muted sch-help">Leave a field empty to keep what the website already says. Only public contact details belong here. Tax identifiers, CNSS numbers and internal registration records are never published.</p>
         <div className="sch-fields">
           {ORG_FIELDS.map(([k, l, ph, max]) => <label key={k} className="field"><span>{l}</span><input className="input" maxLength={max} placeholder={String(v.organization.built?.[k] ?? ph)} value={org[k]} onChange={(e) => setOrg(k, e.target.value)} /></label>)}
           <label className="field s2"><span>Description <em className={org.description.length > 290 ? 'near' : ''} style={{ fontStyle: 'normal', float: 'right', fontSize: 11.5 }}>{org.description.length} / 320</em></span>
@@ -306,11 +314,11 @@ function Redirects() {
   }
   if (!rows) return <Loading />;
   return <section className="card">
-    <div className="card-h">
-      <p className="muted" style={{ margin: 0, maxWidth: 760 }}>Send visitors and search engines from an old address to its new page. The site is static, so each redirect is a small page at the old address that forwards at once and names the new page as canonical; Studio also writes a <span className="mono">_redirects</span> file with the real status code for hosts that support it.</p>
+    <div className="card-h sp-toolbar">
+      <p className="muted" style={{ margin: 0 }}>Send visitors and search engines from an old address to its new page. The site is static, so each redirect is a small page at the old address that forwards at once and names the new page as canonical; Studio also writes a <span className="mono">_redirects</span> file with the real status code for hosts that support it.</p>
       <div className="pills">
         {can('seo.update') && <button className="btn" onClick={() => setEdit({ form: { source: '', destination: '', code: 301, reason: '' } })}><Icon n="plus" />New redirect</button>}
-        {can('seo.publish') ? <button className="btn btn-primary" disabled={!pending.length} onClick={() => setConfirm(true)}><Icon n="globe" />Publish changes{pending.length ? ` (${pending.length})` : ''}</button>
+        {can('seo.publish') ? <button className="btn btn-primary" disabled={!pending.length} title={pending.length ? undefined : 'Nothing is waiting to be published'} onClick={() => setConfirm(true)}><Icon n="globe" />{pending.length ? `Publish changes (${pending.length})` : 'Nothing to publish'}</button>
           : pending.length > 0 && <span className="muted" style={{ fontSize: 12.5 }}>{pending.length} change{pending.length === 1 ? '' : 's'} waiting for an administrator to publish</span>}
       </div>
     </div>
@@ -366,9 +374,9 @@ function PagesView() {
   useEffect(() => { api<PageRow[]>('/seo/pages').then(setRows); }, []);
   const shown = (rows ?? []).filter((r) => !q || `${r.file} ${r.defaults?.title}`.toLowerCase().includes(q.toLowerCase()));
   return <section className="card">
-    <div className="card-h"><p className="muted" style={{ margin: 0 }}>The website’s template pages. Projects, stories, events, opportunities and builder pages have SEO fields in their own editors.</p>
+    <div className="card-h sp-toolbar"><p className="muted" style={{ margin: 0 }}>The website’s template pages. Projects, stories, events, opportunities and builder pages have SEO fields in their own editors.</p>
       <label className="search"><Icon n="search" /><span className="sr-only">Search pages</span><input className="input" placeholder="Search pages" value={q} onChange={(e) => setQ(e.target.value)} /></label></div>
-    {!rows ? <Loading /> : <div className="scroll-x"><table className="table">
+    {!rows ? <Loading /> : <div className="scroll-x"><table className="table sp-ptable">
       <thead><tr><th>Page</th><th>Title in search results</th><th>Settings</th></tr></thead>
       <tbody>{shown.map((r) => <tr key={r.file}>
         <td><Link className="title mono" to={`/studio/seo/pages/${r.file}`}>{r.file}</Link>{r.orphan && <div className="sub">Page no longer a template page</div>}</td>

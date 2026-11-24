@@ -31,6 +31,14 @@ export const COLOURS = [
 ] as const;
 const COLOUR_VALUES = COLOURS.map((c) => c.value) as [string, ...string[]];
 
+/** Page texts an editor may change, with their maximum length. Empty means the default wording below. */
+export const PAGE_FIELDS = [
+  ['flagshipLabel', 40], ['howTitle', 60], ['howSoft', 60], ['howDesc', 200], ['objectivesTitle', 60], ['objectivesSoft', 60], ['objectivesDesc', 200],
+  ['projectsTitle', 60], ['projectsSoft', 60], ['projectsDesc', 200], ['relatedTitle', 60], ['relatedSoft', 60], ['ctaTitle', 80], ['ctaText', 220],
+] as const;
+export type PageKey = (typeof PAGE_FIELDS)[number][0];
+export const EMPTY_PAGE = Object.fromEntries(PAGE_FIELDS.map(([k]) => [k, ''])) as Record<PageKey, string>;
+
 export const pillarSchema = z.object({
   name: need(60, 'Add the pillar name.'),
   short: plain(20).default(''),
@@ -48,6 +56,11 @@ export const pillarSchema = z.object({
   objectives: z.array(z.object({ title: plain(140), text: plain(400).default('') }).strict()).max(6, 'Up to 6 objectives.').default([]),
   activities: z.array(z.number().int().min(0).max(50)).max(8).refine((a) => new Set(a).size === a.length, 'Each activity once.').default([]),
   groups: z.array(z.number().int().min(0).max(50)).max(8).refine((a) => new Set(a).size === a.length, 'Each group once.').default([]),
+  // free-text items shown after the ones picked from the shared lists (for work only this pillar does)
+  extraActivities: z.array(need(160, 'Remove empty activities.')).max(6).default([]),
+  extraGroups: z.array(need(100, 'Remove empty participant groups.')).max(6).default([]),
+  // the page's own headings and texts; empty = the site's default wording (see PAGE_DEFAULTS)
+  page: z.object(Object.fromEntries(PAGE_FIELDS.map(([k, n]) => [k, plain(n).default('')])) as Record<PageKey, z.ZodDefault<ReturnType<typeof plain>>>).strict().prefault({}),
   mediaId: z.string().uuid().nullable().default(null),
   provenance: plain(300).default(''),
 }).strict();
@@ -98,7 +111,8 @@ export async function loadPillar(db: DB, id: string): Promise<FullPillar> {
   const [p] = await db.select().from(pillars).where(eq(pillars.id, id));
   if (!p) throw new AppError(404, 'Pillar not found.');
   const d = p.draft as unknown as PillarInput | null;
-  const content = d ? { ...d, objectives: d.objectives ?? [], mediaId: p.mediaId, provenance: p.provenance } : null;   // drafts from before objectives existed have none
+  // drafts from before objectives, custom items or page texts existed have none
+  const content = d ? { ...d, objectives: d.objectives ?? [], extraActivities: d.extraActivities ?? [], extraGroups: d.extraGroups ?? [], page: { ...EMPTY_PAGE, ...(d.page ?? {}) }, mediaId: p.mediaId, provenance: p.provenance } : null;
   return { ...p, content, projects: await linkedProjects(db, id), usage: await pillarUsage(db, id) };
 }
 
@@ -253,7 +267,7 @@ export async function createPillar(db: DB, cfg: Config, actor: NonNullable<Actor
     const colour = COLOURS.find((c) => !used.has(c.value))?.value ?? COLOURS[all.length % COLOURS.length].value;
     const sort = Math.max(-1, ...all.map((x) => x.sort)) + 1;
     const draft: Omit<PillarInput, 'provenance' | 'mediaId'> = { name, short: name.split(/\s+/)[0].slice(0, 20), summary: '', intro: '', colour, brand: '', highlights: [],
-      approachTitle: '', approachSoft: '', view: '', principles: [], steps: [], objectives: [], activities: [], groups: [] };
+      approachTitle: '', approachSoft: '', view: '', principles: [], steps: [], objectives: [], activities: [], groups: [], extraActivities: [], extraGroups: [], page: { ...EMPTY_PAGE } };
     const [p] = await t.insert(pillars).values({ key, number: String(all.length + 1).padStart(2, '0'), name, description: '', colour, publicFile: file, sort,
       draft: draft as unknown as Record<string, unknown>, provenance: 'Added in Studio', status: 'draft', updatedBy: actor.id }).returning();
     await audit(tx, actor, 'pillar.create', { type: 'pillar', id: p.id }, `Added pillar “${name}” (${file})`);

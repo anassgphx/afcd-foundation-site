@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import '../inbox.css';
 import { api, del, patch, post, put } from '../api.ts';
-import { Icon, Modal, ago, fmtDate, initials, useCan, useMe, useToast } from '../ui.tsx';
+import { Icon, Link, Modal, ago, fmtDate, initials, useCan, useMe, useToast } from '../ui.tsx';
 import { DataTable, EmptyState, ListToolbar, useUrlState, type Column } from '../DataTable.tsx';
 import { Field } from '../Editor.tsx';
 import { Loading } from './Dashboard.tsx';
@@ -257,6 +257,16 @@ function Reader({ id, people, onBack, onChanged, onDelete, onGone, onOpened, mai
   const [note, setNote] = useState(''); const [busy, setBusy] = useState('');
   const [nudge, setNudge] = useState(false);
   const [composing, setComposing] = useState(false);
+  const [template, setTemplate] = useState('');
+  // reply templates (Settings → Email templates) offered as one-click starts
+  const [tpls, setTpls] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => { api<{ templates: { id: string; name: string }[] }>('/settings/templates').then((r) => setTpls(r.templates)).catch(() => {}); }, []);
+  // r = reply (when typing nowhere)
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { const t = e.target as HTMLElement; if (e.key !== 'r' || e.metaKey || e.ctrlKey || e.altKey || /INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable) return;
+      if (mail.ready && can('forms.manage')) { e.preventDefault(); setTemplate(''); setComposing(true); } };
+    window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
+  }, [mail.ready]);
   const load = useCallback(() => api<Msg>(`/inbox/messages/${id}`).then(setM), [id]);
   useEffect(() => { load().then(onOpened).catch((e) => { toast(e.message, true); onGone(); }); }, [load]);
   // on a phone the reader replaces the list: start at the top of the message
@@ -278,11 +288,18 @@ function Reader({ id, people, onBack, onChanged, onDelete, onGone, onOpened, mai
     ['Consent', m.consentAt ? `Agreed to the privacy notice · ${fmtDate(m.consentAt)}` : '—'],
   ];
 
-  return <article className="ix-read-b">
+  // the conversation in time order: the message, then replies, notes and status changes as they happened
+  const thread = [...m.events].sort((a, b) => a.at.localeCompare(b.at));
+  const canReply = manage && mail.ready && !m.spam;
+  const settingsAdmin = can('settings.admin');
+  const openReply = (tpl = '') => { setTemplate(tpl); setComposing(true); setNudge(false); };
+
+  return <article className="ix-read-b ix-r2">
     <div className="ix-read-top">
       <button className="btn btn-ghost btn-sm ix-back" onClick={onBack}><Glyph n="back" />Messages</button>
       <div className="ix-read-actions" role="toolbar" aria-label="Message actions">
-        <button className={`btn btn-ghost icon-btn ix-star${m.starred ? ' on' : ''}`} aria-pressed={m.starred} title={m.starred ? 'Unstar' : 'Star'} aria-label={m.starred ? 'Unstar' : 'Star'}
+        {canReply && !composing && <button className="btn btn-sm btn-primary ix-top-reply" onClick={() => openReply()} title="Reply (r)"><Glyph n="reply" />Reply</button>}
+        <button className={`btn btn-ghost icon-btn ix-star${m.starred ? ' on' : ''}`} aria-pressed={m.starred} title={m.starred ? 'Unstar (s)' : 'Star (s)'} aria-label={m.starred ? 'Unstar' : 'Star'}
           onClick={() => run('star', () => post(`/inbox/messages/${m.id}/star`, { starred: !m.starred }), undefined, { starred: !m.starred })}><Glyph n="star" solid={m.starred} /></button>
         {manage && <>
           <button className="btn btn-ghost icon-btn" title="Mark unread (u)" aria-label="Mark unread" onClick={() => run('unread', () => post('/inbox/flag', { ids: [m.id], flag: 'unread' }), 'Marked unread').then(onBack)}><Glyph n="dot" /></button>
@@ -296,56 +313,73 @@ function Reader({ id, people, onBack, onChanged, onDelete, onGone, onOpened, mai
     {m.spam && <div className="notice n-warn"><div><b>In spam.</b> {SPAM_WHY[m.spamReason ?? ''] ?? ''} {manage && <button className="btn btn-sm" style={{ marginLeft: 6 }} onClick={() => flag('not_spam', 'Moved to the inbox')}>Not spam</button>}</div></div>}
     {m.archived && !m.spam && <div className="notice n-info"><div>Archived {m.archivedAt ? ago(m.archivedAt) : ''}. It stays searchable and is deleted with the retention rules.</div></div>}
 
-    <header className="ix-sender">
-      <span className="ix-av ix-av-lg" aria-hidden="true">{initials(m.name || m.email)}</span>
-      <div><span className="ix-chip">{m.topic}</span><h2>{m.name}</h2><p className="muted">{m.email}</p></div>
+    <header className="ix-head">
+      <div className="ix-head-k"><span className="ix-chip">{m.topic || 'Message'}</span><span className={`ix-st s-${m.status}`}><span className={`ix-sdot s-${m.status}`} aria-hidden="true" />{SLABEL[m.status]}</span>{m.assigneeName && <span className="ix-chip">Assigned to {m.assignedTo === me.user.id ? 'you' : m.assigneeName}</span>}</div>
+      <h2>{m.topic ? `${m.topic} · ${m.name || m.email}` : (m.name || m.email)}</h2>
     </header>
 
-    <div className="ix-controls">
-      <div className="ix-ctl"><span>Status</span>
-        <div className="seg ix-seg" role="group" aria-label="Status">{STATUSES.map(([k, l]) => <button key={k} className={m.status === k ? 'on' : ''} aria-pressed={m.status === k} disabled={!manage || !!busy} onClick={() => m.status !== k && setStatus(k)}><span className={`ix-sdot s-${k}`} aria-hidden="true" />{l}</button>)}</div></div>
-      <label className="ix-ctl"><span>Assigned to</span>
-        <select className="select" aria-label="Assigned to" value={m.assignedTo ?? ''} disabled={!manage || !!busy} onChange={(e) => run('assign', () => patch(`/inbox/messages/${m.id}`, { assignedTo: e.target.value || null }), e.target.value ? 'Assigned' : 'Unassigned')}>
-          <option value="">Nobody</option>{people.map((p) => <option key={p.id} value={p.id}>{p.id === me.user.id ? `${p.name} (me)` : p.name}</option>)}
-          {m.assignedTo && !people.some((p) => p.id === m.assignedTo) && <option value={m.assignedTo}>{m.assigneeName ?? 'Former teammate'}</option>}</select></label>
+    <div className="ix-r2-grid">
+      <div className="ix-conv">
+        <ol className="ix-thread" aria-label="Conversation">
+          <li className="ix-msg in">
+            <div className="ix-msg-h"><span className="ix-av" aria-hidden="true">{initials(m.name || m.email)}</span>
+              <span className="ix-msg-who"><b>{m.name || m.email}</b><small className="muted">{m.email} · via the website</small></span>
+              <time className="muted" dateTime={m.createdAt} title={fmtDate(m.createdAt)}>{ago(m.createdAt)}</time></div>
+            <div className="ix-msg-b">{m.message}</div>
+          </li>
+          {thread.map((e) => e.kind === 'email_sent' ? <li key={e.id} className="ix-msg out">
+              <div className="ix-msg-h"><span className="ix-av ix-av-me" aria-hidden="true">{initials(e.actorName ?? 'AFCD')}</span>
+                <span className="ix-msg-who"><b>{e.actorId === me.user.id ? 'You' : e.actorName ?? 'Former teammate'} replied</b><small className="muted">From {String(e.meta?.from ?? '')} to {String(e.meta?.to ?? '')}</small></span>
+                <time className="muted" dateTime={e.at} title={fmtDate(e.at)}>{ago(e.at)}</time></div>
+              <div className="ix-msg-s">{String(e.meta?.subject ?? '')}</div>
+              <div className="ix-msg-b">{e.body}</div>
+            </li>
+            : e.kind === 'note' ? <li key={e.id} className="ix-msg note">
+              <div className="ix-msg-h"><span className="ix-note-tag">Internal note</span><span className="ix-msg-who"><b>{e.actorName ?? 'Former teammate'}</b></span>
+                <time className="muted" dateTime={e.at} title={fmtDate(e.at)}>{ago(e.at)}</time>
+                {manage && e.actorId === me.user.id && <button className="btn btn-ghost btn-sm btn-danger" onClick={() => run('delnote', () => del(`/inbox/messages/${m.id}/notes/${e.id}`), 'Note deleted')}>Delete</button>}</div>
+              <div className="ix-msg-b">{e.body}</div>
+            </li>
+            : <li key={e.id} className="ix-sys"><span className="ix-ev-dot" aria-hidden="true" /><span><b>{e.actorName ?? (e.actorId ? 'Former teammate' : 'Studio')}</b> {describe(e)} <time className="muted" title={fmtDate(e.at)}>· {ago(e.at)}</time></span></li>)}
+        </ol>
+
+        {composing ? <Composer m={m} mail={mail} template={template} onCancel={() => setComposing(false)} onSent={async (marked) => { setComposing(false); await load(); await onChanged(marked && m.status !== 'closed' ? { status: 'replied' } : undefined); toast(`Reply sent to ${m.email}`); }} />
+          : canReply ? <div className="ix-quick">
+            <button type="button" className="ix-quick-box" onClick={() => openReply()}><span className="ix-av ix-av-me" aria-hidden="true">{initials(me.user.name)}</span><span>Reply to {firstName(m.name) || m.email}…</span><kbd>r</kbd></button>
+            {tpls.length > 0 && <div className="ix-quick-t" aria-label="Start from a template"><span className="muted">Start from:</span>{tpls.slice(0, 6).map((t) => <button key={t.id} type="button" className="ix-tchip" onClick={() => openReply(t.id)}>{t.name}</button>)}</div>}
+            <small className="muted">Sent from {mail.fromEmail}. The reply stays in this conversation. <a href={mailto(m)} className="ix-link" onClick={() => { post(`/inbox/messages/${m.id}/reply`).then(load).catch(() => undefined); if (m.status !== 'replied' && m.status !== 'closed') setNudge(true); }}>Use your email app instead</a></small>
+          </div>
+          : m.spam ? null
+          : <div className="ix-setup">
+            <span className="ix-setup-ic" aria-hidden="true"><Glyph n="send" /></span>
+            <div className="ix-setup-t"><b>Reply from Studio</b>
+              <p className="muted">{manage ? 'Email sending isn’t set up yet. Once an administrator connects the foundation’s mailbox (server, sender address and password, about two minutes), you can answer here and every reply is kept in this conversation.' : 'Only Inbox managers can reply.'}</p>
+              <div className="ix-setup-a">
+                {manage && (settingsAdmin ? <Link to="/studio/settings/email" className="btn btn-sm btn-primary"><Icon n="send" />Set up email sending</Link> : <span className="muted">Ask an administrator to set up email sending in Settings → Email &amp; SMTP.</span>)}
+                {manage && <a className="btn btn-sm" href={mailto(m)} onClick={() => { post(`/inbox/messages/${m.id}/reply`).then(load).catch(() => undefined); if (m.status !== 'replied' && m.status !== 'closed') setNudge(true); }}><Glyph n="reply" />Reply in your email app</a>}
+              </div></div>
+          </div>}
+        {nudge && <div className="notice n-info ix-nudge" role="status"><div>Sent your reply? <button className="btn btn-sm btn-primary" onClick={() => { setNudge(false); setStatus('replied'); }}>Mark as replied</button> <button className="btn btn-sm btn-ghost" onClick={() => setNudge(false)}>Not yet</button></div></div>}
+
+        {manage && <form className="ix-note-form" onSubmit={(e) => { e.preventDefault(); if (note.trim()) run('note', () => post(`/inbox/messages/${m.id}/notes`, { body: note }), 'Note added').then(() => setNote('')); }}>
+          <textarea className="textarea" value={note} onChange={(e) => setNote(e.target.value)} maxLength={4000} rows={2} placeholder="Add an internal note for the team. It is never sent." aria-label="Internal note"
+            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) (e.currentTarget.form as HTMLFormElement).requestSubmit(); }} />
+          {note.trim() && <div className="ix-note-f"><small className="muted">⌘/Ctrl + Enter to add</small><button className="btn btn-sm" disabled={busy === 'note'}>{busy === 'note' ? 'Adding…' : 'Add note'}</button></div>}
+        </form>}
+      </div>
+
+      <aside className="ix-side" aria-label="Details">
+        <div className="ix-side-b">
+          <span className="ix-side-k">Status</span>
+          <div className="ix-stlist" role="group" aria-label="Status">{STATUSES.map(([k, l]) => <button key={k} type="button" className={m.status === k ? 'on' : ''} aria-pressed={m.status === k} disabled={!manage || !!busy} onClick={() => m.status !== k && setStatus(k)}><span className={`ix-sdot s-${k}`} aria-hidden="true" />{l}</button>)}</div>
+        </div>
+        <label className="ix-side-b"><span className="ix-side-k">Assigned to</span>
+          <select className="select" aria-label="Assigned to" value={m.assignedTo ?? ''} disabled={!manage || !!busy} onChange={(e) => run('assign', () => patch(`/inbox/messages/${m.id}`, { assignedTo: e.target.value || null }), e.target.value ? 'Assigned' : 'Unassigned')}>
+            <option value="">Nobody</option>{people.map((p) => <option key={p.id} value={p.id}>{p.id === me.user.id ? `${p.name} (me)` : p.name}</option>)}
+            {m.assignedTo && !people.some((p) => p.id === m.assignedTo) && <option value={m.assignedTo}>{m.assigneeName ?? 'Former teammate'}</option>}</select></label>
+        <dl className="ix-side-b ix-sfacts">{facts.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+      </aside>
     </div>
-
-    <div className="ix-body">{m.message}</div>
-
-    {composing ? <Composer m={m} mail={mail} onCancel={() => setComposing(false)} onSent={async (marked) => { setComposing(false); await load(); await onChanged(marked && m.status !== 'closed' ? { status: 'replied' } : undefined); toast(`Reply sent to ${m.email}`); }} />
-      : <div className="ix-reply">
-        {manage && mail.ready && !m.spam ? <>
-          <button className="btn btn-primary" onClick={() => { setComposing(true); setNudge(false); }}><Glyph n="reply" />Reply</button>
-          <a className="btn btn-ghost" href={mailto(m)} onClick={() => { post(`/inbox/messages/${m.id}/reply`).then(load).catch(() => undefined); if (m.status !== 'replied' && m.status !== 'closed') setNudge(true); }}>Open in email app</a>
-          <small className="muted">Sent from {mail.fromEmail} and kept in the history below.</small>
-        </> : <>
-          {manage ? <a className="btn btn-primary" href={mailto(m)} onClick={() => { post(`/inbox/messages/${m.id}/reply`).then(load).catch(() => undefined); if (m.status !== 'replied' && m.status !== 'closed') setNudge(true); }}><Glyph n="reply" />Reply by email</a>
-            : <a className="btn btn-primary" href={mailto(m)}><Glyph n="reply" />Reply by email</a>}
-          <small className="muted">Opens your email app with the subject and a quote filled in.{manage && !m.spam && <> To send from Studio, <button type="button" className="ix-link" onClick={onSetupMail}>set up email sending</button>.</>}</small>
-        </>}
-      </div>}
-    {nudge && <div className="notice n-info ix-nudge" role="status"><div>Sent your reply? <button className="btn btn-sm btn-primary" onClick={() => { setNudge(false); setStatus('replied'); }}>Mark as replied</button> <button className="btn btn-sm btn-ghost" onClick={() => setNudge(false)}>Not yet</button></div></div>}
-
-    <dl className="ix-facts">{facts.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
-
-    <section className="ix-activity" aria-label="Notes and activity">
-      <h3>Notes and activity</h3>
-      {manage && <form className="ix-note-form" onSubmit={(e) => { e.preventDefault(); if (note.trim()) run('note', () => post(`/inbox/messages/${m.id}/notes`, { body: note }), 'Note added').then(() => setNote('')); }}>
-        <textarea className="textarea" value={note} onChange={(e) => setNote(e.target.value)} maxLength={4000} rows={2} placeholder="Add an internal note. Only staff see it; it is never sent." aria-label="Internal note"
-          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) (e.currentTarget.form as HTMLFormElement).requestSubmit(); }} />
-        <div className="ix-note-f"><small className="muted">⌘/Ctrl + Enter to add</small><button className="btn btn-sm" disabled={!note.trim() || busy === 'note'}>{busy === 'note' ? 'Adding…' : 'Add note'}</button></div>
-      </form>}
-      <ol className="ix-timeline">
-        {[...m.events].reverse().map((e) => <li key={e.id} className={e.kind === 'note' || e.kind === 'email_sent' ? 'ix-ev-note' : ''}>
-          {e.kind === 'email_sent' ? <details className="ix-sent"><summary><Glyph n="send" /><span><b>{e.actorName ?? 'Former teammate'}</b> sent a reply <span className="muted">· {String(e.meta?.subject ?? '')}</span></span><time className="muted" title={fmtDate(e.at)}>{ago(e.at)}</time></summary>
-            <div className="ix-sent-h muted">From {String(e.meta?.from ?? '')} to {String(e.meta?.to ?? '')}</div><p>{e.body}</p></details>
-          : e.kind === 'note' ? <div className="ix-note"><div className="ix-note-h"><b>{e.actorName ?? 'Former teammate'}</b><time className="muted" title={fmtDate(e.at)}>{ago(e.at)}</time>
-            {manage && e.actorId === me.user.id && <button className="btn btn-ghost btn-sm btn-danger" onClick={() => run('delnote', () => del(`/inbox/messages/${m.id}/notes/${e.id}`), 'Note deleted')}>Delete</button>}</div><p>{e.body}</p></div>
-            : <><span className="ix-ev-dot" aria-hidden="true" /><span><b>{e.actorName ?? (e.actorId ? 'Former teammate' : 'Studio')}</b> {describe(e)} <time className="muted" title={fmtDate(e.at)}>· {ago(e.at)}</time></span></>}
-        </li>)}
-        <li><span className="ix-ev-dot" aria-hidden="true" /><span><b>Received</b> from the website ({m.page || 'contact.html'}) <time className="muted" title={fmtDate(m.createdAt)}>· {ago(m.createdAt)}</time></span></li>
-      </ol>
-    </section>
   </article>;
 }
 
@@ -363,7 +397,7 @@ function describe(e: Ev) {
 }
 
 // ================================================================ Reply composer (sends through the saved SMTP server)
-function Composer({ m, mail, onCancel, onSent }: { m: Msg; mail: MailInfo; onCancel: () => void; onSent: (markedReplied: boolean) => Promise<void> }) {
+function Composer({ m, mail, template, onCancel, onSent }: { m: Msg; mail: MailInfo; template?: string; onCancel: () => void; onSent: (markedReplied: boolean) => Promise<void> }) {
   const toast = useToast();
   const draftKey = `studio.reply.${m.id}`;
   const initial = { subject: replySubject(m), body: replyBody(m, 4000) };
@@ -379,8 +413,9 @@ function Composer({ m, mail, onCancel, onSent }: { m: Msg; mail: MailInfo; onCan
   // reply templates (Settings → Email templates), filled in on the server with this message's name and topic
   const [tpls, setTpls] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => { api<{ templates: { id: string; name: string }[] }>('/settings/templates').then((r) => setTpls(r.templates)).catch(() => {}); }, []);
-  async function applyTemplate(id: string) {
-    if (!id || (dirty && !confirm('Replace your text with this template?'))) return;
+  useEffect(() => { if (template) applyTemplate(template, true); }, [template]);
+  async function applyTemplate(id: string, quiet = false) {
+    if (!id || (!quiet && dirty && !confirm('Replace your text with this template?'))) return;
     try { const r = await post<{ subject: string; body: string }>(`/inbox/messages/${m.id}/template/${id}`); setD({ subject: r.subject, body: `${r.body}\n\n---\nOn ${fmtDate(m.createdAt)}, ${m.name} wrote:\n${m.message.slice(0, 4000).split('\n').map((l) => `> ${l}`).join('\n')}` }); bodyRef.current?.focus(); }
     catch (e) { toast((e as Error).message, true); }
   }

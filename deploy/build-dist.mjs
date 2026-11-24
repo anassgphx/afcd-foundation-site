@@ -2,8 +2,9 @@
 // Run after `npm run build:production`. Only public files go in: no Studio, sources, docs or data files.
 import { cpSync, rmSync, mkdirSync, readdirSync, statSync, existsSync, copyFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url)); // decoded path (works with spaces)
 const OUT = join(ROOT, 'dist');
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT);

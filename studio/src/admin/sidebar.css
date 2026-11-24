@@ -1,15 +1,19 @@
 /* Studio sidebar (Sidebar.tsx). Scoped under `.sb` so it overrides the older sidebar rules in studio.css
    without editing that file. Quiet labels, 32px rows, a soft active row with an accent bar, pinned header and footer. */
 
-.sb { --sb-active: #F0EFED; --sb-hover: #F6F6F5; overflow: hidden; }
-.sb :where(a, button):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sb { --sb-active: #F0EFED; --sb-hover: #F6F6F5; overflow: hidden; height: 100vh; height: 100dvh; }
+.sb :where(a, button):focus { outline: none; }
+.sb :where(a, button):focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px rgba(12, 10, 9, .42); }
+.sb .sb-nav a.on:focus-visible { box-shadow: inset 0 0 0 1.5px rgba(12, 10, 9, .55); }
 
 /* ---------- header: logo + workspace */
-.sb-head { flex: none; padding: 14px 14px 12px; border-bottom: 1px solid var(--line); }
+.sb-head { flex: none; padding: 14px 14px 11px; border-bottom: 1px solid var(--line); }
 .sb .sb-brand { display: block; min-height: 0; padding: 2px 4px; border: 0; border-radius: 8px; }
 .sb .sb-brand .brand-logo { max-width: 168px; }
-.sb-ws { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 0 4px; }
-.sb-ws-name { font-size: 12.5px; font-weight: 600; color: var(--ink); letter-spacing: -.005em; }
+.sb-ws { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 8px; padding: 0 4px; }
+.sb-ws-name { flex: none; font-size: 12px; font-weight: 650; color: var(--ink); letter-spacing: -.005em; }
+.sb-ws-role { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
+.sb-ws-role::before { content: '·'; margin-right: 6px; color: var(--faint); }
 .sb-env { display: inline-flex; align-items: center; gap: 5px; height: 18px; padding: 0 7px; border: 1px solid var(--line); border-radius: 999px; background: var(--sunken); font-size: 10.5px; font-weight: 600; color: var(--muted); }
 .sb-env::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #EAB308; }
 
@@ -37,7 +41,11 @@
 .sb-count.sb-unread { background: var(--accent); color: var(--accent-ink); }
 
 /* ---------- footer: pinned */
-.sb .sb-foot { flex: none; display: grid; gap: 2px; padding: 8px 10px 10px; border-top: 1px solid var(--line); background: var(--surface); }
+.sb .sb-foot { flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 10px; padding-bottom: max(8px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface); }
+.sb .sb-foot .sb-foot-btn { flex: 1; min-width: 0; }
+.sb-toggle { flex: none; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--muted); cursor: pointer; transition: background-color .15s, color .15s; }
+.sb-toggle:hover { background: var(--sb-hover); color: var(--ink); }
+.sb-toggle svg { width: 16px; height: 16px; }
 .sb-foot-btn { display: flex; align-items: center; gap: 10px; width: 100%; height: 32px; padding: 0 10px; border: 0; border-radius: 7px; background: none; font: inherit; font-size: 13px; font-weight: 500; color: var(--ink-2); text-align: left; text-decoration: none; cursor: pointer; transition: background-color .15s, color .15s; }
 .sb-foot-btn svg { flex: none; width: 16px; height: 16px; color: var(--muted); }
 .sb-foot-btn:hover { background: var(--sb-hover); color: var(--ink); }
@@ -57,7 +65,9 @@
 .collapsed .sb .sb-count { position: absolute; top: 7px; right: 9px; min-width: 0; width: 8px; height: 8px; padding: 0; font-size: 0; border: 2px solid var(--surface); box-sizing: content-box; background: var(--muted); }
 .collapsed .sb .sb-count.sb-unread { background: var(--accent); }
 .collapsed .sb .sb-ind::before { top: 9px; bottom: 9px; }
+.collapsed .sb .sb-foot { flex-direction: column; align-items: stretch; gap: 2px; }
 .collapsed .sb-foot-btn { justify-content: center; padding: 0; height: 36px; }
+.collapsed .sb-toggle { width: 100%; height: 36px; }
 .sb-toggle svg { transition: transform .2s; }
 .collapsed .sb-toggle svg { transform: scaleX(-1); }
 
@@ -81,3 +91,12 @@
   .sb .sb-nav a, .sb-foot-btn { height: 40px; font-size: 14px; }
 }
 @media (prefers-reduced-motion: reduce) { .sb *, .sb *::before { transition: none !important; } }
+
+/* ---------- keyboard shortcut hint: appears on hover/focus, only where a mouse can hover */
+.sb-kbd { flex: none; display: none; align-items: center; height: 18px; padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--surface);
+  font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; color: var(--faint); }
+@media (hover: hover) and (min-width: 861px) {
+  .sb-kbd { display: inline-flex; opacity: 0; transform: translateX(-3px); transition: opacity .15s, transform .15s; }
+  .sb .sb-nav a:hover .sb-kbd, .sb .sb-nav a:focus-visible .sb-kbd { opacity: 1; transform: none; }
+}
+.collapsed .sb-kbd { display: none !important; }

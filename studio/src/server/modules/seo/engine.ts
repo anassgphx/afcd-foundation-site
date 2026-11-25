@@ -65,6 +65,8 @@ const R: Record<string, Omit<Finding, 'file' | 'evidence'>> = {
 };
 R['link.via-redirect'] = { code: 'link.via-redirect', severity: 'low', category: 'linking', kind: 'standard', title: 'Links to a redirected address', why: 'Visitors and search engines take an extra hop through the redirect page before reaching the content.', fix: 'Point the link straight at the new page.' };
 export const RULES = R;
+/** HTML helpers shared with the on-page checklist (onpage.ts). */
+export { decode, attr, meta, text as htmlText };
 const STUB_MARK = '<!-- studio-redirect -->';   // redirect pages written by Studio (see redirects.ts)
 export const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 const GENERIC_TITLE = /^(home|page|untitled|new page|title|test|index|welcome|default)$/i;
@@ -104,7 +106,8 @@ export function runBuildAudit(root: string, now = new Date(), site = DEFAULT_SIT
     redirectsOut.push({ file: f, to: decode(h.match(/http-equiv="refresh" content="0; url=([^"]+)"/i)?.[1] ?? '') }); return false; });
   const redirected = new Map(redirectsOut.map((r) => [r.file, r.to]));
   const robotsTxt = existsSync(resolve(root, 'robots.txt')) ? readFileSync(resolve(root, 'robots.txt'), 'utf8') : '';
-  const production = !/Disallow:\s*\/\s*$/m.test(robotsTxt);
+  // a preview build blocks every crawler; blocking a single bot (an AI crawler, say) is still a production build
+  const production = robotsAccess(robotsTxt, ['*'])['*'];
   const sitemapXml = existsSync(resolve(root, 'sitemap.xml')) ? readFileSync(resolve(root, 'sitemap.xml'), 'utf8') : '';
   const sitemap = new Set([...sitemapXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => { const u = m[1].replace(/^https?:\/\/[^/]+\//, ''); return u === '' ? 'index.html' : u; }));
   const scanned = files.map((f) => scanPage(root, f, pageUrl));
@@ -224,4 +227,23 @@ export function pageChecklist(p: PageScan, found: Finding[], production = true):
     const status = hits.map((f) => STATUS_OF[f.severity]).sort((x, y) => WORST.indexOf(x) - WORST.indexOf(y))[0];
     return { id: c.id, group: c.group, label: c.label, status, detail: hits.map((f) => f.evidence[0] ? `${f.title}: ${f.evidence[0]}` : f.title).join(' · '), codes: hits.map((f) => f.code) };
   });
+}
+
+/** robots.txt: which of these crawlers may fetch the site root ('*' asks about crawlers without their own group).
+ *  The most specific user-agent group applies; within it the longest matching rule wins, Allow on a tie. */
+export function robotsAccess(txt: string, agents: string[]) {
+  const groups: { ua: string[]; rules: { allow: boolean; path: string }[] }[] = [];
+  let cur: typeof groups[number] | null = null; let lastUa = false;
+  for (const raw of txt.split(/\r?\n/)) {
+    const line = raw.replace(/#.*/, '').trim(); const m = line.match(/^([a-z-]+)\s*:\s*(.*)$/i); if (!m) continue;
+    const k = m[1].toLowerCase(), v = m[2].trim();
+    if (k === 'user-agent') { if (!lastUa || !cur) { cur = { ua: [], rules: [] }; groups.push(cur); } cur.ua.push(v.toLowerCase()); lastUa = true; continue; }
+    lastUa = false;
+    if (cur && (k === 'allow' || k === 'disallow')) cur.rules.push({ allow: k === 'allow' || v === '', path: v || '/' });
+  }
+  return Object.fromEntries(agents.map((a) => {
+    const g = (a !== '*' && groups.find((x) => x.ua.some((u) => u !== '*' && a.toLowerCase().includes(u)))) || groups.find((x) => x.ua.includes('*'));
+    const r = (g?.rules ?? []).filter((x) => '/'.startsWith(x.path)).sort((x, y) => y.path.length - x.path.length || Number(y.allow) - Number(x.allow))[0];
+    return [a, !r || r.allow];
+  })) as Record<string, boolean>;
 }

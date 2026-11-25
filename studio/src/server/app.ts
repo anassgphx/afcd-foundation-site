@@ -37,6 +37,7 @@ import { registerReviewRoutes } from './modules/review/routes.ts';
 import { registerMediaLibraryRoutes } from './modules/media/routes.ts';
 import { registerInboxRoutes } from './modules/inbox/routes.ts';
 import { registerSettingsRoutes } from './modules/settings/routes.ts';
+import { registerOnPageRoutes } from './modules/seo/onpage-routes.ts';
 import { registerPublicationRoutes } from './modules/publications/routes.ts';
 import { projectManageRoutes } from './modules/projects/manage.ts';
 import { pillarVideoRoutes } from './modules/pillars/video.ts';
@@ -434,6 +435,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   // ---------------------------------------------------------------- Inbox: website messages and newsletter list (personal data, forms.read / forms.manage)
   registerInboxRoutes(api);   // modules/inbox
   registerSettingsRoutes(api);   // Settings Center (modules/settings)
+  registerOnPageRoutes(api);     // SEO on-page checklist (modules/seo/onpage)
 
   // ---------------------------------------------------------------- SEO studio
   api.get('/seo/audit', perm('seo.read'), async (c) => c.json({ last: await SEO.lastAudit(db), history: await SEO.auditHistory(db) }));

@@ -8,6 +8,7 @@ import { Icon, Link, Modal, ago, fmtDate, navigate, useCan, useToast } from '../
 import { Loading } from './Dashboard.tsx';
 import { DataTable, EmptyState, ListToolbar } from '../DataTable.tsx';
 import { SEV, SEV_ORDER, SevBadge, tone, type AuditV2, type Issue } from './Seo.tsx';
+import { OnPageCard } from './SeoOnPage.tsx';
 
 // ---------------------------------------------------------------- data types (mirrors of the API)
 type Conn = { status: string; accountEmail: string | null; scopes: string[]; property: string | null; permissionLevel: string | null; connectedAt: string; lastSyncAt: string | null; lastSyncedDate: string | null; lastError: string | null };
@@ -203,7 +204,8 @@ export function MasterOverview({ a, issues, history }: { a: AuditV2; issues: Iss
       </section>
     </div>}
 
-    <div className={`sp-grid4${google ? '' : ' is-3'}`}>
+    <div className="sp-grid4 is-auto">
+      <OnPageCard />
       {google && <section className="card sp-mini"><h3>Indexing <small>URL Inspection</small></h3>
         {!insp?.length ? <p className="muted">No addresses inspected yet. Inspect pages in Search Console → Index status.</p>
           : <ul className="sp-facts">{[...verdicts].map(([v, c]) => <li key={v}><span>{v === 'PASS' ? 'Indexed (last known)' : v === 'NEUTRAL' ? 'Not indexed' : v === 'FAIL' ? 'Problem reported' : v}</span><b>{c}</b></li>)}</ul>}

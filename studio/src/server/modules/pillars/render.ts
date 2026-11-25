@@ -7,6 +7,7 @@ import { media } from '../../db/schema.ts';
 import { publicRef } from '../media/service.ts';
 import { esc } from '../pages/blocks.ts';
 import type { PillarSnapshot } from './service.ts';
+import { videoOut } from './video.ts';
 
 /** The approach heading as the generator writes it: the second part in the softer colour. */
 export const approachTitleHtml = (s: Pick<PillarSnapshot, 'approachTitle' | 'approachSoft'>) =>
@@ -31,7 +32,7 @@ export async function pillarEntries(db: DB, live: { id: string; snap: PillarSnap
       approach: { title: approachTitleHtml(s), view: esc(s.view), principles: s.principles.map(esc), steps: s.steps.map((x) => [esc(x.title), esc(x.text)]) },
       // objectives go out as plain text: content.py escapes them itself (empty titles are skipped there too)
       objectives: (s.objectives ?? []).filter((o) => o.title).map((o) => ({ title: o.title, text: o.text ?? '' })),
-      activities: s.activities, groups: s.groups, image: image(s.mediaId),
+      activities: s.activities, groups: s.groups, image: image(s.mediaId), video: videoOut(s.video, esc),
       // custom items and page texts (escaped like every other string); empty page texts keep the site's wording
       extraActivities: (s.extraActivities ?? []).map(esc), extraGroups: (s.extraGroups ?? []).map(esc),
       page: Object.fromEntries(Object.entries(s.page ?? {}).filter(([, v]) => v).map(([k, v]) => [k, esc(v)])),

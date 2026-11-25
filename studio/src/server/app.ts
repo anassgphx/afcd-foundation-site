@@ -40,6 +40,7 @@ import { registerInboxRoutes } from './modules/inbox/routes.ts';
 import { registerSettingsRoutes } from './modules/settings/routes.ts';
 import { registerPublicationRoutes } from './modules/publications/routes.ts';
 import { projectManageRoutes } from './modules/projects/manage.ts';
+import { pillarVideoRoutes } from './modules/pillars/video.ts';
 import { contentDeleteRoutes } from './modules/content/delete.ts';
 import { documentsDir } from './modules/publications/documents.ts';
 import * as NOTIFY from './modules/settings/notify.ts';
@@ -217,6 +218,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     return c.json({ ok: true });
   });
   projectManageRoutes(api, db, actor);   // duplicate (project.create) and delete (project.archive): modules/projects/manage.ts
+  pillarVideoRoutes(api, db, cfg, actor);   // pillar video upload and Studio playback: modules/pillars/video.ts
   contentDeleteRoutes(api, db, actor);   // delete drafts/archived stories, events, opportunities, partners, publications: modules/content/delete.ts
 
   // ---------------------------------------------------------------- Media

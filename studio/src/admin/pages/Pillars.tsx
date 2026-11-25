@@ -8,6 +8,7 @@ import { EditorHeader, Field, ListEditor, Section, SectionNav, WorkflowPanel } f
 import { RecordTranslations } from '../RecordTranslations.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
+import { PillarVideoField, type PillarVideo } from '../PillarVideo.tsx';
 import '../pillars.css';
 
 type Row = { id: string; key: string; number: string; name: string; draftName: string; short: string; summary: string; colour: string; draftColour: string; publicFile: string;
@@ -113,7 +114,7 @@ export function PillarsScreen({ id }: { id?: string }) {
 type Step = { title: string; text: string };
 type Form = { name: string; short: string; summary: string; intro: string; colour: string; brand: string; highlights: string[]; approachTitle: string; approachSoft: string;
   view: string; principles: string[]; steps: Step[]; objectives: Step[]; activities: number[]; groups: number[]; extraActivities: string[]; extraGroups: string[];
-  page: Record<PageKey, string>; mediaId: string | null; provenance: string };
+  page: Record<PageKey, string>; mediaId: string | null; video: PillarVideo; provenance: string };
 type PageKey = 'flagshipLabel' | 'howTitle' | 'howSoft' | 'howDesc' | 'objectivesTitle' | 'objectivesSoft' | 'objectivesDesc' | 'projectsTitle' | 'projectsSoft' | 'projectsDesc' | 'relatedTitle' | 'relatedSoft' | 'ctaTitle' | 'ctaText';
 /** The page's own texts: [key, label, max length, the site's wording when left empty]. Kept in step with src/content.py. */
 const pageTexts = (name: string, short: string): [string, [PageKey, string, number, string, boolean?][]][] => [
@@ -210,7 +211,7 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
         { id: 'basics', label: 'Pillar', icon: 'pillars', done: !!f.name },
         { id: 'text', label: 'Summary and introduction', icon: 'log', done: !!f.summary && !!f.intro },
         { id: 'objectives', label: 'Objectives', icon: 'check', optional: true, done: f.objectives.length ? true : undefined },
-        { id: 'photo', label: 'Photo', icon: 'image', optional: true, done: f.mediaId ? true : undefined },
+        { id: 'photo', label: 'Photo and video', icon: 'image', optional: true, done: f.mediaId || f.video ? true : undefined },
         { id: 'work', label: 'What we do', icon: 'users', optional: true, done: f.activities.length || f.groups.length || f.extraActivities.length || f.extraGroups.length ? true : undefined },
         { id: 'approach', label: 'Our approach', icon: 'layers', done: !!f.approachTitle && f.steps.length > 0 },
         { id: 'pagetexts', label: 'Page texts', icon: 'log', optional: true, done: Object.values(f.page).some(Boolean) ? true : undefined },
@@ -252,7 +253,7 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
           {f.objectives.length < 6 ? <button type="button" className="btn btn-sm s3" style={{ justifySelf: 'start' }} onClick={() => set('objectives', [...f.objectives, { title: '', text: '' }])}><Icon n="plus" />Add an objective</button>
             : <p className="muted s3" style={{ margin: 0, fontSize: 12.5 }}>6 objectives is the maximum.</p>}
         </Section>
-        <Section id="photo" title="Photo" desc="The big picture in the pillar page’s overview. Without one, the page shows the cover photo of this pillar’s first live project that has one. Alt text and usage rights are checked before review.">
+        <Section id="photo" title="Photo and video" desc="The big picture in the pillar page’s overview. Without one, the page shows the cover photo of this pillar’s first live project that has one. Add a video to play in its place: the photo becomes its poster. Alt text and usage rights are checked before review.">
           <div className="ed-media s3">
             {f.mediaId && photo ? <div className="ed-media-img pl-photo"><img src={photo.url} alt={photo.alt} /><button type="button" className="btn btn-sm" onClick={() => set('mediaId', null)}><Icon n="x" />Remove</button></div>
               : <button type="button" className="ed-drop" onClick={() => setDialog('photo')}><Icon n="image" /><b>Choose a photo</b><small>From the media library.</small></button>}
@@ -262,6 +263,8 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
               <span className="pl-photo-actions"><button type="button" className="btn btn-sm" onClick={() => setDialog('photo')}><Icon n="image" />Change</button><Link className="btn btn-sm" to="/studio/media">Edit in media library</Link></span>
             </div>}
           </div>
+          <div className="s3"><span className="ed-lbl">Video <span className="muted">(optional)</span></span>
+            <PillarVideoField value={f.video ?? null} onChange={(v) => set('video', v)} disabled={!editable} hasPhoto={!!f.mediaId} /></div>
         </Section>
         <Section id="work" title="What we do" desc="Pick from AFCD’s shared lists (the same wording on every page), then add anything only this pillar does. Numbered in the order they appear.">
           {p.lists.activities.length === 0 && <p className="muted s3" style={{ margin: 0 }}>The site’s lists could not be read.</p>}

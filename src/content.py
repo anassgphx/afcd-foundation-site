@@ -889,6 +889,7 @@ PILLAR_APPROACH = {
 PILLAR_SHORT = {'youth-empowerment': 'Youth', 'women-empowerment': 'Women', 'green-thumbs': 'Environment', 'digital-empowerment': 'Digital'}
 PILLAR_BRAND = {'green-thumbs': 'Green Thumbs'}
 PILLAR_IMAGE = {}
+PILLAR_VIDEO = {}   # optional video in a pillar page's overview: {'kind': 'file', src, mime} or {'kind': 'embed', provider, label, embed, watch}
 for _p in STUDIO_PILLARS:   # Studio pillar content (see STUDIO_PILLARS above)
     _k = _p['key']
     PILLAR_INTRO[_k], PILLAR_SHORT[_k], PILLAR_ACTS[_k], PILLAR_GROUPS[_k] = _p['intro'], _p['short'], _p['activities'], _p['groups']
@@ -896,6 +897,7 @@ for _p in STUDIO_PILLARS:   # Studio pillar content (see STUDIO_PILLARS above)
                                steps=[tuple(x) for x in _p['approach']['steps']])
     PILLAR_BRAND[_k] = _p['brand']
     PILLAR_IMAGE[_k] = _p.get('image')
+    PILLAR_VIDEO[_k] = _p.get('video')
 
 
 def pillars():
@@ -937,6 +939,17 @@ def pillars():
                     break
         photo_html = (f'<figure class="plx-photo">{media_img(cover, "h-full w-full", "(min-width: 1024px) 40vw, 100vw", eager=True)}'
                       + (f'<figcaption class="plx-cap"><a href="{cover_from[4]}">{cover_from[0]} <span aria-hidden="true">↗</span></a></figcaption>' if cover_from else '') + '</figure>') if cover else ''
+        # a video replaces the still photo; the photo becomes its poster. Nothing from a video platform loads before play.
+        vid = PILLAR_VIDEO.get(slug)
+        if vid and vid.get('kind') in ('file', 'embed'):
+            poster = media_img(cover, 'h-full w-full', '(min-width: 1024px) 40vw, 100vw', eager=True) if cover else ''
+            if vid['kind'] == 'file':
+                vdata, vsrc = f'data-plx-video="file" data-src="{vid["src"]}" data-type="{vid["mime"]}"', ''
+            else:
+                vdata = f'data-plx-video="embed" data-src="{vid["embed"]}" data-provider="{vid["provider"]}"'
+                vsrc = f'<a class="plx-vid-src" href="{vid["watch"]}" target="_blank" rel="noopener">Watch on {vid["label"]} <span aria-hidden="true">↗</span></a>'
+            photo_html = (f'<figure class="plx-photo plx-vid{"" if cover else " no-poster"}" {vdata} data-title="{t}">{poster}'
+                          f'<button type="button" class="plx-play" aria-label="Play the video about {t}"><span class="plx-play-i" aria-hidden="true"></span><span class="plx-play-t">Play video</span></button>{vsrc}</figure>')
         who = [_esc(BENEFICIARIES[g]) for g in PILLAR_GROUPS[slug]] + list(extra_groups)
         h3_boxes = ((f'<div class="plx-h3-box"><p class="plx-k">{pg.get("flagshipLabel") or "Flagship programmes"}</p><ul class="plx-flags">{flags}</ul></div>' if flags else '')
                     + (f'<div class="plx-h3-box"><p class="plx-k">Who we work with</p><ul class="plx-whos">{"".join(f"<li>{w}</li>" for w in who)}</ul></div>' if who else ''))
@@ -946,7 +959,7 @@ def pillars():
                       + '</div>') if (flags or who) else ''
         side = f'<div class="plx-col">{photo_html}{flags_html}</div>' if (photo_html or flags_html) else ''
         facts = [('Projects', len(projs)), ('Activities', len(PILLAR_ACTS[slug]))] + ([('Objectives', len(pobj))] if pobj else []) + ([('Stories', len(stories))] if stories else [])
-        facts_html = ''.join(f'<div class="plx-fact"><dd>{v}</dd><dt>{k if v != 1 else k[:-1] if k.endswith("s") else k}</dt></div>' for k, v in facts if v)   # a zero is not shown
+        facts_html = ''.join(f'<div class="plx-fact"><dd>{v}</dd><dt>{k if v != 1 else {"Stories": "Story", "Activities": "Activity"}.get(k, k[:-1] if k.endswith("s") else k)}</dt></div>' for k, v in facts if v)   # a zero is not shown
         brand = f'<span class="plx-chip">Programme brand: {PILLAR_BRAND[slug]}</span>' if PILLAR_BRAND.get(slug) else ''
         # pillar names are HTML already ("&amp;", escaped by Studio on export): escaping again showed "&amp;amp;"
         steps_nav = ''.join(f'<a href="{PILLAR_FILE[s2]}" class="plx-pn{" is-on" if s2 == slug else ""}" title="{t2}"{" aria-current=" + chr(34) + "page" + chr(34) if s2 == slug else ""}>{n2}</a>' for s2, n2, t2, _d2, _r2 in PILLARS)

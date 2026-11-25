@@ -34,6 +34,7 @@ import type { EventSnapshot } from '../events/service.ts';
 import { partnerEntries } from '../partners/render.ts';
 import { pillars, pillarRevisions } from '../../db/schema.ts';
 import { pillarEntries } from '../pillars/render.ts';
+import { VIDEO_FILE, videosDir } from '../pillars/video.ts';
 import type { PillarSnapshot } from '../pillars/service.ts';
 import type { PartnerSnapshot } from '../partners/service.ts';
 import { aboutPages, aboutPageRevisions, objectives } from '../../db/schema.ts';
@@ -212,7 +213,22 @@ export class Publisher {
     mkdirSync(resolve(file, '..'), { recursive: true });
     const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
     writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), pillars: list }, null, 2) + '\n'); renameSync(tmp, file);
+    this.copyVideos(live.flatMap((x) => (x.snap.video?.kind === 'file' ? [x.snap.video.file] : [])));
     return live.map((x) => x.snap.mediaId).filter(Boolean) as string[];
+  }
+
+  /** Uploaded pillar videos go to assets/media/video/; videos no live pillar uses any more are removed there. */
+  private copyVideos(files: string[]) {
+    const dest = resolve(this.cfg.siteRoot, 'assets/media/video');
+    const keep = new Set(files.filter((f) => VIDEO_FILE.test(f)));
+    if (keep.size) mkdirSync(dest, { recursive: true });
+    for (const f of keep) {
+      const src = resolve(videosDir(this.cfg), f);
+      if (!existsSync(src)) throw new Error(`Missing video file ${f}. Upload the video again.`);
+      const out = resolve(dest, f);
+      if (!existsSync(out) || statSync(out).size !== statSync(src).size) copyFileSync(src, out);
+    }
+    if (existsSync(dest)) for (const f of readdirSync(dest)) if (VIDEO_FILE.test(f) && !keep.has(f)) rmSync(resolve(dest, f));
   }
 
   get aboutFile() { return resolve(this.cfg.siteRoot, 'src/data/about.json'); }

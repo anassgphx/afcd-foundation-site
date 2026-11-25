@@ -19,6 +19,7 @@ import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
 import { altProblem } from '../media/alt.ts';
+import { videoSchema } from './video.ts';
 
 type Status = typeof pillars.$inferSelect['status'];
 const plain = (max: number) => z.string().trim().max(max).refine((v) => !/[<>]/.test(v), 'Use plain text without < or >.');
@@ -63,6 +64,8 @@ export const pillarSchema = z.object({
   // the page's own headings and texts; empty = the site's default wording (see PAGE_DEFAULTS)
   page: z.object(Object.fromEntries(PAGE_FIELDS.map(([k, n]) => [k, plain(n).default('')])) as Record<PageKey, z.ZodDefault<ReturnType<typeof plain>>>).strict().prefault({}),
   mediaId: z.string().uuid().nullable().default(null),
+  // optional video in the overview (a platform link or an uploaded file); the photo above is its poster
+  video: videoSchema,
   provenance: plain(300).default(''),
 }).strict();
 export type PillarInput = z.infer<typeof pillarSchema>;
@@ -113,7 +116,7 @@ export async function loadPillar(db: DB, id: string): Promise<FullPillar> {
   if (!p) throw new AppError(404, 'Pillar not found.');
   const d = p.draft as unknown as PillarInput | null;
   // drafts from before objectives, custom items or page texts existed have none
-  const content = d ? { ...d, objectives: d.objectives ?? [], extraActivities: d.extraActivities ?? [], extraGroups: d.extraGroups ?? [], page: { ...EMPTY_PAGE, ...(d.page ?? {}) }, mediaId: p.mediaId, provenance: p.provenance } : null;
+  const content = d ? { ...d, objectives: d.objectives ?? [], extraActivities: d.extraActivities ?? [], extraGroups: d.extraGroups ?? [], page: { ...EMPTY_PAGE, ...(d.page ?? {}) }, video: d.video ?? null, mediaId: p.mediaId, provenance: p.provenance } : null;
   return { ...p, content, projects: await linkedProjects(db, id), usage: await pillarUsage(db, id) };
 }
 
@@ -268,7 +271,7 @@ export async function createPillar(db: DB, cfg: Config, actor: NonNullable<Actor
     const colour = COLOURS.find((c) => !used.has(c.value))?.value ?? COLOURS[all.length % COLOURS.length].value;
     const sort = Math.max(-1, ...all.map((x) => x.sort)) + 1;
     const draft: Omit<PillarInput, 'provenance' | 'mediaId'> = { name, short: name.split(/\s+/)[0].slice(0, 20), summary: '', intro: '', colour, brand: '', highlights: [],
-      approachTitle: '', approachSoft: '', view: '', principles: [], steps: [], objectives: [], activities: [], groups: [], extraActivities: [], extraGroups: [], page: { ...EMPTY_PAGE } };
+      approachTitle: '', approachSoft: '', view: '', principles: [], steps: [], objectives: [], activities: [], groups: [], extraActivities: [], extraGroups: [], page: { ...EMPTY_PAGE }, video: null };
     const [p] = await t.insert(pillars).values({ key, number: String(all.length + 1).padStart(2, '0'), name, description: '', colour, publicFile: file, sort,
       draft: draft as unknown as Record<string, unknown>, provenance: 'Added in Studio', status: 'draft', updatedBy: actor.id }).returning();
     await audit(tx, actor, 'pillar.create', { type: 'pillar', id: p.id }, `Added pillar “${name}” (${file})`);

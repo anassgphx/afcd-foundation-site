@@ -994,3 +994,27 @@
   })();
 
 })();
+
+// Pillar overview video: the poster photo shows until the visitor presses play; only then does the platform player
+// (or the uploaded file) load, so the page stays fast and nothing is fetched from video platforms in advance.
+(function () {
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('.plx-play');
+    if (!btn) return;
+    var fig = btn.closest('[data-plx-video]');
+    if (!fig || fig.classList.contains('is-playing')) return;
+    var kind = fig.getAttribute('data-plx-video'), src = fig.getAttribute('data-src') || '', el;
+    if (kind === 'file') {
+      el = document.createElement('video');
+      el.controls = true; el.autoplay = true; el.playsInline = true; el.preload = 'auto';
+      var so = document.createElement('source'); so.src = src; so.type = fig.getAttribute('data-type') || 'video/mp4'; el.appendChild(so);
+    } else if (/^https:\/\/(www\.youtube-nocookie\.com|player\.vimeo\.com|www\.dailymotion\.com|www\.facebook\.com|www\.instagram\.com|www\.tiktok\.com)\//.test(src)) {
+      el = document.createElement('iframe');
+      el.src = src; el.title = (fig.getAttribute('data-title') || 'Video') + ' video';
+      el.setAttribute('allow', 'autoplay; encrypted-media; fullscreen; picture-in-picture'); el.setAttribute('allowfullscreen', '');
+      el.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+    } else return;
+    fig.classList.add('is-playing'); fig.appendChild(el);
+    if (el.focus) el.focus();
+  });
+})();

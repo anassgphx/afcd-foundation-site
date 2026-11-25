@@ -153,14 +153,14 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
   function showErr(e: unknown) { setErrs(e instanceof ApiError && e.details?.length ? e.details.map((d) => (d.path ? `${d.path}: ` : '') + d.message) : [e instanceof Error ? e.message : 'Something went wrong.']); }
   async function save(): Promise<boolean> {
     setBusy('save'); setErrs([]);
-    try { await put(`/pillars/${id}`, f); await load(); toast(live ? 'Draft saved. The live pages are unchanged until you publish.' : 'Draft saved'); return true; }
+    try { await put(`/pillars/${id}`, f); await load(); toast(live ? 'Draft saved. The live pages are unchanged until you publish.' : 'Draft saved. Submit it for review when it is ready.'); return true; }
     catch (e) { showErr(e); return false; } finally { setBusy(''); }
   }
   async function act(action: string, extra: Record<string, unknown> = {}) {
     if (dirty && !(await save())) return;
     setBusy(action); setErrs([]);
     try { await post(`/pillars/${id}/transition`, { action, ...extra }); await load(); setDialog(null); setComment('');
-      toast({ submit: 'Sent for review', approve: 'Approved', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft', request_removal: 'Removal sent for review' }[action] ?? 'Done'); }
+      toast({ submit: 'Sent for review. Reviewers are notified; it can be published once approved.', approve: 'Approved. It is ready to publish.', request_changes: 'Sent back to the author with your note.', withdraw: 'Back to draft. You can edit it again.', request_removal: 'Removal sent for review' }[action] ?? 'Done'); }
     catch (e) { setDialog(null); showErr(e); } finally { setBusy(''); }
   }
   async function publish() {

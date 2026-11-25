@@ -410,12 +410,12 @@ function SeoEditor({ file }: { file: string }) {
   const editable = can('seo.update') && status !== 'in_review';
   const set = <K extends keyof Form>(k: K, v: Form[K]) => { setF((x) => ({ ...x, [k]: v })); setDirty(true); };
   const showErr = (e: unknown) => setErrs(e instanceof ApiError && e.details?.length ? e.details.map((x) => (x.path ? `${x.path}: ` : '') + x.message) : [e instanceof Error ? e.message : 'Something went wrong.']);
-  async function save(): Promise<boolean> { setBusy('save'); setErrs([]); try { await put(`/seo/pages/${file}`, f); await load(); toast(live ? 'Draft saved. The live page is unchanged until you publish.' : 'Draft saved'); return true; } catch (e) { showErr(e); return false; } finally { setBusy(''); } }
+  async function save(): Promise<boolean> { setBusy('save'); setErrs([]); try { await put(`/seo/pages/${file}`, f); await load(); toast(live ? 'Draft saved. The live page is unchanged until you publish.' : 'Draft saved. Submit it for review when it is ready.'); return true; } catch (e) { showErr(e); return false; } finally { setBusy(''); } }
   async function act(action: string, extra: Record<string, unknown> = {}) {
     if (dirty && !(await save())) return;
     const id = (await api<Detail>(`/seo/pages/${file}`)).override?.id; if (!id) return;
     setBusy(action); setErrs([]);
-    try { await post(`/seo/overrides/${id}/transition`, { action, ...extra }); await load(); setDialog(null); setComment(''); toast({ submit: 'Sent for review', approve: 'Approved', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft' }[action] ?? 'Done'); }
+    try { await post(`/seo/overrides/${id}/transition`, { action, ...extra }); await load(); setDialog(null); setComment(''); toast({ submit: 'Sent for review. Reviewers are notified; it can be published once approved.', approve: 'Approved. It is ready to publish.', request_changes: 'Sent back to the author with your note.', withdraw: 'Back to draft. You can edit it again.' }[action] ?? 'Done'); }
     catch (e) { setDialog(null); showErr(e); } finally { setBusy(''); }
   }
   async function deliver(kind: 'publish' | 'unpublish') {

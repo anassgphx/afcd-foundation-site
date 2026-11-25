@@ -48,14 +48,14 @@ export function NewsList() {
     { key: 'updated', header: 'Updated', filter: updatedFilter<Row>(), align: 'right', hideBelow: 700, sort: (r) => -new Date(r.updatedAt).getTime(), csv: (r) => r.updatedAt, render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
   ];
   return <>
-    <div className="page-h"><div><h1>News & Stories</h1><p>Programme news, participant stories, calls for applications and event recaps.</p></div>
+    <div className="page-h"><div><h1>News & stories</h1><p>Programme news, participant stories, calls for applications and event recaps.</p></div>
       {can('news.create') && <button className="btn btn-primary" onClick={create}><Icon n="plus" />New story</button>}</div>
     <section className="card">
       <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search stories" />
       {!rows ? <TableSkeleton /> : <DataTable id="news" rows={shown} total={base.filter((r) => is('all', r)).length} rowKey={(r) => r.id} columns={columns} csvName="afcd-stories" initialSort={{ key: 'date', dir: 'desc' }}
         actions={acts.bulk} rowMenu={acts.rowMenu}
         onOpen={(r) => navigate(`/studio/news/${r.id}`)}
-        empty={<EmptyState icon="log" text="No stories match these filters" onClear={st.q || st.type !== 'all' || st.status !== 'all' ? () => { set('q', ''); set('type', 'all'); set('status', 'all'); } : undefined} />} />}
+        empty={<EmptyState icon="log" text={rows?.length ? 'No stories match these filters' : 'No stories yet'} sub={rows?.length ? undefined : 'Write the first story: programme news, a participant story or an event recap.'} action={can('news.create') && !rows?.length ? <button className="btn btn-sm btn-primary" onClick={create}><Icon n="plus" />New story</button> : undefined} onClear={st.q || st.type !== 'all' || st.status !== 'all' ? () => { set('q', ''); set('type', 'all'); set('status', 'all'); } : undefined} />} />}
     </section>
     {acts.dialog}
   </>;
@@ -99,14 +99,14 @@ export function ArticleEditor({ id }: { id: string }) {
   function showErr(e: unknown) { setErrs(e instanceof ApiError && e.details?.length ? e.details.map((d) => (d.path ? `${d.path}: ` : '') + d.message) : [e instanceof Error ? e.message : 'Something went wrong.']); }
   async function save(): Promise<boolean> {
     setBusy('save'); setErrs([]);
-    try { await put(`/news/${id}`, f); await load(); toast(live ? 'Draft saved. The live story is unchanged until you publish.' : 'Draft saved'); return true; }
+    try { await put(`/news/${id}`, f); await load(); toast(live ? 'Draft saved. The live story is unchanged until you publish.' : 'Draft saved. Submit it for review when it is ready.'); return true; }
     catch (e) { showErr(e); return false; } finally { setBusy(''); }
   }
   async function act(action: string, extra: Record<string, unknown> = {}) {
     if (dirty && !(await save())) return;
     setBusy(action); setErrs([]);
     try { await post(`/news/${id}/transition`, { action, ...extra }); await load(); setDialog(null); setComment('');
-      toast({ submit: 'Sent for review', approve: 'Approved', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft', schedule: 'Scheduled', unschedule: 'Unscheduled', archive: 'Archived', restore: 'Restored as a draft' }[action] ?? 'Done'); }
+      toast({ submit: 'Sent for review. Reviewers are notified; it can be published once approved.', approve: 'Approved. It is ready to publish.', request_changes: 'Sent back to the author with your note.', withdraw: 'Back to draft. You can edit it again.', schedule: 'Scheduled', unschedule: 'Unscheduled', archive: 'Archived', restore: 'Restored as a draft' }[action] ?? 'Done'); }
     catch (e) { setDialog(null); showErr(e); } finally { setBusy(''); }
   }
   async function deliver(kind: 'publish' | 'unpublish') {

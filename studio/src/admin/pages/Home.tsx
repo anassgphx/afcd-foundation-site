@@ -177,7 +177,7 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
       const r = await put<{ updatedAt: string; problems: string[] }>(path, { values: st.values, layout: st.layout, baseUpdatedAt: base.current });
       base.current = r.updatedAt; setSave('saved');
       const fresh = await api<Data>(path); setD(fresh); base.current = fresh.content?.updatedAt ?? null;
-      if (!quiet) toast(live ? `Draft saved. The live ${P.noun} is unchanged until you publish.` : 'Draft saved');
+      if (!quiet) toast(live ? `Draft saved. The live ${P.noun} is unchanged until you publish.` : 'Draft saved. Submit it for review when it is ready.');
       return true;
     } catch (e) { setSave('failed'); showErr(e); return false; }
   }, [st, live, path, P.noun]);
@@ -208,7 +208,7 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
   async function act(action: string, extra: Record<string, unknown> = {}) {
     if (save !== 'saved' && !(await doSave(true))) return;
     setBusy(action); setErrs([]);
-    try { await post(`${path}/transition`, { action, ...extra }); await load(); setDialog(null); setComment(''); toast({ submit: 'Sent for review', approve: 'Approved', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft' }[action] ?? 'Done'); }
+    try { await post(`${path}/transition`, { action, ...extra }); await load(); setDialog(null); setComment(''); toast({ submit: 'Sent for review. Reviewers are notified; it can be published once approved.', approve: 'Approved. It is ready to publish.', request_changes: 'Sent back to the author with your note.', withdraw: 'Back to draft. You can edit it again.' }[action] ?? 'Done'); }
     catch (e) { setDialog(null); showErr(e); } finally { setBusy(''); }
   }
   async function deliver(kind: 'publish' | 'unpublish') {

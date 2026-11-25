@@ -112,7 +112,7 @@ export function ApprovalsPage() {
 
   return <div className={`aq${open ? ' has-panel' : ''}`}>
     <div className="page-h">
-      <div><h1>Approval Queue</h1><p>Everything moving through review, across all content. Someone other than the author approves; publishing rebuilds the site and checks it.</p></div>
+      <div><h1>Approval queue</h1><p>Everything moving through review, across all content. Someone other than the author approves; publishing rebuilds the site and checks it.</p></div>
       <button className="btn btn-ghost" onClick={() => load()}><Icon n="undo" />Refresh</button>
     </div>
 

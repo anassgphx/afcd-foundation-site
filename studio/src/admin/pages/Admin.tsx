@@ -1,5 +1,5 @@
 // Approval queue, publishing history, activity log and users.
-import { useEffect, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useState, type FormEvent } from 'react';
 import { api, patch, post } from '../api.ts';
 import { Badge, Icon, Link, Modal, ago, fmtDate, useCan, useMe, useToast } from '../ui.tsx';
 import { DataTable, EmptyState, ListToolbar, useUrlState, type Column } from '../DataTable.tsx';
@@ -41,7 +41,7 @@ export function ActivityLog() {
   const [rows, setRows] = useState<any[] | null>(null);
   useEffect(() => { api<any[]>('/audit?limit=200').then(setRows).catch(() => setRows([])); }, []);
   return <>
-    <div className="page-h"><div><h1>Activity Log</h1><p>Append-only record of sign-ins, edits, approvals and publishing.</p></div></div>
+    <div className="page-h"><div><h1>Activity log</h1><p>Append-only record of sign-ins, edits, approvals and publishing.</p></div></div>
     <section className="card">{!rows ? <Loading /> : <div className="scroll-x"><table className="table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th></tr></thead><tbody>
       {rows.map((r) => <tr key={r.id}><td className="sub" style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.at)}</td><td>{r.actorEmail ?? <span className="muted">system</span>}</td><td><span className="mono">{r.action}</span></td><td>{r.summary}</td></tr>)}
     </tbody></table></div>}</section>
@@ -70,7 +70,7 @@ export function Users() {
       render: (u) => manage(u) ? <button className="btn btn-sm" onClick={() => change(u.id, { active: !u.active })}>{u.active ? 'Deactivate' : 'Reactivate'}</button> : <span className="dt-state"><span className="dot" style={{ ['--c' as string]: u.active ? '#16a34a' : '#a8a29e' }} />{u.active ? 'Active' : 'Inactive'}</span> },
   ];
   return <>
-    <div className="page-h"><div><h1>Users & Roles</h1><p>Who can edit, review and publish. Permissions are enforced by the server.</p></div>{can('users.manage') && <button className="btn btn-primary" onClick={() => setAdding(true)}><Icon n="plus" />Add user</button>}</div>
+    <div className="page-h"><div><h1>Users & roles</h1><p>Who can edit, review and publish. Permissions are enforced by the server.</p></div>{can('users.manage') && <button className="btn btn-primary" onClick={() => setAdding(true)}><Icon n="plus" />Add user</button>}</div>
     <div className="grid">
       <section className="card">
         <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search name or email">
@@ -79,10 +79,23 @@ export function Users() {
         {!d ? <Loading /> : <DataTable id="users" rows={shown} total={d.users.length} rowKey={(u) => u.id} columns={columns} csvName="afcd-studio-users" initialSort={{ key: 'name', dir: 'asc' }}
           empty={<EmptyState icon="users" text="No users match these filters" onClear={() => { set('q', ''); set('role', 'all'); set('status', 'all'); }} />} />}
       </section>
-      {d && <section className="card"><div className="card-h"><h2>What each role can do</h2></div><div className="scroll-x"><table className="table"><tbody>{d.roles.map((r) => <tr key={r.id}><td style={{ whiteSpace: 'nowrap' }}><b>{r.label}</b></td><td><div className="pills">{r.permissions.map((p) => <span key={p} className="pill mono">{p}</span>)}</div></td></tr>)}</tbody></table></div></section>}
+      {d && <section className="card"><div className="card-h"><h2>What each role can do</h2><span className="muted">Open a role to see its permissions by area</span></div>
+        <div className="role-list">{d.roles.map((r) => { const g = groupPerms(r.permissions); return <details key={r.id} className="role-row">
+          <summary><b>{r.label}</b><span className="muted">{g.length} area{g.length === 1 ? '' : 's'}</span></summary>
+          <dl className="role-perms">{g.map(([area, acts]) => <Fragment key={area}><dt>{area}</dt><dd>{acts.join(', ')}</dd></Fragment>)}</dl>
+        </details>; })}</div></section>}
     </div>
     {adding && d && <AddUser roles={d.roles} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />}
   </>;
+}
+// Permission keys (project.publish…) grouped by area, in plain words, for the role overview
+const AREA: Record<string, string> = { project: 'Projects', page: 'Pages', news: 'News & stories', partner: 'Partners', pillar: 'Pillars', about: 'Site pages', event: 'Events',
+  opportunity: 'Opportunities', publication: 'Publications', forms: 'Inbox', seo: 'SEO', translation: 'Translations', media: 'Media library', users: 'Users', settings: 'Settings',
+  site: 'Website', audit: 'Activity log', menu: 'Menus', home: 'Homepage' };
+function groupPerms(perms: string[]): [string, string[]][] {
+  const m = new Map<string, string[]>();
+  for (const p of perms) { const [a, ...rest] = p.split('.'); const k = AREA[a] ?? a.charAt(0).toUpperCase() + a.slice(1); m.set(k, [...(m.get(k) ?? []), rest.join(' ').replace(/_/g, ' ') || 'all']); }
+  return [...m];
 }
 type UserRow = { id: string; email: string; name: string; role: string; active: boolean; lastLoginAt: string | null };
 

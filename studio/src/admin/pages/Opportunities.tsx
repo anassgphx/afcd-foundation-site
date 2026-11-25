@@ -70,7 +70,7 @@ export function OpportunitiesList() {
       {!rows ? <TableSkeleton /> : <DataTable id="opportunities" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-opportunities" initialSort={{ key: 'deadline', dir: 'asc' }}
         actions={acts.bulk} rowMenu={acts.rowMenu}
         onOpen={(r) => navigate(`/studio/opportunities/${r.id}`)}
-        empty={<EmptyState icon="spark" text="No opportunities match these filters" onClear={st.q || st.type !== 'all' || st.status !== 'all' ? () => { set('q', ''); set('type', 'all'); set('status', 'all'); } : undefined} />} />}
+        empty={<EmptyState icon="spark" text={rows?.length ? 'No opportunities match these filters' : 'No opportunities yet'} sub={rows?.length ? undefined : 'Add a call for applications, a job or a volunteering role.'} action={can('opportunity.create') && !rows?.length ? <button className="btn btn-sm btn-primary" onClick={create}><Icon n="plus" />New opportunity</button> : undefined} onClear={st.q || st.type !== 'all' || st.status !== 'all' ? () => { set('q', ''); set('type', 'all'); set('status', 'all'); } : undefined} />} />}
     </section>
     {acts.dialog}
   </>;
@@ -109,14 +109,14 @@ export function OpportunityEditor({ id }: { id: string }) {
   function showErr(err: unknown) { setErrs(err instanceof ApiError && err.details?.length ? err.details.map((d) => (d.path ? `${d.path}: ` : '') + d.message) : [err instanceof Error ? err.message : 'Something went wrong.']); }
   async function save(): Promise<boolean> {
     setBusy('save'); setErrs([]);
-    try { await put(`/opportunities/${id}`, f); await load(); toast(live ? 'Draft saved. The live page is unchanged until you publish.' : 'Draft saved'); return true; }
+    try { await put(`/opportunities/${id}`, f); await load(); toast(live ? 'Draft saved. The live page is unchanged until you publish.' : 'Draft saved. Submit it for review when it is ready.'); return true; }
     catch (err) { showErr(err); return false; } finally { setBusy(''); }
   }
   async function act(action: string, extra: Record<string, unknown> = {}) {
     if (dirty && !(await save())) return;
     setBusy(action); setErrs([]);
     try { await post(`/opportunities/${id}/transition`, { action, ...extra }); await load(); setDialog(null); setComment('');
-      toast({ submit: 'Sent for review', approve: 'Approved', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft', archive: 'Archived', restore: 'Restored as a draft' }[action] ?? 'Done'); }
+      toast({ submit: 'Sent for review. Reviewers are notified; it can be published once approved.', approve: 'Approved. It is ready to publish.', request_changes: 'Sent back to the author with your note.', withdraw: 'Back to draft. You can edit it again.', archive: 'Archived', restore: 'Restored as a draft' }[action] ?? 'Done'); }
     catch (err) { setDialog(null); showErr(err); } finally { setBusy(''); }
   }
   async function deliver(kind: 'publish' | 'unpublish') {

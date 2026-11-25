@@ -2,6 +2,7 @@
 import React, { StrictMode, Suspense, lazy, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import './studio.css';
+import './design-system.css';
 import { api, post, setCsrf, ApiError } from './api.ts';
 import { Icon, Link, MeCtx, ToastHost, initials, navigate, useCan, useMe, usePath, type Me } from './ui.tsx';
 import { Dashboard, Loading } from './pages/Dashboard.tsx';
@@ -186,18 +187,18 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   if (path.startsWith('/studio/partners')) return { title: 'Partners', el: <PartnersList /> };
   const nw = path.match(/^\/studio\/news\/([0-9a-f-]{36})$/);
   if (nw) return { title: 'Story', el: <ArticleEditor key={nw[1]} id={nw[1]} />, full: true };
-  if (path.startsWith('/studio/news')) return { title: 'News & Stories', el: <NewsList /> };
+  if (path.startsWith('/studio/news')) return { title: 'News & stories', el: <NewsList /> };
   const pg = path.match(/^\/studio\/pages\/([0-9a-f-]{36})$/);
   if (pg) return { title: 'Page builder', el: <Builder key={pg[1]} id={pg[1]} />, full: true };
   if (path.startsWith('/studio/pages')) return { title: 'Pages', el: <PagesList /> };
   const m = path.match(/^\/studio\/projects\/([0-9a-f-]{36}|new)$/);
   if (m) return { title: m[1] === 'new' ? 'New project' : 'Edit project', el: <ProjectEditor key={m[1]} id={m[1]} /> };
   if (path.startsWith('/studio/projects')) return { title: 'Projects', el: <ProjectsList /> };
-  if (path.startsWith('/studio/media')) return { title: 'Media Library', el: <MediaLibrary /> };
-  if (path.startsWith('/studio/approvals')) return { title: 'Approval Queue', el: <ApprovalsPage /> };
+  if (path.startsWith('/studio/media')) return { title: 'Media library', el: <MediaLibrary /> };
+  if (path.startsWith('/studio/approvals')) return { title: 'Approval queue', el: <ApprovalsPage /> };
   if (path.startsWith('/studio/publishing')) return { title: 'Publishing', el: <Publishing /> };
-  if (path.startsWith('/studio/activity')) return { title: 'Activity Log', el: <ActivityLog /> };
-  if (path.startsWith('/studio/users')) return { title: 'Users & Roles', el: <Users /> };
+  if (path.startsWith('/studio/activity')) return { title: 'Activity log', el: <ActivityLog /> };
+  if (path.startsWith('/studio/users')) return { title: 'Users & roles', el: <Users /> };
   if (path.startsWith('/studio/settings')) return { title: 'Settings', el: <SettingsPage /> };
   if (path !== '/studio/' && path !== '/studio') { setTimeout(() => navigate('/studio/')); }
   return { title: 'Dashboard', el: <Dashboard /> };

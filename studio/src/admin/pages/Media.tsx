@@ -204,7 +204,7 @@ export function MediaLibrary() {
   return (
     <div className={`ml${open ? ' has-panel' : ''}`}>
       <div className="page-h">
-        <div><h1>Media Library</h1><p>Every image of the website with its alt text, credit, usage rights and where it appears.</p></div>
+        <div><h1>Media library</h1><p>Every image of the website with its alt text, credit, usage rights and where it appears.</p></div>
         {can('media.upload') && <button className="btn btn-primary" onClick={() => fileInput.current?.click()}><Icon n="upload" /> Upload</button>}
         <input ref={fileInput} type="file" accept={ACCEPT} multiple hidden onChange={(e) => { if (e.target.files) enqueue(e.target.files); e.target.value = ''; }} />
         <input ref={replaceInput} type="file" accept={ACCEPT} hidden onChange={(e) => { const f = e.target.files?.[0]; if (f && replaceTarget.current) enqueue([f], replaceTarget.current); e.target.value = ''; }} />

@@ -2821,3 +2821,63 @@ a.abx-chip:hover { background: #000; color: #fff; border-color: #000; }
   .plx-prs { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .plx-prs li, .plx-prs li:last-child { flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px; }
 }
+
+/* ---------- Pillar How we work: a photo between the two lists; Who we work with as a check-mark list ---------- */
+.plx-work-pic { position: relative; margin: 0; min-height: 260px; overflow: hidden; border-radius: 24px; border: 1px solid #E7E5E4; background: #F4F4F3; }
+.plx-work-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+@media (max-width: 1023px) { .plx-work-pic { min-height: 0; aspect-ratio: 16 / 10; } }
+@media (min-width: 1024px) {
+  .plx-work.has-pic { grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr) minmax(0, 1fr); gap: 28px; align-items: stretch; }
+  .plx-work.has-pic .plx-acts { grid-template-columns: minmax(0, 1fr); }
+  .plx-work.has-pic .plx-work-pic { margin-top: 30px; }
+}
+.plx-who.is-check li, .plx-who.is-check li:last-child { display: flex; align-items: center; gap: 16px; padding: 16px 0; border-top: 1px solid #E7E5E4; border-bottom: 0;
+  font-size: 16px; font-weight: 600; line-height: 1.4; letter-spacing: -.01em; color: #0A0A0A; }
+.plx-who.is-check li:first-child { border-top: 0; padding-top: 4px; }
+.plx-who-ico { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 9999px; background: #0C0A09; color: #fff; }
+.plx-who-ico svg { width: 18px; height: 18px; }
+@media (max-width: 767px) { .plx-who.is-check li { gap: 12px; padding: 13px 0; font-size: 15px; } .plx-who-ico { width: 34px; height: 34px; } .plx-who-ico svg { width: 15px; height: 15px; } }
+
+/* Who we work with: the group name in the site's card-title style, an optional short description under it */
+.plx-who.is-check li > span:last-child { display: grid; gap: 3px; min-width: 0; }
+.plx-who.is-check li:has(.plx-who-d) { align-items: flex-start; }
+.plx-who.is-check li:has(.plx-who-d) .plx-who-ico { margin-top: 2px; }
+.plx-who-t { font-size: 16px; font-weight: 600; line-height: 1.35; letter-spacing: -.015em; color: #0A0A0A; }
+.plx-who-d { font-size: 14px; font-weight: 400; line-height: 1.55; letter-spacing: 0; color: #57534E; }
+@media (max-width: 767px) { .plx-who-t { font-size: 15px; } .plx-who-d { font-size: 13.5px; } }
+/* Who we work with: the same cards as What it looks like (bordered card, grey icon square, text) */
+.plx-who.is-check { gap: 8px; }
+.plx-who.is-check li, .plx-who.is-check li:last-child, .plx-who.is-check li:first-child { align-items: flex-start; gap: 14px; padding: 18px; border: 1px solid #ECECEA; border-radius: 20px;
+  background: #fff; transition: border-color .2s ease; }
+.plx-who.is-check li:hover { border-color: #A8A29E; }
+.plx-who.is-check .plx-who-ico, .plx-who.is-check li:has(.plx-who-d) .plx-who-ico { width: 38px; height: 38px; margin-top: 0; border-radius: 12px; background: #F4F4F3; color: #0A0A0A; }
+.plx-who.is-check .plx-who-ico svg { width: 18px; height: 18px; }
+.plx-who.is-check li > span:last-child { align-self: center; }
+.plx-who.is-check li:has(.plx-who-d) > span:last-child { align-self: flex-start; }
+.plx-who-t { font-size: 15px; font-weight: 600; line-height: 1.45; }
+.plx-who-d { font-size: 14px; }
+@media (max-width: 767px) { .plx-who.is-check li { padding: 16px; } }
+@media (prefers-reduced-motion: reduce) { .plx-who.is-check li { transition: none; } }
+
+/* ---------- Pillar objectives with a square photo carousel (photos left, cards right; carousel first on phones) ---------- */
+.plx-objx { display: grid; gap: 12px; }
+@media (min-width: 1024px) { .plx-objx { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 16px; align-items: stretch; } .plx-objx .plx-steps.plx-objsteps { grid-auto-rows: 1fr; } }
+@media (min-width: 640px) { .plx-objx .plx-steps.plx-objsteps:not(.cols-1) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.plx-car { position: relative; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 22px; border: 1px solid #E7E5E4; background: #F4F4F3; }
+.plx-car-track { display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; overscroll-behavior-x: contain; }
+.plx-car-track::-webkit-scrollbar { display: none; }
+.plx-car-track:focus-visible { outline: 2px solid #000; outline-offset: -4px; }
+.plx-car-slide { position: relative; flex: 0 0 100%; height: 100%; margin: 0; scroll-snap-align: start; }
+.plx-car-slide img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.plx-car-ctrl { position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; pointer-events: none; }
+.plx-car-dots { display: flex; gap: 6px; padding: 7px 9px; border-radius: 9999px; background: rgba(0,0,0,.35); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); pointer-events: auto; }
+.plx-car-dot { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 9999px; background: rgba(255,255,255,.55); cursor: pointer; transition: width .25s ease, background-color .25s ease; }
+.plx-car-dot.is-on { width: 20px; background: #fff; }
+.plx-car-arrows { display: flex; gap: 6px; pointer-events: auto; }
+.plx-car-btn { display: grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 9999px; background: rgba(255,255,255,.94); color: #0A0A0A; font-size: 15px; cursor: pointer; transition: background-color .2s ease, transform .2s ease; }
+.plx-car-btn:hover { background: #fff; transform: scale(1.05); }
+.plx-car-btn:focus-visible, .plx-car-dot:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .plx-car-track { scroll-behavior: auto; } .plx-car-dot, .plx-car-btn { transition: none; } }
+
+/* pillar pages show photos in their own colours (About pages keep their monochrome look) */
+.plx:not(.abx) .plx-photo img, .plx:not(.abx) .plx-pj-vis img, .plx:not(.abx) a.plx-pj:hover .plx-pj-vis img { filter: none; }

@@ -973,7 +973,43 @@ def pillars():
         if work_items:
             acts = ''.join(f'<li class="plx-act"><span class="plx-act-ico">{ICO(ACT_ICONS[w["icon"] if 0 <= w["icon"] < len(ACT_ICONS) else 1])}</span><span>{w["text"]}</span></li>' for w in work_items)
         if audience:
-            groups = ''.join(f'<li>{x}</li>' for x in audience)
+            # each group: its name, and its short description when Studio has one (older data: names only)
+            def _grp(x):
+                if isinstance(x, str):
+                    return f'<li><span class="plx-who-t">{x}</span></li>'
+                return (f'<li><span class="plx-who-t">{x.get("title", "")}</span>'
+                        + (f'<span class="plx-who-d">{x["text"]}</span>' if (x.get('text') or '').strip() else '') + '</li>')
+            groups = ''.join(_grp(x) for x in audience)
+        # Who we work with: each group behind a check mark
+        CHECK = '<span class="plx-who-ico" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 10.5 3.2 3.2L15 7"/></svg></span>'
+        groups = groups.replace('<li>', f'<li>{CHECK}<span>').replace('</li>', '</span></li>')
+        # the photo between the two lists: the one chosen in Studio, else the cover of another live project (never the overview photo)
+        work_pic = STUDIO_PILLAR_BY_KEY.get(slug, {}).get('workImage')
+        if not work_pic:
+            for pr in projs:
+                c_ = ((proj_by_name.get(pr[0]) or {}).get('detail') or {}).get('cover') or []
+                if c_ and pr[4] and (not cover or c_[0].get('src') != cover.get('src')):
+                    work_pic = c_[0]
+                    break
+        # the square carousel next to the objectives: photos chosen in Studio, else live projects' covers not used above
+        obj_pics = list(STUDIO_PILLAR_BY_KEY.get(slug, {}).get('objectivesImages') or [])
+        if not obj_pics:
+            used = {(cover or {}).get('src'), (work_pic or {}).get('src')}
+            for pr in projs:
+                c_ = ((proj_by_name.get(pr[0]) or {}).get('detail') or {}).get('cover') or []
+                for im in c_[:1]:
+                    if pr[4] and im.get('src') not in used:
+                        obj_pics.append(im); used.add(im.get('src'))
+            obj_pics = obj_pics[:8]
+        def car_html(pics):
+            n = len(pics)
+            slides = ''.join(f'<figure class="plx-car-slide" role="group" aria-roledescription="slide" aria-label="{i} of {n}">{media_img(im, "h-full w-full", "(min-width: 1024px) 36vw, 100vw")}</figure>' for i, im in enumerate(pics, 1))
+            ctrl = ('<div class="plx-car-ctrl"><div class="plx-car-dots">' + ''.join(f'<button type="button" class="plx-car-dot{" is-on" if i == 1 else ""}" aria-label="Show photo {i}"></button>' for i in range(1, n + 1))
+                    + '</div><div class="plx-car-arrows"><button type="button" class="plx-car-btn" data-dir="-1" aria-label="Previous photo"><span aria-hidden="true">←</span></button>'
+                    + '<button type="button" class="plx-car-btn" data-dir="1" aria-label="Next photo"><span aria-hidden="true">→</span></button></div></div>') if n > 1 else ''
+            return f'<div class="plx-car" data-plx-car aria-roledescription="carousel" aria-label="Photos: {t}"><div class="plx-car-track" tabindex="0">{slides}</div>{ctrl}</div>'
+        work_pic_html = f'<figure class="plx-work-pic">{media_img(work_pic, "h-full w-full", "(min-width: 1024px) 28vw, 100vw")}</figure>' if work_pic and acts and groups else ''
+
         # -- projects: real ones only
         def pcard(pr, j):
             name, _sl, _pn, cat, href, summ = pr
@@ -1050,7 +1086,7 @@ def pillars():
 {f"""
 <section id="objectives" class="plx-sec py-10 lg:py-14">
   <div class="wrap">{sec_head(f'{next(num):02d} / Objectives', head('objectives', 'What this pillar', 'aims to achieve.'), f'{len(pobj)} objective' + ('s' if len(pobj) != 1 else ''), desc=pg.get('objectivesDesc') or 'What AFCD works toward under this pillar.')}
-    <ol class="plx-steps plx-objsteps cols-{pobj_cols} mt-8 lg:mt-10">{pobj_html}</ol>
+    {f'<div class="plx-objx mt-8 lg:mt-10">{car_html(obj_pics)}<ol class="plx-steps plx-objsteps cols-{min(pobj_cols, 2)}">{pobj_html}</ol></div>' if obj_pics else f'<ol class="plx-steps plx-objsteps cols-{pobj_cols} mt-8 lg:mt-10">{pobj_html}</ol>'}
   </div>
 </section>""" if pobj else ''}
 
@@ -1058,8 +1094,8 @@ def pillars():
   <span id="approach" class="pl-anchor" aria-hidden="true"></span><span id="what-we-do" class="pl-anchor" aria-hidden="true"></span>
   <div class="wrap">
     <header class="sh"><div class="sh-top"><span class="sh-num">{next(num):02d}</span><span class="sh-label">How We Work</span><span class="sh-rule" aria-hidden="true"></span></div></header>
-    <div class="plx-work{'' if acts and groups else ' plx-work-1'} mt-8 lg:mt-10">
-      {f'<div><p class="plx-k">What it looks like</p><ul class="plx-acts mt-4">{acts}</ul></div>' if acts else ''}{f'<div><p class="plx-k">Who we work with</p><ul class="plx-who mt-4">{groups}</ul></div>' if groups else ''}
+    <div class="plx-work{'' if acts and groups else ' plx-work-1'}{' has-pic' if work_pic_html else ''} mt-8 lg:mt-10">
+      {f'<div><p class="plx-k">What it looks like</p><ul class="plx-acts mt-4">{acts}</ul></div>' if acts else ''}{work_pic_html}{f'<div><p class="plx-k">Who we work with</p><ul class="plx-who is-check mt-4">{groups}</ul></div>' if groups else ''}
     </div>
   </div>
 </section>

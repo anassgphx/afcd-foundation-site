@@ -1018,3 +1018,16 @@
     if (el.focus) el.focus();
   });
 })();
+
+// Pillar objectives carousel: one square photo at a time; swipe, arrows, dots or the keyboard (the track scrolls)
+(function () {
+  document.querySelectorAll('[data-plx-car]').forEach(function (car) {
+    var track = car.querySelector('.plx-car-track'), dots = car.querySelectorAll('.plx-car-dot');
+    if (!track) return;
+    var go = function (i) { var n = track.children.length; i = (i + n) % n; track.scrollTo({ left: i * track.clientWidth }); };
+    var cur = function () { return Math.round(track.scrollLeft / Math.max(1, track.clientWidth)); };
+    car.querySelectorAll('.plx-car-btn').forEach(function (b) { b.addEventListener('click', function () { go(cur() + Number(b.getAttribute('data-dir'))); }); });
+    dots.forEach(function (d, i) { d.addEventListener('click', function () { go(i); }); });
+    var t; track.addEventListener('scroll', function () { clearTimeout(t); t = setTimeout(function () { var c = cur(); dots.forEach(function (d, i) { d.classList.toggle('is-on', i === c); if (i === c) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current'); }); }, 60); }, { passive: true });
+  });
+})();

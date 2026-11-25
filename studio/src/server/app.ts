@@ -338,7 +338,8 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   api.delete('/pillars/:id{[0-9a-f-]{36}}', perm('pillar.update'), async (c) => c.json(await PL.deleteDraftPillar(db, actor(c), c.req.param('id'))));
   api.get('/pillars/:id{[0-9a-f-]{36}}', perm('pillar.read'), async (c) => {
     const p = await PL.loadPillar(db, c.req.param('id'));
-    const mediaRows = p.mediaId ? await db.select().from(t.media).where(eq(t.media.id, p.mediaId)) : [];
+    const mids = [p.mediaId, p.content?.workMediaId ?? null, ...(p.content?.objectivesMediaIds ?? [])].filter(Boolean) as string[];   // overview, How we work and objectives photos
+    const mediaRows = mids.length ? await db.select().from(t.media).where(inArray(t.media.id, mids)) : [];
     return c.json({ ...p, draft: undefined, media: mediaRows.map(withUrl), problems: await PL.pillarProblems(db, p), history: await PL.pillarHistory(db, p.id), lists: PL.siteLists(cfg), colours: PL.COLOURS });
   });
   api.put('/pillars/:id{[0-9a-f-]{36}}', perm('pillar.update'), async (c) => c.json(await PL.updatePillar(db, cfg, actor(c), c.req.param('id'), await c.req.json())));

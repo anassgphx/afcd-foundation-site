@@ -214,7 +214,7 @@ export class Publisher {
     const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
     writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), pillars: list }, null, 2) + '\n'); renameSync(tmp, file);
     this.copyVideos(live.flatMap((x) => (x.snap.video?.kind === 'file' ? [x.snap.video.file] : [])));
-    return live.map((x) => x.snap.mediaId).filter(Boolean) as string[];
+    return live.flatMap((x) => [x.snap.mediaId, x.snap.workMediaId ?? null, ...(x.snap.objectivesMediaIds ?? [])]).filter(Boolean) as string[];
   }
 
   /** Uploaded pillar videos go to assets/media/video/; videos no live pillar uses any more are removed there. */

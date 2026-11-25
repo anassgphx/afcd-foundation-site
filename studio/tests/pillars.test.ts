@@ -144,17 +144,17 @@ describe('pillars', () => {
     const { body: p } = await c.ed.get(`/pillars/${id}`);
     expect(p.content.workItems).toEqual([]); expect(p.content.audience).toEqual([]);
     for (const bad of [{ workItems: [{ icon: 1, text: ' ' }] }, { workItems: [{ icon: -1, text: 'x' }] }, { workItems: [{ icon: 1, text: 'x', extra: 1 }] },
-      { workItems: Array(11).fill({ icon: 1, text: 'x' }) }, { audience: [''] }, { audience: ['<b>x</b>'] }, { audience: Array(11).fill('x') }])
+      { workItems: Array(11).fill({ icon: 1, text: 'x' }) }, { audience: [''] }, { audience: ['<b>x</b>'] }, { audience: Array(11).fill('x') }, { audience: [{ title: 'x', text: 'y'.repeat(161) }] }, { audience: [{ title: '', text: 'y' }] }, { audience: [{ title: 'x', text: '', extra: 1 }] }])
       expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), ...bad })).status).toBe(422);
     const workItems = [{ icon: 3, text: 'Clean-ups & tree planting' }, { icon: 0, text: 'Training' }];
-    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), workItems, audience: ['Students', 'Schools & clubs'], activities: [], extraActivities: [], groups: [], extraGroups: [] })).status).toBe(200);
+    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), workItems, audience: ['Students', { title: 'Schools & clubs', text: 'Eco-clubs in 12 schools.' }], activities: [], extraActivities: [], groups: [], extraGroups: [] })).status).toBe(200);
     const { body: q } = await c.ed.get(`/pillars/${id}`);
-    expect(q.content.workItems).toEqual(workItems); expect(q.content.audience).toEqual(['Students', 'Schools & clubs']);
+    expect(q.content.workItems).toEqual(workItems); expect(q.content.audience).toEqual([{ title: 'Students', text: '' }, { title: 'Schools & clubs', text: 'Eco-clubs in 12 schools.' }]);   // a name alone is still accepted
     await c.ed.post(`/pillars/${id}/transition`, { action: 'submit' }); await c.rev.post(`/pillars/${id}/transition`, { action: 'approve' });
     expect((await c.admin.post(`/pillars/${id}/publish`)).status).toBe(200);
     const entry = JSON.parse(readFileSync(join(h.siteRoot, 'src/data/pillars.json'), 'utf8')).pillars.find((x: any) => x.key === 'youth-empowerment');
     expect(entry.workItems).toEqual([{ icon: 3, text: 'Clean-ups &amp; tree planting' }, { icon: 0, text: 'Training' }]);
-    expect(entry.audience).toEqual(['Students', 'Schools &amp; clubs']);
+    expect(entry.audience).toEqual([{ title: 'Students', text: '' }, { title: 'Schools &amp; clubs', text: 'Eco-clubs in 12 schools.' }]);
     expect(entry.activities).toEqual([]); expect(entry.groups).toEqual([]);
   });
 

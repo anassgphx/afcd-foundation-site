@@ -114,9 +114,10 @@ export function PillarsScreen({ id }: { id?: string }) {
 const icoSvg = (d: string) => `<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 type Step = { title: string; text: string };
 type WorkItem = { icon: number; text: string };
+type Group = { title: string; text: string };   // Who we work with: name and optional short description
 type Form = { name: string; short: string; summary: string; intro: string; colour: string; brand: string; approachTitle: string; approachSoft: string;
-  view: string; principles: string[]; steps: Step[]; objectives: Step[]; activities: number[]; groups: number[]; extraActivities: string[]; extraGroups: string[]; workItems: WorkItem[]; audience: string[];
-  mediaId: string | null; video: PillarVideo; provenance: string };
+  view: string; principles: string[]; steps: Step[]; objectives: Step[]; activities: number[]; groups: number[]; extraActivities: string[]; extraGroups: string[]; workItems: WorkItem[]; audience: (Group | string)[];
+  mediaId: string | null; video: PillarVideo; workMediaId: string | null; objectivesMediaIds: string[]; provenance: string };
 type Loaded = { id: string; key: string; number: string; publicFile: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; verifiedAt: string | null; removeRequested: boolean; usage: string[];
   content: Form | null; projects: { id: string; slug: string; name: string; live: boolean; primary: boolean }[]; media: MediaItem[]; problems: string[];
   lists: { activities: string[]; groups: string[]; icons: string[] }; colours: { value: string; label: string }[];
@@ -126,13 +127,15 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
   const can = useCan(); const me = useMe(); const toast = useToast();
   const [p, setP] = useState<Loaded | null>(null); const [f, setF] = useState<Form | null>(null);
   const [photo, setPhoto] = useState<MediaItem | null>(null);
+  const [workPhoto, setWorkPhoto] = useState<MediaItem | null>(null);   // the photo between the How we work lists
+  const [objPhotos, setObjPhotos] = useState<MediaItem[]>([]);          // the square carousel next to the objectives
   const [dirty, setDirty] = useState(false); const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
-  const [dialog, setDialog] = useState<null | 'photo' | 'preview' | 'publish' | 'changes' | 'remove' | 'delete'>(null);
+  const [dialog, setDialog] = useState<null | 'photo' | 'workphoto' | 'objphotos' | 'preview' | 'publish' | 'changes' | 'remove' | 'delete'>(null);
   const [url, setUrl] = useState(''); const [comment, setComment] = useState('');
 
   const load = useCallback(async () => {
     const d = await api<Loaded>(`/pillars/${id}`);
-    setP(d); setF(d.content ? structuredClone(d.content) : null); setPhoto(d.media[0] ?? null); setDirty(false); onChanged?.();
+    setP(d); setF(d.content ? structuredClone(d.content) : null); setPhoto(d.media.find((m) => m.id === d.content?.mediaId) ?? null); setWorkPhoto(d.media.find((m) => m.id === d.content?.workMediaId) ?? null); setObjPhotos((d.content?.objectivesMediaIds ?? []).map((id) => d.media.find((m) => m.id === id)).filter(Boolean) as MediaItem[]); setDirty(false); onChanged?.();
   }, [id]);
   useEffect(() => { load().catch((e) => toast(e.message, true)); }, [load]);
   useEffect(() => { const k = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (dirty) save(); } }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); });
@@ -181,9 +184,10 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
   // this pillar's own lists (and clears the picks), so the page shows exactly what is listed here, in this order.
   const listsOk = p.lists.activities.length > 0 || (!f.activities.length && !f.groups.length);
   const work: WorkItem[] = f.workItems.length ? f.workItems : [...f.activities.map((i) => ({ icon: i, text: p.lists.activities[i] ?? '' })), ...f.extraActivities.map((text) => ({ icon: 1, text }))];
-  const aud: string[] = f.audience.length ? f.audience : [...f.groups.map((i) => p.lists.groups[i] ?? ''), ...f.extraGroups];
+  const aud: Group[] = (f.audience.length ? f.audience : [...f.groups.map((i) => p.lists.groups[i] ?? ''), ...f.extraGroups]).map((g) => (typeof g === 'string' ? { title: g, text: '' } : g));
   const setWork = (v: WorkItem[]) => { setF((x) => ({ ...x!, workItems: v, activities: [], extraActivities: [] })); setDirty(true); };
-  const setAud = (v: string[]) => { setF((x) => ({ ...x!, audience: v, groups: [], extraGroups: [] })); setDirty(true); };
+  const moveAud = (i: number, d: -1 | 1) => { const a = [...aud]; [a[i], a[i + d]] = [a[i + d], a[i]]; setAud(a); };
+  const setAud = (v: Group[]) => { setF((x) => ({ ...x!, audience: v, groups: [], extraGroups: [] })); setDirty(true); };
   const moveWork = (i: number, d: -1 | 1) => { const w = [...work]; [w[i], w[i + d]] = [w[i + d], w[i]]; setWork(w); };
   const setObj = (i: number, v: Partial<Step>) => set('objectives', f.objectives.map((o, j) => (j === i ? { ...o, ...v } : o)));
   const moveObj = (i: number, d: -1 | 1) => { const o = [...f.objectives]; [o[i], o[i + d]] = [o[i + d], o[i]]; set('objectives', o); };
@@ -235,6 +239,16 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
             <textarea className="textarea" rows={2} maxLength={200} value={f.intro} onChange={(x) => set('intro', x.target.value)} aria-label="Page introduction" /></Field>
         </Section>
         <Section id="objectives" title="Objectives" desc="Written here for this pillar only and shown on its page in this order. Nothing is taken from AFCD’s strategy page.">
+          <div className="field ed-f s3"><span className="ed-lbl">Photos next to the objectives <span className="muted">(optional, up to 8)</span></span>
+            {objPhotos.length > 0 && <ul className="pl-objpics">{objPhotos.map((m, i) => <li key={m.id}>
+              <img src={m.url} alt={m.alt} />{(!m.alt || !m.rightsConfirmed) && <span className="pl-objpic-warn" title="Needs alt text and confirmed rights before review"><Icon n="alert" width={13} height={13} /></span>}
+              {editable && <span className="pl-objpic-a">
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === 0} aria-label={`Move photo ${i + 1} earlier`} onClick={() => { const a = [...objPhotos]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; setObjPhotos(a); set('objectivesMediaIds', a.map((x) => x.id)); }}>←</button>
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === objPhotos.length - 1} aria-label={`Move photo ${i + 1} later`} onClick={() => { const a = [...objPhotos]; [a[i + 1], a[i]] = [a[i], a[i + 1]]; setObjPhotos(a); set('objectivesMediaIds', a.map((x) => x.id)); }}>→</button>
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" aria-label={`Remove photo ${i + 1}`} onClick={() => { const a = objPhotos.filter((_, j) => j !== i); setObjPhotos(a); set('objectivesMediaIds', a.map((x) => x.id)); }}><Icon n="x" /></button></span>}
+            </li>)}</ul>}
+            {editable && objPhotos.length < 8 && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('objphotos')}><Icon n="image" />Add photos</button>}
+            <small>A square carousel beside the objectives, in this order. Without photos here, it shows the cover photos of this pillar’s live projects.</small></div>
           {f.objectives.length === 0 && <p className="muted s3" style={{ margin: 0 }}>No objectives yet. Until you add some, the pillar page says its objectives are being finalised.</p>}
           {f.objectives.length > 0 && <ol className="pl-steps s3">{f.objectives.map((o, i) => <li key={i}>
             <span className="pl-step-n">{String(i + 1).padStart(2, '0')}</span>
@@ -281,9 +295,33 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
             {work.length < 10 ? <button type="button" className="btn btn-sm" onClick={() => setWork([...work, { icon: 1, text: '' }])}><Icon n="plus" />Add a card</button>
               : <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>10 cards is the maximum.</p>}
           </div>
-          <Field label="Who we work with" span={3} hint="One group per line, in the order shown. Up to 10. Leave empty to hide the column.">
-            <ListEditor value={aud} onChange={setAud} label="Who we work with" max={10} placeholder="e.g. Young people and students" disabled={!editable} /></Field>
+          <div className="field ed-f s3"><span className="ed-lbl">Who we work with</span>
+            {aud.length > 0 && <ol className="pl-steps pl-aud">{aud.map((g, i) => <li key={i}>
+              <span className="pl-step-n">{String(i + 1).padStart(2, '0')}</span>
+              <div className="pl-step-f">
+                <input className="input" maxLength={100} value={g.title} placeholder="Group name (required)" disabled={!editable} onChange={(x) => setAud(aud.map((y, j) => (j === i ? { ...y, title: x.target.value } : y)))} aria-label={`Group ${i + 1} name`} />
+                <textarea className="textarea" rows={2} maxLength={160} value={g.text} placeholder="Short description (optional, up to 160 characters)" disabled={!editable} onChange={(x) => setAud(aud.map((y, j) => (j === i ? { ...y, text: x.target.value } : y)))} aria-label={`Group ${i + 1} description`} />
+              </div>
+              {editable && <span className="pl-step-a">
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === 0} onClick={() => moveAud(i, -1)} aria-label={`Move group ${i + 1} up`}>↑</button>
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === aud.length - 1} onClick={() => moveAud(i, 1)} aria-label={`Move group ${i + 1} down`}>↓</button>
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" onClick={() => setAud(aud.filter((_, j) => j !== i))} aria-label={`Remove group ${i + 1}`}><Icon n="x" /></button></span>}
+            </li>)}</ol>}
+            {editable && (aud.length < 10 ? <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setAud([...aud, { title: '', text: '' }])}><Icon n="plus" />Add a group</button>
+              : <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>10 groups is the maximum.</p>)}
+            <small>In the order shown. The description appears under the name on the page; leave it empty to show the name only. Remove every group to hide the column.</small></div>
           </>}
+          <div className="field ed-f s3"><span className="ed-lbl">Photo between the two lists <span className="muted">(optional)</span></span>
+            <div className="ed-media">
+              {f.workMediaId && workPhoto ? <div className="ed-media-img pl-photo"><img src={workPhoto.url} alt={workPhoto.alt} />{editable && <button type="button" className="btn btn-sm" onClick={() => { set('workMediaId', null); setWorkPhoto(null); }}><Icon n="x" />Remove</button>}</div>
+                : <button type="button" className="ed-drop" disabled={!editable} onClick={() => setDialog('workphoto')}><Icon n="image" /><b>Choose a photo</b><small>Shown between What it looks like and Who we work with. Use a different picture from the overview photo.</small></button>}
+              {f.workMediaId && workPhoto && <div className="pl-photo-meta">
+                <span className={workPhoto.alt ? 'ok' : 'warn'}><Icon n={workPhoto.alt ? 'check' : 'alert'} width={14} height={14} />{workPhoto.alt ? `Alt text: “${workPhoto.alt}”` : 'No alt text yet'}</span>
+                <span className={workPhoto.rightsConfirmed ? 'ok' : 'warn'}><Icon n={workPhoto.rightsConfirmed ? 'check' : 'alert'} width={14} height={14} />{workPhoto.rightsConfirmed ? 'Usage rights confirmed' : 'Usage rights not confirmed'}</span>
+                {editable && <span className="pl-photo-actions"><button type="button" className="btn btn-sm" onClick={() => setDialog('workphoto')}><Icon n="image" />Change</button></span>}
+              </div>}
+            </div>
+            <small>Without one, the page uses the cover photo of another of this pillar’s live projects, never the overview photo.</small></div>
         </Section>
         <Section id="approach" title="Our approach" desc="The dark band in the middle of the pillar page.">
           <Field label="Heading" span={2} hint="Written in black."><input className="input" maxLength={60} value={f.approachTitle} onChange={(x) => set('approachTitle', x.target.value)} aria-label="Heading" /></Field>
@@ -299,7 +337,7 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
       <Section id="translations" title="Translations" desc="French and Arabic of this pillar’s pages. Reviewed and published on the Translations screen.">
         <RecordTranslations noun="pillar" dirty={status !== 'published'} files={[p.publicFile, 'pillars.html']} fields={[{ label: 'Name', value: f.name }, { label: 'Summary', value: f.summary }, { label: 'Page introduction', value: f.intro },
           ...f.objectives.flatMap((o) => [{ label: 'Objective', value: o.title }, { label: 'Objective explanation', value: o.text }]), { label: 'Approach heading', value: f.approachTitle }, { label: 'Our perspective', value: f.view }, ...f.principles.map((x) => ({ label: 'Guiding principle', value: x })),
-          ...work.map((x) => ({ label: 'Activity', value: x.text })), ...aud.map((x) => ({ label: 'Who we work with', value: x })),
+          ...work.map((x) => ({ label: 'Activity', value: x.text })), ...aud.flatMap((x) => [{ label: 'Who we work with', value: x.title }, { label: 'Who we work with: description', value: x.text }]),
           ]} />
       </Section>
       </div>
@@ -319,6 +357,8 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
       </WorkflowPanel>
     </div>
 
+    {dialog === 'objphotos' && <MediaPicker multiple onClose={() => setDialog(null)} onPick={(m) => { const a = [...objPhotos, ...m.filter((x) => !objPhotos.some((y) => y.id === x.id))].slice(0, 8); setObjPhotos(a); set('objectivesMediaIds', a.map((x) => x.id)); setDialog(null); }} />}
+    {dialog === 'workphoto' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { if (m[0]) { setWorkPhoto(m[0]); set('workMediaId', m[0].id); } setDialog(null); }} />}
     {dialog === 'photo' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { if (m[0]) { setPhoto(m[0]); set('mediaId', m[0].id); } setDialog(null); }} />}
     {dialog === 'preview' && <Modal wide title={`Preview · ${p.publicFile} with this draft`} onClose={() => setDialog(null)}><div className="preview-wrap"><iframe title="Pillar preview" src={url} style={{ width: Math.min(1280, window.innerWidth - 80) }} /></div></Modal>}
     {dialog === 'changes' && <Modal size="sm" title="Request changes" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={!comment.trim()} onClick={() => act('request_changes', { comment })}>Send to author</button></>}><div className="modal-b"><textarea className="textarea" autoFocus aria-label="What needs to change" value={comment} onChange={(e) => setComment(e.target.value)} /></div></Modal>}

@@ -8,7 +8,7 @@
 // other modules read, and change only when a pillar is published. A new pillar is offered to projects, stories and
 // events only once it is live. Removing a live pillar is reviewed too: its page becomes a redirect to pillars.html.
 import { execFileSync } from 'node:child_process';
-import { and, asc, desc, eq, isNotNull, isNull, max, or } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, max, or, inArray } from 'drizzle-orm';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
@@ -56,10 +56,16 @@ export const pillarSchema = z.object({
   extraGroups: z.array(need(100, 'Remove empty participant groups.')).max(6).default([]),
   // the edited lists for How we work; once saved they replace the picks and extras above (empty = those are used)
   workItems: z.array(z.object({ icon: z.number().int().min(0).max(30), text: need(160, 'Remove empty cards.') }).strict()).max(10, 'Up to 10 cards.').default([]),
-  audience: z.array(need(100, 'Remove empty groups.')).max(10, 'Up to 10 groups.').default([]),
+  // Who we work with: each group's name and an optional short description (older drafts saved names only)
+  audience: z.array(z.preprocess((v) => (typeof v === 'string' ? { title: v, text: '' } : v),
+    z.object({ title: need(100, 'Give every group a name, or remove the empty one.'), text: plain(160).default('') }).strict())).max(10, 'Up to 10 groups.').default([]),
   mediaId: z.string().uuid().nullable().default(null),
   // optional video in the overview (a platform link or an uploaded file); the photo above is its poster
   video: videoSchema,
+  // optional photo between the two How we work columns (a different picture from the overview photo)
+  workMediaId: z.string().uuid().nullable().default(null),
+  // photos of the square carousel next to the objectives, in order
+  objectivesMediaIds: z.array(z.string().uuid()).max(8, 'Up to 8 objectives photos.').refine((a) => new Set(a).size === a.length, 'Each photo once.').default([]),
   provenance: plain(300).default(''),
 }).strict();
 export type PillarInput = z.infer<typeof pillarSchema>;
@@ -113,7 +119,7 @@ export async function loadPillar(db: DB, id: string): Promise<FullPillar> {
   const { highlights: _h, page: _pg, ...d } = (p.draft ?? {}) as unknown as PillarInput & { highlights?: unknown; page?: unknown };
   const hasDraft = !!p.draft;
   // drafts from before objectives, custom items or page texts existed have none
-  const content = hasDraft ? { ...d, objectives: d.objectives ?? [], extraActivities: d.extraActivities ?? [], extraGroups: d.extraGroups ?? [], workItems: d.workItems ?? [], audience: d.audience ?? [], video: d.video ?? null, mediaId: p.mediaId, provenance: p.provenance } : null;
+  const content = hasDraft ? { ...d, objectives: d.objectives ?? [], extraActivities: d.extraActivities ?? [], extraGroups: d.extraGroups ?? [], workItems: d.workItems ?? [], audience: d.audience ?? [], video: d.video ?? null, workMediaId: d.workMediaId ?? null, objectivesMediaIds: d.objectivesMediaIds ?? [], mediaId: p.mediaId, provenance: p.provenance } : null;
   return { ...p, content, projects: await linkedProjects(db, id), usage: await pillarUsage(db, id) };
 }
 
@@ -135,9 +141,10 @@ export async function pillarProblems(db: DB, p: FullPillar) {
   if (!c.view) out.push('Add the “Our perspective” text.');
   if (!c.principles.length) out.push('Add at least one guiding principle.');
   if ((c.objectives ?? []).some((o) => !o.title)) out.push('Give every objective a title, or remove the empty one.');
-  if (p.mediaId) {
-    const [m] = await db.select().from(media).where(eq(media.id, p.mediaId));
-    if (!m) out.push('The photo no longer exists in the media library.');
+  for (const [mid, what] of [[p.mediaId, 'photo'], [(c as { workMediaId?: string | null }).workMediaId ?? null, 'How we work photo'], ...((c as { objectivesMediaIds?: string[] }).objectivesMediaIds ?? []).map((x) => [x, 'objectives photo'] as const)] as const) {
+    if (!mid) continue;
+    const [m] = await db.select().from(media).where(eq(media.id, mid));
+    if (!m) out.push(`The ${what} no longer exists in the media library.`);
     else {
       { const ap = altProblem(m, `Add alt text to the photo “${m.originalName}” in the media library.`); if (ap) out.push(ap); }
       if (!m.rightsConfirmed) out.push(`Confirm AFCD may use the photo “${m.originalName}” (usage rights and consent of the people shown).`);
@@ -159,6 +166,8 @@ export async function updatePillar(db: DB, cfg: Config, actor: NonNullable<Actor
     if (!cur.draft) throw new AppError(409, 'Import the current pillar content before editing.');
     if (!EDITABLE.includes(cur.status)) throw new AppError(409, 'This pillar is in review. Withdraw it before editing.');
     if (input.mediaId && !(await t.select({ id: media.id }).from(media).where(eq(media.id, input.mediaId))).length) throw new AppError(422, 'The photo no longer exists in the media library.');
+    if (input.workMediaId && !(await t.select({ id: media.id }).from(media).where(eq(media.id, input.workMediaId))).length) throw new AppError(422, 'The How we work photo no longer exists in the media library.');
+    if (input.objectivesMediaIds.length && (await t.select({ id: media.id }).from(media).where(inArray(media.id, input.objectivesMediaIds))).length !== input.objectivesMediaIds.length) throw new AppError(422, 'An objectives photo no longer exists in the media library.');
     const { provenance, mediaId, ...content } = input;
     const [p] = await t.update(pillars).set({ draft: content as unknown as Record<string, unknown>, mediaId, provenance, status: 'draft', approvedRevisionId: null, removeRequested: false, updatedBy: actor.id, updatedAt: new Date() })
       .where(eq(pillars.id, id)).returning();
@@ -266,7 +275,7 @@ export async function createPillar(db: DB, cfg: Config, actor: NonNullable<Actor
     const colour = COLOURS.find((c) => !used.has(c.value))?.value ?? COLOURS[all.length % COLOURS.length].value;
     const sort = Math.max(-1, ...all.map((x) => x.sort)) + 1;
     const draft: Omit<PillarInput, 'provenance' | 'mediaId'> = { name, short: name.split(/\s+/)[0].slice(0, 20), summary: '', intro: '', colour, brand: '',
-      approachTitle: '', approachSoft: '', view: '', principles: [], steps: [], objectives: [], activities: [], groups: [], extraActivities: [], extraGroups: [], workItems: [], audience: [], video: null };
+      approachTitle: '', approachSoft: '', view: '', principles: [], steps: [], objectives: [], activities: [], groups: [], extraActivities: [], extraGroups: [], workItems: [], audience: [], video: null, workMediaId: null, objectivesMediaIds: [] };
     const [p] = await t.insert(pillars).values({ key, number: String(all.length + 1).padStart(2, '0'), name, description: '', colour, publicFile: file, sort,
       draft: draft as unknown as Record<string, unknown>, provenance: 'Added in Studio', status: 'draft', updatedBy: actor.id }).returning();
     await audit(tx, actor, 'pillar.create', { type: 'pillar', id: p.id }, `Added pillar “${name}” (${file})`);

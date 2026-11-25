@@ -106,3 +106,11 @@ a.pl-item:hover { background: var(--canvas); }
 .pl-pt-long { grid-column: 1 / -1; }
 .pl-pt-grid .input::placeholder, .pl-pt-grid .textarea::placeholder { color: var(--faint); }
 @media (max-width: 640px) { .pl-pt-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* objectives photos (square carousel on the pillar page) */
+.pl-objpics { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.pl-objpics li { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 10px; border: 1px solid var(--line); background: var(--sunken); }
+.pl-objpics img { width: 100%; height: 100%; object-fit: cover; }
+.pl-objpic-warn { position: absolute; top: 6px; left: 6px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #fff; color: var(--warn); }
+.pl-objpic-a { position: absolute; left: 4px; right: 4px; bottom: 4px; display: flex; justify-content: space-between; padding: 2px; border-radius: 8px; background: rgba(255,255,255,.92); }
+.pl-objpic-a .btn { width: 26px; height: 26px; }

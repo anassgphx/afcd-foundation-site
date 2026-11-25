@@ -52,8 +52,8 @@ const FILE = /^[a-z0-9][a-z0-9-]*\.html$/;
 
 // ---------------------------------------------------------------- Text helpers
 const STOP = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'to', 'for', 'in', 'on', 'with', 'at', 'by', 'from', 'is', 'are', 'your', 'our', 'de', 'la', 'le', 'les', 'et', 'du', 'des']);
-/** Lowercase, without accents or punctuation: “Women’s Empowerment” → “women s empowerment”. */
-export const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+/** Lowercase, without accents or punctuation, “&” read as “and”: “Mission, Vision & Values” → “mission vision and values”. */
+export const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/&/g, ' and ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const words = (s: string) => norm(s).split(' ').filter(Boolean);
 const sig = (s: string) => words(s).filter((w) => w.length > 2 && !STOP.has(w));
 /** 'full' when the phrase appears as written, 'partial' when every meaningful word appears, else 'none'. */

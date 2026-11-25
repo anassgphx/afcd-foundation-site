@@ -35,6 +35,8 @@ describe('on-page helpers', () => {
     expect(match('Training for youth leadership in Morocco', 'youth leadership')).toBe('full');
     expect(match('Leadership training for youth', 'youth leadership')).toBe('partial');
     expect(match('Leadership training', 'youth leadership')).toBe('none');
+    expect(match('Mission, Vision & Values · AFCD Foundation', 'mission, vision and values')).toBe('full');   // “&” is “and”
+    expect(match('Youth Empowerment & Civic Engagement', 'youth empowerment and civic engagement')).toBe('full');
   });
 
   it('reads robots.txt like search engines: the specific group wins over *', () => {

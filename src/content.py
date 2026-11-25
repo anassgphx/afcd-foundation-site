@@ -1533,7 +1533,7 @@ def project_details():
 # ---------------------------------------------------------------- Homepage events list (from EVENTS)
 def home_events():
     """Writes the homepage's upcoming-events list (up to 3, real events only) between the home-events markers."""
-    idx = Path(__file__).parent / 'pages' / 'index.html'
+    idx = OUT / 'index.html'   # the build's own copy of the homepage (src/pages in a live build; a preview's folder otherwise)
     if not idx.exists():
         return
     html = idx.read_text(encoding='utf-8')
@@ -1563,7 +1563,7 @@ def partner_logo(name):
 # ---------------------------------------------------------------- Homepage partner strip (from the Partners module)
 def home_partners():
     """Writes the homepage partner strip's names, logos and counts into src/pages/index.html (assets/main.js draws the strip)."""
-    idx = Path(__file__).parent / 'pages' / 'index.html'
+    idx = OUT / 'index.html'   # the build's own copy of the homepage (src/pages in a live build; a preview's folder otherwise)
     if not idx.exists():
         return
     html = idx.read_text(encoding='utf-8')
@@ -1678,7 +1678,7 @@ def home_pillars():
 # ---------------------------------------------------------------- Homepage project cards (from the project module)
 def home_projects():
     """Writes the featured project cards' data into src/pages/index.html (between the home-projects markers)."""
-    idx = Path(__file__).parent / 'pages' / 'index.html'
+    idx = OUT / 'index.html'   # the build's own copy of the homepage (src/pages in a live build; a preview's folder otherwise)
     if not idx.exists():
         return
     html = idx.read_text(encoding='utf-8')

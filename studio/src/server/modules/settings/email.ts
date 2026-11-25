@@ -10,6 +10,7 @@ import { auditLog } from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import * as MAIL from '../inbox/mail.ts';
+import { compose } from './email-layout.ts';
 import { addRevision, changedKeys, revision } from './service.ts';
 
 type Me = NonNullable<Actor>;
@@ -72,10 +73,9 @@ export async function sendTest(db: DB, cfg: Config, me: Me) {
     return { ok: false as const, stage: 'settings', message: reason, to: me.email };
   }
   try {
-    const r = await MAIL.deliver(cfg, {
-      to: me.email, subject: 'AFCD Studio: test email',
-      text: `This is a test email from AFCD Studio (Settings → Email & SMTP).\n\nIf you can read it, Studio can send email through ${s.host}:${s.port}.\n\nRequested by ${me.email} at ${new Date().toISOString()}.`,
-    });
+    const msg = await compose(db, { subject: 'AFCD Studio: test email', heading: 'Email sending works',
+      body: `This is a test email from AFCD Studio (Settings → Email & SMTP).\n\nIf you can read it, Studio can send email through ${s.host}:${s.port}, in the design set in Settings → Email templates.\n\nRequested by ${me.email} at ${new Date().toISOString()}.` });
+    const r = await MAIL.deliver(cfg, { to: me.email, subject: 'AFCD Studio: test email', ...msg });
     const response = (r.response ?? '').slice(0, 300);
     await audit(db, me, 'settings.email_test', { type: 'settings', id: 'email' }, `Test email accepted by ${s.host}`, { to: me.email, host: s.host, port: s.port, response, messageId: r.messageId });
     return { ok: true as const, to: me.email, host: s.host, port: s.port, messageId: r.messageId, response };

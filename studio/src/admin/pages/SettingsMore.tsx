@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { del, post } from '../api.ts';
 import { Icon, Link, Modal, ago, fmtDate, useToast } from '../ui.tsx';
+import '../email-templates.css';
 import { AdminOnly, Checks, Dot, F, Loading, PanelHead, SaveBar, Stats, fmtBytes, useFacts, useForm, type CheckItem } from './settingsKit.tsx';
 
 type Cat = { id: string; label: string; icon: string; summary: string; link?: { to: string; label: string } };
@@ -10,51 +11,148 @@ type Perms = { update: boolean; admin: boolean; publish: boolean };
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
 
 // ---------------------------------------------------------------- Email templates
-type Tpl = { id?: string; name: string; subject: string; body: string };
-type TplData = { templates: Tpl[]; variables: { name: string; label: string; example: string }[]; canEdit: boolean };
+// The design every Studio email is sent in (logo, signature, footer) and reusable Inbox replies with optional parts
+// (preview line, heading, button, details card), with a live preview of the real email at desktop and phone width.
+type Btn = { label: string; url: string };
+type Details = { title: string; rows: { label: string; value: string }[] };
+type Tpl = { id?: string; name: string; subject: string; heading: string; preheader: string; body: string; button: Btn | null; details: Details | null };
+type Design = { branded: boolean; showContact: boolean; showSocial: boolean; footerNote: string; signature: string };
+type TplData = { templates: Tpl[]; design: Design; variables: { name: string; label: string; example: string }[]; canEdit: boolean };
+type Pv = { subject: string; heading: string; preheader: string; unknown: string[]; html: string; text: string };
+const blank = (t: Partial<Tpl>): Tpl => ({ name: '', subject: '', heading: '', preheader: '', body: '', button: null, details: null, ...t });
+const STARTERS: { title: string; desc: string; t: Tpl }[] = [
+  { title: 'Volunteering reply', desc: 'Thank them and explain the next steps.', t: blank({ name: 'Volunteering', subject: 'Re: {{topic}}', heading: 'Thank you for offering your time',
+    preheader: 'Here is how volunteering with us works.', body: 'Dear {{contact_first_name}},\n\nThank you for writing to {{organization}} and for wanting to volunteer with us.\n\nOur team will call you within a week to talk about the roles that fit you best. Meanwhile, you can read about our current projects on our website.',
+    button: { label: 'See our projects', url: 'https://afcdfoundation.com/projects.html' } }) },
+  { title: 'Partnership reply', desc: 'Acknowledge a partnership request.', t: blank({ name: 'Partnership', subject: 'Re: {{topic}}', heading: 'Let’s talk about working together',
+    preheader: 'Thank you for your interest in partnering with us.', body: 'Dear {{contact_first_name}},\n\nThank you for reaching out about a partnership with {{organization}}.\n\nWe will review your message and suggest a short call in the coming days. If you have a presentation or proposal, you can reply to this email with it attached.' }) },
+  { title: 'Event confirmation', desc: 'Confirm a place, with the event details.', t: blank({ name: 'Event confirmation', subject: 'Your place is confirmed', heading: 'See you soon, {{contact_first_name}}',
+    preheader: 'Your registration is confirmed. Details inside.', body: 'Dear {{contact_first_name}},\n\nThank you for registering. Your place is confirmed and we look forward to welcoming you.',
+    button: { label: 'View the event', url: 'https://afcdfoundation.com/events.html' },
+    details: { title: 'Event details', rows: [{ label: 'Date', value: '' }, { label: 'Time', value: '' }, { label: 'Place', value: '' }] } }) },
+];
+
 export function TemplatesPanel({ c, onSaved }: { c: Cat; onSaved: () => void }) {
   const { d, err, reload } = useFacts<TplData>('/settings/templates');
   if (!d) return <><PanelHead title={c.label} summary={c.summary} icon={c.icon} /><Loading err={err} /></>;
   return <TemplatesEditor c={c} d={d} onSaved={() => { reload(); onSaved(); }} />;
 }
 function TemplatesEditor({ c, d, onSaved }: { c: Cat; d: TplData; onSaved: () => void }) {
-  const f = useForm<{ templates: Tpl[] }>({ templates: d.templates }, '/settings/templates', onSaved);
-  const [sel, setSel] = useState(0);
-  const [pv, setPv] = useState<{ subject: string; body: string; unknown: string[] } | null>(null);
-  const list = f.v.templates; const t = list[sel];
-  const upd = (patch: Partial<Tpl>) => f.setV({ templates: list.map((x, i) => (i === sel ? { ...x, ...patch } : x)) });
+  const f = useForm<{ templates: Tpl[]; design: Design }>({ templates: d.templates.map(blank), design: d.design }, '/settings/templates', onSaved);
+  const [sel, setSel] = useState<number | 'design'>(d.templates.length ? 0 : 'design');
+  const [view, setView] = useState<'desktop' | 'phone' | 'text'>('desktop');
+  const [pv, setPv] = useState<Pv | null>(null);
+  const list = f.v.templates; const design = f.v.design;
+  const t = typeof sel === 'number' ? list[sel] : undefined;
+  const ro = !d.canEdit;
+  const upd = (patch: Partial<Tpl>) => { if (typeof sel === 'number') f.setV({ ...f.v, templates: list.map((x, i) => (i === sel ? { ...x, ...patch } : x)) }); };
+  const updD = (patch: Partial<Design>) => f.setV({ ...f.v, design: { ...design, ...patch } });
+  const add = (x: Tpl) => { f.setV({ ...f.v, templates: [...list, x] }); setSel(list.length); };
+  // the design is previewed on the selected template, or on a sample reply when there is none
+  const shown = t ?? list[0] ?? STARTERS[0].t;
   useEffect(() => {
-    if (!t) { setPv(null); return; }
-    const h = setTimeout(() => { post<{ subject: string; body: string; unknown: string[] }>('/settings/templates/preview', { subject: t.subject, body: t.body }).then(setPv).catch(() => {}); }, 250);
+    const h = setTimeout(() => { post<Pv>('/settings/templates/preview', { ...shown, design }).then(setPv).catch(() => {}); }, 250);
     return () => clearTimeout(h);
-  }, [t?.subject, t?.body]);
-  const insert = (name: string) => { if (t) upd({ body: `${t.body}{{${name}}}` }); };
-  const e = (k: string) => f.errs[`templates.${sel}.${k}`];
+  }, [JSON.stringify(shown), JSON.stringify(design)]);
+  const e = (k: string) => (typeof sel === 'number' ? f.errs[`templates.${sel}.${k}`] : f.errs[`design.${k}`]);
+  const vars = (onPick: (name: string) => void) => !ro && <div className="set-vars" aria-label="Insert a variable"><span className="muted">Insert:</span>
+    {d.variables.map((v) => <button key={v.name} type="button" className="set-var" title={`${v.label} (e.g. ${v.example})`} onClick={() => onPick(v.name)}>{`{{${v.name}}}`}</button>)}</div>;
+
   return (
     <>
-      <PanelHead title={c.label} summary="Reusable replies for the Inbox. Plain text with a few safe variables, filled in when you insert a template into a reply." icon={c.icon} />
-      <div className="set-tpl">
-        <div className="set-card set-tpl-list">
-          <div className="between"><h3>Templates</h3>{d.canEdit && <button className="btn btn-sm" disabled={list.length >= 20} onClick={() => { f.setV({ templates: [...list, { name: `New template ${list.length + 1}`, subject: 'Re: {{topic}}', body: 'Dear {{contact_first_name}},\n\n\n\nBest regards,\n{{sender_name}}\n{{organization}}' }] }); setSel(list.length); }}><Icon n="plus" />New</button>}</div>
-          {list.length ? <ul role="listbox" aria-label="Templates">{list.map((x, i) => <li key={x.id ?? `new-${i}`}><button type="button" role="option" aria-selected={i === sel} className={i === sel ? 'on' : ''} onClick={() => setSel(i)}><b>{x.name || 'Untitled'}</b><small>{x.subject}</small></button></li>)}</ul>
-            : <div className="set-empty-s"><p className="muted">No templates yet.</p>{d.canEdit && <p className="muted">Create one for replies you write often, such as volunteering or partnership answers.</p>}</div>}
+      <PanelHead title={c.label} summary="The design every email from Studio is sent in, and reusable replies for the Inbox. Variables are filled in when a template is used." icon={c.icon} />
+      <div className="et-wrap"><div className="et">
+        {/* ---------- list */}
+        <nav className="set-card et-list" aria-label="Email design and templates">
+          <button type="button" className={`et-item${sel === 'design' ? ' on' : ''}`} aria-current={sel === 'design'} onClick={() => setSel('design')}>
+            <span className="et-ico"><Icon n="layers" /></span><span><b>Email design</b><small>Logo, signature and footer for every email</small></span></button>
+          <div className="et-list-h"><h3>Templates <span className="muted">{list.length}</span></h3>
+            {!ro && <button className="btn btn-sm" disabled={list.length >= 20} onClick={() => add(blank({ name: `New template ${list.length + 1}`, subject: 'Re: {{topic}}', body: 'Dear {{contact_first_name}},\n\n' }))}><Icon n="plus" />New</button>}</div>
+          {list.length ? list.map((x, i) => <button key={x.id ?? `new-${i}`} type="button" className={`et-item${i === sel ? ' on' : ''}`} aria-current={i === sel} onClick={() => setSel(i)}>
+            <span className="et-ico"><Icon n="mail" /></span><span><b>{x.name || 'Untitled'}</b><small>{x.subject || 'No subject'}</small></span></button>)
+            : <div className="et-starters">
+              <p className="muted">No templates yet. {!ro && 'Start from one of these and adapt it:'}</p>
+              {!ro && STARTERS.map((s) => <button key={s.title} type="button" className="et-starter" onClick={() => add({ ...s.t })}><b>{s.title}</b><small>{s.desc}</small><Icon n="plus" /></button>)}
+            </div>}
+        </nav>
+
+        {/* ---------- editor */}
+        <div className="set-card et-ed">
+          {sel === 'design' ? <>
+            <div className="et-ed-h"><h3>Email design</h3><p className="muted">Used by Inbox replies, test emails and notifications. The logo, contact details and social links come from <Link to="/studio/settings/branding">Branding</Link> and <Link to="/studio/settings/contact">Contact &amp; social</Link>.</p></div>
+            <label className="check et-check"><input type="checkbox" checked={design.branded} disabled={ro} onChange={(x) => updD({ branded: x.target.checked })} />
+              <span><b>Send emails in the branded design</b><small className="muted">Off: plain text only, like a personal email.</small></span></label>
+            <F id="et-sig" label="Signature" effect="immediate" error={e('signature')} hint="Added under every Inbox reply. Leave it empty if your templates already sign off.">
+              <textarea id="set-et-sig" className="textarea" rows={3} value={design.signature} disabled={ro} placeholder={'Warm regards,\n{{sender_name}}\n{{organization}}'} onChange={(x) => updD({ signature: x.target.value })} />
+            </F>
+            {vars((n) => updD({ signature: `${design.signature}{{${n}}}` }))}
+            <F id="et-foot" label="Footer note" effect="immediate" error={e('footerNote')} hint="A short line under the contact details, e.g. why they receive this email.">
+              <textarea id="set-et-foot" className="textarea" rows={2} maxLength={300} value={design.footerNote} disabled={ro} onChange={(x) => updD({ footerNote: x.target.value })} />
+            </F>
+            <div className="et-toggles">
+              <label className="check"><input type="checkbox" checked={design.showContact} disabled={ro || !design.branded} onChange={(x) => updD({ showContact: x.target.checked })} /><span>Show email and phone in the footer</span></label>
+              <label className="check"><input type="checkbox" checked={design.showSocial} disabled={ro || !design.branded} onChange={(x) => updD({ showSocial: x.target.checked })} /><span>Show social links in the footer</span></label>
+            </div>
+          </> : t ? <>
+            <div className="et-ed-h"><h3>{t.name || 'Untitled'}</h3><p className="muted">Pick it in Inbox → Reply → Use a template. You can still edit the text before sending.</p></div>
+            {f.errs[`templates.${sel}`] && <div className="notice n-warn" role="alert"><div>{f.errs[`templates.${sel}`]}</div></div>}
+            <div className="et-row">
+              <F id="tpl-name" label="Name" effect="immediate" error={e('name')} hint="Only Studio users see it.">
+                <input id="set-tpl-name" className="input" value={t.name} maxLength={60} disabled={ro} onChange={(x) => upd({ name: x.target.value })} /></F>
+              <F id="tpl-subject" label="Subject" effect="immediate" error={e('subject')}>
+                <input id="set-tpl-subject" className="input" value={t.subject} maxLength={200} disabled={ro} onChange={(x) => upd({ subject: x.target.value })} /></F>
+            </div>
+            <F id="tpl-pre" label="Preview line" effect="immediate" error={e('preheader')} hint="Optional. Shown next to the subject in most inboxes.">
+              <input id="set-tpl-pre" className="input" value={t.preheader} maxLength={150} disabled={ro} onChange={(x) => upd({ preheader: x.target.value })} /></F>
+            <F id="tpl-heading" label="Heading" effect="immediate" error={e('heading')} hint="Optional. A large title at the top of the email.">
+              <input id="set-tpl-heading" className="input" value={t.heading} maxLength={120} disabled={ro} onChange={(x) => upd({ heading: x.target.value })} /></F>
+            <F id="tpl-body" label="Text" effect="immediate" error={e('body')} hint="Plain text. A blank line starts a new paragraph; https links become clickable.">
+              <textarea id="set-tpl-body" className="textarea set-tpl-body" rows={8} value={t.body} maxLength={5000} disabled={ro} onChange={(x) => upd({ body: x.target.value })} /></F>
+            {vars((n) => upd({ body: `${t.body}{{${n}}}` }))}
+
+            <fieldset className="et-part" disabled={ro}>
+              <legend><label className="check"><input type="checkbox" checked={!!t.button} onChange={(x) => upd({ button: x.target.checked ? { label: '', url: 'https://afcdfoundation.com/' } : null })} /><span><b>Button</b> <small className="muted">One clear next step</small></span></label></legend>
+              {t.button && <div className="et-row">
+                <F id="tpl-bl" label="Button text" effect="immediate" error={e('button.label')}><input id="set-tpl-bl" className="input" maxLength={40} placeholder="e.g. See the event" value={t.button.label} onChange={(x) => upd({ button: { ...t.button!, label: x.target.value } })} /></F>
+                <F id="tpl-bu" label="Link" effect="immediate" error={e('button.url')} hint="https:// or mailto:"><input id="set-tpl-bu" className="input mono" maxLength={500} value={t.button.url} onChange={(x) => upd({ button: { ...t.button!, url: x.target.value.trim() } })} /></F>
+              </div>}
+            </fieldset>
+
+            <fieldset className="et-part" disabled={ro}>
+              <legend><label className="check"><input type="checkbox" checked={!!t.details} onChange={(x) => upd({ details: x.target.checked ? { title: '', rows: [{ label: '', value: '' }] } : null })} /><span><b>Details card</b> <small className="muted">Dates, places, amounts</small></span></label></legend>
+              {t.details && <>
+                <F id="tpl-dt" label="Card title" effect="immediate" error={e('details.title')}><input id="set-tpl-dt" className="input" maxLength={60} placeholder="e.g. Event details" value={t.details.title} onChange={(x) => upd({ details: { ...t.details!, title: x.target.value } })} /></F>
+                <ol className="et-rows">{t.details.rows.map((r, i) => <li key={i}>
+                  <input className="input" maxLength={40} placeholder="Label" aria-label={`Line ${i + 1} label`} value={r.label} onChange={(x) => upd({ details: { ...t.details!, rows: t.details!.rows.map((y, j) => (j === i ? { ...y, label: x.target.value } : y)) } })} />
+                  <input className="input" maxLength={160} placeholder="Value" aria-label={`Line ${i + 1} value`} value={r.value} onChange={(x) => upd({ details: { ...t.details!, rows: t.details!.rows.map((y, j) => (j === i ? { ...y, value: x.target.value } : y)) } })} />
+                  <button type="button" className="btn btn-ghost icon-btn btn-sm" aria-label={`Remove line ${i + 1}`} onClick={() => upd({ details: { ...t.details!, rows: t.details!.rows.filter((_, j) => j !== i) } })}><Icon n="x" /></button></li>)}</ol>
+                {t.details.rows.length < 8 && <button type="button" className="btn btn-sm" onClick={() => upd({ details: { ...t.details!, rows: [...t.details!.rows, { label: '', value: '' }] } })}><Icon n="plus" />Add a line</button>}
+              </>}
+            </fieldset>
+            {!ro && <div className="et-actions">
+              <button className="btn btn-sm btn-ghost" onClick={() => add({ ...t, id: undefined, name: `${t.name} (copy)`.slice(0, 60) })} disabled={list.length >= 20}><Icon n="layers" />Duplicate</button>
+              <button className="btn btn-sm btn-ghost btn-danger" onClick={() => { if (!confirm(`Remove “${t.name}”? It goes away when you save.`)) return; f.setV({ ...f.v, templates: list.filter((_, i) => i !== sel) }); setSel(list.length > 1 ? Math.max(0, (sel as number) - 1) : 'design'); }}><Icon n="x" />Remove</button>
+            </div>}
+          </> : null}
         </div>
-        {t ? <div className="set-card">
-          <F id="tpl-name" label="Name" effect="immediate" error={e('name')} hint="Only Studio users see it, in the reply composer.">
-            <input id="set-tpl-name" className="input" value={t.name} disabled={!d.canEdit} onChange={(x) => upd({ name: x.target.value })} />
-          </F>
-          <F id="tpl-subject" label="Subject" effect="immediate" error={e('subject')}>
-            <input id="set-tpl-subject" className="input" value={t.subject} disabled={!d.canEdit} onChange={(x) => upd({ subject: x.target.value })} />
-          </F>
-          <F id="tpl-body" label="Text" effect="immediate" error={e('body')}>
-            <textarea id="set-tpl-body" className="textarea set-tpl-body" rows={9} value={t.body} disabled={!d.canEdit} onChange={(x) => upd({ body: x.target.value })} />
-          </F>
-          {d.canEdit && <div className="set-vars" aria-label="Insert a variable"><span className="muted">Insert:</span>{d.variables.map((v) => <button key={v.name} type="button" className="set-var" title={v.label} onClick={() => insert(v.name)}>{`{{${v.name}}}`}</button>)}</div>}
-          {pv && <div className="set-preview" aria-live="polite"><small className="muted">Preview with example values</small><b>{pv.subject}</b><pre>{pv.body}</pre>{pv.unknown.length > 0 && <small className="err">Unknown: {pv.unknown.map((u) => `{{${u}}}`).join(', ')}. Only the variables above can be used.</small>}</div>}
-          {d.canEdit && <div><button className="btn btn-sm btn-ghost btn-danger" onClick={() => { f.setV({ templates: list.filter((_, i) => i !== sel) }); setSel(Math.max(0, sel - 1)); }}><Icon n="x" />Remove this template</button></div>}
-        </div> : <div className="set-card set-empty"><Icon n="log" /><div><b>Nothing selected</b><p className="muted">{d.canEdit ? 'Create a template to start.' : 'There are no templates yet.'}</p></div></div>}
-      </div>
-      <SaveBar dirty={f.dirty} busy={f.busy} onSave={() => f.save()} onReset={f.reset} canEdit={d.canEdit} note="Templates appear in Inbox → Reply → Use template" />
+
+        {/* ---------- live preview */}
+        <section className="set-card et-pv" aria-label="Preview">
+          <div className="et-pv-h">
+            <span><b>Preview</b><small className="muted">{sel === 'design' && !list.length ? 'A sample reply' : 'With example values'}</small></span>
+            <span className="seg" role="group" aria-label="Preview size">{(['desktop', 'phone', 'text'] as const).map((v) => <button key={v} type="button" className={view === v ? 'on' : ''} aria-pressed={view === v} onClick={() => setView(v)}>{v === 'desktop' ? 'Desktop' : v === 'phone' ? 'Phone' : 'Plain text'}</button>)}</span>
+          </div>
+          {pv && <div className="et-inbox" aria-label="How it looks in an inbox"><span className="et-av">{d.variables.find((v) => v.name === 'organization')?.example.slice(0, 1) ?? 'A'}</span>
+            <span><b>{pv.subject || 'No subject'}</b><small>{pv.preheader || pv.text.split('\n').find((l) => l.trim()) || ''}</small></span></div>}
+          {pv?.unknown.length ? <small className="err">Unknown: {pv.unknown.map((u) => `{{${u}}}`).join(', ')}. Only the variables listed can be used.</small> : null}
+          {!design.branded && view !== 'text' && <p className="muted et-note">The branded design is off: emails go out as plain text. This is how they would look with it on.</p>}
+          <div className={`et-frame is-${view}`}>
+            {!pv ? <div className="skeleton" style={{ height: 320 }} /> : view === 'text' ? <pre className="et-text">{pv.text}</pre>
+              : <iframe title="Email preview" sandbox="" srcDoc={pv.html} />}
+          </div>
+        </section>
+      </div></div>
+      <SaveBar dirty={f.dirty} busy={f.busy} onSave={() => f.save()} onReset={f.reset} canEdit={d.canEdit} note="Templates appear in Inbox → Reply → Use a template" />
     </>
   );
 }

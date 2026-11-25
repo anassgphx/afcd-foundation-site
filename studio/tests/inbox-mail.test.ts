@@ -61,7 +61,12 @@ describe('inbox email', () => {
     const r = await admin.post(`/inbox/messages/${id}/send`, { subject: 'Re: Volunteering\r\nBcc: x@evil.example', body: 'Fake reply: thank you, see you Saturday.' });
     expect(r.status).toBe(200);
     expect(sent).toHaveLength(1);
-    expect(sent[0].m).toEqual({ from: '"AFCD Foundation" <contact@example.org>', to: 'test.person@example.org', replyTo: 'team@example.org', subject: 'Re: Volunteering Bcc: x@evil.example', text: 'Fake reply: thank you, see you Saturday.' });
+    // sent in the branded layout (Settings → Email templates): HTML plus a text version that starts with the reply itself
+    expect(sent[0].m).toMatchObject({ from: '"AFCD Foundation" <contact@example.org>', to: 'test.person@example.org', replyTo: 'team@example.org', subject: 'Re: Volunteering Bcc: x@evil.example' });
+    expect(Object.keys(sent[0].m).sort()).toEqual(['from', 'html', 'replyTo', 'subject', 'text', 'to']);
+    expect(sent[0].m.text.startsWith('Fake reply: thank you, see you Saturday.')).toBe(true);
+    expect(sent[0].m.html).toContain('Fake reply: thank you, see you Saturday.');
+    expect(sent[0].m.html).toContain('assets/brand/afcd-logo.png');
     const { body: m } = await admin.get(`/inbox/messages/${id}`);
     expect(m.status).toBe('replied');
     const ev = m.events.find((e: { kind: string }) => e.kind === 'email_sent');

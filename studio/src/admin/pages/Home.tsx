@@ -7,6 +7,8 @@ import { api, post, put, ApiError } from '../api.ts';
 import { Badge, Icon, LiveBadge, Modal, fmtDate, useCan, useMe, useToast } from '../ui.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { DesignFields, FieldEditor, type BlockDef, type Design } from './Builder.tsx';
+/** Longest plain text a homepage field takes; matches TEXT_MAX in modules/home/service.ts. */
+const TEXT_MAX = 800;
 import { Loading } from './Dashboard.tsx';
 
 type FieldDef = { key: string; type: 'text' | 'split' | 'rich' | 'link' | 'tail' | 'image' | 'stories'; section: string; sectionId: string | null; label: string; default: any };
@@ -359,8 +361,9 @@ function SectionFields({ fields, values, media, editable, onChange, onPickImage 
     else if (f.type === 'image') { const m = v.mediaId ? media[v.mediaId] : null; control = <><div className="thumb" style={{ width: '100%' }}><img src={m ? m.url : '/studio/site/' + v.src} alt={m ? m.alt : v.alt} /></div>
       <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} disabled={!editable} onClick={() => onPickImage(f.key)}><Icon n="image" />Choose photo</button></>; }
     else if (f.type === 'stories') control = <StoriesField value={v} media={media} editable={editable} onChange={(x) => onChange(f, x)} onPickImage={(i) => onPickImage(f.key, i)} />;
-    else if (f.type === 'rich' || String(v).length > 60) control = <textarea className="textarea" maxLength={f.type === 'rich' ? 700 : 500} value={v} onChange={(e) => onChange(f, e.target.value.replace(/\n/g, ' '))} aria-label={f.label} />;
-    else control = <input className="input" maxLength={HEAD_MAX[f.key.match(/\.head\.(num|label|meta)$/)?.[1] ?? ''] ?? (f.key.endsWith('.value') ? 24 : 500)} value={v} onChange={(e) => onChange(f, e.target.value)} aria-label={f.label} />;
+    else if (f.type === 'rich' || String(v).length > 60) control = <><textarea className="textarea" rows={Math.min(10, Math.max(3, Math.ceil(String(v).length / 45)))} maxLength={f.type === 'rich' ? 700 : TEXT_MAX} value={v} onChange={(e) => onChange(f, e.target.value.replace(/\n/g, ' '))} aria-label={f.label} />
+      <small className="muted" style={{ justifySelf: 'end' }}>{String(v).length}/{f.type === 'rich' ? 700 : TEXT_MAX}{f.type !== 'rich' && String(v).length > 180 ? ' · long text is shown smaller on the page' : ''}</small></>;
+    else control = <input className="input" maxLength={HEAD_MAX[f.key.match(/\.head\.(num|label|meta)$/)?.[1] ?? ''] ?? (f.key.endsWith('.value') ? 24 : TEXT_MAX)} value={v} onChange={(e) => onChange(f, e.target.value)} aria-label={f.label} />;
     return <div key={f.key} data-field={f.key} className={`field${changed ? ' hp-changed' : ''}`}><span>{f.label}{changed && <em className="hp-dot">edited</em>}</span>{control}
       {f.type === 'rich' && <small>**Double stars** highlight words, as on the page.</small>}
       {changed && f.type !== 'image' && f.type !== 'stories' && <small>The French and Arabic pages show this English text until it is translated on the Translations page.</small>}

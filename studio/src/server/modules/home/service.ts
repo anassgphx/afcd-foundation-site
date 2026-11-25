@@ -45,7 +45,7 @@ export const valueMediaIds = (values: Record<string, unknown>) => Object.values(
   v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId]
   : Array.isArray(v) ? v.flatMap((s) => (s && typeof s === 'object' && s.image && typeof s.image === 'object' && 'mediaId' in s.image ? [String(s.image.mediaId)] : [])) : []);
 /** Longest plain text a homepage field takes (headings, labels and numbers have their own, shorter limits). */
-export const TEXT_MAX = 500;
+export const TEXT_MAX = 800;
 const schemaFor = (f: FieldDef): z.ZodTypeAny => {
   const isNumber = f.key.endsWith('.value');
   const head = headPart(f.key);

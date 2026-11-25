@@ -282,6 +282,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
    empty white box. While a menu is open the bar is solid, without the blur, so the panel's links always show. */
 body.mega-open #site-header.is-scrolled .mainbar:not(.mainbar-dark) { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
 body.mega-open #site-header.is-scrolled .mainbar-dark { background: #080808; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* Mission and vision cards: a long statement (data-long, set by lib/page-fields.mjs) steps down in size so it stays readable */
+#purpose [data-long="1"] { font-size: 20px; } #purpose [data-long="2"] { font-size: 18px; line-height: 1.3; } #purpose [data-long="3"] { font-size: 16px; line-height: 1.4; }
+@media (min-width: 768px) { #purpose [data-long="1"] { font-size: 23px; } #purpose [data-long="2"] { font-size: 20px; } #purpose [data-long="3"] { font-size: 18px; } }
 
 /* Mega menu panels */
 .mm-intro { display: flex; flex-direction: column; padding: 20px; border-radius: 18px; background: #F6F6F6; }

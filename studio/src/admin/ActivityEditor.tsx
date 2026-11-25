@@ -7,7 +7,7 @@ import { Icon, useToast } from './ui.tsx';
 import { upload, type MediaItem } from './pages/Media.tsx';
 import './activity-editor.css';
 
-export type Activity = { title: string; text: string; when?: string; place?: string; mediaIds: string[]; publicationSlugs?: string[] };
+export type Activity = { title: string; text: string; when?: string; whenEnd?: string; place?: string; mediaIds: string[]; publicationSlugs?: string[] };
 export type PubOpt = { id: string; slug: string; title: string; type: string; status: string; publishedRevisionId: string | null };
 const PUB_TYPES: Record<string, string> = { report: 'Report', study: 'Study', policy_brief: 'Policy brief', guide: 'Guide', annual_report: 'Annual report', toolkit: 'Toolkit', other: 'Publication' };
 const MAX = 20, PHOTOS = 12, SHOWN = 3;
@@ -20,8 +20,17 @@ export function whenIso(v?: string) {
   const d = +m[1], mo = +m[2]; if (mo < 1 || mo > 12 || d < 1 || d > 31) return '';
   return `${m[3]}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
-/** "28 Jun 2025" for the card header; other text as it was typed. */
-const whenLabel = (v?: string) => { const iso = whenIso(v); if (!iso) return v?.trim() ?? ''; const [y, mo, d] = iso.split('-').map(Number); return `${d} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mo - 1]} ${y}`; };
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "28 Jun 2025" for the card header, "28–30 Jun 2025" or "30 Jun – 2 Jul 2025" for several days; other text as it was typed. */
+export function whenLabel(v?: string, end?: string) {
+  const iso = whenIso(v); if (!iso) return v?.trim() ?? '';
+  const [y, mo, d] = iso.split('-').map(Number); const one = `${d} ${MONTHS[mo - 1]} ${y}`;
+  const e = whenIso(end); if (!e || e <= iso) return one;
+  const [y2, mo2, d2] = e.split('-').map(Number);
+  if (y2 !== y) return `${one} – ${d2} ${MONTHS[mo2 - 1]} ${y2}`;
+  if (mo2 !== mo) return `${d} ${MONTHS[mo - 1]} – ${d2} ${MONTHS[mo2 - 1]} ${y}`;
+  return `${d}–${d2} ${MONTHS[mo - 1]} ${y}`;
+}
 
 type Props = {
   items: Activity[]; onChange: (v: Activity[]) => void; ro: boolean; err?: string;
@@ -45,7 +54,7 @@ export function ActivityList({ items, onChange, ro, err, media, addMedia, onPick
     if ((a.title.trim() || a.text.trim() || a.mediaIds.length) && !confirm(`Remove “${a.title.trim() || `activity ${i + 1}`}”${a.mediaIds.length ? ` and its ${a.mediaIds.length} photo link${a.mediaIds.length === 1 ? '' : 's'}` : ''}? The photos stay in the Media Library.`)) return;
     onChange(items.filter((_, j) => j !== i)); setOpen((o) => o.filter((_, j) => j !== i));
   };
-  const add = () => { onChange([...items, { title: '', text: '', when: '', place: '', mediaIds: [] }]); setOpen((o) => [...o, true]); };
+  const add = () => { onChange([...items, { title: '', text: '', when: '', whenEnd: '', place: '', mediaIds: [] }]); setOpen((o) => [...o, true]); };
   const allOpen = open.length > 0 && open.every(Boolean);
 
   if (!items.length) return <div className="ae-empty">
@@ -74,7 +83,7 @@ export function ActivityList({ items, onChange, ro, err, media, addMedia, onPick
               <span className="ae-n">{String(i + 1).padStart(2, '0')}</span>
               {first ? <img className="ae-thumb" src={first.url} alt="" /> : <span className="ae-thumb is-empty" aria-hidden="true"><Icon n="image" /></span>}
               <span className="ae-head-t"><b>{a.title.trim() || <em>Untitled activity</em>}</b>
-                <small>{[whenLabel(a.when), a.place?.trim()].filter(Boolean).join(' · ') || 'No date or place'} · {a.mediaIds.length ? `${a.mediaIds.length} photo${a.mediaIds.length === 1 ? '' : 's'}` : 'No photos'}</small></span>
+                <small>{[whenLabel(a.when, a.whenEnd), a.place?.trim()].filter(Boolean).join(' · ') || 'No date or place'} · {a.mediaIds.length ? `${a.mediaIds.length} photo${a.mediaIds.length === 1 ? '' : 's'}` : 'No photos'}</small></span>
               <span className="ae-chips">
                 {rights > 0 && <span className="ae-chip warn">{rights} rights</span>}
               </span>
@@ -92,9 +101,16 @@ export function ActivityList({ items, onChange, ro, err, media, addMedia, onPick
               <span className="between"><small>{!a.title.trim() ? 'Required.' : 'Short and specific.'}</small><small className={`count-hint${a.title.length > TITLE_MAX * 0.9 ? ' near' : ''}`}>{a.title.length} / {TITLE_MAX}</small></span>
             </label>
             <div className="ae-meta">
-              <label className="field"><span className="pe-label">When <em>· optional</em></span>
-                <input className="input" type="date" value={whenIso(a.when)} disabled={ro} onChange={(e) => update(i, { ...a, when: e.target.value })} aria-label="Date of the activity" />
-                {a.when && !whenIso(a.when) && <small className="ae-when-old">Saved as “{a.when}”. Pick the date to replace it.</small>}</label>
+              <div className="field"><span className="pe-label">When <em>· optional</em></span>
+                <div className="ae-dates">
+                  <label><small>From</small>
+                    <input className="input" type="date" value={whenIso(a.when)} disabled={ro} aria-label="First day of the activity"
+                      onChange={(e) => { const v = e.target.value; update(i, { ...a, when: v, whenEnd: !v ? '' : a.whenEnd && whenIso(a.whenEnd) && whenIso(a.whenEnd) < v ? v : a.whenEnd }); }} /></label>
+                  <label><small>To <em>· if more than 1 day</em></small>
+                    <input className="input" type="date" value={whenIso(a.whenEnd)} min={whenIso(a.when) || undefined} disabled={ro || !whenIso(a.when)} aria-label="Last day of the activity"
+                      onChange={(e) => update(i, { ...a, whenEnd: e.target.value })} /></label>
+                </div>
+                {a.when && !whenIso(a.when) && <small className="ae-when-old">Saved as “{a.when}”. Pick the date to replace it.</small>}</div>
               <label className="field"><span className="pe-label">Place <em>· optional</em></span>
                 <input className="input" value={a.place ?? ''} maxLength={80} disabled={ro} placeholder="e.g. Marrakech" onChange={(e) => update(i, { ...a, place: e.target.value })} /></label>
             </div>

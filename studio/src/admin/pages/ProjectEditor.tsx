@@ -38,7 +38,7 @@ function LogoFrame({ m, st, tone }: { m: { url: string; large?: string; alt: str
     <img src={m.large ?? m.url} alt={m.alt} style={{ objectPosition: `${m.focalX}% ${m.focalY}%` }} /></span>;
 }
 type Outcome = { title: string; text: string; figure: string };
-type Activity = { title: string; text: string; when?: string; place?: string; mediaIds: string[]; publicationSlugs?: string[] };
+type Activity = { title: string; text: string; when?: string; whenEnd?: string; place?: string; mediaIds: string[]; publicationSlugs?: string[] };
 type LinkedEvent = { id: string; title: string; startDate: string; status: string; live: boolean };
 type MediaRow = { id: string; storageKey: string; originalName: string; width: number; height: number; alt: string; rightsConfirmed: boolean; focalX: number; focalY: number };
 type Loaded = Form & {

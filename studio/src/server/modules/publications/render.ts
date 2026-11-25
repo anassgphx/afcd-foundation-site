@@ -73,7 +73,8 @@ const CSS = `.pub-grid{display:grid;gap:20px;grid-template-columns:repeat(auto-f
 .pub-filters input:checked+.pub-chip{background:#000;border-color:#000;color:#fff}
 .pub-filters input:focus-visible+.pub-chip{outline:2px solid #000;outline-offset:2px}
 .pub-none{display:none}
-.pub-dl-cover{aspect-ratio:3/4;width:100%;border-radius:20px;object-fit:cover;background:#F6F6F6}`;
+.pub-split3{display:grid;gap:40px}@media(min-width:1024px){.pub-split3{grid-template-columns:minmax(0,4fr) minmax(0,5fr) minmax(0,3fr);gap:40px}.pub-stick{position:sticky;top:8rem}}@media(min-width:1280px){.pub-split3{gap:48px}}
+.pub-dl-cover{display:block;width:100%;height:auto;border-radius:24px;background:#F6F6F6;box-shadow:0 1px 2px rgba(8,8,8,.06),0 12px 32px -12px rgba(8,8,8,.18)}`;
 
 const meta = (s: PublicationSnapshot, d: DocumentRow | null) => [d ? `PDF · ${sizeLabel(d.bytes)}` : s.externalUrl ? 'Online' : '', LANG_LABEL[s.language] ?? ''].filter(Boolean).join(' · ');
 
@@ -158,8 +159,9 @@ export function detailSource(p: LivePub, ctx: Ctx) {
     : `<a href="${esc(s.externalUrl)}" target="_blank" rel="noopener" class="btn-dark btn-cta mt-5 min-h-[50px] w-full justify-center px-6">Read online ${ARR}</a>`) : '';
   const abstract = s.abstract.trim() ? `<h2 class="text-[24px] font-semibold tracking-[-0.03em] md:text-[28px]">About this publication</h2>
       <div class="mt-5 space-y-5 text-[17px] leading-[1.8] text-ink-dark">${articleBody(s.abstract)}</div>` : '';
-  const aside = `<div class="rounded-[28px] border border-ink-light p-6 lg:sticky lg:top-32">
-      ${cover ? `<img src="${esc(cover.src)}" srcset="${esc(cover.srcset)}" sizes="(min-width:1024px) 30vw, 100vw" width="${cover.w}" height="${cover.h}" alt="${esc(cover.alt)}" loading="eager" decoding="async" class="pub-dl-cover mb-6" style="object-position:${cover.fx}% ${cover.fy}%">` : ''}
+  // the cover is shown whole (not cropped), beside the text; the details card no longer repeats it
+  const coverImg = cover ? `<img src="${esc(cover.src)}" srcset="${esc(cover.srcset)}" sizes="(min-width:1024px) 38vw, 100vw" width="${cover.w}" height="${cover.h}" alt="${esc(cover.alt)}" loading="eager" decoding="async" class="pub-dl-cover">` : '';
+  const aside = `<div class="rounded-[28px] border border-ink-light p-6">
       <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">${TYPE_LABEL[s.type]}</span>${pls.map((x) => `<span class="ev-pillar"><span class="pj-dot" style="--c:${esc(x.colour)}"></span>${esc(x.name)}</span>`).join('')}</div>
       <dl class="evd-facts mt-5">${facts.map(([a, b]) => `<div class="evd-fact"><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl>
       ${download}${online}
@@ -169,10 +171,20 @@ export function detailSource(p: LivePub, ctx: Ctx) {
   const body = header([['Publications', 'publications.html'], [esc(short), publicationFile(s.slug)]], `${TYPE_LABEL[s.type]}${year}`, esc(s.title), esc(s.summary)) + `
 <section class="py-12 lg:py-16">
   <style>${CSS}</style>
-  <div class="wrap grid gap-10 lg:grid-cols-12 lg:gap-16">
-    ${abstract ? `<div class="lg:col-span-8">${abstract}</div>
-    <aside class="lg:col-span-4">${aside}</aside>` : `<aside class="lg:col-span-5">${aside}</aside>`}
-  </div>
+  ${coverImg && abstract
+    // split in three: the cover, the text, the details card (stacked on small screens)
+    ? `<div class="wrap pub-split3">
+    <div><div class="pub-stick">${coverImg}</div></div>
+    <div>${abstract}</div>
+    <aside><div class="pub-stick">${aside}</div></aside>
+  </div>`
+    : `<div class="wrap grid gap-10 lg:grid-cols-12 lg:gap-16">
+    ${coverImg
+      ? `<div class="lg:col-span-5"><div class="lg:sticky lg:top-32">${coverImg}</div></div>
+    <aside class="lg:col-span-4">${aside}</aside>`
+      : abstract ? `<div class="lg:col-span-8">${abstract}</div>
+    <aside class="lg:col-span-4"><div class="lg:sticky lg:top-32">${aside}</div></aside>` : `<aside class="lg:col-span-5">${aside}</aside>`}
+  </div>`}
 </section>
 <section class="border-t border-ink-light py-10"><div class="wrap flex flex-wrap gap-x-6 gap-y-3"><a href="publications.html" class="link-arrow">All publications ${ARR}</a>${projects[0] ? `<a href="${esc(projects[0].file!)}" class="link-arrow">${esc(projects[0].name)} ${ARR}</a>` : ''}</div></section>`;
   return `---\ntitle: ${line(s.seoTitle || s.title)} · Publications · AFCD Foundation\ndescription: ${line(s.seoDescription || s.summary || s.title)}\nactive: none\nparent: Publications|publications.html\n---\n<span id="top"></span>\n<article data-studio-publication-rev="${p.id}">\n${body}\n</article>\n`;

@@ -2881,3 +2881,8 @@ a.abx-chip:hover { background: #000; color: #fff; border-color: #000; }
 
 /* pillar pages show photos in their own colours (About pages keep their monochrome look) */
 .plx:not(.abx) .plx-photo img, .plx:not(.abx) .plx-pj-vis img, .plx:not(.abx) a.plx-pj:hover .plx-pj-vis img { filter: none; }
+/* Pillar perspective text reads as a description, not a pull quote: body size, softer colour, a thin grey line */
+.plx:not(.abx) .plx-pv-quote { max-width: 60ch; padding-left: 0; padding-inline-start: 18px; border-left: 0; border-inline-start: 2px solid #E7E5E4;
+  font-size: 16px; font-weight: 400; line-height: 1.7; letter-spacing: 0; color: #44403C; }
+@media (min-width: 768px) { .plx:not(.abx) .plx-pv-quote { font-size: 17px; } }
+@media (min-width: 1280px) { .plx:not(.abx) .plx-pv-quote { font-size: 18px; } }

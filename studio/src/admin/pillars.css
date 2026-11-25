@@ -114,3 +114,8 @@ a.pl-item:hover { background: var(--canvas); }
 .pl-objpic-warn { position: absolute; top: 6px; left: 6px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #fff; color: var(--warn); }
 .pl-objpic-a { position: absolute; left: 4px; right: 4px; bottom: 4px; display: flex; justify-content: space-between; padding: 2px; border-radius: 8px; background: rgba(255,255,255,.92); }
 .pl-objpic-a .btn { width: 26px; height: 26px; }
+
+/* pillar editor: one part of the page at a time (tabs in the left column, in the website's order) */
+.pl-tabs-nav a { cursor: pointer; }
+.pl-next { display: flex; justify-content: flex-end; margin-top: 4px; }
+.pl-next .btn svg { width: 14px; height: 14px; margin-right: -3px; }

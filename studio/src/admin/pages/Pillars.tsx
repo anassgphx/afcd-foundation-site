@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, del, post, put, ApiError } from '../api.ts';
 import { Icon, Link, Modal, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
-import { EditorHeader, Field, ListEditor, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
+import { EditorHeader, Field, ListEditor, Section, WorkflowPanel } from '../Editor.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
@@ -114,7 +114,9 @@ export function PillarsScreen({ id }: { id?: string }) {
 const icoSvg = (d: string) => `<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 type Step = { title: string; text: string };
 type WorkItem = { icon: number; text: string };
-type Group = { title: string; text: string };   // Who we work with: name and optional short description
+type Group = { title: string; text: string };
+type PTab = 'overview' | 'perspective' | 'objectives' | 'work' | 'translations' | 'settings';
+const NEXT: Partial<Record<PTab, [PTab, string]>> = { overview: ['perspective', 'Perspective'], perspective: ['objectives', 'Objectives'], objectives: ['work', 'How we work'], work: ['translations', 'Translations'] };   // Who we work with: name and optional short description
 type Form = { name: string; short: string; summary: string; intro: string; colour: string; brand: string; approachTitle: string; approachSoft: string;
   view: string; principles: string[]; steps: Step[]; objectives: Step[]; activities: number[]; groups: number[]; extraActivities: string[]; extraGroups: string[]; workItems: WorkItem[]; audience: (Group | string)[];
   mediaId: string | null; video: PillarVideo; workMediaId: string | null; objectivesMediaIds: string[]; provenance: string };
@@ -128,7 +130,8 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
   const [p, setP] = useState<Loaded | null>(null); const [f, setF] = useState<Form | null>(null);
   const [photo, setPhoto] = useState<MediaItem | null>(null);
   const [workPhoto, setWorkPhoto] = useState<MediaItem | null>(null);   // the photo between the How we work lists
-  const [objPhotos, setObjPhotos] = useState<MediaItem[]>([]);          // the square carousel next to the objectives
+  const [objPhotos, setObjPhotos] = useState<MediaItem[]>([]);
+  const [tab, setTab] = useState<PTab>('overview');   // one part of the page at a time, in the website's order          // the square carousel next to the objectives
   const [dirty, setDirty] = useState(false); const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
   const [dialog, setDialog] = useState<null | 'photo' | 'workphoto' | 'objphotos' | 'preview' | 'publish' | 'changes' | 'remove' | 'delete'>(null);
   const [url, setUrl] = useState(''); const [comment, setComment] = useState('');
@@ -208,18 +211,23 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
     {!live && status !== 'in_review' && !p.removeRequested && <div className="notice n-info"><div>New pillar: not on the website yet. Its page will be <span className="mono">{p.publicFile}</span>, numbered in the list order.</div></div>}
     {status === 'in_review' && !p.removeRequested && can('pillar.update') && <div className="notice n-info"><div>In review: read-only. Withdraw it to edit.</div></div>}
     <div className="ed-layout">
-      <SectionNav sections={[
-        { id: 'basics', label: 'Pillar', icon: 'pillars', done: !!f.name },
-        { id: 'text', label: 'Summary and introduction', icon: 'log', done: !!f.summary && !!f.intro },
-        { id: 'objectives', label: 'Objectives', icon: 'check', optional: true, done: f.objectives.length ? true : undefined },
-        { id: 'photo', label: 'Photo and video', icon: 'image', optional: true, done: f.mediaId || f.video ? true : undefined },
-        { id: 'work', label: 'What we do', icon: 'users', optional: true, done: work.length || aud.length ? true : undefined },
-        { id: 'approach', label: 'Our approach', icon: 'layers', done: !!f.approachTitle },
-        { id: 'internal', label: 'Internal', icon: 'lock', optional: true },
-        { id: 'translations', label: 'Translations', icon: 'globe', optional: true },
-      ]} />
+      <nav className="ed-nav pl-tabs-nav" aria-label="Parts of the pillar page" role="tablist" aria-orientation="vertical">
+        {([
+          ['overview', 'Overview', 'pillars', !!f.name && !!f.summary && !!f.intro],
+          ['perspective', 'Perspective', 'layers', !!f.approachTitle && !!f.view && f.principles.length > 0],
+          ['objectives', 'Objectives', 'check', f.objectives.length ? true : undefined],
+          ['work', 'How we work', 'users', work.length || aud.length ? true : undefined],
+          ['translations', 'Translations', 'globe', undefined],
+          ['settings', 'Settings', 'lock', undefined],
+        ] as [PTab, string, string, boolean | undefined][]).map(([k, label, icon, done]) => <a key={k} href={`#${k}`} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''}
+          onClick={(e) => { e.preventDefault(); setTab(k); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
+          <Icon n={icon} width={15} height={15} /><span>{label}</span>
+          {done === undefined ? null : done ? <i className="ed-ok" aria-label="Complete">✓</i> : <i className="ed-todo" aria-label="Needs attention" />}
+        </a>)}
+      </nav>
       <div className="ed-col">
       <fieldset className="ed-main" disabled={!editable}>
+        {tab === 'overview' && <>
         <Section id="basics" title="Pillar" desc="Its name and colour on every page of the website.">
           <Field label="Name" span={2} count={[f.name.length, 60]} hint="Also used on project pages, story tags and the strategy page."><input className="input input-lg" maxLength={60} value={f.name} onChange={(x) => set('name', x.target.value)} aria-label="Name" /></Field>
           <Field label="Short name" count={[f.short.length, 20]} hint={<>One word, as in “Projects in <i>{(f.short || 'youth').toLowerCase()}</i>.”</>}><input className="input" maxLength={20} value={f.short} onChange={(x) => set('short', x.target.value)} aria-label="Short name" /></Field>
@@ -232,12 +240,16 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
             <div className="pl-fixed"><span className="mono">{p.publicFile}</span><span className="muted">·</span><span className="mono">pillars.html#{p.key}</span><span className="muted">· numbered by its place in the list</span>
               {live && <a className="btn btn-sm" href={me.siteUrl + p.publicFile} target="_blank" rel="noopener"><Icon n="ext" />Open</a>}</div></Field>
         </Section>
+        </>}
+        {tab === 'overview' && <>
         <Section id="text" title="Summary and introduction" desc="Plain text. The site’s typography is applied automatically.">
           <Field label="Summary" span={3} count={[f.summary.length, 400]} hint="On the Our Pillars card, in the pillar page’s coloured overview, and in its search description.">
             <textarea className="textarea" rows={4} maxLength={400} value={f.summary} onChange={(x) => set('summary', x.target.value)} aria-label="Summary" /></Field>
           <Field label="Page introduction" span={3} count={[f.intro.length, 200]} hint="The line under the pillar name at the top of its page.">
             <textarea className="textarea" rows={2} maxLength={200} value={f.intro} onChange={(x) => set('intro', x.target.value)} aria-label="Page introduction" /></Field>
         </Section>
+        </>}
+        {tab === 'objectives' && <>
         <Section id="objectives" title="Objectives" desc="Written here for this pillar only and shown on its page in this order. Nothing is taken from AFCD’s strategy page.">
           <div className="field ed-f s3"><span className="ed-lbl">Photos next to the objectives <span className="muted">(optional, up to 8)</span></span>
             {objPhotos.length > 0 && <ul className="pl-objpics">{objPhotos.map((m, i) => <li key={m.id}>
@@ -262,6 +274,8 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
           {f.objectives.length < 6 ? <button type="button" className="btn btn-sm s3" style={{ justifySelf: 'start' }} onClick={() => set('objectives', [...f.objectives, { title: '', text: '' }])}><Icon n="plus" />Add an objective</button>
             : <p className="muted s3" style={{ margin: 0, fontSize: 12.5 }}>6 objectives is the maximum.</p>}
         </Section>
+        </>}
+        {tab === 'overview' && <>
         <Section id="photo" title="Photo and video" desc="The big picture in the pillar page’s overview. Without one, the page shows the cover photo of this pillar’s first live project that has one. Add a video to play in its place: the photo becomes its poster. Alt text and usage rights are checked before review.">
           <div className="ed-media s3">
             {f.mediaId && photo ? <div className="ed-media-img pl-photo"><img src={photo.url} alt={photo.alt} /><button type="button" className="btn btn-sm" onClick={() => set('mediaId', null)}><Icon n="x" />Remove</button></div>
@@ -275,6 +289,8 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
           <div className="s3"><span className="ed-lbl">Video <span className="muted">(optional)</span></span>
             <PillarVideoField value={f.video ?? null} onChange={(v) => set('video', v)} disabled={!editable} hasPhoto={!!f.mediaId} /></div>
         </Section>
+        </>}
+        {tab === 'work' && <>
         <Section id="work" title="How we work: activities and people" desc="The two lists in the pillar page’s How we work section. Add, edit, remove and reorder them here; the page shows them exactly in this order.">
           {!listsOk && <p className="muted s3" style={{ margin: 0 }}>The site’s lists could not be read, so these lists can’t be edited right now.</p>}
           {listsOk && <>
@@ -323,23 +339,31 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
             </div>
             <small>Without one, the page uses the cover photo of another of this pillar’s live projects, never the overview photo.</small></div>
         </Section>
-        <Section id="approach" title="Our approach" desc="The dark band in the middle of the pillar page.">
+        </>}
+        {tab === 'perspective' && <>
+        <Section id="approach" title="Our approach" desc="The Our Perspective part of the pillar page: its heading, the text beside it and the guiding principles.">
           <Field label="Heading" span={2} hint="Written in black."><input className="input" maxLength={60} value={f.approachTitle} onChange={(x) => set('approachTitle', x.target.value)} aria-label="Heading" /></Field>
           <Field label="Heading, second part" hint="Optional, written in grey."><input className="input" maxLength={60} value={f.approachSoft} onChange={(x) => set('approachSoft', x.target.value)} aria-label="Heading, second part" /></Field>
           <p className="pl-title-prev s3" aria-label="Heading preview">{f.approachTitle} <span>{f.approachSoft}</span></p>
           <Field label="Our perspective" span={3} count={[f.view.length, 500]}><textarea className="textarea" rows={3} maxLength={500} value={f.view} onChange={(x) => set('view', x.target.value)} aria-label="Our perspective" /></Field>
           <Field label="Guiding principles" span={3} hint="Up to 6 short phrases."><ListEditor value={f.principles} onChange={(v) => set('principles', v)} label="Guiding principles" max={6} placeholder="e.g. Youth-led" disabled={!editable} /></Field>
         </Section>
+        </>}
+        {tab === 'settings' && <>
         <Section id="internal" title="Internal" desc="Not shown on the website.">
           <Field label="Source" span={3} hint="Where this content comes from."><input className="input" maxLength={300} value={f.provenance} onChange={(x) => set('provenance', x.target.value)} aria-label="Source" /></Field>
         </Section>
+        </>}
       </fieldset>
+      {NEXT[tab] && <div className="pl-next"><button type="button" className="btn" onClick={() => { setTab(NEXT[tab]![0]); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Next: {NEXT[tab]![1]}<Icon n="chev" /></button></div>}
+      {tab === 'translations' && <>
       <Section id="translations" title="Translations" desc="French and Arabic of this pillar’s pages. Reviewed and published on the Translations screen.">
         <RecordTranslations noun="pillar" dirty={status !== 'published'} files={[p.publicFile, 'pillars.html']} fields={[{ label: 'Name', value: f.name }, { label: 'Summary', value: f.summary }, { label: 'Page introduction', value: f.intro },
           ...f.objectives.flatMap((o) => [{ label: 'Objective', value: o.title }, { label: 'Objective explanation', value: o.text }]), { label: 'Approach heading', value: f.approachTitle }, { label: 'Our perspective', value: f.view }, ...f.principles.map((x) => ({ label: 'Guiding principle', value: x })),
           ...work.map((x) => ({ label: 'Activity', value: x.text })), ...aud.flatMap((x) => [{ label: 'Who we work with', value: x.title }, { label: 'Who we work with: description', value: x.text }]),
           ]} />
       </Section>
+      </>}
       </div>
       <WorkflowPanel status={status} live={live} problems={p.problems}
         facts={[['Website', live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'], ['Colour', colourName], ...(p.publishedAt ? [['Published', fmtDate(p.publishedAt)] as [string, string]] : []), ...(p.verifiedAt ? [['Last approved', fmtDate(p.verifiedAt)] as [string, string]] : [])]}>

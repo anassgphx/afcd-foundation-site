@@ -44,6 +44,8 @@ const storySchema = z.object({ quote: plain(300, 1), name: plain(80, 1), role: p
 export const valueMediaIds = (values: Record<string, unknown>) => Object.values(values).flatMap((v) =>
   v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId]
   : Array.isArray(v) ? v.flatMap((s) => (s && typeof s === 'object' && s.image && typeof s.image === 'object' && 'mediaId' in s.image ? [String(s.image.mediaId)] : [])) : []);
+/** Longest plain text a homepage field takes (headings, labels and numbers have their own, shorter limits). */
+export const TEXT_MAX = 500;
 const schemaFor = (f: FieldDef): z.ZodTypeAny => {
   const isNumber = f.key.endsWith('.value');
   const head = headPart(f.key);
@@ -58,7 +60,7 @@ const schemaFor = (f: FieldDef): z.ZodTypeAny => {
     case 'image': return z.object({ mediaId: z.string().uuid() }).strict();
     case 'stories': return z.array(storySchema).min(1, 'Keep at least one story.').max(STORIES_MAX, `Use at most ${STORIES_MAX} stories.`);
     case 'rich': return plain(700, 1);
-    default: return isNumber ? plain(24, 1) : plain(f.key.endsWith('quote') ? 300 : 240, 1);
+    default: return isNumber ? plain(24, 1) : plain(TEXT_MAX, 1);
   }
 };
 

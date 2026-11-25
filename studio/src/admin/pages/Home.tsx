@@ -359,8 +359,8 @@ function SectionFields({ fields, values, media, editable, onChange, onPickImage 
     else if (f.type === 'image') { const m = v.mediaId ? media[v.mediaId] : null; control = <><div className="thumb" style={{ width: '100%' }}><img src={m ? m.url : '/studio/site/' + v.src} alt={m ? m.alt : v.alt} /></div>
       <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} disabled={!editable} onClick={() => onPickImage(f.key)}><Icon n="image" />Choose photo</button></>; }
     else if (f.type === 'stories') control = <StoriesField value={v} media={media} editable={editable} onChange={(x) => onChange(f, x)} onPickImage={(i) => onPickImage(f.key, i)} />;
-    else if (f.type === 'rich' || String(v).length > 60) control = <textarea className="textarea" maxLength={f.type === 'rich' ? 700 : 300} value={v} onChange={(e) => onChange(f, e.target.value.replace(/\n/g, ' '))} aria-label={f.label} />;
-    else control = <input className="input" maxLength={HEAD_MAX[f.key.match(/\.head\.(num|label|meta)$/)?.[1] ?? ''] ?? (f.key.endsWith('.value') ? 24 : 240)} value={v} onChange={(e) => onChange(f, e.target.value)} aria-label={f.label} />;
+    else if (f.type === 'rich' || String(v).length > 60) control = <textarea className="textarea" maxLength={f.type === 'rich' ? 700 : 500} value={v} onChange={(e) => onChange(f, e.target.value.replace(/\n/g, ' '))} aria-label={f.label} />;
+    else control = <input className="input" maxLength={HEAD_MAX[f.key.match(/\.head\.(num|label|meta)$/)?.[1] ?? ''] ?? (f.key.endsWith('.value') ? 24 : 500)} value={v} onChange={(e) => onChange(f, e.target.value)} aria-label={f.label} />;
     return <div key={f.key} data-field={f.key} className={`field${changed ? ' hp-changed' : ''}`}><span>{f.label}{changed && <em className="hp-dot">edited</em>}</span>{control}
       {f.type === 'rich' && <small>**Double stars** highlight words, as on the page.</small>}
       {changed && f.type !== 'image' && f.type !== 'stories' && <small>The French and Arabic pages show this English text until it is translated on the Translations page.</small>}

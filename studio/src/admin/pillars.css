@@ -119,3 +119,13 @@ a.pl-item:hover { background: var(--canvas); }
 .pl-tabs-nav a { cursor: pointer; }
 .pl-next { display: flex; justify-content: flex-end; margin-top: 4px; }
 .pl-next .btn svg { width: 14px; height: 14px; margin-right: -3px; }
+
+/* pillar editor tabs: a top tab bar like the project editor (the left nav column is not used) */
+.pl-layout { grid-template-columns: minmax(0, 1fr) 300px; }
+@media (max-width: 980px) { .pl-layout { grid-template-columns: minmax(0, 1fr); } }
+.pl-tabbar { overflow: hidden; }
+.pl-tabbar .tabs { padding: 0 8px; border-bottom: 0; }
+.pl-tabbar .tabs button { display: inline-flex; align-items: center; gap: 6px; height: 48px; font-size: 14px; }
+.pl-tabbar .tabs button:hover { color: var(--ink); }
+.pl-tabbar .tabs button.on::after { left: 12px; right: 12px; }
+.pl-tab-todo { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #EAB308; }

@@ -210,22 +210,22 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
     {p.removeRequested && <div className="notice n-warn"><div><b>Removal from the website {status === 'approved' ? 'approved' : 'requested'}.</b> Publishing takes this pillar off Our Pillars, turns <span className="mono">{p.publicFile}</span> into a redirect to <span className="mono">pillars.html</span> and deletes it from Studio. Withdraw to keep it.</div></div>}
     {!live && status !== 'in_review' && !p.removeRequested && <div className="notice n-info"><div>New pillar: not on the website yet. Its page will be <span className="mono">{p.publicFile}</span>, numbered in the list order.</div></div>}
     {status === 'in_review' && !p.removeRequested && can('pillar.update') && <div className="notice n-info"><div>In review: read-only. Withdraw it to edit.</div></div>}
-    <div className="ed-layout">
-      <nav className="ed-nav pl-tabs-nav" aria-label="Parts of the pillar page" role="tablist" aria-orientation="vertical">
-        {([
-          ['overview', 'Overview', 'pillars', !!f.name && !!f.summary && !!f.intro],
-          ['perspective', 'Perspective', 'layers', !!f.approachTitle && !!f.view && f.principles.length > 0],
-          ['objectives', 'Objectives', 'check', f.objectives.length ? true : undefined],
-          ['work', 'How we work', 'users', work.length || aud.length ? true : undefined],
-          ['translations', 'Translations', 'globe', undefined],
-          ['settings', 'Settings', 'lock', undefined],
-        ] as [PTab, string, string, boolean | undefined][]).map(([k, label, icon, done]) => <a key={k} href={`#${k}`} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''}
-          onClick={(e) => { e.preventDefault(); setTab(k); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
-          <Icon n={icon} width={15} height={15} /><span>{label}</span>
-          {done === undefined ? null : done ? <i className="ed-ok" aria-label="Complete">✓</i> : <i className="ed-todo" aria-label="Needs attention" />}
-        </a>)}
-      </nav>
+    <div className="ed-layout pl-layout">
       <div className="ed-col">
+      <div className="card pl-tabbar">
+        <div className="tabs" role="tablist" aria-label="Parts of the pillar page">
+          {([
+            ['overview', 'Overview', !!f.name && !!f.summary && !!f.intro],
+            ['perspective', 'Perspective', !!f.approachTitle && !!f.view && f.principles.length > 0],
+            ['objectives', 'Objectives', f.objectives.length ? true : undefined],
+            ['work', 'How we work', work.length || aud.length ? true : undefined],
+            ['translations', 'Translations', undefined],
+            ['settings', 'Settings', undefined],
+          ] as [PTab, string, boolean | undefined][]).map(([k, label, done]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+            {label}{done === false && <span className="pl-tab-todo" title="Needs attention"><span className="sr-only">, needs attention</span></span>}
+          </button>)}
+        </div>
+      </div>
       <fieldset className="ed-main" disabled={!editable}>
         {tab === 'overview' && <>
         <Section id="basics" title="Pillar" desc="Its name and colour on every page of the website.">

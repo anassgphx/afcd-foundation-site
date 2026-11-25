@@ -278,6 +278,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .nav-cta-ico { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9999px; background: #fff; color: #000; font-size: 14px; transition: transform .3s ease; }
 .nav-cta:hover .nav-cta-ico { transform: rotate(45deg); }
 #site-header.is-scrolled .mainbar:not(.mainbar-dark) { background: rgba(255,255,255,.82); -webkit-backdrop-filter: saturate(1.4) blur(16px); backdrop-filter: saturate(1.4) blur(16px); }
+/* An open menu panel is clipped (clip-path) inside the blurred bar of the moved-up header; Chrome then paints the panel as an
+   empty white box. While a menu is open the bar is solid, without the blur, so the panel's links always show. */
+body.mega-open #site-header.is-scrolled .mainbar:not(.mainbar-dark) { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+body.mega-open #site-header.is-scrolled .mainbar-dark { background: #080808; -webkit-backdrop-filter: none; backdrop-filter: none; }
 
 /* Mega menu panels */
 .mm-intro { display: flex; flex-direction: column; padding: 20px; border-radius: 18px; background: #F6F6F6; }

@@ -120,7 +120,6 @@ type Form = { name: string; short: string; summary: string; intro: string; colou
 type PageKey = 'flagshipLabel' | 'howTitle' | 'howSoft' | 'howDesc' | 'objectivesTitle' | 'objectivesSoft' | 'objectivesDesc' | 'projectsTitle' | 'projectsSoft' | 'projectsDesc' | 'relatedTitle' | 'relatedSoft' | 'ctaTitle' | 'ctaText';
 /** The page's own texts: [key, label, max length, the site's wording when left empty]. Kept in step with src/content.py. */
 const pageTexts = (name: string, short: string): [string, [PageKey, string, number, string, boolean?][]][] => [
-  ['How we work', [['howTitle', 'Heading', 60, 'How this pillar'], ['howSoft', 'Heading, grey part', 60, 'comes to life.'], ['howDesc', 'Description', 200, 'The steps we follow and the activities we run under this pillar.', true]]],
   ['Objectives', [['objectivesTitle', 'Heading', 60, 'What this pillar'], ['objectivesSoft', 'Heading, grey part', 60, 'aims to achieve.'], ['objectivesDesc', 'Description', 200, 'What AFCD works toward under this pillar.', true]]],
   ['Projects', [['projectsTitle', 'Heading', 60, 'Projects in'], ['projectsSoft', 'Heading, grey part', 60, `${(short || 'youth').toLowerCase()}.`], ['projectsDesc', 'Description', 200, `Programmes AFCD runs under the ${name || 'pillar’s'} pillar.`, true]]],
   ['Related', [['relatedTitle', 'Heading', 60, 'Stories and events'], ['relatedSoft', 'Heading, grey part', 60, 'from this pillar.']]],
@@ -186,8 +185,6 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
     setBusy('preview');
     try { const r = await post<{ url: string }>(`/pillars/${id}/preview`); setUrl(r.url); setDialog('preview'); } catch (e) { showErr(e); } finally { setBusy(''); }
   }
-  const setStep = (i: number, v: Partial<Step>) => set('steps', f.steps.map((s, j) => (j === i ? { ...s, ...v } : s)));
-  const moveStep = (i: number, d: -1 | 1) => { const s = [...f.steps]; [s[i], s[i + d]] = [s[i + d], s[i]]; set('steps', s); };
   // How we work's two lists. Until edited here they come from the old picks and extras; the first edit saves them as
   // this pillar's own lists (and clears the picks), so the page shows exactly what is listed here, in this order.
   const listsOk = p.lists.activities.length > 0 || (!f.activities.length && !f.groups.length);
@@ -221,7 +218,7 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
         { id: 'objectives', label: 'Objectives', icon: 'check', optional: true, done: f.objectives.length ? true : undefined },
         { id: 'photo', label: 'Photo and video', icon: 'image', optional: true, done: f.mediaId || f.video ? true : undefined },
         { id: 'work', label: 'What we do', icon: 'users', optional: true, done: work.length || aud.length ? true : undefined },
-        { id: 'approach', label: 'Our approach', icon: 'layers', done: !!f.approachTitle && f.steps.length > 0 },
+        { id: 'approach', label: 'Our approach', icon: 'layers', done: !!f.approachTitle },
         { id: 'pagetexts', label: 'Page texts', icon: 'log', optional: true, done: Object.values(f.page).some(Boolean) ? true : undefined },
         { id: 'projects', label: 'Projects', icon: 'folder', optional: true, done: f.highlights.length || p.projects.length ? true : undefined },
         { id: 'internal', label: 'Internal', icon: 'lock', optional: true },
@@ -274,7 +271,7 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
           <div className="s3"><span className="ed-lbl">Video <span className="muted">(optional)</span></span>
             <PillarVideoField value={f.video ?? null} onChange={(v) => set('video', v)} disabled={!editable} hasPhoto={!!f.mediaId} /></div>
         </Section>
-        <Section id="work" title="How we work: activities and people" desc="The two lists under the steps on the pillar page. Add, edit, remove and reorder them here; the page shows them exactly in this order.">
+        <Section id="work" title="How we work: activities and people" desc="The two lists in the pillar page’s How we work section. Add, edit, remove and reorder them here; the page shows them exactly in this order.">
           {!listsOk && <p className="muted s3" style={{ margin: 0 }}>The site’s lists could not be read, so these lists can’t be edited right now.</p>}
           {listsOk && <>
           <div className="s3"><span className="ed-lbl">What it looks like <span className="muted">({work.length}/10)</span></span>
@@ -304,18 +301,6 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
           <p className="pl-title-prev s3" aria-label="Heading preview">{f.approachTitle} <span>{f.approachSoft}</span></p>
           <Field label="Our perspective" span={3} count={[f.view.length, 500]}><textarea className="textarea" rows={3} maxLength={500} value={f.view} onChange={(x) => set('view', x.target.value)} aria-label="Our perspective" /></Field>
           <Field label="Guiding principles" span={3} hint="Up to 6 short phrases."><ListEditor value={f.principles} onChange={(v) => set('principles', v)} label="Guiding principles" max={6} placeholder="e.g. Youth-led" disabled={!editable} /></Field>
-          <div className="field ed-f s3"><span className="ed-lbl">Steps</span>
-            <ol className="pl-steps">{f.steps.map((s, i) => <li key={i}>
-              <span className="pl-step-n">{String(i + 1).padStart(2, '0')}</span>
-              <div className="pl-step-f"><input className="input" maxLength={40} value={s.title} placeholder="Step title" onChange={(x) => setStep(i, { title: x.target.value })} aria-label={`Step ${i + 1} title`} />
-                <textarea className="textarea" rows={2} maxLength={200} value={s.text} placeholder="What happens in this step" onChange={(x) => setStep(i, { text: x.target.value })} aria-label={`Step ${i + 1} text`} /></div>
-              <span className="pl-step-a">
-                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === 0} onClick={() => moveStep(i, -1)} aria-label={`Move step ${i + 1} up`}>↑</button>
-                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === f.steps.length - 1} onClick={() => moveStep(i, 1)} aria-label={`Move step ${i + 1} down`}>↓</button>
-                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={f.steps.length === 1} onClick={() => set('steps', f.steps.filter((_, j) => j !== i))} aria-label={`Remove step ${i + 1}`}><Icon n="x" /></button></span>
-            </li>)}</ol>
-            {f.steps.length < 6 && <button type="button" className="btn btn-sm" onClick={() => set('steps', [...f.steps, { title: '', text: '' }])}><Icon n="plus" />Add a step</button>}
-          </div>
         </Section>
         <Section id="pagetexts" title="Page texts" desc="Headings and texts of the pillar page. Leave a field empty to keep the site’s wording, shown in grey.">
           {pageTexts(f.name, f.short).map(([group, fields]) => <div key={group} className="field ed-f s3 pl-pt"><span className="ed-lbl">{group}</span>
@@ -337,7 +322,7 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
       </fieldset>
       <Section id="translations" title="Translations" desc="French and Arabic of this pillar’s pages. Reviewed and published on the Translations screen.">
         <RecordTranslations noun="pillar" dirty={status !== 'published'} files={[p.publicFile, 'pillars.html']} fields={[{ label: 'Name', value: f.name }, { label: 'Summary', value: f.summary }, { label: 'Page introduction', value: f.intro },
-          ...f.objectives.flatMap((o) => [{ label: 'Objective', value: o.title }, { label: 'Objective explanation', value: o.text }]), { label: 'Approach heading', value: f.approachTitle }, { label: 'Our perspective', value: f.view }, ...f.principles.map((x) => ({ label: 'Guiding principle', value: x })), ...f.steps.flatMap((s) => [{ label: 'Step title', value: s.title }, { label: 'Step text', value: s.text }]),
+          ...f.objectives.flatMap((o) => [{ label: 'Objective', value: o.title }, { label: 'Objective explanation', value: o.text }]), { label: 'Approach heading', value: f.approachTitle }, { label: 'Our perspective', value: f.view }, ...f.principles.map((x) => ({ label: 'Guiding principle', value: x })),
           ...work.map((x) => ({ label: 'Activity', value: x.text })), ...aud.map((x) => ({ label: 'Who we work with', value: x })),
           ...pageTexts(f.name, f.short).flatMap(([, fs]) => fs.filter(([k]) => f.page[k]).map(([k, label]) => ({ label: `Page text: ${label}`, value: f.page[k] })))]} />
       </Section>

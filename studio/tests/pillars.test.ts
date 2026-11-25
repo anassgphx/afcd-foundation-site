@@ -327,6 +327,7 @@ describe('pillar pages through the real generator', () => {
     const gt = readFileSync(join(realBuild(join(root, 'lists'), await write(join(root, 'lists.json'), lists)), 'environment-climate.html'), 'utf8');
     const how = gt.slice(gt.indexOf('id="how-we-work"'), gt.indexOf('id="projects"'));
     expect(how).toContain('plx-work plx-work-1'); expect(how).not.toContain('Who we work with');
+    expect(how).not.toContain('plx-step'); expect(how).not.toContain('How this pillar');          // the numbered steps are gone
     expect(how.indexOf('Card B &amp; C')).toBeLessThan(how.indexOf('Card A'));
     expect((how.match(/class="plx-act"/g) ?? []).length).toBe(2);
 

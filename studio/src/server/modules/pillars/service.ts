@@ -53,6 +53,7 @@ export const pillarSchema = z.object({
   approachSoft: plain(60).default(''),
   view: plain(500).default(''),
   principles: z.array(need(40, 'Remove empty principles.')).max(6).default([]),
+  // no longer shown on the page or edited in Studio; kept so saved steps are not lost
   steps: z.array(z.object({ title: plain(40), text: plain(200) }).strict()).max(6).default([]),
   // this pillar's own objectives (AFCD-wide SO-01…SO-06 stay separate); entered by AFCD, never imported or invented
   objectives: z.array(z.object({ title: plain(140), text: plain(400).default('') }).strict()).max(6, 'Up to 6 objectives.').default([]),
@@ -141,8 +142,6 @@ export async function pillarProblems(db: DB, p: FullPillar) {
   if (!c.approachTitle) out.push('Add the “Our approach” heading.');
   if (!c.view) out.push('Add the “Our perspective” text.');
   if (!c.principles.length) out.push('Add at least one guiding principle.');
-  if (!c.steps.length) out.push('Add at least one approach step.');
-  if (c.steps.some((s) => !s.title || !s.text)) out.push('Give every approach step a title and a text.');
   if ((c.objectives ?? []).some((o) => !o.title)) out.push('Give every objective a title, or remove the empty one.');
   if (p.mediaId) {
     const [m] = await db.select().from(media).where(eq(media.id, p.mediaId));

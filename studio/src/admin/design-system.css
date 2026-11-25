@@ -266,3 +266,18 @@ fieldset { min-width: 0; }                                     /* browsers defau
 .shell .role-perms dt { color: var(--muted); }
 .shell .role-perms dd { margin: 0; color: var(--ink-2); }
 @media (max-width: 640px) { .shell .role-perms { grid-template-columns: 1fr; gap: 0; } .shell .role-perms dd { margin-bottom: 8px; } }
+
+/* ======================================================================== Projects list: one-row toolbar + "Filter & sort" panel */
+.shell .pjl-tools { flex: 1 1 320px; justify-content: flex-end; }
+.shell .pjl-tools .search { flex: 0 1 280px; }
+.shell .pjl-tools .search input { width: 100%; }
+.shell .pjl-panel { background: var(--surface); }
+.shell .pjl-panel .lt-f > b, .shell .pjl-group > b { font-size: 12px; font-weight: 500; color: var(--muted); text-transform: none; letter-spacing: 0; }
+.shell .pjl-group { grid-column: 1 / -1; display: grid; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.shell .pjl-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (max-width: 640px) {
+  .shell .pjl-tools { flex-wrap: nowrap; }
+  .shell .pjl-tools .search { flex: 1 1 auto; width: auto; }
+  .shell .pjl-tools .lt-btn { flex: none; }
+  .shell .pjl-panel { grid-template-columns: 1fr; }
+}

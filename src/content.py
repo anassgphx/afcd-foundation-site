@@ -97,7 +97,9 @@ _PILLARS_JSON = Path(os.environ.get('STUDIO_PILLARS_JSON') or Path(__file__).par
 STUDIO_PILLARS = __import__('json').loads(_PILLARS_JSON.read_text(encoding='utf-8'))['pillars'] if _PILLARS_JSON.is_file() else []
 STUDIO_PILLAR_BY_KEY = {p_['key']: p_ for p_ in STUDIO_PILLARS}   # per-pillar extras, e.g. 'objectives': [{title, text}]
 if STUDIO_PILLARS:
-    PILLARS = [(p['key'], p['number'], p['name'], p['summary'], p['highlights']) for p in STUDIO_PILLARS]
+    # programme tags on the pillar cards are not edited in Studio: they stay the ones written above
+    _HIGHLIGHTS = {k_: r_ for k_, _n, _t, _d, r_ in PILLARS}
+    PILLARS = [(p['key'], p['number'], p['name'], p['summary'], _HIGHLIGHTS.get(p['key'], [])) for p in STUDIO_PILLARS]
     _names = {p['key']: p['name'] for p in STUDIO_PILLARS}
     OBJECTIVES = [(r, t, d, [(_names.get(sl, n), sl) for n, sl in links]) for r, t, d, links in OBJECTIVES]
 # How many pillars there are, for "Pillar 02 / 04" and "Four pillars" (Studio can add and remove pillars).

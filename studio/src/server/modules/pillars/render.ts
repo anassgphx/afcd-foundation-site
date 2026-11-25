@@ -28,15 +28,13 @@ export async function pillarEntries(db: DB, live: { id: string; snap: PillarSnap
     .map(({ id, snap: s }, i) => ({
       key: s.key, number: String(i + 1).padStart(2, '0'), file: s.publicFile, revision: id,
       name: esc(s.name), short: esc(s.short), summary: esc(s.summary), intro: esc(s.intro), colour: s.colour, brand: esc(s.brand),
-      highlights: s.highlights.map(esc),
       approach: { title: approachTitleHtml(s), view: esc(s.view), principles: s.principles.map(esc), steps: s.steps.map((x) => [esc(x.title), esc(x.text)]) },
       // objectives go out as plain text: content.py escapes them itself (empty titles are skipped there too)
       objectives: (s.objectives ?? []).filter((o) => o.title).map((o) => ({ title: o.title, text: o.text ?? '' })),
       activities: s.activities, groups: s.groups, image: image(s.mediaId), video: videoOut(s.video, esc),
-      // custom items and page texts (escaped like every other string); empty page texts keep the site's wording
+      // custom items (escaped like every other string)
       extraActivities: (s.extraActivities ?? []).map(esc), extraGroups: (s.extraGroups ?? []).map(esc),
       workItems: (s.workItems ?? []).map((w) => ({ icon: w.icon, text: esc(w.text) })), audience: (s.audience ?? []).map(esc),
-      page: Object.fromEntries(Object.entries(s.page ?? {}).filter(([, v]) => v).map(([k, v]) => [k, esc(v)])),
     }));
 }
 export type PillarEntry = Awaited<ReturnType<typeof pillarEntries>>[number];

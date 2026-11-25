@@ -33,13 +33,6 @@ export const COLOURS = [
 ] as const;
 const COLOUR_VALUES = COLOURS.map((c) => c.value) as [string, ...string[]];
 
-/** Page texts an editor may change, with their maximum length. Empty means the default wording below. */
-export const PAGE_FIELDS = [
-  ['flagshipLabel', 40], ['howTitle', 60], ['howSoft', 60], ['howDesc', 200], ['objectivesTitle', 60], ['objectivesSoft', 60], ['objectivesDesc', 200],
-  ['projectsTitle', 60], ['projectsSoft', 60], ['projectsDesc', 200], ['relatedTitle', 60], ['relatedSoft', 60], ['ctaTitle', 80], ['ctaText', 220],
-] as const;
-export type PageKey = (typeof PAGE_FIELDS)[number][0];
-export const EMPTY_PAGE = Object.fromEntries(PAGE_FIELDS.map(([k]) => [k, ''])) as Record<PageKey, string>;
 
 export const pillarSchema = z.object({
   name: need(60, 'Add the pillar name.'),
@@ -48,7 +41,6 @@ export const pillarSchema = z.object({
   intro: plain(200).default(''),
   colour: z.enum(COLOUR_VALUES, { message: 'Choose one of the four site colours.' }),
   brand: plain(40).default(''),
-  highlights: z.array(need(80, 'Remove empty programme names.')).max(8).default([]),
   approachTitle: plain(60).default(''),
   approachSoft: plain(60).default(''),
   view: plain(500).default(''),
@@ -65,8 +57,6 @@ export const pillarSchema = z.object({
   // the edited lists for How we work; once saved they replace the picks and extras above (empty = those are used)
   workItems: z.array(z.object({ icon: z.number().int().min(0).max(30), text: need(160, 'Remove empty cards.') }).strict()).max(10, 'Up to 10 cards.').default([]),
   audience: z.array(need(100, 'Remove empty groups.')).max(10, 'Up to 10 groups.').default([]),
-  // the page's own headings and texts; empty = the site's default wording (see PAGE_DEFAULTS)
-  page: z.object(Object.fromEntries(PAGE_FIELDS.map(([k, n]) => [k, plain(n).default('')])) as Record<PageKey, z.ZodDefault<ReturnType<typeof plain>>>).strict().prefault({}),
   mediaId: z.string().uuid().nullable().default(null),
   // optional video in the overview (a platform link or an uploaded file); the photo above is its poster
   video: videoSchema,
@@ -119,9 +109,11 @@ async function linkedProjects(db: DB, id: string) {
 export async function loadPillar(db: DB, id: string): Promise<FullPillar> {
   const [p] = await db.select().from(pillars).where(eq(pillars.id, id));
   if (!p) throw new AppError(404, 'Pillar not found.');
-  const d = p.draft as unknown as PillarInput | null;
+  // older drafts may still carry the removed page texts and programme list: they are dropped here
+  const { highlights: _h, page: _pg, ...d } = (p.draft ?? {}) as unknown as PillarInput & { highlights?: unknown; page?: unknown };
+  const hasDraft = !!p.draft;
   // drafts from before objectives, custom items or page texts existed have none
-  const content = d ? { ...d, objectives: d.objectives ?? [], extraActivities: d.extraActivities ?? [], extraGroups: d.extraGroups ?? [], workItems: d.workItems ?? [], audience: d.audience ?? [], page: { ...EMPTY_PAGE, ...(d.page ?? {}) }, video: d.video ?? null, mediaId: p.mediaId, provenance: p.provenance } : null;
+  const content = hasDraft ? { ...d, objectives: d.objectives ?? [], extraActivities: d.extraActivities ?? [], extraGroups: d.extraGroups ?? [], workItems: d.workItems ?? [], audience: d.audience ?? [], video: d.video ?? null, mediaId: p.mediaId, provenance: p.provenance } : null;
   return { ...p, content, projects: await linkedProjects(db, id), usage: await pillarUsage(db, id) };
 }
 
@@ -273,8 +265,8 @@ export async function createPillar(db: DB, cfg: Config, actor: NonNullable<Actor
     const used = new Set(all.map((x) => x.colour));
     const colour = COLOURS.find((c) => !used.has(c.value))?.value ?? COLOURS[all.length % COLOURS.length].value;
     const sort = Math.max(-1, ...all.map((x) => x.sort)) + 1;
-    const draft: Omit<PillarInput, 'provenance' | 'mediaId'> = { name, short: name.split(/\s+/)[0].slice(0, 20), summary: '', intro: '', colour, brand: '', highlights: [],
-      approachTitle: '', approachSoft: '', view: '', principles: [], steps: [], objectives: [], activities: [], groups: [], extraActivities: [], extraGroups: [], workItems: [], audience: [], page: { ...EMPTY_PAGE }, video: null };
+    const draft: Omit<PillarInput, 'provenance' | 'mediaId'> = { name, short: name.split(/\s+/)[0].slice(0, 20), summary: '', intro: '', colour, brand: '',
+      approachTitle: '', approachSoft: '', view: '', principles: [], steps: [], objectives: [], activities: [], groups: [], extraActivities: [], extraGroups: [], workItems: [], audience: [], video: null };
     const [p] = await t.insert(pillars).values({ key, number: String(all.length + 1).padStart(2, '0'), name, description: '', colour, publicFile: file, sort,
       draft: draft as unknown as Record<string, unknown>, provenance: 'Added in Studio', status: 'draft', updatedBy: actor.id }).returning();
     await audit(tx, actor, 'pillar.create', { type: 'pillar', id: p.id }, `Added pillar “${name}” (${file})`);
@@ -360,7 +352,7 @@ export function contentFromSite(s: SitePillar): PillarInput {
   const [approachTitle, approachSoft] = splitTitle(s.approach.title);
   return parse({
     name: unescape(s.name), short: unescape(s.short), summary: unescape(s.summary), intro: unescape(s.intro), colour: s.colour, brand: unescape(s.brand),
-    highlights: s.highlights.map(unescape), approachTitle, approachSoft, view: unescape(s.approach.view), principles: s.approach.principles.map(unescape),
+    approachTitle, approachSoft, view: unescape(s.approach.view), principles: s.approach.principles.map(unescape),
     steps: s.approach.steps.map(([title, text]) => ({ title: unescape(title), text: unescape(text) })), objectives: [], activities: s.activities, groups: s.groups,
     mediaId: null, provenance: 'Imported from the current pillar pages (src/content.py)',
   });

@@ -189,7 +189,9 @@ describe('about pages in the real generator (src/content.py)', () => {
     const html = readFileSync(join(dir, 'index.html'), 'utf8');
     const box = html.slice(html.indexOf('id="pillar-explorer"'), html.indexOf('<!-- ============ 6.'));
     expect(box).toContain('<span class="pl-title">Women &amp; Girls (test)</span>');
-    expect(box).toContain('Test summary.'); expect(box).toContain('<li>Test programme (fake)</li>');
+    expect(box).toContain('Test summary.');
+    // programme tags are not edited in Studio: the website keeps its own, whatever pillars.json says
+    expect(box).not.toContain('Test programme (fake)'); expect(box).toContain('<li>META Skills for Women Empowerment</li>');
     expect(box).toMatch(/pl-panel pl-tone-3" data-i="1"/);                                 // the colour chosen in Studio (green)
     expect(box).toContain(`01 / ${String(pillars.length).padStart(2, '0')}`);
     expect((box.match(/class="pl-panel /g) ?? []).length).toBe(pillars.length);

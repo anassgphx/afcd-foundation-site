@@ -50,7 +50,7 @@ describe('pillars', () => {
     expect(youth.summary).toBe(SITE_PILLARS[0].summary);
 
     const { body: p } = await c.ed.get(`/pillars/${youth.id}`);
-    expect(p.content.highlights).toEqual(['Leadership Lab 2.0', 'Youth First Academy', 'Let’s Dialogue']);
+    expect(p.content.highlights).toBeUndefined(); expect(p.content.page).toBeUndefined();   // not edited in Studio (not shown on the pillar page)
     expect(p.content.approachTitle).toBe('From learning'); expect(p.content.approachSoft).toBe('to leading.');
 
     // validation: one of the four colours, plain text, fixed key/number/file
@@ -119,26 +119,22 @@ describe('pillars', () => {
     expect(other.objectives).toEqual([]);                                                       // a pillar imported before objectives existed
   });
 
-  it('lets editors change every page text and add their own activities and groups; empty keeps the site wording', async () => {
+  it('lets editors add their own activities and groups; page texts and the programme list are no longer saved', async () => {
     await importPillars(h.db, h.cfg, null, SITE_PILLARS);
     const id = (await c.ed.get('/pillars/records')).body[0].id;
     const { body: p } = await c.ed.get(`/pillars/${id}`);
-    expect(p.content.page.howTitle).toBe('');                                                   // imported pillars start with the site's wording
     expect(p.content.extraActivities).toEqual([]);
-    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), page: { ...p.content.page, howTitle: 'How <b>' } })).status).toBe(422);
-    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), page: { ...p.content.page, unknownText: 'x' } })).status).toBe(422);
+    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), page: { howTitle: 'x' } })).status).toBe(422);          // removed fields are refused
+    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), highlights: ['x'] })).status).toBe(422);
     expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), extraActivities: Array(7).fill('Something') })).status).toBe(422);
-    const page = { ...p.content.page, howTitle: 'Learning & leading', howSoft: 'together.', ctaTitle: 'Join “the” lab.' };
-    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), page, extraActivities: ['Hackathons & meetups'], extraGroups: ['University students'] })).status).toBe(200);
-    expect((await c.ed.get(`/pillars/${id}`)).body.content.page.ctaTitle).toBe('Join “the” lab.');
+    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), extraActivities: ['Hackathons & meetups'], extraGroups: ['University students'] })).status).toBe(200);
     await c.ed.post(`/pillars/${id}/transition`, { action: 'submit' }); await c.rev.post(`/pillars/${id}/transition`, { action: 'approve' });
     expect((await c.admin.post(`/pillars/${id}/publish`)).status).toBe(200);
     const all = JSON.parse(readFileSync(join(h.siteRoot, 'src/data/pillars.json'), 'utf8')).pillars;
     const entry = all.find((x: any) => x.key === 'youth-empowerment');
-    expect(entry.page).toEqual({ howTitle: 'Learning &amp; leading', howSoft: 'together.', ctaTitle: 'Join “the” lab.' });   // escaped; empty texts left out
+    expect(entry.page).toBeUndefined(); expect(entry.highlights).toBeUndefined();          // the website keeps its own wording and programme tags
     expect(entry.extraActivities).toEqual(['Hackathons &amp; meetups']);
     expect(entry.extraGroups).toEqual(['University students']);
-    expect(all.find((x: any) => x.key === 'green-thumbs').page).toEqual({});                   // untouched pillars keep the site wording
     expect(entry.workItems).toEqual([]); expect(entry.audience).toEqual([]);                   // not edited: the picks above are used
   });
 

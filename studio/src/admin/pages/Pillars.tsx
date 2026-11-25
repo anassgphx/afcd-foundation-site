@@ -114,17 +114,9 @@ export function PillarsScreen({ id }: { id?: string }) {
 const icoSvg = (d: string) => `<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 type Step = { title: string; text: string };
 type WorkItem = { icon: number; text: string };
-type Form = { name: string; short: string; summary: string; intro: string; colour: string; brand: string; highlights: string[]; approachTitle: string; approachSoft: string;
+type Form = { name: string; short: string; summary: string; intro: string; colour: string; brand: string; approachTitle: string; approachSoft: string;
   view: string; principles: string[]; steps: Step[]; objectives: Step[]; activities: number[]; groups: number[]; extraActivities: string[]; extraGroups: string[]; workItems: WorkItem[]; audience: string[];
-  page: Record<PageKey, string>; mediaId: string | null; video: PillarVideo; provenance: string };
-type PageKey = 'flagshipLabel' | 'howTitle' | 'howSoft' | 'howDesc' | 'objectivesTitle' | 'objectivesSoft' | 'objectivesDesc' | 'projectsTitle' | 'projectsSoft' | 'projectsDesc' | 'relatedTitle' | 'relatedSoft' | 'ctaTitle' | 'ctaText';
-/** The page's own texts: [key, label, max length, the site's wording when left empty]. Kept in step with src/content.py. */
-const pageTexts = (name: string, short: string): [string, [PageKey, string, number, string, boolean?][]][] => [
-  ['Objectives', [['objectivesTitle', 'Heading', 60, 'What this pillar'], ['objectivesSoft', 'Heading, grey part', 60, 'aims to achieve.'], ['objectivesDesc', 'Description', 200, 'What AFCD works toward under this pillar.', true]]],
-  ['Projects', [['projectsTitle', 'Heading', 60, 'Projects in'], ['projectsSoft', 'Heading, grey part', 60, `${(short || 'youth').toLowerCase()}.`], ['projectsDesc', 'Description', 200, `Programmes AFCD runs under the ${name || 'pillar’s'} pillar.`, true]]],
-  ['Related', [['relatedTitle', 'Heading', 60, 'Stories and events'], ['relatedSoft', 'Heading, grey part', 60, 'from this pillar.']]],
-  ['Get involved band', [['ctaTitle', 'Heading', 80, 'Find your place in our work.'], ['ctaText', 'Text', 220, 'Volunteer, join a programme when calls open, or partner with us on this pillar.', true]]],
-];
+  mediaId: string | null; video: PillarVideo; provenance: string };
 type Loaded = { id: string; key: string; number: string; publicFile: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; verifiedAt: string | null; removeRequested: boolean; usage: string[];
   content: Form | null; projects: { id: string; slug: string; name: string; live: boolean; primary: boolean }[]; media: MediaItem[]; problems: string[];
   lists: { activities: string[]; groups: string[]; icons: string[] }; colours: { value: string; label: string }[];
@@ -219,8 +211,6 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
         { id: 'photo', label: 'Photo and video', icon: 'image', optional: true, done: f.mediaId || f.video ? true : undefined },
         { id: 'work', label: 'What we do', icon: 'users', optional: true, done: work.length || aud.length ? true : undefined },
         { id: 'approach', label: 'Our approach', icon: 'layers', done: !!f.approachTitle },
-        { id: 'pagetexts', label: 'Page texts', icon: 'log', optional: true, done: Object.values(f.page).some(Boolean) ? true : undefined },
-        { id: 'projects', label: 'Projects', icon: 'folder', optional: true, done: f.highlights.length || p.projects.length ? true : undefined },
         { id: 'internal', label: 'Internal', icon: 'lock', optional: true },
         { id: 'translations', label: 'Translations', icon: 'globe', optional: true },
       ]} />
@@ -302,20 +292,6 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
           <Field label="Our perspective" span={3} count={[f.view.length, 500]}><textarea className="textarea" rows={3} maxLength={500} value={f.view} onChange={(x) => set('view', x.target.value)} aria-label="Our perspective" /></Field>
           <Field label="Guiding principles" span={3} hint="Up to 6 short phrases."><ListEditor value={f.principles} onChange={(v) => set('principles', v)} label="Guiding principles" max={6} placeholder="e.g. Youth-led" disabled={!editable} /></Field>
         </Section>
-        <Section id="pagetexts" title="Page texts" desc="Headings and texts of the pillar page. Leave a field empty to keep the site’s wording, shown in grey.">
-          {pageTexts(f.name, f.short).map(([group, fields]) => <div key={group} className="field ed-f s3 pl-pt"><span className="ed-lbl">{group}</span>
-            <div className="pl-pt-grid">{fields.map(([k, label, max, def, long]) => <label key={k} className={`field${long ? ' pl-pt-long' : ''}`}><span>{label}</span>
-              {long ? <textarea className="textarea" rows={2} maxLength={max} value={f.page[k]} placeholder={def} onChange={(x) => set('page', { ...f.page, [k]: x.target.value })} />
-                : <input className="input" maxLength={max} value={f.page[k]} placeholder={def} onChange={(x) => set('page', { ...f.page, [k]: x.target.value })} />}</label>)}</div></div>)}
-        </Section>
-        <Section id="projects" title="Projects" desc="What the website lists for this pillar.">
-          <Field label="Programmes on the Our Pillars card" span={3} hint="Text only, shown as tags on this pillar’s card and page. They are not linked to project records and do not add projects to the pillar. Up to 8."><ListEditor value={f.highlights} onChange={(v) => set('highlights', v)} label="Programmes on the Our Pillars card" max={8} placeholder="Programme name" disabled={!editable} /></Field>
-          <div className="field ed-f s3"><span className="ed-lbl">Linked projects</span>
-            {p.projects.length === 0 ? <p className="muted" style={{ margin: 0 }}>No project is linked to this pillar yet.</p>
-              : <ul className="pl-projects">{p.projects.map((x) => <li key={x.id}><Link to={`/studio/projects/${x.id}`}>{x.name}</Link>{x.primary && <span className="pill">Main pillar</span>}{!x.live && <span className="pill">Not live</span>}</li>)}</ul>}
-            {p.projects.length > 0 && !p.projects.some((x) => x.live) && <p style={{ margin: '6px 0 0', color: 'var(--warn)' }}>None of these projects is published, so the pillar page says “No projects are published under this pillar yet”. Publish one of them to list it there.</p>}
-            <small>The pillar page lists the live projects linked here. A project chooses its pillars in its own record.</small></div>
-        </Section>
         <Section id="internal" title="Internal" desc="Not shown on the website.">
           <Field label="Source" span={3} hint="Where this content comes from."><input className="input" maxLength={300} value={f.provenance} onChange={(x) => set('provenance', x.target.value)} aria-label="Source" /></Field>
         </Section>
@@ -324,7 +300,7 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
         <RecordTranslations noun="pillar" dirty={status !== 'published'} files={[p.publicFile, 'pillars.html']} fields={[{ label: 'Name', value: f.name }, { label: 'Summary', value: f.summary }, { label: 'Page introduction', value: f.intro },
           ...f.objectives.flatMap((o) => [{ label: 'Objective', value: o.title }, { label: 'Objective explanation', value: o.text }]), { label: 'Approach heading', value: f.approachTitle }, { label: 'Our perspective', value: f.view }, ...f.principles.map((x) => ({ label: 'Guiding principle', value: x })),
           ...work.map((x) => ({ label: 'Activity', value: x.text })), ...aud.map((x) => ({ label: 'Who we work with', value: x })),
-          ...pageTexts(f.name, f.short).flatMap(([, fs]) => fs.filter(([k]) => f.page[k]).map(([k, label]) => ({ label: `Page text: ${label}`, value: f.page[k] })))]} />
+          ]} />
       </Section>
       </div>
       <WorkflowPanel status={status} live={live} problems={p.problems}

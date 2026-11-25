@@ -2767,3 +2767,23 @@ a.abx-chip:hover { background: #000; color: #fff; border-color: #000; }
   .plx-h3-box .plx-flag-c { display: none; }
 }
 @media (max-width: 400px) { .plx-h3-facts .plx-fact dt { font-size: 11.5px; } .plx-h3-facts .plx-fact + .plx-fact { padding-left: 10px; } }
+/* How we work with only one of its two lists: that list takes the full width */
+.plx-work.plx-work-1 { grid-template-columns: minmax(0, 1fr) !important; }
+@media (min-width: 1024px) { .plx-work.plx-work-1 .plx-acts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Objectives = the How we work columns; spacing and dividers follow the reading direction (Arabic is right-to-left) */
+.plx-step { padding: 24px 0 28px; padding-inline-end: 24px; }
+@media (min-width: 1024px) {
+  .plx-step + .plx-step { padding-left: 0; border-left: 0; padding-inline-start: 24px; border-inline-start: 1px solid #ECECEA; }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .plx-objsteps .plx-step:nth-child(2n) { padding-inline-start: 24px; border-inline-start: 1px solid #ECECEA; }
+}
+@media (min-width: 1024px) {
+  .plx-objsteps.cols-1 { grid-template-columns: minmax(0, 1fr); }
+  .plx-objsteps.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .plx-objsteps.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .plx-objsteps.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* a new row starts without a divider, and rows after the first get a hairline on top */
+  .plx-objsteps.cols-3 .plx-step:nth-child(3n + 1) { padding-inline-start: 0; border-inline-start: 0; }
+  .plx-objsteps.cols-3 .plx-step:nth-child(n + 4) { border-top: 1px solid #ECECEA; }
+}

@@ -111,14 +111,15 @@ export function PillarsScreen({ id }: { id?: string }) {
   </div>;
 }
 
+const icoSvg = (d: string) => `<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 type Step = { title: string; text: string };
+type WorkItem = { icon: number; text: string };
 type Form = { name: string; short: string; summary: string; intro: string; colour: string; brand: string; highlights: string[]; approachTitle: string; approachSoft: string;
-  view: string; principles: string[]; steps: Step[]; objectives: Step[]; activities: number[]; groups: number[]; extraActivities: string[]; extraGroups: string[];
+  view: string; principles: string[]; steps: Step[]; objectives: Step[]; activities: number[]; groups: number[]; extraActivities: string[]; extraGroups: string[]; workItems: WorkItem[]; audience: string[];
   page: Record<PageKey, string>; mediaId: string | null; video: PillarVideo; provenance: string };
 type PageKey = 'flagshipLabel' | 'howTitle' | 'howSoft' | 'howDesc' | 'objectivesTitle' | 'objectivesSoft' | 'objectivesDesc' | 'projectsTitle' | 'projectsSoft' | 'projectsDesc' | 'relatedTitle' | 'relatedSoft' | 'ctaTitle' | 'ctaText';
 /** The page's own texts: [key, label, max length, the site's wording when left empty]. Kept in step with src/content.py. */
 const pageTexts = (name: string, short: string): [string, [PageKey, string, number, string, boolean?][]][] => [
-  ['Overview', [['flagshipLabel', 'Flagship programmes label', 40, 'Flagship programmes']]],
   ['How we work', [['howTitle', 'Heading', 60, 'How this pillar'], ['howSoft', 'Heading, grey part', 60, 'comes to life.'], ['howDesc', 'Description', 200, 'The steps we follow and the activities we run under this pillar.', true]]],
   ['Objectives', [['objectivesTitle', 'Heading', 60, 'What this pillar'], ['objectivesSoft', 'Heading, grey part', 60, 'aims to achieve.'], ['objectivesDesc', 'Description', 200, 'What AFCD works toward under this pillar.', true]]],
   ['Projects', [['projectsTitle', 'Heading', 60, 'Projects in'], ['projectsSoft', 'Heading, grey part', 60, `${(short || 'youth').toLowerCase()}.`], ['projectsDesc', 'Description', 200, `Programmes AFCD runs under the ${name || 'pillar’s'} pillar.`, true]]],
@@ -127,7 +128,7 @@ const pageTexts = (name: string, short: string): [string, [PageKey, string, numb
 ];
 type Loaded = { id: string; key: string; number: string; publicFile: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; verifiedAt: string | null; removeRequested: boolean; usage: string[];
   content: Form | null; projects: { id: string; slug: string; name: string; live: boolean; primary: boolean }[]; media: MediaItem[]; problems: string[];
-  lists: { activities: string[]; groups: string[] }; colours: { value: string; label: string }[];
+  lists: { activities: string[]; groups: string[]; icons: string[] }; colours: { value: string; label: string }[];
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] } };
 
 export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => void }) {
@@ -185,9 +186,16 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
     setBusy('preview');
     try { const r = await post<{ url: string }>(`/pillars/${id}/preview`); setUrl(r.url); setDialog('preview'); } catch (e) { showErr(e); } finally { setBusy(''); }
   }
-  const toggle = (k: 'activities' | 'groups', i: number, on: boolean) => set(k, on ? [...f[k], i] : f[k].filter((x) => x !== i));
   const setStep = (i: number, v: Partial<Step>) => set('steps', f.steps.map((s, j) => (j === i ? { ...s, ...v } : s)));
   const moveStep = (i: number, d: -1 | 1) => { const s = [...f.steps]; [s[i], s[i + d]] = [s[i + d], s[i]]; set('steps', s); };
+  // How we work's two lists. Until edited here they come from the old picks and extras; the first edit saves them as
+  // this pillar's own lists (and clears the picks), so the page shows exactly what is listed here, in this order.
+  const listsOk = p.lists.activities.length > 0 || (!f.activities.length && !f.groups.length);
+  const work: WorkItem[] = f.workItems.length ? f.workItems : [...f.activities.map((i) => ({ icon: i, text: p.lists.activities[i] ?? '' })), ...f.extraActivities.map((text) => ({ icon: 1, text }))];
+  const aud: string[] = f.audience.length ? f.audience : [...f.groups.map((i) => p.lists.groups[i] ?? ''), ...f.extraGroups];
+  const setWork = (v: WorkItem[]) => { setF((x) => ({ ...x!, workItems: v, activities: [], extraActivities: [] })); setDirty(true); };
+  const setAud = (v: string[]) => { setF((x) => ({ ...x!, audience: v, groups: [], extraGroups: [] })); setDirty(true); };
+  const moveWork = (i: number, d: -1 | 1) => { const w = [...work]; [w[i], w[i + d]] = [w[i + d], w[i]]; setWork(w); };
   const setObj = (i: number, v: Partial<Step>) => set('objectives', f.objectives.map((o, j) => (j === i ? { ...o, ...v } : o)));
   const moveObj = (i: number, d: -1 | 1) => { const o = [...f.objectives]; [o[i], o[i + d]] = [o[i + d], o[i]]; set('objectives', o); };
   const colourName = p.colours.find((c) => c.value === f.colour)?.label ?? f.colour;
@@ -212,7 +220,7 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
         { id: 'text', label: 'Summary and introduction', icon: 'log', done: !!f.summary && !!f.intro },
         { id: 'objectives', label: 'Objectives', icon: 'check', optional: true, done: f.objectives.length ? true : undefined },
         { id: 'photo', label: 'Photo and video', icon: 'image', optional: true, done: f.mediaId || f.video ? true : undefined },
-        { id: 'work', label: 'What we do', icon: 'users', optional: true, done: f.activities.length || f.groups.length || f.extraActivities.length || f.extraGroups.length ? true : undefined },
+        { id: 'work', label: 'What we do', icon: 'users', optional: true, done: work.length || aud.length ? true : undefined },
         { id: 'approach', label: 'Our approach', icon: 'layers', done: !!f.approachTitle && f.steps.length > 0 },
         { id: 'pagetexts', label: 'Page texts', icon: 'log', optional: true, done: Object.values(f.page).some(Boolean) ? true : undefined },
         { id: 'projects', label: 'Projects', icon: 'folder', optional: true, done: f.highlights.length || p.projects.length ? true : undefined },
@@ -266,12 +274,29 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
           <div className="s3"><span className="ed-lbl">Video <span className="muted">(optional)</span></span>
             <PillarVideoField value={f.video ?? null} onChange={(v) => set('video', v)} disabled={!editable} hasPhoto={!!f.mediaId} /></div>
         </Section>
-        <Section id="work" title="What we do" desc="Pick from AFCD’s shared lists (the same wording on every page), then add anything only this pillar does. Numbered in the order they appear.">
-          {p.lists.activities.length === 0 && <p className="muted s3" style={{ margin: 0 }}>The site’s lists could not be read.</p>}
-          {p.lists.activities.length > 0 && <Field label="Activities" span={3}><div className="pl-picks">{p.lists.activities.map((a, i) => { const at = f.activities.indexOf(i); return <label key={i} className={at >= 0 ? 'on' : ''}><input type="checkbox" checked={at >= 0} onChange={(e) => toggle('activities', i, e.target.checked)} /><span className="pl-pick-n">{at >= 0 ? String(at + 1).padStart(2, '0') : ''}</span><span>{a}</span></label>; })}</div></Field>}
-          {p.lists.groups.length > 0 && <Field label="Who we work with" span={3}><div className="pl-picks">{p.lists.groups.map((g, i) => { const at = f.groups.indexOf(i); return <label key={i} className={at >= 0 ? 'on' : ''}><input type="checkbox" checked={at >= 0} onChange={(e) => toggle('groups', i, e.target.checked)} /><span className="pl-pick-n">{at >= 0 ? String(at + 1).padStart(2, '0') : ''}</span><span>{g}</span></label>; })}</div></Field>}
-                  <Field label="Other activities" span={3} hint="Only for this pillar. Shown after the ones picked above. Up to 6."><ListEditor value={f.extraActivities} onChange={(v) => set('extraActivities', v)} label="Other activities" max={6} placeholder="e.g. Youth climate hackathons" disabled={!editable} /></Field>
-          <Field label="Other participant groups" span={3} hint="Only for this pillar. Up to 6."><ListEditor value={f.extraGroups} onChange={(v) => set('extraGroups', v)} label="Other participant groups" max={6} placeholder="e.g. University students" disabled={!editable} /></Field>
+        <Section id="work" title="How we work: activities and people" desc="The two lists under the steps on the pillar page. Add, edit, remove and reorder them here; the page shows them exactly in this order.">
+          {!listsOk && <p className="muted s3" style={{ margin: 0 }}>The site’s lists could not be read, so these lists can’t be edited right now.</p>}
+          {listsOk && <>
+          <div className="s3"><span className="ed-lbl">What it looks like <span className="muted">({work.length}/10)</span></span>
+            {work.length === 0 && <p className="muted" style={{ margin: '4px 0 8px' }}>No cards. The page shows only “Who we work with”.</p>}
+            {work.length > 0 && <ol className="pl-steps pl-work">{work.map((w, i) => <li key={i}>
+              <span className="pl-work-ico" aria-hidden="true" dangerouslySetInnerHTML={{ __html: icoSvg(p.lists.icons[w.icon] ?? p.lists.icons[1] ?? '') }} />
+              <div className="pl-step-f">
+                <textarea className="textarea" rows={2} maxLength={160} value={w.text} placeholder="What this pillar does (required)" onChange={(x) => setWork(work.map((y, j) => (j === i ? { ...y, text: x.target.value } : y)))} aria-label={`Card ${i + 1} text`} aria-invalid={!w.text.trim()} />
+                {p.lists.icons.length > 0 && <div className="pl-icons" role="radiogroup" aria-label={`Card ${i + 1} icon`}>{p.lists.icons.map((d, k) =>
+                  <button key={k} type="button" role="radio" aria-checked={w.icon === k} aria-label={`Icon ${k + 1}`} className={w.icon === k ? 'on' : ''} onClick={() => setWork(work.map((y, j) => (j === i ? { ...y, icon: k } : y)))} dangerouslySetInnerHTML={{ __html: icoSvg(d) }} />)}</div>}
+              </div>
+              <span className="pl-step-a">
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === 0} onClick={() => moveWork(i, -1)} aria-label={`Move card ${i + 1} up`}>↑</button>
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === work.length - 1} onClick={() => moveWork(i, 1)} aria-label={`Move card ${i + 1} down`}>↓</button>
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" onClick={() => setWork(work.filter((_, j) => j !== i))} aria-label={`Remove card ${i + 1}`}><Icon n="x" /></button></span>
+            </li>)}</ol>}
+            {work.length < 10 ? <button type="button" className="btn btn-sm" onClick={() => setWork([...work, { icon: 1, text: '' }])}><Icon n="plus" />Add a card</button>
+              : <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>10 cards is the maximum.</p>}
+          </div>
+          <Field label="Who we work with" span={3} hint="One group per line, in the order shown. Up to 10. Leave empty to hide the column.">
+            <ListEditor value={aud} onChange={setAud} label="Who we work with" max={10} placeholder="e.g. Young people and students" disabled={!editable} /></Field>
+          </>}
         </Section>
         <Section id="approach" title="Our approach" desc="The dark band in the middle of the pillar page.">
           <Field label="Heading" span={2} hint="Written in black."><input className="input" maxLength={60} value={f.approachTitle} onChange={(x) => set('approachTitle', x.target.value)} aria-label="Heading" /></Field>
@@ -313,7 +338,7 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
       <Section id="translations" title="Translations" desc="French and Arabic of this pillar’s pages. Reviewed and published on the Translations screen.">
         <RecordTranslations noun="pillar" dirty={status !== 'published'} files={[p.publicFile, 'pillars.html']} fields={[{ label: 'Name', value: f.name }, { label: 'Summary', value: f.summary }, { label: 'Page introduction', value: f.intro },
           ...f.objectives.flatMap((o) => [{ label: 'Objective', value: o.title }, { label: 'Objective explanation', value: o.text }]), { label: 'Approach heading', value: f.approachTitle }, { label: 'Our perspective', value: f.view }, ...f.principles.map((x) => ({ label: 'Guiding principle', value: x })), ...f.steps.flatMap((s) => [{ label: 'Step title', value: s.title }, { label: 'Step text', value: s.text }]),
-          ...f.extraActivities.map((x) => ({ label: 'Activity', value: x })), ...f.extraGroups.map((x) => ({ label: 'Participant group', value: x })),
+          ...work.map((x) => ({ label: 'Activity', value: x.text })), ...aud.map((x) => ({ label: 'Who we work with', value: x })),
           ...pageTexts(f.name, f.short).flatMap(([, fs]) => fs.filter(([k]) => f.page[k]).map(([k, label]) => ({ label: `Page text: ${label}`, value: f.page[k] })))]} />
       </Section>
       </div>

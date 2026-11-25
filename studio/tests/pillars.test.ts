@@ -139,6 +139,27 @@ describe('pillars', () => {
     expect(entry.extraActivities).toEqual(['Hackathons &amp; meetups']);
     expect(entry.extraGroups).toEqual(['University students']);
     expect(all.find((x: any) => x.key === 'green-thumbs').page).toEqual({});                   // untouched pillars keep the site wording
+    expect(entry.workItems).toEqual([]); expect(entry.audience).toEqual([]);                   // not edited: the picks above are used
+  });
+
+  it('saves How we work’s own cards (icon and text) and groups, in order, and checks them', async () => {
+    await importPillars(h.db, h.cfg, null, SITE_PILLARS);
+    const id = (await c.ed.get('/pillars/records')).body[0].id;
+    const { body: p } = await c.ed.get(`/pillars/${id}`);
+    expect(p.content.workItems).toEqual([]); expect(p.content.audience).toEqual([]);
+    for (const bad of [{ workItems: [{ icon: 1, text: ' ' }] }, { workItems: [{ icon: -1, text: 'x' }] }, { workItems: [{ icon: 1, text: 'x', extra: 1 }] },
+      { workItems: Array(11).fill({ icon: 1, text: 'x' }) }, { audience: [''] }, { audience: ['<b>x</b>'] }, { audience: Array(11).fill('x') }])
+      expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), ...bad })).status).toBe(422);
+    const workItems = [{ icon: 3, text: 'Clean-ups & tree planting' }, { icon: 0, text: 'Training' }];
+    expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), workItems, audience: ['Students', 'Schools & clubs'], activities: [], extraActivities: [], groups: [], extraGroups: [] })).status).toBe(200);
+    const { body: q } = await c.ed.get(`/pillars/${id}`);
+    expect(q.content.workItems).toEqual(workItems); expect(q.content.audience).toEqual(['Students', 'Schools & clubs']);
+    await c.ed.post(`/pillars/${id}/transition`, { action: 'submit' }); await c.rev.post(`/pillars/${id}/transition`, { action: 'approve' });
+    expect((await c.admin.post(`/pillars/${id}/publish`)).status).toBe(200);
+    const entry = JSON.parse(readFileSync(join(h.siteRoot, 'src/data/pillars.json'), 'utf8')).pillars.find((x: any) => x.key === 'youth-empowerment');
+    expect(entry.workItems).toEqual([{ icon: 3, text: 'Clean-ups &amp; tree planting' }, { icon: 0, text: 'Training' }]);
+    expect(entry.audience).toEqual(['Students', 'Schools &amp; clubs']);
+    expect(entry.activities).toEqual([]); expect(entry.groups).toEqual([]);
   });
 
   it('blocks a photo without alt text or confirmed rights', async () => {
@@ -300,6 +321,14 @@ describe('pillar pages through the real generator', () => {
     const page = readFileSync(join(after, 'digital-inclusion.html'), 'utf8');
     expect(page).toContain('Digital &amp; AI'); expect(page).toContain('Edited intro.');
     expect(readFileSync(join(after, 'youth-empowerment.html'), 'utf8')).toContain('Digital &amp; AI');   // "Other pillars" cards
+
+    // How we work's own lists replace the picked ones, in order; an empty one hides its column
+    const lists = live.map((x) => (x.snap.key === 'green-thumbs' ? { ...x, snap: { ...x.snap, workItems: [{ icon: 5, text: 'Card B & C' }, { icon: 2, text: 'Card A' }], audience: [], activities: [], extraActivities: [], groups: [], extraGroups: [] } } : x));
+    const gt = readFileSync(join(realBuild(join(root, 'lists'), await write(join(root, 'lists.json'), lists)), 'environment-climate.html'), 'utf8');
+    const how = gt.slice(gt.indexOf('id="how-we-work"'), gt.indexOf('id="projects"'));
+    expect(how).toContain('plx-work plx-work-1'); expect(how).not.toContain('Who we work with');
+    expect(how.indexOf('Card B &amp; C')).toBeLessThan(how.indexOf('Card A'));
+    expect((how.match(/class="plx-act"/g) ?? []).length).toBe(2);
 
     // a fifth pillar added in Studio gets its own page, and the count follows everywhere
     const fifth = { id: 'rev-new', sort: 10, snap: { ...live[3].snap, key: 'health-wellbeing', publicFile: 'health-wellbeing.html', name: 'Health and Well-being', short: 'Health', summary: 'A new pillar summary.', intro: 'A new pillar.', highlights: [] } };

@@ -34,6 +34,12 @@
 .pl-step-n { padding-top: 8px; color: var(--muted); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .pl-step-f { display: grid; gap: 6px; }
 .pl-step-a { display: flex; gap: 2px; }
+.pl-work-ico { display: grid; place-items: center; width: 28px; height: 28px; margin-top: 4px; border-radius: 8px; background: var(--canvas); color: var(--ink); }
+.pl-icons { display: flex; flex-wrap: wrap; gap: 4px; }
+.pl-icons button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--muted); cursor: pointer; }
+.pl-icons button:hover { color: var(--ink); border-color: var(--ink); }
+.pl-icons button.on { color: #fff; background: var(--ink); border-color: var(--ink); }
+.pl-icons button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 .pl-projects { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
 .pl-projects li { display: inline-flex; align-items: center; gap: 6px; }

@@ -229,8 +229,8 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
               {live && <a className="btn btn-sm" href={me.siteUrl + p.publicFile} target="_blank" rel="noopener"><Icon n="ext" />Open</a>}</div></Field>
         </Section>
         <Section id="text" title="Summary and introduction" desc="Plain text. The site’s typography is applied automatically.">
-          <Field label="Summary" span={3} count={[f.summary.length, 320]} hint="On the Our Pillars card, in the pillar page’s coloured overview, and in its search description.">
-            <textarea className="textarea" rows={3} maxLength={320} value={f.summary} onChange={(x) => set('summary', x.target.value)} aria-label="Summary" /></Field>
+          <Field label="Summary" span={3} count={[f.summary.length, 400]} hint="On the Our Pillars card, in the pillar page’s coloured overview, and in its search description.">
+            <textarea className="textarea" rows={4} maxLength={400} value={f.summary} onChange={(x) => set('summary', x.target.value)} aria-label="Summary" /></Field>
           <Field label="Page introduction" span={3} count={[f.intro.length, 200]} hint="The line under the pillar name at the top of its page.">
             <textarea className="textarea" rows={2} maxLength={200} value={f.intro} onChange={(x) => set('intro', x.target.value)} aria-label="Page introduction" /></Field>
         </Section>

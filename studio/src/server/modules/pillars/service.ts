@@ -37,7 +37,7 @@ const COLOUR_VALUES = COLOURS.map((c) => c.value) as [string, ...string[]];
 export const pillarSchema = z.object({
   name: need(60, 'Add the pillar name.'),
   short: plain(20).default(''),
-  summary: plain(320).default(''),
+  summary: plain(400).default(''),
   intro: plain(200).default(''),
   colour: z.enum(COLOUR_VALUES, { message: 'Choose one of the four site colours.' }),
   brand: plain(40).default(''),

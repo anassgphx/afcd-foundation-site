@@ -33,7 +33,7 @@ const toQuery = (f: F) => { const u = new URLSearchParams(); for (const k of KEY
 const COL: Record<string, K> = { name: 'cat', pillar: 'pillar', status: 'st', page: 'web' };
 
 const SORTS: [string, string][] = [['', 'Listing order'], ['name:asc', 'Name A–Z'], ['name:desc', 'Name Z–A'], ['updated:asc', 'Recently updated'], ['updated:desc', 'Least recently updated'], ['status:asc', 'Status (needs action first)']];
-const PHOTOS: Record<string, string> = { has: 'Has photos', none: 'No photos', issues: 'Missing alt text or rights' };
+const PHOTOS: Record<string, string> = { has: 'Has photos', none: 'No photos', issues: 'Missing confirmed rights' };
 /** The years a project mentions ("2019–2021", "Since 2023"), as a range; null when it names none. */
 const yearsOf = (s: string) => { const y = (s.match(/\b(19|20)\d{2}\b/g) ?? []).map(Number); return y.length ? [Math.min(...y), Math.max(...y)] as const : null; };
 
@@ -82,7 +82,7 @@ export function ProjectsList() {
         <span className={`dt-thumb pjl-thumb${r.logoThumb ? ' is-logo' : ''}`}>{r.logoThumb ? <img src={r.logoThumb} alt="" loading="lazy" /> : r.thumb ? <img src={r.thumb} alt="" loading="lazy" /> : <Icon n="folder" />}</span>
         <span className="min-w-0"><Link className="title" to={`/studio/projects/${r.id}`}>{r.name}</Link>{projectStatus(r.years) && <span className={`pjl-st is-${projectStatus(r.years)!.toLowerCase()}`}><i />{projectStatus(r.years)}</span>}
           <span className="sub">{[r.category, r.location, r.years].filter(Boolean).join(' · ') || '—'}
-            {r.photoIssues > 0 && <> · <span className="lt-photo" title="Photos missing alt text or confirmed rights"><Icon n="alert" />{r.photoIssues} photo{r.photoIssues === 1 ? '' : 's'} to complete</span></>}</span></span></div> },
+            {r.photoIssues > 0 && <> · <span className="lt-photo" title="Photos missing confirmed rights"><Icon n="alert" />{r.photoIssues} photo{r.photoIssues === 1 ? '' : 's'} to complete</span></>}</span></span></div> },
     { key: 'pillar', header: 'Pillars', sort: (r) => r.pillars[0]?.name ?? 'zzz', csv: (r) => r.pillars.map((p) => p.name).join('; '), hideBelow: 900,
       filter: { type: 'set', title: 'Pillars', get: (r) => r.pillars.map((p) => p.key), options: opts.pillars.map((p) => ({ value: p.key, label: p.name, colour: p.colour })) },
       render: (r) => <div className="pills">{r.pillars.map((p) => <span key={p.key} className="pill" title={p.isPrimary ? 'Primary pillar' : 'Also linked'}><span className="dot" style={{ ['--c' as string]: p.colour }} />{p.name}{p.isPrimary && r.pillars.length > 1 ? ' ·' : ''}</span>)}</div> },

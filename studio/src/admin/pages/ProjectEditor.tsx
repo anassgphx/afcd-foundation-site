@@ -215,7 +215,7 @@ export function ProjectEditor({ id }: { id: string }) {
   const tabChanged = (t: string) => TAB_FIELDS[t].some((f) => changed.has(f));
   const errorList = Object.entries(errors).filter(([, v]) => v);
   const usedPhotoIds = [...new Set([form.heroMediaId, ...form.galleryMediaIds, ...form.activityItems.flatMap((a) => a.mediaIds)].filter(Boolean) as string[])];
-  const toFix = usedPhotoIds.map((x) => media[x]).filter((m) => m && (!m.alt || !m.rightsConfirmed));
+  const toFix = usedPhotoIds.map((x) => media[x]).filter((m) => m && !m.rightsConfirmed);
   const canFix = can('media.update');
   const goTo = (field: string) => { const t = TABS.find((x) => TAB_FIELDS[x].includes(field)); if (t) setTab(t); setTimeout(() => document.getElementById(`pe-${field}`)?.focus(), 40); };
   const leave = (to: string) => { if (dirty && !confirm('You have unsaved changes. Leave without saving?')) return; navigate(to); };
@@ -284,7 +284,7 @@ export function ProjectEditor({ id }: { id: string }) {
         <p className="pe-fixlist-h"><b>{toFix.length === 1 ? '1 photo needs' : `${toFix.length} photos need`} details before review</b><span>Alt text describes the photo for screen readers; the rights box confirms AFCD may publish it.</span></p>
         <ul>{toFix.map((m) => <li key={m.id}>
           <img src={m.url} alt="" />
-          <span className="pe-fix-t"><b title={m.originalName}>{m.originalName}</b><small>{[!m.alt && 'Alt text missing', !m.rightsConfirmed && 'Rights not confirmed'].filter(Boolean).join(' · ')}</small></span>
+          <span className="pe-fix-t"><b title={m.originalName}>{m.originalName}</b><small>Rights not confirmed</small></span>
           {canFix ? <button type="button" className="btn btn-sm btn-primary" onClick={() => setFixing(m)}>Fix</button> : <small className="muted">Ask a media manager</small>}
         </li>)}</ul>
       </div>}
@@ -400,7 +400,7 @@ export function ProjectEditor({ id }: { id: string }) {
               </PeSection>
 
               <PeSection title="Project logo" desc="Shown in the project summary, next to its title. Choose how it is framed.">
-                <Field group name="logoMediaId" label="Logo" optional hint="Upload it to the Media Library first (PNG or SVG-like images with a transparent background work best). Needs alt text and confirmed rights." err={errors.logoMediaId}>
+                <Field group name="logoMediaId" label="Logo" optional hint="Upload it to the Media Library first (PNG or SVG-like images with a transparent background work best). Needs confirmed rights." err={errors.logoMediaId}>
                   {(() => {
                     const m = form.logoMediaId ? media[form.logoMediaId] : null; const st = form.logoStyle;
                     const setSt = (p: Partial<LogoStyle>) => set('logoStyle', { ...st, ...p });
@@ -430,7 +430,7 @@ export function ProjectEditor({ id }: { id: string }) {
               </PeSection>
 
               <PeSection title="Cover photos" desc="Up to five places at the top of the project page: the main photo large, the others beside it. A poster takes one of the places.">
-              <Field group name="heroMediaId" label="Cover photos" optional hint="The first photo is the large one; ★ makes another one the main photo. Photos 2 to 5 are also the first photos of the Gallery tab. Each needs alt text and confirmed rights before publishing." err={errors.heroMediaId}>
+              <Field group name="heroMediaId" label="Cover photos" optional hint="The first photo is the large one; ★ makes another one the main photo. Photos 2 to 5 are also the first photos of the Gallery tab. Each needs confirmed rights before publishing." err={errors.heroMediaId}>
                   {(() => {
                     const places = form.posterMediaId ? 4 : 5;   // the poster is one of the five cover places
                     const cover = [form.heroMediaId, ...form.galleryMediaIds].filter(Boolean).slice(0, places) as string[];
@@ -446,7 +446,7 @@ export function ProjectEditor({ id }: { id: string }) {
                     {!ro && cover.length < places && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('hero')}><Icon n="image" />{cover.length ? `Add photos (${places - cover.length} more)` : `Choose up to ${places} photos`}</button>}</>;
                   })()}
                 </Field>
-                <Field group name="posterMediaId" label="Poster (1:1)" optional hint="A square poster shown whole (never cropped) next to the main photo, with a “Poster” tag. It takes one of the five cover places. Needs alt text and confirmed rights before publishing." err={errors.posterMediaId}>
+                <Field group name="posterMediaId" label="Poster (1:1)" optional hint="A square poster shown whole (never cropped) next to the main photo, with a “Poster” tag. It takes one of the five cover places. Needs confirmed rights before publishing." err={errors.posterMediaId}>
                   {(() => {
                     const m = form.posterMediaId ? media[form.posterMediaId] : null;
                     const r = m ? m.width / m.height : 1; const square = Math.abs(r - 1) <= 0.08;
@@ -455,7 +455,7 @@ export function ProjectEditor({ id }: { id: string }) {
                       <div className="pe-poster-side">
                         {m && <small className="muted">{m.width} × {m.height} px · {m.originalName}</small>}
                         {m && !square && <p className="pe-warn"><Icon n="alert" width={14} height={14} />Not square ({r > 1 ? 'wider' : 'taller'} than 1:1). It will show whole with space around it; a square version looks best.</p>}
-                        {m && (!m.alt || !m.rightsConfirmed) && <p className="pe-warn"><Icon n="alert" width={14} height={14} />{!m.alt ? 'Add alt text' : 'Confirm usage rights'} for this poster in the Media Library before publishing.</p>}
+                        {m && !m.rightsConfirmed && <p className="pe-warn"><Icon n="alert" width={14} height={14} />Confirm usage rights for this poster in the Media Library before publishing.</p>}
                         {!ro && <div className="pe-poster-b"><button type="button" className="btn btn-sm" onClick={() => setDialog('poster')}><Icon n="image" />{m ? 'Change poster' : 'Choose poster'}</button>
                           {m && <button type="button" className="btn btn-ghost btn-sm btn-danger" onClick={() => set('posterMediaId', null)}>Remove</button>}</div>}
                       </div>

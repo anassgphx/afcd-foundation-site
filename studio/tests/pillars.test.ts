@@ -158,7 +158,7 @@ describe('pillars', () => {
     expect(entry.activities).toEqual([]); expect(entry.groups).toEqual([]);
   });
 
-  it('blocks a photo without alt text or confirmed rights', async () => {
+  it('blocks a photo without confirmed rights (alt text optional)', async () => {
     await importPillars(h.db, h.cfg, null, SITE_PILLARS);
     const id = (await c.ed.get('/pillars/records')).body[0].id;
     const fd = new FormData(); fd.append('file', new File([await pngBytes()], 'youth.png', { type: 'image/png' }));
@@ -167,7 +167,7 @@ describe('pillars', () => {
     expect((await c.ed.put(`/pillars/${id}`, { ...editable(p), mediaId: img.id })).status).toBe(200);
     const blocked = await c.ed.post(`/pillars/${id}/transition`, { action: 'submit' });
     expect(blocked.status).toBe(422);
-    expect(JSON.stringify(blocked.body.details)).toMatch(/alt text/);
+    expect(JSON.stringify(blocked.body.details)).not.toMatch(/alt text/);
     expect(JSON.stringify(blocked.body.details)).toMatch(/Confirm AFCD may use/);
     await h.app.request(`/studio/api/media/${img.id}`, { method: 'PATCH', headers: { Cookie: c.ed.cookie, Origin: ORIGIN, 'X-CSRF-Token': c.ed.csrf, 'Content-Type': 'application/json' }, body: JSON.stringify({ alt: 'Young people at a workshop', rightsConfirmed: true }) });
     expect((await c.ed.post(`/pillars/${id}/transition`, { action: 'submit' })).status).toBe(200);

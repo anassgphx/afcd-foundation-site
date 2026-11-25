@@ -41,7 +41,7 @@ describe('media library', () => {
     expect(lib.total).toBe(4);
     const by = Object.fromEntries(lib.items.map((m: any) => [m.id, m]));
     expect(by[a.id].issues).toEqual([]);
-    expect(by[copy.id].issues).toEqual(['alt', 'credit', 'rights']);
+    expect(by[copy.id].issues).toEqual(['credit', 'rights'])   // alt text is optional;
     expect(by[a.id].usedOn).toEqual([{ kind: 'Project', title: 'Green Schools', href: `/studio/projects/${p.id}`, where: 'Main photo', live: false }]);
     expect(by[copy.id].usedOn).toEqual([]);
     expect(by[a.id].uploadedByName).toBe('ed');

@@ -113,7 +113,6 @@ async function checkBranding(db: DB, v: Values['branding']) {
   if (fav && (Math.abs(fav.width - fav.height) > Math.max(2, fav.width * 0.02) || fav.width < 48)) throw new AppError(422, 'The favicon must be square and at least 48 × 48 pixels.', [{ path: 'faviconMediaId', message: 'The favicon must be square and at least 48 × 48 pixels.' }]);
   const og = need('socialImageMediaId', 'share image');
   if (og && (og.width < 600 || og.height < 315)) throw new AppError(422, 'The share image must be at least 600 × 315 pixels (1200 × 630 is best).', [{ path: 'socialImageMediaId', message: 'At least 600 × 315 pixels (1200 × 630 is best).' }]);
-  if (og && !v.socialImageAlt.trim() && !og.alt.trim()) throw new AppError(422, 'Describe the share image (alt text), here or in the Media library.', [{ path: 'socialImageAlt', message: 'Describe the share image, here or in the Media library.' }]);
 }
 
 /** Saves one category as a draft (the website is unchanged until settings are published) and records a revision. */

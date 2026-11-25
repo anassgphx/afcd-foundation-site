@@ -206,7 +206,7 @@ export function PartnerEditor({ id }: { id: string }) {
             <div className="pt-logo-info">
               <b>{logoShape === 'is-square' ? 'Square logo' : logoShape === 'is-mid' ? 'Medium logo' : 'Wide logo'}</b>
               <small>{logo.width}×{logo.height} px · the website sizes it by its shape so every logo looks equally weighted.</small>
-              {(!logo.alt || !logo.rightsConfirmed) && <small className="pt-hint-warn">{!logo.alt ? 'Add alt text (usually the organisation name)' : 'Confirm AFCD may use it (permission from the partner)'} in the Media Library before review.</small>}
+              {!logo.rightsConfirmed && <small className="pt-hint-warn">Confirm AFCD may use it (permission from the partner) in the Media Library before review.</small>}
               <div className="pt-logo-actions">
                 <button type="button" className="btn btn-sm" disabled={!!busy || !can('media.update')} onClick={() => trimLogo()} title="Crop away empty transparent or white margins"><Icon n="image" />{busy === 'trim' ? 'Trimming…' : 'Trim empty margins'}</button>
                 {(logo as MediaItem & { crop?: unknown }).crop ? <button type="button" className="btn btn-sm btn-ghost" disabled={!!busy || !can('media.update')} onClick={() => trimLogo(true)}>Undo trim</button> : null}

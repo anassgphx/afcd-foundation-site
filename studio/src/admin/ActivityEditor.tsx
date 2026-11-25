@@ -30,7 +30,7 @@ type Props = {
 };
 
 const move = <T,>(a: T[], from: number, to: number) => { const b = [...a]; const [x] = b.splice(from, 1); b.splice(to, 0, x); return b; };
-const needs = (m?: MediaItem) => (!m ? null : !m.alt ? 'alt' : !m.rightsConfirmed ? 'rights' : null);
+const needs = (m?: MediaItem) => (!m ? null : !m.rightsConfirmed ? 'rights' : null);
 
 export function ActivityList({ items, onChange, ro, err, media, addMedia, onPickPhotos, canEditMedia, publications = [] }: Props) {
   // open/closed per card; cards with a title start closed, empty ones open
@@ -63,7 +63,7 @@ export function ActivityList({ items, onChange, ro, err, media, addMedia, onPick
       {items.map((a, i) => {
         const first = a.mediaIds.map((x) => media[x]).find(Boolean);
         const flags = a.mediaIds.map((x) => needs(media[x])).filter(Boolean);
-        const alts = flags.filter((f) => f === 'alt').length, rights = flags.filter((f) => f === 'rights').length;
+        const rights = flags.filter((f) => f === 'rights').length;
         const isOpen = !!open[i];
         return <li key={i} className={`ae-card${isOpen ? ' is-open' : ''}${drag === i ? ' is-drag' : ''}${over === i && drag !== null && drag !== i ? ' is-over' : ''}`}
           onDragOver={(e) => { if (drag !== null) { e.preventDefault(); setOver(i); } }} onDragLeave={() => setOver((o) => (o === i ? null : o))}
@@ -76,7 +76,6 @@ export function ActivityList({ items, onChange, ro, err, media, addMedia, onPick
               <span className="ae-head-t"><b>{a.title.trim() || <em>Untitled activity</em>}</b>
                 <small>{[whenLabel(a.when), a.place?.trim()].filter(Boolean).join(' · ') || 'No date or place'} · {a.mediaIds.length ? `${a.mediaIds.length} photo${a.mediaIds.length === 1 ? '' : 's'}` : 'No photos'}</small></span>
               <span className="ae-chips">
-                {alts > 0 && <span className="ae-chip bad">{alts} alt text</span>}
                 {rights > 0 && <span className="ae-chip warn">{rights} rights</span>}
               </span>
               <Icon n="chev" className="ae-caret" />
@@ -141,7 +140,7 @@ function Gallery({ ids, media, ro, label, canEditMedia, addMedia, onChange, onPi
       try { added.push(await upload(f)); } catch (e) { toast(`${f.name}: ${(e as Error).message}`, true); }
       setUploading((n) => n - 1);
     }
-    if (added.length) { addMedia(added); onChange([...new Set([...ids, ...added.map((m) => m.id)])].slice(0, PHOTOS)); toast(`${added.length} photo${added.length === 1 ? '' : 's'} uploaded. Add alt text before review.`); }
+    if (added.length) { addMedia(added); onChange([...new Set([...ids, ...added.map((m) => m.id)])].slice(0, PHOTOS)); toast(`${added.length} photo${added.length === 1 ? '' : 's'} uploaded. Confirm usage rights before review.`); }
   }
 
   const editItem = editing ? media[editing] : null;
@@ -162,7 +161,6 @@ function Gallery({ ids, media, ro, label, canEditMedia, addMedia, onChange, onPi
         onDrop={(e) => { if (drag !== null) { e.preventDefault(); e.stopPropagation(); onChange(move(ids, drag, i)); } setDrag(null); setOver(null); }}>
         {m ? <img src={m.url} alt={m.alt || ''} draggable={false} /> : <span className="ae-tile-ph">Photo</span>}
         {i === 0 && <span className="ae-main">Main</span>}
-        {flag === 'alt' && <span className="ae-flag bad" title="No alt text yet">Alt</span>}
         {flag === 'rights' && <span className="ae-flag warn" title="Usage rights not confirmed">Rights</span>}
         {!ro && <span className="ae-tile-tools">
           <button type="button" aria-label={`Move photo ${i + 1} earlier`} title="Move earlier" disabled={i === 0} onClick={() => onChange(move(ids, i, i - 1))}>‹</button>

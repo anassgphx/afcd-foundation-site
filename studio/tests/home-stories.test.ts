@@ -163,7 +163,7 @@ describe('participant stories: photos from the Media Library', () => {
     mkdirSync(join(h.siteRoot, 'assets/img'), { recursive: true }); writeFileSync(join(h.siteRoot, 'assets/img/hero-slide-2.webp'), 'x');
   });
 
-  it('needs alt text and confirmed rights before review, then publishes the photo with its alt text and focal point', async () => {
+  it('needs confirmed rights (not alt text) before review, then publishes the photo with its alt text and focal point', async () => {
     const ed = await client(h.app, 'ed@afcd.test'), rev = await client(h.app, 'rev@afcd.test'), admin = await client(h.app, 'admin@afcd.test');
     const png = await sharp({ create: { width: 1200, height: 800, channels: 3, background: '#557755' } }).png().toBuffer();
     const fd = new FormData(); fd.append('file', new File([new Uint8Array(png)], 'story.png'));
@@ -175,9 +175,9 @@ describe('participant stories: photos from the Media Library', () => {
     expect((await ed.put('/home', { 'impact.stories': list })).status).toBe(200);
     const home = (await ed.get('/home')).body;
     expect(home.media.map((m: any) => m.id)).toContain(id);   // the editor can show the thumbnail
-    expect(home.problems.join(' ')).toMatch(/Add alt text/);
+    expect(home.problems.join(' ')).not.toMatch(/alt text/);
     expect(home.problems.join(' ')).toMatch(/Confirm usage rights/);
-    expect(home.issues.filter((i: any) => /Add alt text/.test(i.message))).toEqual([{ message: 'Add alt text to “story.png”.', section: f.sectionId, field: 'impact.stories', item: 0 }]);
+    expect(home.issues.filter((i: any) => /Confirm usage rights/.test(i.message))).toEqual([{ message: 'Confirm usage rights and consent for “story.png”.', section: f.sectionId, field: 'impact.stories', item: 0 }]);
     expect((await ed.post('/home/transition', { action: 'submit' })).status).toBe(422);
 
     await h.db.update(media).set({ alt: 'Sara speaking at a workshop', rightsConfirmed: true, focalX: 40, focalY: 25 });

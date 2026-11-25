@@ -23,7 +23,7 @@ describe('project logo', () => {
     expect(r.status).toBe(201);
     const full = await P.loadProject(h.db, r.body.id);
     expect(full.logo?.id).toBe(logo.id);
-    expect(P.publishProblems(full).join(' ')).toMatch(/alt text to “test-logo\.png”/);
+    expect(P.publishProblems(full).join(' ')).toMatch(/rights and consent for “test-logo\.png”/);
     const snap = P.toSnapshot(full);
     expect(snap.detail.logo).toMatchObject({ id: logo.id, ...style });
     const lg = snap.detail.logo as { w: number; h: number }; expect(lg.w / lg.h).toBeCloseTo(800 / 600, 2);   // keeps the image proportions for the "original" shape

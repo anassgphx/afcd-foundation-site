@@ -344,7 +344,7 @@ export async function listProjects(db: DB) {
     ...((r.activityItems ?? []) as { mediaIds?: string[] }[]).flatMap((a) => a.mediaIds ?? [])].filter(Boolean) as string[])]]));
   const allIds = [...new Set([...used.values()].flat())];
   const incomplete = new Set((allIds.length ? await db.select({ id: media.id, alt: media.alt, ok: media.rightsConfirmed }).from(media).where(inArray(media.id, allIds)) : [])
-    .filter((m) => !m.alt.trim() || !m.ok).map((m) => m.id));
+    .filter((m) => !m.ok).map((m) => m.id));
   const th = (id: string | null) => (id ? thumbs.get(id) ?? null : null);
   // for the list's "info entered" meter: how many partners and gallery photos each project has
   const pp = await db.select({ projectId: partnerProjects.projectId }).from(partnerProjects);

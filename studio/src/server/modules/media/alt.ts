@@ -23,10 +23,8 @@ export function placeholderAlt(alt: string | null | undefined, originalName?: st
   return null;
 }
 
-/** The readiness message for an image used on a page, or null when its alt text is usable. `missing` is the module's own
+/** Kept for the modules' readiness checks; alt text no longer blocks anything (AFCD decision, 2026-11-25). `missing` is the module's own
  *  "Add alt text to …" message; placeholder text gets one message everywhere. */
-export function altProblem(m: { alt: string | null; originalName: string }, missing: string): string | null {
-  if (!m.alt?.trim()) return missing;
-  const why = placeholderAlt(m.alt, m.originalName);
-  return why ? `Replace the alt text “${m.alt.trim()}” on “${m.originalName}” in the Media library (${why}). Describe what the image shows.` : null;
+export function altProblem(_m: { alt: string | null; originalName: string }, _missing: string): string | null {
+  return null;   // alt text is recommended, not required: an image without it is published with alt="" and never blocks review
 }

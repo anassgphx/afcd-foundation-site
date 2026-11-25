@@ -168,7 +168,7 @@ export function EventEditor({ id }: { id: string }) {
         <Section id="media" title="Poster" desc="Square images work best. Without one, a neutral placeholder is shown.">
           <div className="ed-media s3">
             {f.posterMediaId && poster ? <div className="ed-media-img"><img src={poster.url} alt={poster.alt} /><button type="button" className="btn btn-sm" onClick={() => set('posterMediaId', null)}><Icon n="x" />Remove</button></div>
-              : <button type="button" className="ed-drop" onClick={() => setDialog('poster')}><Icon n="image" /><b>Choose a poster</b><small>From the media library. It needs alt text and confirmed rights before review.</small></button>}
+              : <button type="button" className="ed-drop" onClick={() => setDialog('poster')}><Icon n="image" /><b>Choose a poster</b><small>From the media library. It needs confirmed rights before review.</small></button>}
             {f.posterMediaId && <button type="button" className="btn btn-sm" onClick={() => setDialog('poster')}><Icon n="image" />Change poster</button>}
           </div>
         </Section>

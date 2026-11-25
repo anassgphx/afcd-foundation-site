@@ -119,7 +119,7 @@ describe('about pages', () => {
     expect((await c.admin.get('/about/strategy')).body.status).toBe('approved');
   });
 
-  it('team: people need a name and role, never a legal-representative label or a private email; portraits need alt text and rights', async () => {
+  it('team: people need a name and role, never a legal-representative label or a private email; portraits need confirmed rights (alt text optional)', async () => {
     await importAbout(h.db, h.cfg, null, SITE);
     const { body: t } = await c.ed.get('/about/team');
     const fd = new FormData(); fd.append('file', new File([await pngBytes()], 'portrait.png', { type: 'image/png' }));
@@ -132,7 +132,7 @@ describe('about pages', () => {
     expect(blocked.status).toBe(422);
     const msg = JSON.stringify(blocked.body.details);
     expect(msg).toMatch(/legal representative is not shown/); expect(msg).toMatch(/Person 2: add a name/); expect(msg).toMatch(/someone@example.com is not public/);
-    expect(msg).toMatch(/alt text/); expect(msg).toMatch(/Confirm AFCD may use/);
+    expect(msg).not.toMatch(/alt text/); expect(msg).toMatch(/Confirm AFCD may use/);
     await h.app.request(`/studio/api/media/${img.id}`, { method: 'PATCH', headers: { Cookie: c.ed.cookie, Origin: ORIGIN, 'X-CSRF-Token': c.ed.csrf, 'Content-Type': 'application/json' }, body: JSON.stringify({ alt: 'Portrait of a test person', rightsConfirmed: true }) });
     expect((await c.ed.put('/about/team', { content: { ...t.content, people: [person, { ...person, name: 'Second Test (fake)', bio: 'Write to contact@afcdteam.com' }] } })).status).toBe(200);
     await approve(c, 'team');

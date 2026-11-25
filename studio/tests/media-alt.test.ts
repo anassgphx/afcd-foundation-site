@@ -13,8 +13,9 @@ describe('placeholder alt text', () => {
   });
   it('leaves empty alt to the "missing" message, unchanged', () => {
     expect(placeholderAlt('')).toBeNull();
-    expect(altProblem({ alt: '', originalName: 'a.jpg' }, 'Add alt text to “a.jpg”.')).toBe('Add alt text to “a.jpg”.');
-    expect(altProblem({ alt: 'zzzzz', originalName: '1.jpg' }, 'x')).toMatch(/^Replace the alt text “zzzzz” on “1\.jpg” in the Media library/);
+    // alt text is optional: neither an empty nor a weak alt text blocks review
+    expect(altProblem({ alt: '', originalName: 'a.jpg' }, 'Add alt text to “a.jpg”.')).toBeNull();
+    expect(altProblem({ alt: 'zzzzz', originalName: '1.jpg' }, 'x')).toBeNull();
     expect(altProblem({ alt: 'Students planting trees', originalName: '1.jpg' }, 'x')).toBeNull();
   });
 });

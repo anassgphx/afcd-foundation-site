@@ -253,7 +253,7 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
         <Section id="objectives" title="Objectives" desc="Written here for this pillar only and shown on its page in this order. Nothing is taken from AFCD’s strategy page.">
           <div className="field ed-f s3"><span className="ed-lbl">Photos next to the objectives <span className="muted">(optional, up to 8)</span></span>
             {objPhotos.length > 0 && <ul className="pl-objpics">{objPhotos.map((m, i) => <li key={m.id}>
-              <img src={m.url} alt={m.alt} />{(!m.alt || !m.rightsConfirmed) && <span className="pl-objpic-warn" title="Needs alt text and confirmed rights before review"><Icon n="alert" width={13} height={13} /></span>}
+              <img src={m.url} alt={m.alt} />{!m.rightsConfirmed && <span className="pl-objpic-warn" title="Needs confirmed rights before review"><Icon n="alert" width={13} height={13} /></span>}
               {editable && <span className="pl-objpic-a">
                 <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === 0} aria-label={`Move photo ${i + 1} earlier`} onClick={() => { const a = [...objPhotos]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; setObjPhotos(a); set('objectivesMediaIds', a.map((x) => x.id)); }}>←</button>
                 <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === objPhotos.length - 1} aria-label={`Move photo ${i + 1} later`} onClick={() => { const a = [...objPhotos]; [a[i + 1], a[i]] = [a[i], a[i + 1]]; setObjPhotos(a); set('objectivesMediaIds', a.map((x) => x.id)); }}>→</button>

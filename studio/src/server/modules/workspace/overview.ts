@@ -7,7 +7,6 @@ import { can, type Role } from '../../rbac.ts';
 import { TEXT_PAGES } from '../home/service.ts';
 import { todayMorocco } from '../events/render.ts';
 import { notifications, openFailures } from './service.ts';
-import { placeholderAlt } from '../media/alt.ts';
 import { recentPublicState } from '../publish/public-check.ts';
 
 type Mod = { key: string; label: string; href: string; icon: string; live: number; drafts: number; review: number; note?: string; scheduled?: number };
@@ -100,10 +99,9 @@ export async function overview(db: DB, user: { id: string; role: Role }, cfg?: C
       detail: r ? `Studio’s check of titles, links and indexing, not a Google score. ${errors ? `${errors} serious issue${errors === 1 ? '' : 's'}` : 'No serious issues'}${warnings ? `, ${warnings} to improve` : ''} · ${checked}` : 'Run the site audit' });
   }
   if (can(role, 'media.read')) {
-    // placeholder alt text ("zzzzz") counts as missing: it needs fixing just as much as an empty one
     const rows = await db.select({ alt: media.alt, originalName: media.originalName, rightsConfirmed: media.rightsConfirmed }).from(media);
-    const total = rows.length, need = rows.filter((m) => !m.rightsConfirmed || !m.alt.trim() || placeholderAlt(m.alt, m.originalName)).length;
-    health.push({ key: 'media', label: 'Media', value: need ? `${need} to fix` : `${total} ready`, tone: need ? 'warn' : 'ok', href: '/studio/media', detail: need ? 'Need alt text or confirmed usage rights before they can be published.' : `${total} images, all with alt text and rights` });
+    const total = rows.length, need = rows.filter((m) => !m.rightsConfirmed).length;
+    health.push({ key: 'media', label: 'Media', value: need ? `${need} to fix` : `${total} ready`, tone: need ? 'warn' : 'ok', href: '/studio/media', detail: need ? 'Need confirmed usage rights before they can be published.' : `${total} images, all with confirmed rights` });
   }
   if (can(role, 'forms.read')) {
     const [{ n }] = await db.select({ n: count() }).from(formSubmissions).where(and(eq(formSubmissions.formKey, 'contact'), eq(formSubmissions.spam, false), isNull(formSubmissions.archivedAt), isNull(formSubmissions.readAt)));

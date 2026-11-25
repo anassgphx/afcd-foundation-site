@@ -37,7 +37,7 @@ describe('project page sections', () => {
     const bad4 = await ed.put(`/projects/${plain.body.id}`, projectInput({ programObjectives: Array.from({ length: 13 }, (_, i) => ({ title: `O${i}`, text: '' })) }));
     expect(bad4.status).toBe(422);
 
-    // a photo without alt text or rights blocks review, like the gallery
+    // a photo without confirmed rights blocks review (alt text is optional), like the gallery
     const [photo] = await h.db.insert(media).values({ originalName: 'bootcamp.jpg', storageKey: 'abc123', mime: 'image/jpeg', width: 1600, height: 1200, bytes: 1000, alt: '', rightsConfirmed: false }).returning();
     const [photo2] = await h.db.insert(media).values({ originalName: 'bootcamp-2.jpg', storageKey: 'def456', mime: 'image/jpeg', width: 1600, height: 1200, bytes: 1000, alt: 'Group work', rightsConfirmed: true }).returning();
     const ok = await ed.put(`/projects/${plain.body.id}`, projectInput(sections([photo2.id, photo.id])));
@@ -48,7 +48,7 @@ describe('project page sections', () => {
     expect(got.activityItems[0].mediaIds).toEqual([photo2.id, photo.id]);
     expect(got.linkedEvents).toEqual([]);
     expect(got.activityMedia[photo.id].originalName).toBe('bootcamp.jpg');
-    expect(got.problems).toContain('Add alt text to “bootcamp.jpg”.');
+    expect(got.problems).not.toContain('Add alt text to “bootcamp.jpg”.');
     expect(got.problems).toContain('Confirm usage rights and consent for “bootcamp.jpg”.');
 
     // export: plain text, empty optional parts left out, the photo in the gallery's shape

@@ -11,12 +11,11 @@ import * as L from './library.ts';
 import * as T from './trash.ts';
 import * as C from './crop.ts';
 import { trimBox } from './trim.ts';
-import { placeholderAlt } from './alt.ts';
 
 const urls = (m: M.MediaRow) => ({ url: `/studio/media-file/${m.storageKey}-480.webp`, large: `/studio/media-file/${M.publicRef(m).src.split('/').pop()}` });
 /** What a reviewer would ask for before this image can be used publicly. */
 const today = () => new Date().toISOString().slice(0, 10);
-const issues = (m: M.MediaRow) => [...(!m.alt.trim() || placeholderAlt(m.alt, m.originalName) ? ['alt'] : []), ...(!m.credit.trim() ? ['credit'] : []), ...(!m.rightsConfirmed ? ['rights'] : []),
+const issues = (m: M.MediaRow) => [...(!m.credit.trim() ? ['credit'] : []), ...(!m.rightsConfirmed ? ['rights'] : []),
   ...(m.rightsExpiresOn && m.rightsExpiresOn < today() ? ['expired'] : [])];
 
 export function registerMediaLibraryRoutes(api: Hono<Env>) {

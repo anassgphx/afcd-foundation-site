@@ -1003,18 +1003,8 @@ def pillars():
         work_pic_html = f'<figure class="plx-work-pic">{media_img(work_pic, "h-full w-full", "(min-width: 1024px) 28vw, 100vw")}</figure>' if work_pic and acts and groups else ''
 
         # -- projects: real ones only
-        def pcard(pr, j):
-            name, _sl, _pn, cat, href, summ = pr
-
-            data = proj_by_name.get(name) or {}
-            img = ((data.get('detail') or {}).get('cover') or [None])[0]
-            st = project_status(name)
-            visual = media_img(img, 'h-full w-full', '(min-width: 1024px) 30vw, 100vw') if img else f'<span class="plx-pj-mono" aria-hidden="true">{j:02d}</span>'
-            meta = ''.join(x for x in [status_badge(st, 'is-sm') if st else '', f'<span class="plx-pj-cat">{cat}</span>' if cat else ''])
-            inner = f'''<div class="plx-pj-vis{' has-img' if img else ''}">{visual}</div><div class="plx-pj-b"><div class="plx-pj-meta">{meta}</div><span class="plx-pj-t">{name}</span>{f'<span class="plx-pj-d">{summ}</span>' if summ else ''}<span class="plx-pj-go">{'Explore project' if href else 'Project page coming soon'}{' <span aria-hidden="true">↗</span>' if href else ''}</span></div>'''
-            return f'<li><a href="{href}" class="plx-pj">{inner}</a></li>' if href else f'<li><div class="plx-pj is-static">{inner}</div></li>'
-        proj_html = ''.join(pcard(p, j) for j, p in enumerate(projs, 1))
-        proj_block = (f'<ul class="plx-pjs mt-8 lg:mt-10">{proj_html}</ul>' if projs else
+        proj_html = ''.join(project_card(p) for p in projs)   # the same card as the projects page
+        proj_block = (f'<ul class="pjc-grid mt-8 lg:mt-10">{proj_html}</ul>' if projs else
                       f'<div class="plx-empty mt-8 lg:mt-10"><p class="plx-empty-t">No projects are published under this pillar yet.</p><p class="plx-empty-d">They appear here as soon as AFCD publishes them.</p><a href="projects.html" class="link-arrow mt-4">All projects <span class="arr" aria-hidden="true">↗</span></a></div>')
 
         # -- related: this pillar's stories and events

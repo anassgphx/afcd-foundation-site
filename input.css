@@ -3159,3 +3159,8 @@ ol.abx-tl .abx-tl-d { margin-top: 8px; max-width: none; font-size: 15px; color: 
 .pjc-soon { display: inline-block; font-size: 13px; color: #78716C; }
 .pjc:focus-visible { outline: 2px solid #0A0A0A; outline-offset: 6px; border-radius: 1rem; }
 @media (max-width: 639px) { .pjc-title { font-size: 21px; } .pjc-body { padding-top: 18px; } }
+
+/* Pillar pages: their projects in the same cards and grid as the projects page. */
+.pjc-grid { display: grid; gap: 48px 24px; }
+@media (min-width: 640px) { .pjc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .pjc-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

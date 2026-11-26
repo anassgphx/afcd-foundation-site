@@ -1155,12 +1155,14 @@ def status_badge(st, cls=''):
 
 
 def project_poster(name, slug, pname):
-    """A project card's picture: its main photo, else its first cover photo, else a poster tile in the pillar colour."""
+    """A project card's picture (square): the project's poster (1:1, shown whole), else its main photo or first cover
+    photo cropped to a square, else a tile in the pillar colour with the project name."""
     d = (next((y for y in _PROJECT_DATA if y.get('name') == name), None) or {}).get('detail') or {}
-    pic = d.get('hero') or next(iter(d.get('cover') or []), None)
-    if pic and pic.get('src') and pic.get('srcset'):
-        return f'<div class="pj-card-pic">{media_img(pic, "aspect-[4/3] w-full", "(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw")}</div>'
-    return (f'<div class="pj-card-pic pj-poster aspect-[4/3] w-full" style="--c:{PILLAR_TONE.get(slug, "#E7E5E4")}">'
+    pic = next((m for m in (d.get('poster'), d.get('hero'), next(iter(d.get('cover') or []), None)) if m and m.get('src') and m.get('srcset')), None)
+    if pic:
+        kind = ' is-poster' if pic is d.get('poster') else ''
+        return f'<div class="pj-card-pic{kind}">{media_img(pic, "h-full w-full", "(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw")}</div>'
+    return (f'<div class="pj-card-pic pj-poster" style="--c:{PILLAR_TONE.get(slug, "#E7E5E4")}">'
             f'<span class="pj-poster-k">{pname}</span><span class="pj-poster-t">{name}</span></div>')
 
 

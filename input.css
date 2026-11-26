@@ -3100,8 +3100,23 @@ ol.abx-tl .abx-tl-d { margin-top: 8px; max-width: none; font-size: 15px; color: 
 @media (min-width: 1024px) { .abx-regs2 + .abx-note { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; padding: 32px 36px; } .abx-regs2 + .abx-note > p { margin-top: 0; } }
 @media (prefers-reduced-motion: reduce) { .abx-reg2, .abx-reg2:hover { transition: none; transform: none; } }
 
-/* Partners page: two logo box shapes. Square logos get a 1:1 box, every other logo a 2.5:1 box; the whole logo fits inside. */
-.pr-stage:has(.pr-logo.has-img) { position: relative; height: auto; aspect-ratio: 5 / 2; padding: 0; }
-.pr-stage:has(.pr-logo.is-square) { aspect-ratio: 1 / 1; }
-.pr-stage .pr-logo.has-img { position: absolute; inset: 16px; width: auto; height: auto !important; }   /* the box sets the size, never the image */
-.pr-stage .pr-logo.has-img .pr-logo-img { width: 100% !important; height: 100% !important; max-width: 100% !important; max-height: 100%; object-fit: contain !important; object-position: center !important; }
+/* Partners page directory: a clean grid. Each card is a same-size tile that holds only the logo (smaller, with room
+   around it, in colour), then the name and the partnership facts sit under the tile, outside the box. */
+.pr-grid { gap: 32px 20px; }
+@media (max-width: 639px) { .pr-grid { gap: 24px 12px; } }
+.pr-grid .pr-card { padding: 0; gap: 0; border: 0; border-radius: 0; background: none; box-shadow: none; transform: none; }
+.pr-grid .pr-card:hover { transform: none; box-shadow: none; }
+.pr-grid .pr-stage { position: relative; height: auto; aspect-ratio: 3 / 2; padding: 0; border-radius: 20px; background: #FAFAF9; border: 1px solid #EEECE9;
+  transition: background-color .3s ease, border-color .3s ease, box-shadow .35s ease, transform .35s cubic-bezier(.2,.7,.2,1); }
+.pr-grid .pr-card:hover .pr-stage { background: #fff; border-color: #D6D3D1; transform: translateY(-3px); box-shadow: 0 22px 40px -28px rgba(0,0,0,.28); }
+.pr-grid .pr-stage .pr-logo { position: absolute; inset: 18% 16%; width: auto; height: auto !important; display: flex; align-items: center; justify-content: center !important; padding: 0 !important; }
+.pr-grid .pr-stage .pr-logo.is-square { inset: 14% 22%; }
+.pr-grid .pr-stage .pr-logo.has-img .pr-logo-img { width: 100% !important; height: 100% !important; max-width: 100% !important; max-height: 100%; object-fit: contain !important; object-position: center !important; filter: none !important; mix-blend-mode: multiply; }
+.pr-grid .pr-stage .pr-logo:not(.has-img) span { width: 64px; height: 64px; font-size: 17px; background: #fff; }
+.pr-grid .pr-body { padding: 14px 4px 0; }
+.pr-grid .pr-body .pr-scope { font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: #78716C; }
+.pr-grid .pr-body .pr-scope svg { width: 13px; height: 13px; }
+.pr-grid .pr-name { margin-top: 6px; font-size: 16.5px; line-height: 1.3; }
+.pr-grid .pr-meta { margin-top: 8px; }
+.pr-grid .pr-web { margin-top: 10px; padding-top: 0; }
+@media (max-width: 639px) { .pr-grid .pr-stage { border-radius: 16px; } .pr-grid .pr-stage .pr-logo { inset: 14% 10%; } .pr-grid .pr-stage .pr-logo.is-square { inset: 12% 22%; } .pr-grid .pr-name { font-size: 15px; } .pr-grid .pr-body { padding-top: 12px; } }

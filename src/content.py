@@ -562,13 +562,17 @@ def about():
     side = (f'<figure class="plx-photo">{media_img(photo, "h-full w-full", "(min-width: 1024px) 40vw, 100vw", eager=True)}</figure>' if photo else
             f'<div class="plx-side abx-side"><p class="plx-k">In short</p><div class="abx-paras">{paras}</div>{legal}</div>' if paras or legal else '')
     facts = [(_esc(f['label']), _esc(f['value'])) for f in c.get('facts') or []] + [('Pillars', f'{PILLAR_COUNT:02d}')]
-    tl = ''.join(f'''<li class="abx-tl-i"><span class="abx-tl-when">{_esc(m["when"])}</span><span class="abx-tl-dot" aria-hidden="true"></span><span class="abx-tl-b"><span class="abx-tl-t">{_esc(m["title"])}</span>{f'<span class="abx-tl-d">{_esc(m["text"])}</span>' if (m.get("text") or "").strip() else ''}</span></li>'''
+    tl = ''.join(f'''<li class="abx-tl-i"><span class="abx-tl-dot" aria-hidden="true"></span><div class="abx-tl-card"><span class="abx-tl-when">{_esc(m["when"])}</span><span class="abx-tl-b"><span class="abx-tl-t">{_esc(m["title"])}</span>{f'<span class="abx-tl-d">{_esc(m["text"])}</span>' if (m.get("text") or "").strip() else ''}</span></div></li>'''
                  for m in c.get('milestones') or [])
     pr = c.get('principles') or []
     areas = c.get('areas') or []
+    # each area in its pillar's colour, with the pillar's icon from the homepage explorer
+    area_tone = lambda a: f' style="--pc:{PILLAR_TONE.get(a.get("pillar"), "#E7E5E4")}"'
+    area_ico = lambda a: ('<span class="abx-area-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" '
+                          f'stroke-linejoin="round" aria-hidden="true">{HOME_PILLAR_ICO.get(a.get("pillar"), HOME_PILLAR_ICO["youth-empowerment"])}</svg></span>')
     area_rows = ''.join(
-        (f'<li><a href="pillars.html#{_esc(a["pillar"])}" class="plx-other abx-area">' if a.get('pillar') in PILLAR_FILE else '<li><div class="plx-other abx-area">')
-        + f'<span class="plx-other-n">{j:02d}</span><span class="min-w-0"><span class="plx-other-t">{_esc(a["title"])}</span>'
+        (f'<li><a href="pillars.html#{_esc(a["pillar"])}" class="plx-other abx-area"{area_tone(a)}>' if a.get('pillar') in PILLAR_FILE else f'<li><div class="plx-other abx-area"{area_tone(a)}>')
+        + f'{area_ico(a)}<span class="plx-other-n">{j:02d}</span><span class="min-w-0"><span class="plx-other-t">{_esc(a["title"])}</span>'
         + (f'<span class="plx-other-d">{_esc(a["text"])}</span>' if (a.get('text') or '').strip() else '') + '</span>'
         + ('<span class="plx-arr" aria-hidden="true">↗</span></a></li>' if a.get('pillar') in PILLAR_FILE else '</div></li>')
         for j, a in enumerate(areas, 1))
@@ -585,7 +589,7 @@ def about():
     fy = str(c.get('foundedYear') or 2007)
     blocks = {
         'statement': lambda k, cfg: f"""
-<section id="statement" class="plx-sec py-14 lg:py-20">
+<section id="statement" class="plx-sec abx-stx py-10 lg:py-14">
   <div class="wrap">
     <div class="plx-pv">
       <div>

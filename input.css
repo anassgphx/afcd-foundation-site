@@ -2939,3 +2939,77 @@ a.abx-chip:hover { background: #000; color: #fff; border-color: #000; }
   .abx .abx-lead { font-size: 18px; }
   .abx .plx-side { border-radius: 24px; }
 }
+
+/* ---------- Our Story · President's statement (#statement.abx-stx): one soft-grey card. The heading stays in view on
+   the left while the statement reads on the right: an opening quotation mark, the first paragraph as a lead, then
+   the attribution under a thin rule. ---------- */
+.abx-stx .plx-pv { gap: 32px; padding: 28px; border-radius: 32px; background: #F5F5F5; }
+@media (min-width: 768px) { .abx-stx .plx-pv { padding: 48px; } }
+@media (min-width: 1024px) { .abx-stx .plx-pv { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 72px; padding: 64px; align-items: start; }
+  .abx-stx .plx-pv > div:first-child { position: sticky; top: 140px; } }
+.abx-stx .sh-num { background: #000; color: #fff; }
+.abx-stx .plx-k { margin-top: 32px; font-size: 12px; letter-spacing: .16em; color: #737373; }
+.abx-stx .abx-st-title { margin-top: 12px; font-size: clamp(30px, 3.2vw, 44px); line-height: 1.06; letter-spacing: -.04em; text-wrap: balance; }
+.abx-stx .abx-st-title::after { content: ""; display: block; width: 48px; height: 2px; margin-top: 28px; background: #000; }
+.abx-stx .abx-st-pic { width: 100%; max-width: 320px; margin-top: 32px; border-radius: 22px; }
+.abx-stx .abx-st-pic img { filter: none; }
+.abx-stx .abx-st { position: relative; padding-top: 64px; }
+.abx-stx .abx-st::before { content: "“"; position: absolute; top: -8px; left: -4px; font-size: 120px; font-weight: 700; line-height: 1; color: #000; }
+.abx-stx .abx-st-q { display: grid; gap: 20px; max-width: 62ch; padding: 0; border: 0; padding-inline-start: 0; border-inline-start: 0;
+  font-size: 17px; font-weight: 400; line-height: 1.75; letter-spacing: 0; color: #404040; }
+.abx-stx .abx-st-q p:first-child { font-size: clamp(19px, 1.6vw, 22px); font-weight: 500; line-height: 1.55; letter-spacing: -.01em; color: #000; }
+.abx-stx .abx-sig { margin-top: 36px; padding: 20px 0 0; padding-inline-start: 0; border-top: 1px solid #D4D4D4; }
+.abx-stx .abx-sig-n { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.abx-stx .abx-sig-r { margin-top: 4px; font-size: 14px; color: #737373; }
+@media (max-width: 639px) {
+  .abx-stx .plx-pv { padding: 22px; border-radius: 24px; }
+  .abx-stx .abx-st { padding-top: 52px; }
+  .abx-stx .abx-st::before { font-size: 96px; }
+  .abx-stx .abx-st-q { font-size: 16px; }
+}
+
+/* ---------- Our Story · journey (ol.abx-tl): a vertical timeline. One line runs down the middle, milestones sit in
+   bordered cards that alternate left and right (the site's card style); on phones the line moves to the left. ---------- */
+ol.abx-tl { position: relative; display: grid; gap: 20px; padding: 8px 0; border-top: 0; }
+ol.abx-tl::before { content: ""; position: absolute; top: 0; bottom: 0; left: 11px; width: 2px; border-radius: 2px; background: linear-gradient(#000, #000 70%, #D4D4D4); }
+ol.abx-tl .abx-tl-i { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 0 18px; padding: 0; border: 0; }
+ol.abx-tl .abx-tl-i::before { display: none; }
+ol.abx-tl .abx-tl-dot { grid-column: 1; grid-row: 1; justify-self: center; width: 16px; height: 16px; margin-top: 30px; border: 3px solid #000; background: #fff; box-shadow: 0 0 0 6px #fff; }
+ol.abx-tl .abx-tl-i:hover .abx-tl-dot { background: #000; }
+ol.abx-tl .abx-tl-card { grid-column: 2; grid-row: 1; padding: 22px 24px 24px; border: 1px solid #ECECEA; border-radius: 22px; background: #fff;
+  transition: border-color .3s ease, transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .3s ease; }
+ol.abx-tl .abx-tl-i:hover .abx-tl-card { border-color: #000; transform: translateY(-2px); box-shadow: 0 12px 28px -18px rgba(0,0,0,.35); }
+ol.abx-tl .abx-tl-when { display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 9999px; background: #000; color: #fff;
+  font-size: 13px; font-weight: 600; letter-spacing: .02em; line-height: 1; }
+ol.abx-tl .abx-tl-b { display: block; margin-top: 16px; }
+ol.abx-tl .abx-tl-t { font-size: 22px; }
+ol.abx-tl .abx-tl-d { margin-top: 8px; font-size: 15.5px; color: #57534E; }
+@media (min-width: 1024px) {
+  ol.abx-tl { gap: 0; }
+  ol.abx-tl::before { left: calc(50% - 1px); }
+  ol.abx-tl .abx-tl-i { grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr); gap: 0; }
+  ol.abx-tl .abx-tl-i + .abx-tl-i { margin-top: -40px; }
+  ol.abx-tl .abx-tl-dot { grid-column: 2; }
+  ol.abx-tl .abx-tl-card { grid-column: 1; padding: 28px 32px 30px; }
+  ol.abx-tl .abx-tl-i:nth-child(even) .abx-tl-card { grid-column: 3; }
+  ol.abx-tl .abx-tl-i:nth-child(odd) .abx-tl-card { text-align: right; }
+  ol.abx-tl .abx-tl-i:nth-child(odd) .abx-tl-d { margin-left: auto; }
+  ol.abx-tl .abx-tl-t { font-size: 24px; }
+}
+
+/* ---------- Our Story · What we do (#what-we-do): the four areas side by side, each a card in its pillar's colour with
+   the pillar's icon; two per row on tablets, one per row on phones. ---------- */
+#what-we-do .plx-others { display: grid; gap: 12px; }
+@media (min-width: 640px) { #what-we-do .plx-others { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { #what-we-do .plx-others { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+#what-we-do .plx-others > li { display: flex; }
+.abx-area.plx-other { flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto 1fr; align-items: center; gap: 22px 12px; padding: 24px; }
+.abx-area.plx-other:hover { padding-left: 24px; }
+.abx-area-ico { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; background: var(--pc, #E7E5E4); color: #000; }
+.abx-area-ico svg { width: 26px; height: 26px; }
+.abx-area .plx-other-n { justify-self: start; width: auto; height: auto; background: none; font-size: 12px; font-weight: 600; letter-spacing: .08em; color: #57534E; }
+.abx-area .plx-arr { grid-column: 3; grid-row: 1; }
+.abx-area > span.min-w-0 { grid-column: 1 / -1; grid-row: 2; align-self: start; }
+.abx-area .plx-other-t { font-size: 20px; line-height: 1.2; letter-spacing: -.025em; }
+.abx-area .plx-other-d { margin-top: 10px; font-size: 14.5px; line-height: 1.6; }
+@media (max-width: 639px) { .abx-area.plx-other, .abx-area.plx-other:hover { padding: 20px; } .abx-area-ico { width: 46px; height: 46px; } }

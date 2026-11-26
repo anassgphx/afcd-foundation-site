@@ -2902,3 +2902,40 @@ a.abx-chip:hover { background: #000; color: #fff; border-color: #000; }
 
 /* Project pages: a smaller title than other page headers (project names are often long) */
 .phd-title.sh-title.phd-title-md { font-size: clamp(30px, 3.4vw, 52px); line-height: 1.06; letter-spacing: -.035em; text-wrap: balance; }
+
+/* ---------- About pages overview (.abx .plx-hero): light and bordered like the pillar overview; the year in solid ink,
+   a readable lead, the key facts as small tiles, and the side panel in the same white card. ---------- */
+.abx .plx-hero { gap: 12px; align-items: stretch; }
+.abx .plx-hero-main { background: #fff; color: #0A0A0A; border: 1px solid #E7E5E4; border-radius: 28px; padding: 28px; }
+@media (min-width: 768px) { .abx .plx-hero-main { padding: 40px 44px; } }
+.abx .plx-hero-top { align-items: center; }
+.abx .abx-big { display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border-radius: 9999px; background: #0A0A0A; color: #fff; -webkit-text-stroke: 0;
+  font-size: 15px; font-weight: 600; line-height: 1; letter-spacing: .02em; }
+.abx .plx-pns { background: #F4F4F3; }
+.abx .plx-pn { color: #78716C; }
+.abx .plx-pn:hover { color: #000; background: #fff; }
+.abx .plx-pn.is-on { background: #000; color: #fff; }
+.abx .abx-lead { margin-top: 28px; max-width: 46ch; font-size: 20px; font-weight: 500; line-height: 1.5; letter-spacing: -.01em; color: #1C1917; text-wrap: pretty; }
+@media (min-width: 1024px) { .abx .abx-lead { font-size: 22px; } }
+.abx .plx-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 28px; border-top: 0; }
+.abx .plx-fact, .abx .plx-fact + .plx-fact { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid #ECECEA; border-radius: 16px; background: #FAFAF9; }
+.abx .plx-fact dt { order: 1; font-size: 12.5px; font-weight: 500; letter-spacing: 0; text-transform: none; color: #78716C; }
+.abx .plx-fact dd { order: 0; margin: 0; font-size: 20px; font-weight: 700; line-height: 1.2; letter-spacing: -.02em; color: #0A0A0A; }
+.abx .plx-cta { margin-top: 28px; }
+.abx .plx-btn { background: #000; color: #fff; }
+.abx .plx-btn:hover { background: #262626; }
+.abx .plx-link { color: #1C1917; }
+.abx .plx-link:hover { color: #000; text-decoration: underline; text-underline-offset: 4px; }
+.abx .plx-share { margin-top: auto; padding-top: 20px; border-top-color: #ECECEA; }
+.abx .plx-cta + .plx-share { margin-top: 28px; }
+.abx .plx-share .shr-k { color: #78716C; }
+.abx .plx-share .shr-b { color: #000; border-color: #E7E5E4; background: #fff; }
+.abx .plx-share .shr-b:hover { background: #000; color: #fff; border-color: #000; }
+.abx .plx-side { background: #fff; border-color: #E7E5E4; border-radius: 28px; }
+@media (max-width: 639px) {
+  .abx .plx-hero-main { padding: 22px; border-radius: 24px; }
+  .abx .plx-hero-top { flex-direction: row; flex-wrap: wrap; }
+  .abx .plx-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .abx .abx-lead { font-size: 18px; }
+  .abx .plx-side { border-radius: 24px; }
+}

@@ -136,7 +136,7 @@ ${filterCss(items, showTypes ? types : [], showPillars ? pkeys : [])}</style>
     <p class="pub-none mt-8 rounded-[24px] border border-dashed border-ink-light p-6 text-[15px] text-ink-dark" role="status">No publications match these filters.</p>
   </div>
 </section>`;
-  return `---\ntitle: Publications · AFCD Foundation\ndescription: Reports, studies, policy briefs and guides published by AFCD Foundation, to read and download.\nactive: none\n---\n<span id="top"></span>\n<div data-studio-publications="${live.map((p) => p.id).sort().join(',')}">\n${body}\n</div>\n`;
+  return `---\ntitle: AFCD Foundation publications: reports and resources\ndescription: Reports, studies, policy briefs and guides published by AFCD Foundation, to read and download.\nactive: none\n---\n<span id="top"></span>\n<div data-studio-publications="${live.map((p) => p.id).sort().join(',')}">\n${body}\n</div>\n`;
 }
 
 export function detailSource(p: LivePub, ctx: Ctx) {

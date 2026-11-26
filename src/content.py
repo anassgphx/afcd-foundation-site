@@ -646,7 +646,7 @@ def about():
 {secs}
 </div>
 ''' + abx_cta(c) + about_more('our-story.html')
-    page('our-story.html', 'Our Story · AFCD Foundation',
+    page('our-story.html', 'AFCD Foundation history: our story since 2007',
          'How young volunteers founded AFCD Foundation in Ait Ourir in 2007, and how we work with communities.', 'about', body, parent=ABOUT)
 
     # ---------------------------------------------------------------- Mission & Vision: one path, from today to tomorrow
@@ -787,7 +787,7 @@ def about():
 {groups_html}
 </div>
 ''' + abx_cta(c) + about_more('team.html')
-    page('team.html', 'Our Team · AFCD Foundation',
+    page('team.html', 'AFCD Foundation team: the people behind our work',
          'Meet the team behind AFCD Foundation’s programmes in Marrakech, Al Haouz and across Morocco.', 'about', body, parent=ABOUT)
 
     # ---------------------------------------------------------------- About hub: overview of the sub-pages, then impact
@@ -1145,7 +1145,7 @@ def pillars():
 </section>
 ''' + cta_band('Find your place in our work.', 'Volunteer, join a programme when calls open, or partner with us on a pillar.',
                   ('Get Involved', 'get-involved.html'), ('All projects', 'projects.html'))
-    page('pillars.html', 'Our Pillars · AFCD Foundation',
+    page('pillars.html', 'AFCD Foundation pillars: our areas of work',
          (', '.join(t for _s, _n, t, _d, _r in PILLARS[:-1]) + ' and ' if len(PILLARS) > 1 else '') + f'{PILLARS[-1][2]}: the {PILLARS_WORD} pillars of AFCD Foundation’s work.',
          'pillars', body)
 
@@ -1204,7 +1204,7 @@ def projects():
 </section>
 ''' + cta_band('Have an idea for your community?', 'We co-design and fund community initiatives with partners and local residents.',
                ('Partner With Us', 'get-involved.html#partner'), ('Contact us', 'contact.html'))
-    page('projects.html', 'Projects · AFCD Foundation',
+    page('projects.html', 'AFCD Foundation projects across Morocco',
          'AFCD Foundation projects across youth and women’s empowerment, the environment and digital inclusion.',
          'projects', body)
 
@@ -1853,7 +1853,7 @@ def news():
 </section>
 ''' + cta_band('Have a story to share?', 'Alumni, volunteers and partners: tell us about the change you’ve seen.',
                ('Contact us', 'contact.html'), ('Get Involved', 'get-involved.html'))
-    page('news.html', 'News & Stories · AFCD Foundation',
+    page('news.html', 'AFCD Foundation news and stories',
          'News, calls for applications and participant stories from AFCD Foundation.', 'news', body)
 
 
@@ -2259,7 +2259,7 @@ def events():
                    ('Contact us', 'contact.html?topic=General+question#message'), ('All events', 'events.html')) + bar
         page(event_file(e), f"{e.get('seoTitle') or e['title']} · Events · AFCD Foundation", (e.get('seoDescription') or f"{e['kind']} on {e['day']} {e['mon']} {e['year']} in {e['where']}: {e['desc']}")[:160], 'events', dbody, parent=('Events', 'events.html'))
 
-    page('events.html', 'Events · AFCD Foundation',
+    page('events.html', 'AFCD Foundation events: workshops and trainings',
          'AFCD Foundation events: workshops, trainings, community days and online sessions across Morocco.', 'events', body)
 
 
@@ -2376,7 +2376,7 @@ def partners():
 </div>
 ''' + cta_band(_esc(cl.get('title') or ''), _esc(cl.get('text') or ''),
                ('Partner With Us', 'contact.html?topic=Partnership#message'), ('Our projects', 'projects.html'))
-    page('partners.html', 'Partners · AFCD Foundation',
+    page('partners.html', 'AFCD Foundation partners: international, national and local',
          'The international, national and local organizations that have supported AFCD Foundation’s programmes.', 'partners', body)
 
 
@@ -2483,7 +2483,7 @@ def involved():
 </section>
 ''' + cta_band('Not sure where you fit?', 'Write to us and we’ll find the right way for you to take part.',
                ('Contact us', 'contact.html'), ('About AFCD', 'about.html'))
-    page('get-involved.html', 'Get Involved · AFCD Foundation',
+    page('get-involved.html', 'Volunteer with AFCD Foundation · Get Involved',
          'Volunteer, join a programme, partner with us or join the alumni club at AFCD Foundation.', 'involved', body)
 
 

@@ -67,7 +67,7 @@ export async function resolveFieldValues(db: DB, values: Record<string, unknown>
     if (v && typeof v === 'object' && 'mediaId' in v) { const p = photo((v as { mediaId: string }).mediaId); if (p) out[k] = p; }
     else if (Array.isArray(v)) out[k] = v.map((s) => {
       if (!(s && typeof s === 'object' && s.image && typeof s.image === 'object' && 'mediaId' in s.image)) return s;
-      const { image, ...rest } = s; const p = photo(String(image.mediaId));
+      const { image, ...rest } = s; const p = photo(String(image.mediaId ?? ''));
       return p ? { ...rest, image: p } : rest;   // a deleted photo falls back to the placeholder (review reports it)
     });
     else out[k] = v;

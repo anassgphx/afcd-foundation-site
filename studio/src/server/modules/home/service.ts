@@ -41,9 +41,14 @@ const storyImage = z.union([
 ]);
 const storySchema = z.object({ quote: plain(300, 1), name: plain(80, 1), role: plain(120), caption: plain(80), image: storyImage.optional(), sample: z.boolean().optional() }).strict();
 /** Every Media Library photo a set of values uses: image fields ({ mediaId }) and story photos. */
+/** The Media Library id a value points at, or null (no photo, a cleared photo { mediaId: null }, or anything not an id). */
+export const mediaIdOf = (v: unknown): string | null => {
+  const id = v && typeof v === 'object' && 'mediaId' in v ? (v as { mediaId: unknown }).mediaId : null;
+  return typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : null;
+};
 export const valueMediaIds = (values: Record<string, unknown>) => Object.values(values).flatMap((v) =>
-  v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId]
-  : Array.isArray(v) ? v.flatMap((s) => (s && typeof s === 'object' && s.image && typeof s.image === 'object' && 'mediaId' in s.image ? [String(s.image.mediaId)] : [])) : []);
+  Array.isArray(v) ? v.flatMap((s) => { const id = s && typeof s === 'object' ? mediaIdOf(s.image) : null; return id ? [id] : []; })
+  : (() => { const id = mediaIdOf(v); return id ? [id] : []; })());
 /** Longest plain text a homepage field takes (headings, labels and numbers have their own, shorter limits). */
 export const TEXT_MAX = 800;
 const schemaFor = (f: FieldDef): z.ZodTypeAny => {
@@ -97,8 +102,8 @@ export async function contentIssues(db: DB, cfg: Config, values: Record<string, 
   const usedBy = new Map<string, { section: string | null; field: string | null; item?: number }[]>();
   const use = (id: string, w: { section: string | null; field: string | null; item?: number }) => usedBy.set(id, [...(usedBy.get(id) ?? []), w]);
   for (const [k, v] of Object.entries(values)) {
-    if (v && typeof v === 'object' && 'mediaId' in v) use(String((v as { mediaId: string }).mediaId), { section: sectionOf(k), field: k });
-    else if (Array.isArray(v)) v.forEach((s, i) => { if (s && typeof s === 'object' && s.image && typeof s.image === 'object' && 'mediaId' in s.image) use(String(s.image.mediaId), { section: sectionOf(k), field: k, item: i }); });
+    if (Array.isArray(v)) v.forEach((s, i) => { const id = s && typeof s === 'object' ? mediaIdOf(s.image) : null; if (id) use(id, { section: sectionOf(k), field: k, item: i }); });
+    else { const id = mediaIdOf(v); if (id) use(id, { section: sectionOf(k), field: k }); }
   }
   if (Array.isArray(layout) && page.layout) {
     try {

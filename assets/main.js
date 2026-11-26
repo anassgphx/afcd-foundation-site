@@ -365,7 +365,10 @@
     var cur = 0, DUR = 7000, done = 0, t0 = performance.now(), userPaused = reduce, hover = false;
     var rtl = function () { return doc.dir === 'rtl' ? -1 : 1; };
     function running() { return !userPaused && !hover; }
+    function ready() { root.classList.add('hx-ready'); }   // see #hero:not(.hx-ready) in input.css
+    if (document.readyState === 'complete') ready(); else window.addEventListener('load', ready, { once: true });
     function go(i) {
+      ready();
       cur = (i + slides.length) % slides.length; done = 0; t0 = performance.now();
       slides.forEach(function (s, k) { var on = k === cur; s.classList.toggle('is-on', on); if (on) s.removeAttribute('aria-hidden'); else s.setAttribute('aria-hidden', 'true'); });
       copies.forEach(function (c, k) { c.classList.toggle('is-on', k === cur); c.hidden = k !== cur; });

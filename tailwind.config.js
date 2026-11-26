@@ -4,7 +4,7 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Arial', 'sans-serif'],
+        sans: ['Inter', 'Inter Fallback', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Arial', 'sans-serif'],
       },
       colors: {
         ink: { DEFAULT: '#0B0B0B', pure: '#000000', charcoal: '#171717', dark: '#404040', mid: '#737373', light: '#D4D4D4', faint: '#F5F5F5', off: '#FAFAFA' },

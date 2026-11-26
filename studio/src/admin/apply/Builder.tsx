@@ -1,4 +1,5 @@
-// AFCD Apply form builder. Left: pages, questions and rules (drag to reorder, or use the arrow buttons / Alt+↑↓).
+// AFCD Apply form builder. Two views of the same form: Simple (one column of cards, edited in place; the default)
+// and Advanced. Advanced, left: pages, questions and rules (drag to reorder, or use the arrow buttons / Alt+↑↓).
 // Centre: the live form on a desktop or phone canvas, with inline label editing; "Test" fills it in like an applicant,
 // running the same engine the server runs. Right: the inspector. Top: undo/redo, problems, save and publish.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -7,23 +8,11 @@ import type { Answers, Field, FieldType, FormDef, Issue, Lang } from '../../serv
 import { FIELD_TYPES, allFields, analyze, evaluate, t, validate } from '../../server/modules/apply/engine.ts';
 import { FieldView, type Lng } from './FieldView.tsx';
 import { FieldInspector, PageInspector, RuleInspector, SettingsInspector, findField, ruleSummary, slugId, type Sel } from './Inspector.tsx';
+import { SimpleEditor, newField } from './SimpleForm.tsx';
 import './builder.css';
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 const typing = (el: EventTarget | null) => { const e = el as HTMLElement | null; return !!e && (/INPUT|TEXTAREA|SELECT/.test(e.tagName) || e.isContentEditable); };
-
-function newField(type: FieldType, taken: Set<string>): Field {
-  const label: Record<FieldType, string> = { short_text: 'Short answer', long_text: 'Long answer', email: 'Email', phone: 'Phone', url: 'Web address', number: 'Number', date: 'Date',
-    single_choice: 'Choose one', multi_choice: 'Choose any', yes_no: 'Yes or no?', consent: 'I agree to…', file: 'Upload a file', statement: '', calculated: 'Total' };
-  const id = slugId(type === 'statement' ? 'text_block' : label[type], taken, 'q');
-  const f: Field = { id, type, label: { en: label[type] } };
-  if (type === 'single_choice' || type === 'multi_choice') f.config = { options: [{ value: 'option_1', label: { en: 'Option 1' } }, { value: 'option_2', label: { en: 'Option 2' } }] };
-  if (type === 'file') f.config = { accept: ['pdf'], maxMb: 5, maxFiles: 1 };
-  if (type === 'statement') f.config = { text: { en: 'Explain something to applicants here.' } };
-  if (type === 'calculated') f.config = { expr: { op: 'sum', args: [0] }, decimals: 2 };
-  if (type === 'consent') f.required = true;
-  return f;
-}
 
 export type BuilderProps = {
   initial: FormDef; rev: number; locked: Set<string>;
@@ -45,6 +34,8 @@ export function Builder({ initial, rev: rev0, locked, title, subtitle, back, sav
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [lang, setLang] = useState<Lng>('en');
   const [mode, setMode] = useState<'edit' | 'test'>('edit');
+  const [view, setViewState] = useState<'simple' | 'advanced'>(() => { try { return localStorage.getItem('studio:fb-view') === 'advanced' ? 'advanced' : 'simple'; } catch { return 'simple'; } });
+  const setView = (v: 'simple' | 'advanced') => { setViewState(v); setMode('edit'); try { localStorage.setItem('studio:fb-view', v); } catch { /* private window */ } };
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string[]>([]);
   const [showIssues, setShowIssues] = useState(false);
   const dirty = JSON.stringify(d) !== savedJson;
@@ -171,6 +162,8 @@ export function Builder({ initial, rev: rev0, locked, title, subtitle, back, sav
             {[...errors, ...warnings].map((i, n) => <button type="button" key={n} className={`fb-issue ${i.level}`} onClick={() => pick(i)}><b>{i.level === 'error' ? 'Must fix' : 'Check'}</b><span>{i.message}</span></button>)}
           </div>}
         </div>
+        <div className="seg" role="group" aria-label="View"><button type="button" className={view === 'simple' ? 'on' : ''} onClick={() => setView('simple')}>Simple</button><button type="button" className={view === 'advanced' ? 'on' : ''} onClick={() => setView('advanced')}>Advanced</button></div>
+        {view === 'simple' && <button type="button" className={`btn btn-sm${mode === 'test' ? ' btn-primary' : ''}`} onClick={() => setMode(mode === 'test' ? 'edit' : 'test')} aria-pressed={mode === 'test'}><Icon n="eye" />{mode === 'test' ? 'Back to editing' : 'Preview'}</button>}
         {status}
         {menu}
         <button type="button" className="btn" disabled={!dirty || busy} onClick={() => void doSave()} title="Save (⌘S)">{busy ? 'Saving…' : dirty ? 'Save' : 'Saved'}</button>
@@ -179,6 +172,10 @@ export function Builder({ initial, rev: rev0, locked, title, subtitle, back, sav
     </header>
     {err.length > 0 && <div className="notice n-warn fb-err" role="alert"><div><ul style={{ margin: 0 }}>{err.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErr([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
 
+    {view === 'simple' ? (mode === 'test'
+      ? <div className="sf-preview-wrap"><div className="fb-sheet"><TestRun key={JSON.stringify(d)} d={d} lang={lang} /></div></div>
+      : <SimpleEditor d={d} change={change} locked={locked} sel={sel} setSel={setSel} issues={issues} ruled={new Set([...shownByRule, ...hiddenByRule])}
+          onAdvanced={(s) => { setSel(s); setMode('edit'); setView('advanced'); }} />) :
     <div className="fb-body">
       <nav className="fb-nav" aria-label="Pages, questions and rules">
         <div className="fb-nav-h"><b>Pages</b><button type="button" className="btn btn-ghost btn-sm" onClick={addPage}><Icon n="plus" />Page</button></div>
@@ -227,7 +224,7 @@ export function Builder({ initial, rev: rev0, locked, title, subtitle, back, sav
         {sel && sel.kind !== 'settings' && issuesFor(sel.kind, sel.id).length > 0 && <div className="in-b"><span className="in-lang-h">Checks</span>
           {issuesFor(sel.kind, sel.id).map((i, n) => <p key={n} className={`fb-issue-inline ${i.level}`}>{i.message}</p>)}</div>}
       </aside>
-    </div>
+    </div>}
   </div>;
 }
 

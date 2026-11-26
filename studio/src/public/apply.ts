@@ -196,8 +196,8 @@ function boot() {
       if (!n && !def.settings.reviewStep) return void submit();
       scheduleSave(); render(); focusTitle();
     }
-    put(h('div', { className: 'ap-head' }, h('p', { className: 'ap-step' }, u('step', { n: idx + 1, m: total })), langs), bar, heading,
-      p.description ? h('p', { className: 'ap-page-desc' }, t(p.description, lang)) : null, summary, msgs, fields,
+    put(h('div', { className: 'ap-pagehead' }, h('div', { className: 'ap-head' }, h('p', { className: 'ap-step' }, u('step', { n: idx + 1, m: total })), langs), bar, heading,
+      p.description ? h('p', { className: 'ap-page-desc' }, t(p.description, lang)) : null), summary, msgs, fields,
       h('div', { className: 'ap-nav' }, back, h('span', { className: 'ap-sp' }), status, next), resumeBox());
     refresh();
   }
@@ -300,7 +300,7 @@ function boot() {
     };
     const msg = h('div');
     const submitBtn = h('button', { type: 'button', className: 'ap-btn ap-primary', disabled: !all.ok || frozen, onclick: () => void submit(msg, submitBtn as HTMLButtonElement) }, t(def.settings.submitLabel, lang) || u('submit'));
-    put(h('h3', { className: 'ap-page-title', tabindex: '-1' }, u('reviewTitle')),
+    put(h('div', { className: 'ap-pagehead' }, h('h3', { className: 'ap-page-title', tabindex: '-1' }, u('reviewTitle'))),
       ...ev.path.map((pid) => { const p = def.pages.find((x) => x.id === pid)!; return h('section', { className: 'ap-review' }, h('div', { className: 'ap-review-h' }, h('h4', {}, t(p.title, lang)), h('button', { type: 'button', className: 'ap-link', onclick: () => { page = pid; render(); focusTitle(); } }, u('edit'))),
         h('dl', {}, ...p.fields.filter((f) => ev.visibleFields.has(f.id) && (FIELD_TYPES[f.type].input || f.type === 'calculated')).map((f) => h('div', {}, h('dt', {}, t(f.label, lang)), h('dd', {}, show(f, ev.values[f.id])))))); }),
       !all.ok ? banner(`${u('fix')} ${all.errors.map((e) => t(def.pages.flatMap((x) => x.fields).find((x) => x.id === e.field)?.label, lang)).join(', ')}`, 'warn') : null,

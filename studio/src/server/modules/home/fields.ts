@@ -30,7 +30,7 @@ const FIELD_LABEL: Record<string, string> = {
   'stat1.label': 'Figure 1 · label', 'stat1.value': 'Figure 1 · value', 'stat2.label': 'Figure 2 · label', 'stat2.value': 'Figure 2 · value',
   'stat3.label': 'Figure 3 · label', 'stat3.value': 'Figure 3 · value', 'stat4.label': 'Figure 4 · label',
   'stat1.text': 'Figure 1 · description', 'stat2.text': 'Figure 2 · description', 'stat3.text': 'Figure 3 · description',
-  image2: 'Second photo', stories: 'Participant stories',
+  image2: 'Second photo', image3: 'Third photo', stories: 'Participant stories',
   // the numbered header line of a section: pill, label, thin rule, then a caption or a link on the right
   // contact page
   lead: 'Introduction', phone: 'Phone number', 'phone.label': 'Phone · card title', email1: 'First email address', 'email1.label': 'First email · card title',

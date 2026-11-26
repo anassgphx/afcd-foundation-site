@@ -60,17 +60,27 @@ function header(crumbs: [string, string][], label: string, title: string, lead: 
 }
 
 /** Page-local styles (the site stylesheet stays untouched; text in a style element is never sent for translation). */
-const CSS = `.pub-grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
-.pub-card{position:relative;display:flex;flex-direction:column;height:100%;border:1px solid #ECECEC;border-radius:24px;overflow:hidden;background:#fff;transition:border-color .2s ease,box-shadow .2s ease}
-.pub-card:hover,.pub-card:focus-within{border-color:#000;box-shadow:0 10px 30px -18px rgba(0,0,0,.35)}
-.pub-card h3 a::after{content:"";position:absolute;inset:0;border-radius:24px}
-.pub-card h3 a:focus-visible{outline:none}.pub-card:has(h3 a:focus-visible){outline:2px solid #000;outline-offset:3px}
-.pub-cover{position:relative;aspect-ratio:4/3;background:#F6F6F6;display:flex;align-items:center;justify-content:center;color:#8A8A8A}
+const CSS = `.pub-grid{display:grid;gap:44px 24px;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr))}
+.pub-card{position:relative;display:flex;flex-direction:column;height:100%}
+.pub-card h3 a::after{content:"";position:absolute;inset:0;border-radius:20px}
+.pub-card h3 a:focus-visible{outline:none}.pub-card:has(h3 a:focus-visible){outline:2px solid #000;outline-offset:6px;border-radius:20px}
+.pub-cover{position:relative;aspect-ratio:1/1;overflow:hidden;border-radius:20px;background:#F5F5F4;display:flex;align-items:center;justify-content:center;color:#8A8A8A;transition:transform .35s cubic-bezier(.2,.7,.2,1),box-shadow .35s ease}
 .pub-cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.pub-body{display:flex;flex:1;flex-direction:column;gap:10px;padding:18px 20px 20px}
-.pub-body h3{font-size:18px;font-weight:600;line-height:1.3;letter-spacing:-.02em}
-.pub-body .pub-sum{font-size:14px;line-height:1.6;color:var(--dark,#3F3F3F)}
-.pub-meta{margin-top:auto;padding-top:6px;font-size:12.5px;color:var(--mid,#6F6F6F)}
+.pub-cover::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);pointer-events:none}
+.pub-card:hover .pub-cover{transform:translateY(-4px);box-shadow:0 24px 40px -28px rgba(0,0,0,.45)}
+.pub-body{display:flex;flex:1;flex-direction:column;padding:20px 4px 0}
+.pub-kind{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#44403C}
+.pub-kind i{width:8px;height:8px;border-radius:9999px;background:#0A0A0A}
+.pub-kind time{font-weight:500;letter-spacing:.04em;text-transform:none;color:#78716C}
+.pub-body h3{margin-top:12px;font-size:21px;font-weight:600;line-height:1.2;letter-spacing:-.03em;color:#0A0A0A}
+.pub-card:hover h3{text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:4px}
+.pub-body .pub-sum{margin-top:10px;font-size:15px;line-height:1.6;color:#57534E;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.pub-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-top:auto;padding-top:22px}
+.pub-foot::before{content:"";flex-basis:100%;height:1px;margin-bottom:4px;background:#E7E5E4}
+.pub-meta{font-size:13px;font-weight:500;color:#57534E}
+.pub-btn{display:inline-flex;align-items:center;gap:10px;height:42px;padding:0 7px 0 18px;border-radius:9999px;background:#0A0A0A;color:#fff;font-size:13.5px;font-weight:600}
+.pub-btn span{display:grid;place-items:center;width:28px;height:28px;border-radius:9999px;background:#fff;color:#0A0A0A;font-size:12px;transition:transform .3s cubic-bezier(.2,.7,.2,1)}
+.pub-card:hover .pub-btn span{transform:rotate(45deg)}
 .pub-filters{display:flex;flex-wrap:wrap;gap:18px 32px;border:0;margin:0;padding:0}
 .pub-filters fieldset{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border:0;margin:0;padding:0;min-width:0}
 .pub-filters legend{float:left;margin-right:6px;font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--mid,#6F6F6F)}
@@ -90,10 +100,10 @@ function card(p: LivePub, ctx: Ctx) {
         <article class="pub-card">
           <div class="pub-cover">${cover ? `<img src="${esc(cover.src)}" srcset="${esc(cover.srcset)}" sizes="(min-width:1024px) 30vw, (min-width:640px) 45vw, 100vw" width="${cover.w}" height="${cover.h}" alt="" loading="lazy" decoding="async" style="object-position:${cover.fx}% ${cover.fy}%">` : DOC_ICO}</div>
           <div class="pub-body">
-            <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">${TYPE_LABEL[s.type]}</span>${s.publishedOn ? `<time class="text-[13px] text-ink-mid" datetime="${s.publishedOn}">${dateLabel(s.publishedOn)}</time>` : ''}</div>
+            <p class="pub-kind"><i aria-hidden="true"></i>${TYPE_LABEL[s.type]}${s.publishedOn ? `<time datetime="${s.publishedOn}">${dateLabel(s.publishedOn)}</time>` : ''}</p>
             <h3><a href="${publicationFile(s.slug)}">${esc(s.title)}</a></h3>
             ${s.summary ? `<p class="pub-sum">${esc(s.summary)}</p>` : ''}
-            <p class="pub-meta">${meta(s, ctx.doc(s.documentId))}</p>
+            <div class="pub-foot"><p class="pub-meta">${meta(s, ctx.doc(s.documentId))}</p><span class="pub-btn" aria-hidden="true">Read &amp; download <span>↗</span></span></div>
           </div>
         </article>
       </li>`;

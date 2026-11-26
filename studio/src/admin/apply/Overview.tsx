@@ -28,10 +28,10 @@ export function ApplyOverview() {
   const a = d.applications;
   const kpis: [string, number, string, string][] = [
     ['Open calls', k.open, 'open', k.paused ? `${k.paused} paused` : 'Accepting applications'],
-    ['Applications received', a.total, '/studio/apply/submissions', a.status.submitted ? `${a.status.submitted} not yet looked at` : 'All submitted'],
+    ['Applications received', a.total, '/studio/apply/applicants', a.status.submitted ? `${a.status.submitted} not yet looked at` : 'All submitted'],
     ['Drafts in progress', a.drafts, '', 'Started, not submitted yet'],
-    ['Needs eligibility review', a.eligibility.needs_review ?? 0, '/studio/apply/submissions?eligibility=needs_review', 'Flagged by the form’s rules'],
-    ...(d.outbox ? [['Email errors', d.outbox.failed, '/studio/apply/communications', d.outbox.ready ? `${d.outbox.queued} waiting to send` : 'Email sending is not set up'] as [string, number, string, string]] : []),
+    ['Needs eligibility review', a.eligibility.needs_review ?? 0, '/studio/apply/applicants?eligibility=needs_review', 'Flagged by the form’s rules'],
+    ...(d.outbox ? [['Email errors', d.outbox.failed, '/studio/apply/messages', d.outbox.ready ? `${d.outbox.queued} waiting to send` : 'Email sending is not set up'] as [string, number, string, string]] : []),
     ['Closing this week', k.closingThisWeek, 'open', 'Open calls with a deadline in 7 days'],
     ['Scheduled', k.scheduled, 'scheduled', 'Approved, opening on their date'],
     ['Awaiting approval', k.inReview, 'in_review', 'Submitted for review'],
@@ -47,8 +47,8 @@ export function ApplyOverview() {
       {can('apply.call.manage') && <Link className="btn btn-sm btn-primary" to="/studio/apply/calls?new=1">New call</Link>}</section> : <>
       <div className="ap-kpis">{kpis.map(([l, n, s, sub]) => s === '' ? <div key={l} className="ap-kpi"><span>{l}</span><b>{n}</b><small>{sub}</small></div> : <Link key={l} to={s.startsWith('/') ? s : `/studio/apply/calls?status=${s}`} className="ap-kpi"><span>{l}</span><b>{n}</b><small>{sub}</small></Link>)}</div>
       <div className="ap-grid">
-        {d.recent && d.recent.length > 0 && <section className="card"><header className="ap-h"><h2>Recent applications</h2><Link to="/studio/apply/submissions" className="btn btn-ghost btn-sm">All</Link></header>
-          <table className="ap-t"><tbody>{d.recent.map((r) => <tr key={r.id}><td><Link to={`/studio/apply/submissions/${r.id}`}>{r.applicantName || r.reference}</Link><small>{r.reference} · {r.callTitle}</small></td>
+        {d.recent && d.recent.length > 0 && <section className="card"><header className="ap-h"><h2>Recent applications</h2><Link to="/studio/apply/applicants" className="btn btn-ghost btn-sm">All</Link></header>
+          <table className="ap-t"><tbody>{d.recent.map((r) => <tr key={r.id}><td><Link to={`/studio/apply/applicants/${r.id}`}>{r.applicantName || r.reference}</Link><small>{r.reference} · {r.callTitle}</small></td>
             <td className="r"><small>{ELIG[r.eligibility]}{r.overridden ? ' (corrected)' : ''}</small><small>{ago(r.submittedAt)}</small></td></tr>)}</tbody></table></section>}
         {d.deadlines.length > 0 && <section className="card"><header className="ap-h"><h2>Deadlines</h2></header>
           <table className="ap-t"><tbody>{d.deadlines.map((c) => <tr key={c.id}><td><Link to={`/studio/apply/calls/${c.id}`}>{c.title}</Link><small className="mono">{c.reference}</small></td>

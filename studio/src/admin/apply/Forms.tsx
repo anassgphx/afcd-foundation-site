@@ -1,4 +1,4 @@
-// AFCD Apply → Form builder (forms of every call) and Templates (built-in and custom, versioned, JSON import/export).
+// AFCD Apply → a call's Form tab (the builder) and Form templates (built-in and custom, versioned, JSON import/export).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { Icon, Link, Modal, ago, fmtDate, navigate, useCan, useToast } from '../ui.tsx';
@@ -12,28 +12,6 @@ const errText = (e: unknown) => e instanceof ApiError && e.details?.length ? `${
 async function readJsonFile(file: File) {
   if (file.size > 1_000_000) throw new Error('The file is larger than 1 MB.');
   try { return JSON.parse(await file.text()); } catch { throw new Error('This file is not valid JSON.'); }
-}
-
-// ---------------------------------------------------------------- Forms list
-type FormRow = { callId: string; reference: string; title: string; status: string; closesAt: string | null; formId: string | null; updatedAt: string | null; questions: number; pages: number; rules: number; version: number | null; unpublishedChanges: boolean; errors: number };
-export function FormsList() {
-  const [rows, setRows] = useState<FormRow[] | null>(null); const toast = useToast();
-  useEffect(() => { api<FormRow[]>('/apply/forms').then(setRows).catch((e) => { setRows([]); toast(e.message, true); }); }, []);
-  const state = (r: FormRow) => !r.formId ? 'No form yet' : r.errors ? `${r.errors} problem${r.errors === 1 ? '' : 's'}` : !r.version ? 'Not published' : r.unpublishedChanges ? `Version ${r.version} · unpublished changes` : `Version ${r.version} published`;
-  const columns: Column<FormRow>[] = [
-    { key: 'call', header: 'Call', sort: (r) => r.title, render: (r) => <div className="dt-main"><span className="dt-thumb"><Icon n="layers" /></span><span className="min-w-0"><Link className="title" to={`/studio/apply/calls/${r.callId}/form`}>{r.title}</Link><span className="sub mono">{r.reference}</span></span></div> },
-    { key: 'status', header: 'Call status', hideBelow: 900, sort: (r) => r.status, render: (r) => <CallBadge s={r.status} /> },
-    { key: 'form', header: 'Form', sort: (r) => state(r), render: (r) => <span className={`ap-fstate${!r.formId ? ' none' : r.errors ? ' bad' : r.unpublishedChanges ? ' warn' : ' ok'}`}>{state(r)}</span> },
-    { key: 'size', header: 'Questions', align: 'right', hideBelow: 1000, sort: (r) => r.questions, render: (r) => r.formId ? <span className="sub">{r.questions} in {r.pages} page{r.pages === 1 ? '' : 's'} · {r.rules} rule{r.rules === 1 ? '' : 's'}</span> : '—' },
-    { key: 'updated', header: 'Edited', align: 'right', hideBelow: 1100, sort: (r) => -(r.updatedAt ? new Date(r.updatedAt).getTime() : 0), render: (r) => r.updatedAt ? <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> : '—' },
-  ];
-  return <>
-    <div className="page-h"><div><h1>Form builder</h1><p>Each call has one application form. Applicants always answer a published version, and each application keeps the version it was made with.</p></div>
-      <Link className="btn" to="/studio/apply/templates"><Icon n="book" />Templates</Link></div>
-    <section className="card">{!rows ? <TableSkeleton /> : <DataTable id="apply-forms" rows={rows} total={rows.length} rowKey={(r) => r.callId} columns={columns} initialSort={{ key: 'updated', dir: 'asc' }}
-      onOpen={(r) => navigate(`/studio/apply/calls/${r.callId}/form`)}
-      empty={<EmptyState icon="layers" text="No calls yet" sub="Create a call first; its form is built here." action={<Link className="btn btn-sm btn-primary" to="/studio/apply/calls?new=1">New call</Link>} />} />}</section>
-  </>;
 }
 
 // ---------------------------------------------------------------- Template chooser (new form, replace form)
@@ -129,25 +107,25 @@ export function TemplatesPage() {
   const load = () => api<Tpl[]>(`/apply/templates${archived ? '?archived=1' : ''}`).then(setRows).catch((e) => { setRows([]); toast(e.message, true); });
   useEffect(() => { load(); }, [archived]);
   async function importFile(file: File) {
-    try { const data = await readJsonFile(file); const t = await post<{ id: string }>('/apply/templates', { meta: { name: String(data?.name ?? file.name.replace(/\.json$/i, '')).slice(0, 120) || 'Imported template', description: String(data?.description ?? '').slice(0, 500), ...(typeof data?.category === 'string' && /^[a-z_]+$/.test(data.category) ? { category: data.category } : {}) }, from: { data } }); toast('Template imported.'); navigate(`/studio/apply/templates/${t.id}`); }
+    try { const data = await readJsonFile(file); const t = await post<{ id: string }>('/apply/templates', { meta: { name: String(data?.name ?? file.name.replace(/\.json$/i, '')).slice(0, 120) || 'Imported template', description: String(data?.description ?? '').slice(0, 500), ...(typeof data?.category === 'string' && /^[a-z_]+$/.test(data.category) ? { category: data.category } : {}) }, from: { data } }); toast('Template imported.'); navigate(`/studio/apply/calls/templates/${t.id}`); }
     catch (e) { toast(errText(e), true); }
   }
   const act = async (path: string, done: string) => { try { await post(path); toast(done); load(); } catch (e) { toast(errText(e), true); } };
   const typeName = (c: string) => CALL_TYPES.find((x) => x[0] === c)?.[1] ?? c;
   const columns: Column<Tpl>[] = [
     { key: 'name', header: 'Template', sort: (r) => r.name, render: (r) => <div className="dt-main"><span className="dt-thumb"><Icon n="book" /></span><span className="min-w-0">
-      {r.builtIn ? <span className="title">{r.name}</span> : <Link className="title" to={`/studio/apply/templates/${r.id}`}>{r.name}</Link>}<span className="sub">{r.description || typeName(r.category)}</span></span></div> },
+      {r.builtIn ? <span className="title">{r.name}</span> : <Link className="title" to={`/studio/apply/calls/templates/${r.id}`}>{r.name}</Link>}<span className="sub">{r.description || typeName(r.category)}</span></span></div> },
     { key: 'kind', header: 'Kind', sort: (r) => (r.builtIn ? 0 : 1), render: (r) => <span className="pill">{r.builtIn ? 'Built-in' : r.archivedAt ? 'Archived' : `Custom · v${r.version}`}</span> },
     { key: 'size', header: 'Content', hideBelow: 900, sort: (r) => r.questions, render: (r) => <span className="sub">{r.pages} pages · {r.questions} questions · {r.rules} rule{r.rules === 1 ? '' : 's'}</span> },
     { key: 'updated', header: 'Edited', align: 'right', hideBelow: 1100, sort: (r) => -(r.updatedAt ? new Date(r.updatedAt).getTime() : 0), render: (r) => r.updatedAt ? <span className="dt-when"><b>{ago(r.updatedAt)}</b><small>{r.updatedByName}</small></span> : '—' },
   ];
   return <>
     <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void importFile(file); }} />
-    <div className="page-h"><div><h1>Templates</h1><p>Starting points for application forms. Built-in templates are read-only; duplicate one to change it. Custom templates keep a version number that goes up on every save.</p></div>
+    <div className="page-h"><div><Link to="/studio/apply/calls" className="ed-back"><Icon n="chev" width={14} height={14} style={{ transform: 'rotate(180deg)' }} />Calls</Link><h1>Form templates</h1><p>Starting points for application forms, offered when you create a call. Built-in templates are read-only; duplicate one to change it. Custom templates keep a version number that goes up on every save.</p></div>
       <div className="ap-row"><label className="ap-check"><input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} />Show archived</label>
         {can('apply.form.edit') && <button className="btn" onClick={() => fileRef.current?.click()}><Icon n="upload" />Import JSON</button>}</div></div>
     <section className="card">{!rows ? <TableSkeleton /> : <DataTable id="apply-templates" rows={rows} total={rows.length} rowKey={(r) => r.id} columns={columns}
-      onOpen={(r) => { if (!r.builtIn) navigate(`/studio/apply/templates/${r.id}`); }}
+      onOpen={(r) => { if (!r.builtIn) navigate(`/studio/apply/calls/templates/${r.id}`); }}
       rowMenu={(r) => [
         ...(can('apply.form.edit') ? [{ label: 'Duplicate', icon: 'layers', run: () => { setDup(r); setName(`${r.name} (copy)`); } }] : []),
         { label: 'Export JSON', icon: 'upload', run: () => { const a = document.createElement('a'); a.href = `/studio/api/apply/templates/${r.id}/export`; a.download = ''; a.click(); } },
@@ -155,7 +133,7 @@ export function TemplatesPage() {
       ]}
       empty={<EmptyState icon="book" text="No templates" />} />}</section>
     {dup && <Modal size="sm" title="Duplicate template" onClose={() => setDup(null)} footer={<><button className="btn" onClick={() => setDup(null)}>Cancel</button>
-      <button className="btn btn-primary" disabled={busy || name.trim().length < 2} onClick={async () => { setBusy(true); try { const t = await post<{ id: string }>('/apply/templates', { meta: { name: name.trim(), description: dup.description, category: /^[a-z_]+$/.test(dup.category) ? dup.category : 'other' }, from: { template: dup.id } }); navigate(`/studio/apply/templates/${t.id}`); } catch (e) { toast(errText(e), true); } finally { setBusy(false); } }}>Duplicate</button></>}>
+      <button className="btn btn-primary" disabled={busy || name.trim().length < 2} onClick={async () => { setBusy(true); try { const t = await post<{ id: string }>('/apply/templates', { meta: { name: name.trim(), description: dup.description, category: /^[a-z_]+$/.test(dup.category) ? dup.category : 'other' }, from: { template: dup.id } }); navigate(`/studio/apply/calls/templates/${t.id}`); } catch (e) { toast(errText(e), true); } finally { setBusy(false); } }}>Duplicate</button></>}>
       <div className="modal-b"><label className="field"><span>Name of the copy</span><input className="input" autoFocus maxLength={120} value={name} onChange={(e) => setName(e.target.value)} /></label></div></Modal>}
   </>;
 }
@@ -167,11 +145,11 @@ export function TemplateBuilder({ id }: { id: string }) {
   const ver = useRef(1); const lastDef = useRef<FormDef | null>(null);
   useEffect(() => { api(`/apply/templates/${id}`).then((r) => { setX(r); ver.current = r.version; lastDef.current = r.definition; setM({ name: r.name, description: r.description, category: r.category }); }).catch((e) => toast(e.message, true)); }, [id]);
   if (!x) return <Loading />;
-  if (x.builtIn) { navigate('/studio/apply/templates'); return null; }
+  if (x.builtIn) { navigate('/studio/apply/calls/templates'); return null; }
   const save = async (def: FormDef) => { const r = await put<{ version: number }>(`/apply/templates/${id}`, { meta: m, definition: def, version: ver.current }); ver.current = r.version; lastDef.current = def; toast(`Saved as version ${r.version}`); return r.version; };
   return <>
     <Builder initial={x.definition} rev={x.version} locked={new Set()} title={m.name} subtitle={<>Template · <button type="button" className="linkish" onClick={() => setMeta(true)}>name and description</button>{x.archivedAt ? ' · archived (restore it to save)' : ''}</>}
-      back={<Link to="/studio/apply/templates" className="fb-back" aria-label="Back to templates"><Icon n="chev" width={14} height={14} style={{ transform: 'rotate(180deg)' }} /></Link>}
+      back={<Link to="/studio/apply/calls/templates" className="fb-back" aria-label="Back to templates"><Icon n="chev" width={14} height={14} style={{ transform: 'rotate(180deg)' }} /></Link>}
       save={can('apply.form.edit') ? async (def) => save(def) : async () => { throw new Error('Your role cannot change templates.'); }}
       menu={<a className="btn btn-ghost btn-sm" href={`/studio/api/apply/templates/${id}/export`} download>Export JSON</a>} />
     {meta && <Modal size="sm" title="Template details" onClose={() => setMeta(false)} footer={<><button className="btn" onClick={() => setMeta(false)}>Cancel</button><button className="btn btn-primary" disabled={!can('apply.form.edit') || m.name.trim().length < 2} onClick={async () => { try { await save(lastDef.current!); setMeta(false); } catch (e) { toast(errText(e), true); } }}>Save details</button></>}><div className="modal-b stack">

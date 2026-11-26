@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, post, ApiError } from '../api.ts';
 import { Icon, Link, Modal, fmtDate, navigate, useCan, useToast } from '../ui.tsx';
-import { TableSkeleton, useUrlState } from '../DataTable.tsx';
+import { TableSkeleton } from '../DataTable.tsx';
 import { Loading } from '../pages/Dashboard.tsx';
 import type { Answers, Field, FileRef, FormDef } from '../../server/modules/apply/engine.ts';
 import { FIELD_TYPES, evaluate, t } from '../../server/modules/apply/engine.ts';
@@ -23,49 +23,40 @@ const MOVES: Record<string, string[]> = { submitted: ['eligibility_review', 'und
 type Row = { id: string; reference: string; applicantName: string; applicantEmail: string; status: string; eligibility: string; overridden: boolean; submittedAt: string; lang: string; callId: string; callReference: string; callTitle: string };
 type Page = { items: Row[]; total: number; next: string | null };
 
-export function SubmissionsList() {
+/** The applications table: filtered by the Applicants pipeline (call, stage statuses, eligibility, search). Bulk status changes for managers. */
+export function SubmissionsTable({ call, status, eligibility, q, hint, onChanged }: { call: string; status: string; eligibility: string; q: string; hint?: React.ReactNode; onChanged?: () => void }) {
   const can = useCan(); const toast = useToast();
-  const [st, set] = useUrlState({ call: '', status: '', eligibility: '', q: '' });
-  const [calls, setCalls] = useState<{ id: string; reference: string; title: string }[]>([]);
   const [rows, setRows] = useState<Row[] | null>(null); const [total, setTotal] = useState(0); const [next, setNext] = useState<string | null>(null);
-  const [q, setQ] = useState(st.q); const [sel, setSel] = useState<Set<string>>(new Set()); const [bulk, setBulk] = useState(false); const [busy, setBusy] = useState(false);
-  const qs = (cursor?: string) => new URLSearchParams(Object.entries({ call: st.call, status: st.status, eligibility: st.eligibility, q: st.q, cursor: cursor ?? '' }).filter(([, v]) => v)).toString();
+  const [sel, setSel] = useState<Set<string>>(new Set()); const [bulk, setBulk] = useState(false); const [busy, setBusy] = useState(false);
+  const qs = (cursor?: string) => new URLSearchParams(Object.entries({ call, status, eligibility, q, cursor: cursor ?? '' }).filter(([, v]) => v)).toString();
   const load = useCallback(async () => {
     setRows(null); setSel(new Set());
     try { const r = await api<Page>(`/apply/submissions?${qs()}`); setRows(r.items); setTotal(r.total); setNext(r.next); } catch (e) { setRows([]); toast((e as Error).message, true); }
-  }, [st.call, st.status, st.eligibility, st.q]);
+  }, [call, status, eligibility, q]);
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { api('/apply/calls').then((r) => setCalls(r.filter((x: { status: string }) => !['draft', 'in_review', 'changes_requested', 'approved'].includes(x.status)))).catch(() => {}); }, []);
-  useEffect(() => { const h = setTimeout(() => { if (q !== st.q) set('q', q); }, 350); return () => clearTimeout(h); }, [q]);
   async function more() { if (!next) return; setBusy(true); try { const r = await api<Page>(`/apply/submissions?${qs(next)}`); setRows((x) => [...(x ?? []), ...r.items]); setNext(r.next); } finally { setBusy(false); } }
   const chosen = (rows ?? []).filter((r) => sel.has(r.id));
   const commonMoves = chosen.length ? chosen.map((r) => MOVES[r.status] ?? []).reduce((a, b) => a.filter((x) => b.includes(x))) : [];
   return <>
-    <div className="page-h"><div><h1>Submissions</h1><p>Applications received through AFCD Apply. Each one keeps the form version it was made with. This is personal data: open only what you need.</p></div></div>
     <section className="card">
-      <div className="sb-filters">
-        <select className="select" value={st.call} onChange={(e) => set('call', e.target.value)} aria-label="Call"><option value="">All calls</option>{calls.map((c) => <option key={c.id} value={c.id}>{c.reference} · {c.title}</option>)}</select>
-        <select className="select" value={st.status} onChange={(e) => set('status', e.target.value)} aria-label="Status"><option value="">Any status</option>{Object.entries(APP_STATUS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-        <select className="select" value={st.eligibility} onChange={(e) => set('eligibility', e.target.value)} aria-label="Eligibility"><option value="">Any eligibility</option>{Object.entries(ELIG).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-        <input className="input" type="search" placeholder="Reference, name or email" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search applications" />
-      </div>
+      {hint && <div className="pl-hint">{hint}</div>}
       {can('apply.submission.manage') && chosen.length > 0 && <div className="sb-bulk"><b>{chosen.length} selected</b>
         <button className="btn btn-sm" disabled={!commonMoves.length} title={commonMoves.length ? undefined : 'These applications have no status change in common'} onClick={() => setBulk(true)}>Change status…</button>
         <button className="btn btn-sm btn-ghost" onClick={() => setSel(new Set())}>Clear</button></div>}
-      {!rows ? <TableSkeleton /> : !rows.length ? <p className="sb-empty">{st.call || st.status || st.eligibility || st.q ? 'No applications match these filters.' : 'No applications yet. They appear here when applicants submit.'}</p> :
+      {!rows ? <TableSkeleton /> : !rows.length ? <p className="sb-empty">{eligibility || q ? 'No applications match these filters.' : status ? 'No applications at this stage.' : 'No applications yet. They appear here when applicants submit.'}</p> :
         <div className="sb-scroll"><table className="table sb-table">
           <thead><tr>{can('apply.submission.manage') && <th className="sb-c"><input type="checkbox" aria-label="Select all shown" checked={chosen.length === rows.length} onChange={(e) => setSel(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} /></th>}
-            <th>Reference</th><th>Applicant</th><th className="sb-hide">Call</th><th>Status</th><th>Eligibility</th><th className="r">Submitted</th></tr></thead>
+            <th>Reference</th><th>Applicant</th>{!call && <th className="sb-hide">Call</th>}<th>Status</th><th>Eligibility</th><th className="r">Submitted</th></tr></thead>
           <tbody>{rows.map((r) => <tr key={r.id} className={sel.has(r.id) ? 'on' : ''}>
             {can('apply.submission.manage') && <td className="sb-c"><input type="checkbox" aria-label={`Select ${r.reference}`} checked={sel.has(r.id)} onChange={(e) => setSel((x) => { const n = new Set(x); if (e.target.checked) n.add(r.id); else n.delete(r.id); return n; })} /></td>}
-            <td><Link to={`/studio/apply/submissions/${r.id}`} className="mono sb-ref">{r.reference}</Link></td>
+            <td><Link to={`/studio/apply/applicants/${r.id}`} className="mono sb-ref">{r.reference}</Link></td>
             <td><span className="sb-name">{r.applicantName || '—'}</span><small>{r.applicantEmail}</small></td>
-            <td className="sb-hide"><small>{r.callTitle}</small></td>
+            {!call && <td className="sb-hide"><small>{r.callTitle}</small></td>}
             <td><StatusBadge s={r.status} /></td><td><EligBadge e={r.eligibility} o={r.overridden} /></td>
             <td className="r"><small>{fmtDate(r.submittedAt)}</small></td></tr>)}</tbody></table></div>}
       {rows && rows.length > 0 && <div className="sb-foot"><span>{rows.length} of {total} shown</span>{next && <button className="btn btn-sm" disabled={busy} onClick={more}>{busy ? 'Loading…' : 'Show 50 more'}</button>}</div>}
     </section>
-    {bulk && <BulkDialog rows={chosen} moves={commonMoves} onClose={() => setBulk(false)} onDone={() => { setBulk(false); void load(); }} />}
+    {bulk && <BulkDialog rows={chosen} moves={commonMoves} onClose={() => setBulk(false)} onDone={() => { setBulk(false); void load(); onChanged?.(); }} />}
   </>;
 }
 
@@ -120,7 +111,7 @@ export function SubmissionDetail({ id }: { id: string }) {
   const EV: Record<string, string> = { email: 'Email sent', decision: 'Decision', submitted: 'Submitted by the applicant', status: 'Status changed', eligibility: 'Eligibility corrected', note: 'Note', download: 'File downloaded' };
   return <>
     <div className="ed-head"><div className="min-w-0">
-      <Link to="/studio/apply/submissions" className="ed-back"><Icon n="chev" width={14} height={14} style={{ transform: 'rotate(180deg)' }} />Submissions</Link>
+      <Link to="/studio/apply/applicants" className="ed-back"><Icon n="chev" width={14} height={14} style={{ transform: 'rotate(180deg)' }} />Applicants</Link>
       <h1 className="sb-h1">{d.applicantName || d.reference}</h1>
       <div className="sb-meta"><span className="mono">{d.reference}</span><StatusBadge s={d.status} /><EligBadge e={d.eligibility} o={!!d.eligibilityOverride} /><span>{d.call.title}</span><span>Submitted {fmtDate(d.submittedAt)}</span></div>
     </div>

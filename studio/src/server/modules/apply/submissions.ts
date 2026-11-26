@@ -32,7 +32,9 @@ export const MOVES: Partial<Record<Status, Status[]>> = {
 
 // ---------------------------------------------------------------- List
 const listSchema = z.object({
-  call: z.string().uuid().optional(), status: z.enum(APPLICATION_STATUSES).optional(), eligibility: z.enum(ELIGIBILITY).optional(),
+  call: z.string().uuid().optional(),
+  // one status, or several separated by commas (a pipeline stage such as shortlisted,interview)
+  status: z.string().max(200).transform((v) => [...new Set(v.split(',').map((x) => x.trim()).filter(Boolean))]).pipe(z.array(z.enum(APPLICATION_STATUSES)).max(APPLICATION_STATUSES.length)).optional(), eligibility: z.enum(ELIGIBILITY).optional(),
   q: z.string().trim().max(120).optional(), cursor: z.string().max(200).optional(), limit: z.coerce.number().int().min(10).max(100).default(50),
 });
 const enc = (d: Date, id: string) => Buffer.from(`${d.toISOString()}|${id}`).toString('base64url');
@@ -49,7 +51,7 @@ export async function listSubmissions(db: DB, raw: Record<string, string | undef
   const f = p.data;
   const where: SQL[] = [];
   if (f.call) where.push(eq(applySubmissions.callId, f.call));
-  if (f.status) where.push(eq(applySubmissions.status, f.status));
+  if (f.status?.length) where.push(f.status.length === 1 ? eq(applySubmissions.status, f.status[0]) : inArray(applySubmissions.status, f.status));
   if (f.eligibility) where.push(eq(applySubmissions.eligibility, f.eligibility));
   if (f.q) {
     const like = `%${f.q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;

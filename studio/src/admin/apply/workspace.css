@@ -1,0 +1,79 @@
+/* AFCD Apply: the call workspace (header, tabs, overview), the Applicants pipeline, the New call dialog and My reviews.
+   Built on the design-system tokens only. */
+
+/* Call tabs: one line under the call's header; they scroll sideways on a phone instead of wrapping */
+.cw-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 0 0 18px; overflow-x: auto; scrollbar-width: none; }
+.cw-tabs::-webkit-scrollbar { display: none; }
+.cw-tabs a { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--muted); font-size: var(--fs-md); font-weight: 500; text-decoration: none; white-space: nowrap; }
+.cw-tabs a:hover { color: var(--ink); }
+.cw-tabs a.on { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+.cw-tabs a:focus-visible { outline: none; box-shadow: var(--focus); border-radius: var(--r-xs); }
+.cw-tabs em { font-style: normal; font-size: var(--fs-xs); font-weight: 600; color: var(--muted); background: var(--selected); border-radius: 999px; padding: 1px 7px; font-variant-numeric: tabular-nums; }
+.cw-head .ed-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: var(--fs-sm); color: var(--muted); }
+/* the Form tab: tabs above the full-height builder */
+.cw-full .cw-tabs { margin: 0; padding: 0 16px; background: var(--surface); }
+.cw-full .fb { height: calc(100vh - 56px - 41px); }
+.cw-full .fb-start { padding-top: 20px; }
+
+/* Call overview */
+.cw-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.cw-grid .cw-kpis { grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
+.cw-card { padding: 0 0 6px; }
+.cw-card .ap-h { padding: 14px 16px 6px; }
+.cw-pad { padding: 4px 16px 12px; margin: 0; }
+.cw-checks { list-style: none; margin: 0; padding: 0 16px; }
+.cw-checks li { display: flex; align-items: center; gap: 12px; min-height: 48px; border-top: 1px solid var(--line); }
+.cw-checks li:first-child { border-top: 0; }
+.cw-checks li > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cw-checks b { font-size: var(--fs-md); font-weight: 500; }
+.cw-checks small { font-size: var(--fs-xs); color: var(--warn); }
+.cw-checks li.opt small { color: var(--muted); }
+.cw-checks a { font-size: var(--fs-sm); }
+.cw-mark { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; box-sizing: border-box; border: 1.5px solid var(--warn); }
+.cw-checks li.done .cw-mark { background: var(--ok); border-color: var(--ok); color: #fff; }
+.cw-checks li.opt .cw-mark { border-style: dashed; border-color: var(--faint); }
+.cw-pipe { list-style: none; margin: 0; padding: 4px 16px 10px; display: flex; flex-direction: column; gap: 10px; }
+.cw-pipe li { display: grid; grid-template-columns: 96px minmax(0, 1fr) 36px; align-items: center; gap: 12px; font-size: var(--fs-sm); }
+.cw-pipe b { text-align: right; font-variant-numeric: tabular-nums; }
+.cw-bar { height: 8px; border-radius: 4px; background: var(--selected); overflow: hidden; }
+.cw-bar > span { display: block; height: 100%; background: var(--ink); border-radius: 4px; min-width: 0; transition: width .3s var(--ease); }
+@media (max-width: 900px) { .cw-grid { grid-template-columns: minmax(0, 1fr); } .cw-grid .cw-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Applicants pipeline: the stages as one segmented row, the current one filled */
+.pl-call { width: auto; max-width: 340px; }
+.pl-stages { display: flex; gap: 4px; padding: 4px; margin-bottom: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow-x: auto; scrollbar-width: none; }
+.pl-stages::-webkit-scrollbar { display: none; }
+.pl-stage { flex: 1 0 112px; min-height: 52px; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 6px 12px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.pl-stage:hover { background: var(--hover); }
+.pl-stage:focus-visible { outline: none; box-shadow: var(--focus); }
+.pl-stage small { font-size: var(--fs-xs); color: var(--muted); }
+.pl-stage span { display: flex; align-items: baseline; gap: 8px; }
+.pl-stage b { font-size: var(--fs-md); font-weight: 600; }
+.pl-stage em { font-style: normal; font-size: var(--fs-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+.pl-stage.on { background: var(--accent); color: var(--accent-ink); }
+.pl-stage.on small, .pl-stage.on em { color: var(--accent-ink); opacity: .78; }
+.pl-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.pl-tools .input { flex: 1 1 260px; max-width: 360px; }
+.pl-tools .select { flex: 0 1 200px; }
+.pl-hint { padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--sunken); font-size: var(--fs-sm); color: var(--ink-2); }
+.pl-hint-card { border: 1px solid var(--line); border-radius: var(--r); margin-bottom: 12px; }
+
+/* New call: title and type side by side, then the form's starting point */
+.nc-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; }
+.nc-start { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.nc-start legend { font-size: var(--fs-sm); font-weight: 500; color: var(--ink-2); padding: 0 0 8px; }
+.nc-tpls { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; max-height: 300px; overflow: auto; padding: 2px; }
+.nc-tpl { display: flex; flex-direction: column; gap: 2px; min-height: 56px; padding: 9px 11px; text-align: left; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); font: inherit; cursor: pointer; }
+.nc-tpl:hover { border-color: var(--line-strong); }
+.nc-tpl:focus-visible { outline: none; box-shadow: var(--focus); }
+.nc-tpl b { font-size: var(--fs-sm); font-weight: 600; }
+.nc-tpl small { font-size: var(--fs-xs); color: var(--muted); }
+.nc-tpl.on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); background: var(--hover); }
+@media (max-width: 560px) { .nc-row { grid-template-columns: minmax(0, 1fr); } }
+
+/* My reviews */
+.mr-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mr-kpis .ap-kpi { font: inherit; text-align: left; cursor: pointer; }
+.mr-kpis .ap-kpi.on { border-color: var(--ink); }
+.mr-t td { padding-top: 10px; padding-bottom: 10px; }
+.mr-go { width: 1%; white-space: nowrap; }

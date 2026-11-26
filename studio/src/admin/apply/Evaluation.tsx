@@ -1,5 +1,5 @@
-// AFCD Apply → Review & evaluation. Managers: rubric (criteria, weights, scales, mode, blind), assignments and progress
-// per call. Reviewers: their own assignments only, a conflict-of-interest declaration first, then a blind view of the
+// AFCD Apply → reviews. Managers: rubric (criteria, weights, scales, mode, blind), assignments and progress in each
+// call's Reviews tab. Reviewers: their own assignments only, a conflict-of-interest declaration first, then a blind view of the
 // application and the scoring form (draft, then final and locked).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
@@ -22,27 +22,38 @@ export function CallPicker({ value, onChange, withSubmissions = true }: { value:
   return <select className="select ev-pick" value={value} onChange={(e) => onChange(e.target.value)} aria-label="Call">{!calls.length && <option value="">No call has applications yet</option>}{calls.map((c) => <option key={c.id} value={c.id}>{c.reference} · {c.title}</option>)}</select>;
 }
 
-export function EvaluationPage() {
-  const can = useCan();
-  const [call, setCall] = useState(() => new URLSearchParams(location.search).get('call') ?? '');
-  const [tab, setTab] = useState('progress');
-  return <>
-    <div className="page-h"><div><h1>Review &amp; evaluation</h1><p>Reviewers score applications against a rubric. Final reviews are locked; scores are computed on the server from the rubric version each review used.</p></div></div>
-    {can('apply.review') && <MyReviews />}
-    {can('apply.evaluation.manage') && <section className="card ev-card">
-      <div className="ev-bar"><CallPicker value={call} onChange={setCall} /><div className="in-tabs ev-tabs" role="tablist">{[['progress', 'Assignments & progress'], ['rubric', 'Rubric']].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div></div>
-      {call ? (tab === 'rubric' ? <RubricEditor key={call} callId={call} /> : <Progress key={call} callId={call} />) : <p className="muted ev-pad">Choose a call.</p>}
-    </section>}
-  </>;
+/** A call's Reviews tab: who reviews what and how far they are, and the scoring rubric. */
+export function CallReviews({ callId }: { callId: string }) {
+  const [tab, setTab] = useState(() => new URLSearchParams(location.search).get('tab') === 'rubric' ? 'rubric' : 'progress');
+  return <section className="card ev-card">
+    <div className="ev-bar"><div className="in-tabs ev-tabs" role="tablist">{[['progress', 'Reviewers & progress'], ['rubric', 'Scoring rubric']].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div></div>
+    {tab === 'rubric' ? <RubricEditor key={callId} callId={callId} /> : <Progress key={callId} callId={callId} />}
+  </section>;
 }
 
-function MyReviews() {
-  const [rows, setRows] = useState<{ id: string; status: string; reference: string; callTitle: string; createdAt: string; reviewStatus: string | null }[] | null>(null);
-  useEffect(() => { api('/apply/my-reviews').then(setRows).catch(() => setRows([])); }, []);
-  if (!rows || !rows.length) return null;
-  const label = (r: { status: string; reviewStatus: string | null }) => r.status === 'conflict' ? 'Conflict declared' : r.status === 'final' ? 'Final' : r.reviewStatus === 'draft' ? 'Draft' : r.status === 'in_progress' ? 'Started' : 'To do';
-  return <section className="card ev-card"><header className="ap-h"><h2>My reviews</h2><span className="muted">{rows.filter((r) => !['final', 'conflict'].includes(r.status)).length} to finish</span></header>
-    <table className="ap-t"><tbody>{rows.map((r) => <tr key={r.id}><td><Link to={`/studio/apply/reviews/${r.id}`}>{r.callTitle}</Link><small>Application {r.reference.slice(-4)} · assigned {fmtDate(r.createdAt)}</small></td><td className="r"><span className={`badge ev-r-${r.status}`}>{label(r)}</span></td></tr>)}</tbody></table></section>;
+type Mine = { id: string; status: string; reference: string; callTitle: string; createdAt: string; reviewStatus: string | null };
+const mineLabel = (r: Mine) => r.status === 'conflict' ? 'Conflict declared' : r.status === 'final' ? 'Final' : r.reviewStatus === 'draft' ? 'Draft saved' : r.status === 'in_progress' ? 'Started' : 'To do';
+
+/** Reviews assigned to the signed-in user, across calls. Blind calls show the reference only. */
+export function MyReviewsPage() {
+  const [rows, setRows] = useState<Mine[] | null>(null); const [show, setShow] = useState<'open' | 'done'>('open');
+  useEffect(() => { api<Mine[]>('/apply/my-reviews').then(setRows).catch(() => setRows([])); }, []);
+  const isDone = (r: Mine) => ['final', 'conflict'].includes(r.status);
+  const todo = (rows ?? []).filter((r) => !isDone(r) && mineLabel(r) === 'To do').length, started = (rows ?? []).filter((r) => !isDone(r) && mineLabel(r) !== 'To do').length, done = (rows ?? []).filter(isDone).length;
+  const list = (rows ?? []).filter((r) => (show === 'done') === isDone(r));
+  return <>
+    <div className="page-h"><div><h1>My reviews</h1><p>Applications assigned to you. Opening one first asks whether you have a conflict of interest. Final reviews are locked.</p></div></div>
+    {!rows ? <Loading /> : !rows.length ? <section className="card ap-empty"><Icon n="check" /><div><b>Nothing assigned to you</b><p>When a manager assigns you applications to review, they appear here.</p></div></section> : <>
+      <div className="ap-kpis mr-kpis">{([['To do', todo, 'open'], ['Started', started, 'open'], ['Finished', done, 'done']] as const).map(([l, n, k]) => <button key={l} type="button" className={`ap-kpi${show === k ? ' on' : ''}`} onClick={() => setShow(k)}><span>{l}</span><b>{n}</b></button>)}</div>
+      <section className="card">
+        <div className="ev-bar"><div className="in-tabs ev-tabs" role="tablist">{([['open', `To finish (${todo + started})`], ['done', `Finished (${done})`]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={show === k} className={show === k ? 'on' : ''} onClick={() => setShow(k)}>{l}</button>)}</div></div>
+        {!list.length ? <p className="sb-empty">{show === 'open' ? 'All done. Nothing left to review.' : 'No finished reviews yet.'}</p> :
+          <table className="ap-t mr-t"><tbody>{list.map((r) => <tr key={r.id}><td><Link to={`/studio/apply/reviews/${r.id}`}>Application {r.reference.slice(-4)}</Link><small>{r.callTitle} · assigned {fmtDate(r.createdAt)}</small></td>
+            <td className="r"><span className={`badge ev-r-${r.status}`}>{mineLabel(r)}</span></td>
+            <td className="r mr-go">{!isDone(r) ? <Link className="btn btn-sm btn-primary" to={`/studio/apply/reviews/${r.id}`}>{mineLabel(r) === 'To do' ? 'Start review' : 'Continue'}</Link> : <Link className="btn btn-sm" to={`/studio/apply/reviews/${r.id}`}>Open</Link>}</td></tr>)}</tbody></table>}
+      </section>
+    </>}
+  </>;
 }
 
 // ---------------------------------------------------------------- Rubric
@@ -104,7 +115,7 @@ function Progress({ callId }: { callId: string }) {
       <th>Application</th><th>Status</th><th>Reviews</th><th className="r">Score</th></tr></thead><tbody>
       {p.applications.map((a) => <tr key={a.id} className={sel.has(a.id) ? 'on' : ''}>
         <td className="sb-c"><input type="checkbox" disabled={a.status === 'withdrawn'} aria-label={`Select ${a.reference}`} checked={sel.has(a.id)} onChange={(e) => setSel((x) => { const n = new Set(x); if (e.target.checked) n.add(a.id); else n.delete(a.id); return n; })} /></td>
-        <td><Link to={`/studio/apply/submissions/${a.id}`} className="mono sb-ref">{a.reference}</Link><small>{a.applicantName}</small></td>
+        <td><Link to={`/studio/apply/applicants/${a.id}`} className="mono sb-ref">{a.reference}</Link><small>{a.applicantName}</small></td>
         <td><small>{APP_STATUS[a.status]}</small><EligBadge e={a.eligibility} /></td>
         <td>{a.reviews.length ? <ul className="ev-revs">{a.reviews.map((r) => <li key={r.id} className={`ev-r-${r.status}`}>{r.reviewer} · {label(r.status)}{r.totalBp !== null ? ` · ${pts(r.totalBp)}` : ''}</li>)}</ul> : <small className="muted">None</small>}</td>
         <td className="r"><b>{pts(a.scoreBp)}</b>{a.disagreement && <small className="ev-flag" title="Reviewers are further apart than the threshold">Disagreement</small>}</td></tr>)}</tbody></table></div>}
@@ -141,7 +152,7 @@ export function ReviewScreen({ id }: { id: string }) {
     try { const r = await save(); if (r === null) return; const x = await post<{ totalBp: number }>(`/apply/reviews/${id}/final`, { rev: r }); setConfirm(false); toast(`Review submitted: ${pts(x.totalBp)} / 100. It is now locked.`); await load(); }
     catch (e) { setConfirm(false); setErrs(e instanceof ApiError && e.details?.length ? e.details.map((d) => d.message) : [(e as Error).message]); } finally { setBusy(false); }
   }
-  const head = <div className="ed-head"><div className="min-w-0"><Link to="/studio/apply/evaluation" className="ed-back"><Icon n="chev" width={14} height={14} style={{ transform: 'rotate(180deg)' }} />Review &amp; evaluation</Link>
+  const head = <div className="ed-head"><div className="min-w-0"><Link to="/studio/apply/reviews" className="ed-back"><Icon n="chev" width={14} height={14} style={{ transform: 'rotate(180deg)' }} />My reviews</Link>
     <h1 className="sb-h1">{v.application?.reference ?? 'Application'}</h1><div className="sb-meta"><span>{v.call.title}</span><span>Rubric v{v.rubric.number}</span>{v.rubric.settings.blind && <span className="badge">Blind review</span>}</div></div></div>;
   if (!v.assignment.coi) return <>{head}<section className="card ev-pad ev-coi"><h2>Conflict of interest</h2>
     <p>Before you see this application: do you know the applicant personally, work or study with them, or have any interest in the outcome?</p>

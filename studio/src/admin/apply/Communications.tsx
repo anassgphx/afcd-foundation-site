@@ -1,12 +1,11 @@
-// AFCD Apply → Communications: the outbox (delivery status, retries), sending (decision emails for approved decisions,
+// AFCD Apply → Messages (every call's outbox, Studio's default templates) and each call's Emails tab: the outbox (delivery status, retries), sending (decision emails for approved decisions,
 // messages to chosen applicants), email templates with {{variables}}, and the per-call receipt switch. Every send goes
 // through the queue, one email per applicant, after a confirmed count.
 import { useCallback, useEffect, useState } from 'react';
 import { api, del, post, put, ApiError } from '../api.ts';
-import { Link, Modal, fmtDate, useToast } from '../ui.tsx';
+import { Link, Modal, fmtDate, navigate, useToast } from '../ui.tsx';
 import { Loading } from '../pages/Dashboard.tsx';
 import { APP_STATUS } from './Submissions.tsx';
-import { CallPicker } from './Evaluation.tsx';
 import './evaluation.css';
 
 const errText = (e: unknown) => (e instanceof ApiError && e.details?.length ? `${e.message} ${e.details.map((d) => d.message).join(' ')}` : (e as Error).message);
@@ -14,16 +13,37 @@ type Msg = { id: string; kind: string; toEmail: string; subject: string; status:
 const KIND: Record<string, string> = { receipt: 'Receipt', decision: 'Decision', custom: 'Message' };
 const STATUS: Record<string, string> = { queued: 'Waiting', sending: 'Sending', sent: 'Sent', failed: 'Failed', cancelled: 'Cancelled' };
 
-export function CommunicationsPage() {
-  const [call, setCall] = useState(''); const [tab, setTab] = useState('outbox');
+function NotReady() {
   const [ready, setReady] = useState<boolean | null>(null);
   useEffect(() => { api('/apply/overview').then((o) => setReady(o.outbox?.ready ?? null)).catch(() => {}); }, []);
+  return ready === false ? <div className="notice n-warn"><div>Email sending isn’t set up, so emails wait in the outbox. An administrator can set it up in Settings → Email.</div></div> : null;
+}
+
+/** Messages: every email to applicants, across calls, and the default texts each call starts from. Writing to applicants happens in a call. */
+export function MessagesPage() {
+  const [call, setCall] = useState(''); const [tab, setTab] = useState('outbox');
+  const [calls, setCalls] = useState<{ id: string; reference: string; title: string; status: string }[]>([]);
+  useEffect(() => { api('/apply/calls').then((r) => setCalls(r.filter((c: { status: string }) => ['open', 'paused', 'closed', 'under_evaluation', 'completed'].includes(c.status)))).catch(() => {}); }, []);
   return <>
-    <div className="page-h"><div><h1>Communications</h1><p>Emails to applicants go through Studio’s email server, one per applicant, from a queue that retries and records delivery.</p></div></div>
-    {ready === false && <div className="notice n-warn"><div>Email sending isn’t set up, so emails wait in the outbox. An administrator can set it up in Settings → Email.</div></div>}
+    <div className="page-h"><div><h1>Messages</h1><p>Emails to applicants go through Studio’s email server, one per applicant, from a queue that retries and records delivery. To write to applicants, open a call’s Emails tab.</p></div>
+      {calls.length > 0 && <select className="select ev-pick" value="" onChange={(e) => e.target.value && navigate(`/studio/apply/calls/${e.target.value}/emails?tab=send`)} aria-label="Write to the applicants of a call"><option value="">Write to applicants of…</option>{calls.map((c) => <option key={c.id} value={c.id}>{c.reference} · {c.title}</option>)}</select>}</div>
+    <NotReady />
     <section className="card">
-      <div className="ev-bar"><CallPicker value={call} onChange={setCall} /><div className="in-tabs ev-tabs" role="tablist">{[['outbox', 'Outbox'], ['send', 'Send'], ['templates', 'Templates']].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div></div>
-      {!call ? <p className="muted ev-pad">Choose a call.</p> : tab === 'outbox' ? <Outbox key={call} callId={call} /> : tab === 'send' ? <Send key={call} callId={call} /> : <Templates key={call} callId={call} />}
+      <div className="ev-bar"><div className="in-tabs ev-tabs" role="tablist">{[['outbox', 'Outbox'], ['templates', 'Default texts']].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
+        {tab === 'outbox' && <select className="select ev-pick" value={call} onChange={(e) => setCall(e.target.value)} aria-label="Call"><option value="">All calls</option>{calls.map((c) => <option key={c.id} value={c.id}>{c.reference} · {c.title}</option>)}</select>}</div>
+      {tab === 'outbox' ? <MessagesTable key={call} callId={call || undefined} /> : <Templates callId="" defaultOnly />}
+    </section>
+  </>;
+}
+
+/** A call's Emails tab: its outbox, sending results and messages, and its own email texts. */
+export function CallEmails({ callId }: { callId: string }) {
+  const [tab, setTab] = useState(() => { const t = new URLSearchParams(location.search).get('tab'); return t === 'send' || t === 'templates' ? t : 'outbox'; });
+  return <>
+    <NotReady />
+    <section className="card">
+      <div className="ev-bar"><div className="in-tabs ev-tabs" role="tablist">{[['outbox', 'Outbox'], ['send', 'Send'], ['templates', 'Email texts']].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div></div>
+      {tab === 'outbox' ? <Outbox callId={callId} /> : tab === 'send' ? <Send callId={callId} /> : <Templates callId={callId} />}
     </section>
   </>;
 }
@@ -39,7 +59,7 @@ export function MessagesTable({ callId, submissionId }: { callId?: string; submi
     {!submissionId && <div className="ev-pad ap-row"><select className="select ev-pick" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">Every status</option>{Object.entries(STATUS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select><button className="btn btn-sm" onClick={() => void load()}>Refresh</button></div>}
     {!rows.length ? <p className="sb-empty">No emails{status ? ' with this status' : ''} yet.</p> : <div className="sb-scroll"><table className="table sb-table"><thead><tr><th>Email</th>{!submissionId && <th>Application</th>}<th>Status</th><th className="r">When</th><th /></tr></thead><tbody>
       {rows.map((m) => <tr key={m.id}><td><button className="linkish" onClick={async () => setOpen(await api(`/apply/messages/${m.id}`))}>{m.subject}</button><small>{KIND[m.kind]} · {m.toEmail}</small></td>
-        {!submissionId && <td><Link to={`/studio/apply/submissions/${m.submissionId}`} className="mono sb-ref">{m.reference}</Link></td>}
+        {!submissionId && <td><Link to={`/studio/apply/applicants/${m.submissionId}`} className="mono sb-ref">{m.reference}</Link></td>}
         <td><span className={`badge cm-${m.status}`}>{STATUS[m.status] ?? m.status}</span>{m.lastError && <small className="cm-err" title={m.lastError}>{m.lastError}</small>}{m.status === 'queued' && m.attempts > 0 && <small>Retry {fmtDate(m.nextAttemptAt)}</small>}</td>
         <td className="r"><small>{m.sentAt ? `Sent ${fmtDate(m.sentAt)}` : `Queued ${fmtDate(m.createdAt)}`}</small><small>{m.attempts} attempt{m.attempts === 1 ? '' : 's'}</small></td>
         <td className="r">{m.status === 'failed' && <button className="btn btn-sm" onClick={() => act(m.id, 'retry')}>Retry</button>}{['queued', 'failed'].includes(m.status) && <button className="btn btn-sm btn-ghost" onClick={() => act(m.id, 'cancel')}>Cancel</button>}</td></tr>)}</tbody></table></div>}
@@ -100,9 +120,9 @@ function Send({ callId }: { callId: string }) {
 }
 
 type Tpl = { key: string; label: string; variants: Record<'en' | 'fr' | 'ar', { subject: string; body: string }>; source: string; rev: number; defaultRev: number };
-function Templates({ callId }: { callId: string }) {
+function Templates({ callId, defaultOnly }: { callId: string; defaultOnly?: boolean }) {
   const toast = useToast();
-  const [scope, setScope] = useState<'call' | 'default'>('call');
+  const [scope, setScope] = useState<'call' | 'default'>(defaultOnly ? 'default' : 'call');
   const [data, setData] = useState<{ variables: Record<string, string>; templates: Tpl[] } | null>(null); const [edit, setEdit] = useState<Tpl | null>(null); const [busy, setBusy] = useState(false);
   const q = scope === 'call' ? `?call=${callId}` : '?call=default';
   const load = useCallback(() => api(`/apply/email-templates${q}`).then(setData), [q]);
@@ -110,7 +130,7 @@ function Templates({ callId }: { callId: string }) {
   if (!data) return <Loading />;
   const SRC: Record<string, string> = { call: 'This call’s own text', default: 'Studio default', 'built-in': 'Built-in text' };
   return <div className="ev-pad stack">
-    <div className="ap-row"><select className="select ev-pick" value={scope} onChange={(e) => setScope(e.target.value as 'call')} aria-label="Which templates"><option value="call">Templates for this call</option><option value="default">Studio defaults (every call)</option></select></div>
+    {!defaultOnly && <div className="ap-row"><select className="select ev-pick" value={scope} onChange={(e) => setScope(e.target.value as 'call')} aria-label="Which templates"><option value="call">Templates for this call</option><option value="default">Studio defaults (every call)</option></select></div>}
     <table className="ap-t"><tbody>{data.templates.map((t) => <tr key={t.key}><td><b>{t.label}</b><small>{t.variants.en.subject}</small></td><td className="r"><small>{SRC[t.source]}</small>
       <button className="btn btn-sm" onClick={() => setEdit(JSON.parse(JSON.stringify(t)))}>Edit</button>
       {scope === 'call' && t.source === 'call' && <button className="btn btn-sm btn-ghost" onClick={async () => { await del(`/apply/email-templates/${t.key}?call=${callId}`); toast('This call uses the default text again.'); await load(); }}>Use default</button>}</td></tr>)}</tbody></table>

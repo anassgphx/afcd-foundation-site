@@ -30,6 +30,12 @@ const I: Record<string, ReactNode> = {
   bell: <><path d="M10.27 21a2 2 0 0 0 3.46 0" /><path d="M3.26 15.33A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.67C19.41 13.96 18 12.5 18 8A6 6 0 0 0 6 8c0 4.5-1.41 5.96-2.74 7.33" /></>,
   settings: <><path d="M20 7h-9M14 17H5" /><circle cx="17" cy="17" r="3" /><circle cx="7" cy="7" r="3" /></>,
   find: <><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></>,
+  // Applications: a gauge for its overview, a megaphone for calls, an ID card for applicants, a clipboard for reviews, a paper plane for messages
+  gauge: <><path d="m12 14 4-4" /><path d="M3.34 19a10 10 0 1 1 17.32 0" /></>,
+  megaphone: <><path d="m3 11 18-5v12L3 14v-3z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></>,
+  idcard: <><rect x="2" y="5" width="20" height="14" rx="2" /><circle cx="9" cy="11" r="2" /><path d="M6.17 15a3 3 0 0 1 5.66 0M15 10h3M15 14h3" /></>,
+  clipboard: <><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><path d="m9 14 2 2 4-4" /></>,
+  send: <><path d="M14.54 21.69a.5.5 0 0 0 .94-.03l6.5-19a.5.5 0 0 0-.64-.64l-19 6.5a.5.5 0 0 0-.03.94l7.93 3.18a2 2 0 0 1 1.11 1.11z" /><path d="m21.85 2.15-10.94 10.94" /></>,
   chevDown: <path d="m6 9 6 6 6-6" />,
   chevRight: <path d="m9 18 6-6-6-6" />,
   sideOpen: <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18m5-12 3 3-3 3" /></>,

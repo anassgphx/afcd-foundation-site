@@ -28,17 +28,13 @@ export const NAV: { group: string; items: NavItem[] }[] = [
     { to: '/studio/seo', label: 'SEO', icon: 'search', perm: 'seo.read', match: /^\/studio\/seo/, key: 's' },
     { to: '/studio/translations', label: 'Translations', icon: 'languages', perm: 'translation.read', match: /^\/studio\/translations/, key: 't' },
   ] },
-  // AFCD Apply (docs/adr/0004-afcd-apply.md): more screens join this group as each phase lands
+  // AFCD Apply (docs/adr/0004-afcd-apply.md): four places, each call a workspace with tabs, applicants one pipeline
   { group: 'Applications', items: [
-    { to: '/studio/apply', label: 'Overview', icon: 'dash', perm: 'apply.read', match: /^\/studio\/apply\/?$/ },
-    { to: '/studio/apply/calls', label: 'Calls', icon: 'spark', perm: 'apply.read', match: /^\/studio\/apply\/calls(?!\/[0-9a-f-]{36}\/form)/ },
-    { to: '/studio/apply/submissions', label: 'Submissions', icon: 'inbox', perm: 'apply.submission.read', match: /^\/studio\/apply\/submissions/ },
-    { to: '/studio/apply/evaluation', label: 'Review & evaluation', icon: 'checkcircle', perm: 'apply.review', match: /^\/studio\/apply\/(evaluation|reviews)/ },
-    { to: '/studio/apply/shortlists', label: 'Shortlists', icon: 'log', perm: 'apply.evaluation.manage', match: /^\/studio\/apply\/shortlists/ },
-    { to: '/studio/apply/decisions', label: 'Decisions', icon: 'check', perm: 'apply.submission.read', match: /^\/studio\/apply\/decisions/ },
-    { to: '/studio/apply/communications', label: 'Communications', icon: 'mail', perm: 'apply.message', match: /^\/studio\/apply\/communications/ },
-    { to: '/studio/apply/forms', label: 'Form builder', icon: 'layers', perm: 'apply.read', match: /^\/studio\/apply\/(forms|calls\/[0-9a-f-]{36}\/form)/ },
-    { to: '/studio/apply/templates', label: 'Templates', icon: 'book', perm: 'apply.read', match: /^\/studio\/apply\/templates/ },
+    { to: '/studio/apply', label: 'Overview', icon: 'gauge', perm: 'apply.submission.read', match: /^\/studio\/apply\/?$/ },
+    { to: '/studio/apply/calls', label: 'Calls', icon: 'megaphone', perm: 'apply.read', match: /^\/studio\/apply\/calls/ },
+    { to: '/studio/apply/applicants', label: 'Applicants', icon: 'idcard', perm: 'apply.submission.read', match: /^\/studio\/apply\/applicants/ },
+    { to: '/studio/apply/reviews', label: 'My reviews', icon: 'clipboard', perm: 'apply.review', match: /^\/studio\/apply\/reviews/ },
+    { to: '/studio/apply/messages', label: 'Messages', icon: 'send', perm: 'apply.message', match: /^\/studio\/apply\/messages/ },
   ] },
   { group: 'Workflow', items: [
     { to: '/studio/inbox', label: 'Inbox', icon: 'inbox', perm: 'forms.read', match: /^\/studio\/(inbox|forms)/, key: 'i' },
@@ -69,6 +65,13 @@ export function Sidebar({ path, collapsed, onToggle, unread, onCloseMobile }: { 
     api<QueueItem[]>('/review-queue').then((r) => setQueue(r.filter((x) => (x.status === 'in_review' && x.canApprove) || (x.status === 'approved' && x.canPublish)).length)).catch(() => {});
   }, [path]);
 
+  // Applications: new applications nobody has looked at, and reviews assigned to this user that are not final yet
+  const [fresh, setFresh] = useState(0); const [toReview, setToReview] = useState(0);
+  useEffect(() => {
+    if (can('apply.submission.read')) api<{ status: Record<string, number> }>('/apply/submissions/counts').then((r) => setFresh(r.status.submitted ?? 0)).catch(() => {});
+    if (can('apply.review')) api<{ status: string }[]>('/apply/my-reviews').then((r) => setToReview(r.filter((x) => !['final', 'conflict'].includes(x.status)).length)).catch(() => {});
+  }, [path]);
+
   // "g" then a letter jumps to a section (only sections this role can open)
   useEffect(() => {
     let armed = 0;
@@ -97,9 +100,11 @@ export function Sidebar({ path, collapsed, onToggle, unread, onCloseMobile }: { 
     addEventListener('resize', measure);
     document.fonts?.ready.then(measure).catch(() => {});
     return () => { ro.disconnect(); removeEventListener('resize', measure); };
-  }, [path, collapsed, queue, unread]);
+  }, [path, collapsed, queue, unread, fresh, toReview]);
 
   const badge = (i: NavItem) => {
+    if (i.to === '/studio/apply/applicants' && fresh > 0) return <em className="sb-count" aria-label={`${fresh} new`}>{fresh > 99 ? '99+' : fresh}</em>;
+    if (i.to === '/studio/apply/reviews' && toReview > 0) return <em className="sb-count" aria-label={`${toReview} to finish`}>{toReview > 99 ? '99+' : toReview}</em>;
     if (i.to === '/studio/approvals' && queue > 0) return <em className="sb-count" aria-label={`${queue} waiting for you`}>{queue > 99 ? '99+' : queue}</em>;
     if (i.to === '/studio/inbox' && unread > 0) return <em className="sb-count sb-unread" aria-label={`${unread} unread`}>{unread > 99 ? '99+' : unread}</em>;
     return null;

@@ -18,7 +18,8 @@ const SCREENS = {
   translations: () => import('./pages/Translations.tsx'), menus: () => import('./pages/Menus.tsx'), home: () => import('./pages/Home.tsx'), media: () => import('./pages/Media.tsx'),
   admin: () => import('./pages/Admin.tsx'), approvals: () => import('./pages/Approvals.tsx'),
   open: () => import('./pages/OpenPage.tsx'), settings: () => import('./pages/Settings.tsx'),
-  applyOverview: () => import('./apply/Overview.tsx'), applyCalls: () => import('./apply/Calls.tsx'), applyForms: () => import('./apply/Forms.tsx'), applySubmissions: () => import('./apply/Submissions.tsx'), applyEvaluation: () => import('./apply/Evaluation.tsx'), applySelection: () => import('./apply/Selection.tsx'), applyComms: () => import('./apply/Communications.tsx'),
+  applyOverview: () => import('./apply/Overview.tsx'), applyCalls: () => import('./apply/Calls.tsx'), applyForms: () => import('./apply/Forms.tsx'), applySubmissions: () => import('./apply/Submissions.tsx'), applyEvaluation: () => import('./apply/Evaluation.tsx'), applyComms: () => import('./apply/Communications.tsx'),
+  applyWorkspace: () => import('./apply/Workspace.tsx'), applyApplicants: () => import('./apply/Applicants.tsx'),
 };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const screen = <K extends keyof typeof SCREENS>(k: K, name: string) => lazy(() => SCREENS[k]().then((m) => ({ default: (m as any)[name] as React.ComponentType<any> })));
@@ -30,11 +31,10 @@ const OpportunityEditor = screen('opportunities', 'OpportunityEditor'), InboxPag
 const TranslationsPage = screen('translations', 'TranslationsPage'), MenusPage = screen('menus', 'MenusPage'), HomeEditor = screen('home', 'HomeEditor');
 const MediaLibrary = screen('media', 'MediaLibrary'), Publishing = screen('admin', 'Publishing'), ActivityLog = screen('admin', 'ActivityLog'), Users = screen('admin', 'Users');
 const ApprovalsPage = screen('approvals', 'ApprovalsPage');
-const ApplyOverview = screen('applyOverview', 'ApplyOverview'), CallsList = screen('applyCalls', 'CallsList'), CallEditor = screen('applyCalls', 'CallEditor');
-const FormsList = screen('applyForms', 'FormsList'), CallFormBuilder = screen('applyForms', 'CallFormBuilder'), TemplatesPage = screen('applyForms', 'TemplatesPage'), TemplateBuilder = screen('applyForms', 'TemplateBuilder');
-const SubmissionsList = screen('applySubmissions', 'SubmissionsList'), SubmissionDetail = screen('applySubmissions', 'SubmissionDetail');
-const EvaluationPage = screen('applyEvaluation', 'EvaluationPage'), ReviewScreen = screen('applyEvaluation', 'ReviewScreen'), ShortlistsPage = screen('applySelection', 'ShortlistsPage'), DecisionsPage = screen('applySelection', 'DecisionsPage');
-const CommunicationsPage = screen('applyComms', 'CommunicationsPage');
+const ApplyOverview = screen('applyOverview', 'ApplyOverview'), CallsList = screen('applyCalls', 'CallsList'), CallWorkspace = screen('applyWorkspace', 'CallWorkspace');
+const TemplatesPage = screen('applyForms', 'TemplatesPage'), TemplateBuilder = screen('applyForms', 'TemplateBuilder'), SubmissionDetail = screen('applySubmissions', 'SubmissionDetail');
+const ApplicantsPage = screen('applyApplicants', 'ApplicantsPage'), MyReviewsPage = screen('applyEvaluation', 'MyReviewsPage'), ReviewScreen = screen('applyEvaluation', 'ReviewScreen');
+const MessagesPage = screen('applyComms', 'MessagesPage');
 const PublicationsList = screen('publications', 'PublicationsList'), PublicationEditor = screen('publications', 'PublicationEditor');
 const OpenPage = screen('open', 'OpenPage');
 const SettingsPage = screen('settings', 'SettingsPage');
@@ -164,6 +164,45 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   );
 }
 
+// AFCD Apply: Overview, Calls (each call a workspace with tabs), Applicants (one pipeline), My reviews, Messages.
+// Addresses of the earlier pages lead to where their content lives now.
+const UUID = '([0-9a-f-]{36})';
+function applyRoute(path: string): { title: string; el: React.ReactElement; full?: boolean } | null {
+  const m = (re: string) => path.match(new RegExp(`^/studio/apply/${re}/?$`));
+  const q = location.search;
+  let x;
+  if ((x = m(`calls/templates/${UUID}`))) return { title: 'Template', el: <TemplateBuilder key={x[1]} id={x[1]} />, full: true };
+  if (m('calls/templates')) return { title: 'Form templates', el: <TemplatesPage /> };
+  if ((x = m(`calls/${UUID}/form`))) return { title: 'Application form', el: <CallWorkspace key={`${x[1]}:form`} id={x[1]} tab="form" />, full: true };
+  if ((x = m(`calls/${UUID}/(details|applicants|reviews|emails)`))) return { title: 'Call', el: <CallWorkspace key={`${x[1]}:${x[2]}`} id={x[1]} tab={x[2] as 'details'} /> };
+  if ((x = m(`calls/${UUID}`))) return { title: 'Call', el: <CallWorkspace key={`${x[1]}:overview`} id={x[1]} tab="overview" /> };
+  if (m('calls')) return { title: 'Calls', el: <CallsList /> };
+  if ((x = m(`applicants/${UUID}`))) return { title: 'Application', el: <SubmissionDetail key={x[1]} id={x[1]} /> };
+  if (m('applicants')) return { title: 'Applicants', el: <ApplicantsPage /> };
+  if ((x = m(`reviews/${UUID}`))) return { title: 'Review', el: <ReviewScreen key={x[1]} id={x[1]} /> };
+  if (m('reviews')) return { title: 'My reviews', el: <MyReviewsPage /> };
+  if (m('messages')) return { title: 'Messages', el: <MessagesPage /> };
+  // earlier addresses
+  const call = new URLSearchParams(q).get('call');
+  const old: [RegExp, (r: RegExpMatchArray) => string][] = [
+    [/^\/studio\/apply\/submissions\/([0-9a-f-]{36})$/, (r) => `/studio/apply/applicants/${r[1]}`],
+    [/^\/studio\/apply\/submissions\/?$/, () => `/studio/apply/applicants${q}`],
+    [/^\/studio\/apply\/evaluation\/?$/, () => (call ? `/studio/apply/calls/${call}/reviews` : '/studio/apply/reviews')],
+    [/^\/studio\/apply\/shortlists\/?$/, () => `/studio/apply/applicants?stage=shortlist${call ? `&call=${call}` : ''}`],
+    [/^\/studio\/apply\/decisions\/?$/, () => `/studio/apply/applicants?stage=decision${call ? `&call=${call}` : ''}`],
+    [/^\/studio\/apply\/communications\/?$/, () => '/studio/apply/messages'],
+    [/^\/studio\/apply\/forms\/?$/, () => '/studio/apply/calls'],
+    [/^\/studio\/apply\/templates\/([0-9a-f-]{36})$/, (r) => `/studio/apply/calls/templates/${r[1]}`],
+    [/^\/studio\/apply\/templates\/?$/, () => '/studio/apply/calls/templates'],
+  ];
+  for (const [re, to] of old) { const r = path.match(re); if (r) return { title: 'Applications', el: <Moved to={to(r)} /> }; }
+  return null;
+}
+function Moved({ to }: { to: string }) {
+  useEffect(() => { history.replaceState(null, '', to); window.dispatchEvent(new Event('studio:nav')); }, [to]);
+  return <Loading />;
+}
+
 function route(path: string): { title: string; el: React.ReactElement; full?: boolean } {
   if (path.startsWith('/studio/open')) return { title: 'Opening the editor', el: <OpenPage key={location.search} /> };
   if (path.startsWith('/studio/home')) return { title: 'Homepage', el: <HomeEditor key="home" />, full: true };
@@ -172,24 +211,7 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   if (path.startsWith('/studio/translations')) return { title: 'Translations', el: <TranslationsPage /> };
   if (path.startsWith('/studio/menus')) return { title: 'Menus', el: <MenusPage /> };
   if (path.startsWith('/studio/inbox') || path.startsWith('/studio/forms')) return { title: 'Inbox', el: <InboxPage /> };
-  const af = path.match(/^\/studio\/apply\/calls\/([0-9a-f-]{36})\/form$/);
-  if (af) return { title: 'Application form', el: <CallFormBuilder key={af[1]} callId={af[1]} />, full: true };
-  const at = path.match(/^\/studio\/apply\/templates\/([0-9a-f-]{36})$/);
-  if (at) return { title: 'Template', el: <TemplateBuilder key={at[1]} id={at[1]} />, full: true };
-  if (path.startsWith('/studio/apply/templates')) return { title: 'Templates', el: <TemplatesPage /> };
-  if (path.startsWith('/studio/apply/forms')) return { title: 'Form builder', el: <FormsList /> };
-  const as = path.match(/^\/studio\/apply\/submissions\/([0-9a-f-]{36})$/);
-  if (as) return { title: 'Application', el: <SubmissionDetail key={as[1]} id={as[1]} /> };
-  if (path.startsWith('/studio/apply/submissions')) return { title: 'Submissions', el: <SubmissionsList /> };
-  const ar = path.match(/^\/studio\/apply\/reviews\/([0-9a-f-]{36})$/);
-  if (ar) return { title: 'Review', el: <ReviewScreen key={ar[1]} id={ar[1]} /> };
-  if (path.startsWith('/studio/apply/evaluation')) return { title: 'Review & evaluation', el: <EvaluationPage /> };
-  if (path.startsWith('/studio/apply/shortlists')) return { title: 'Shortlists', el: <ShortlistsPage /> };
-  if (path.startsWith('/studio/apply/decisions')) return { title: 'Decisions', el: <DecisionsPage /> };
-  if (path.startsWith('/studio/apply/communications')) return { title: 'Communications', el: <CommunicationsPage /> };
-  const ac = path.match(/^\/studio\/apply\/calls\/([0-9a-f-]{36})$/);
-  if (ac) return { title: 'Call', el: <CallEditor key={ac[1]} id={ac[1]} /> };
-  if (path.startsWith('/studio/apply/calls')) return { title: 'Calls', el: <CallsList /> };
+  if (path.startsWith('/studio/apply/')) { const r = applyRoute(path); if (r) return r; }
   if (/^\/studio\/apply\/?$/.test(path)) return { title: 'Applications', el: <ApplyOverview /> };
   const op = path.match(/^\/studio\/opportunities\/([0-9a-f-]{36})$/);
   if (op) return { title: 'Opportunity', el: <OpportunityEditor key={op[1]} id={op[1]} /> };

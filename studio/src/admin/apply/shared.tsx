@@ -1,5 +1,6 @@
 // AFCD Apply: labels and small pieces shared by the Applications screens.
 import './apply.css';
+import './workspace.css';
 
 export const CALL_TYPES: [string, string][] = [
   ['youth_program', 'Youth programme'], ['fellowship', 'Fellowship'], ['training', 'Training'], ['volunteer', 'Volunteering'], ['recruitment', 'Recruitment'],

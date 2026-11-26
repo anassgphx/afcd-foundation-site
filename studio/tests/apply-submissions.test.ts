@@ -146,6 +146,10 @@ describe('apply: staff side of applications', () => {
     expect((await call.mgr.get('/apply/submissions?q=%25')).body.total).toBe(0);    // "%" is searched literally
     expect((await call.mgr.get(`/apply/submissions?call=${call.id}&status=submitted`)).body.total).toBe(12);
     expect((await call.mgr.get('/apply/submissions?cursor=garbage')).status).toBe(422);
+    // a pipeline stage asks for several statuses at once
+    expect((await call.mgr.get(`/apply/submissions?call=${call.id}&status=submitted,withdrawn`)).body.total).toBe(12);
+    expect((await call.mgr.get(`/apply/submissions?call=${call.id}&status=shortlisted,interview`)).body.total).toBe(0);
+    expect((await call.mgr.get('/apply/submissions?status=submitted,nonsense')).status).toBe(422);
   });
 
   it('changes status with a reason and a confirmed count, and corrects eligibility without losing the automatic result', async () => {

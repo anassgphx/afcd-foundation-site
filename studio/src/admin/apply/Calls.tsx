@@ -49,6 +49,7 @@ export function CallsList() {
     <div className="page-h"><div><h1>Calls</h1><p>Each call has a reference, its own dates and time zone, and a history of every change to its status and deadline.</p></div>
       <div className="ap-row">
         {can('apply.export') && rows && rows.length > 0 && <a className="btn" href="/studio/api/apply/calls/export.csv" download><Icon n="upload" style={{ transform: 'rotate(180deg)' }} />Export CSV</a>}
+        <Link className="btn" to="/studio/apply/calls/templates"><Icon n="book" />Form templates</Link>
         {can('apply.call.manage') && <button className="btn btn-primary" onClick={() => set('new', '1')}><Icon n="plus" />New call</button>}
       </div></div>
     <section className="card">
@@ -63,21 +64,38 @@ export function CallsList() {
   </>;
 }
 
+type Tpl = { id: string; builtIn: boolean; name: string; description: string; category: string; questions: number; pages: number };
+/** A new call, and where its application form starts: a template (built-in or your own) or a blank form. */
 function NewCall({ onClose }: { onClose: () => void }) {
+  const can = useCan();
   const [title, setTitle] = useState(''); const [type, setType] = useState('youth_program'); const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const [tpls, setTpls] = useState<Tpl[] | null>(null); const [tpl, setTpl] = useState<string | null>('youth_program');
+  useEffect(() => { api<Tpl[]>('/apply/templates').then((l) => { setTpls(l); if (!l.some((t) => t.id === 'youth_program')) setTpl(l[0]?.id ?? null); }).catch(() => { setTpls([]); setTpl(null); }); }, []);
+  const pick = (t: Tpl | null) => { setTpl(t?.id ?? null); if (t && CALL_TYPES.some(([v]) => v === t.category)) setType(t.category); };
   async function create() {
     setBusy(true); setErr('');
     try {
       const slug = slugify(title) || `call-${Date.now().toString(36)}`;
       const r = await post<{ id: string }>('/apply/calls', { title: title.trim(), slug, callType: type });
+      // the call exists from here; a form that fails to start is created later from the Form tab
+      if (can('apply.form.edit') && tpls) { try { await post(`/apply/calls/${r.id}/form`, tpl ? { template: tpl } : {}); } catch { /* the Form tab offers the choice again */ } }
       navigate(`/studio/apply/calls/${r.id}`);
     } catch (e) { setErr(e instanceof ApiError && e.details?.length ? e.details.map((d) => d.message).join(' ') : (e as Error).message); setBusy(false); }
   }
-  return <Modal size="sm" title="New call" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button>
-    <button className="btn btn-primary" disabled={busy || title.trim().length < 3} onClick={create}>{busy ? 'Creating…' : 'Create draft'}</button></>}>
+  return <Modal title="New call" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button>
+    <button className="btn btn-primary" disabled={busy || title.trim().length < 3} onClick={create}>{busy ? 'Creating…' : 'Create call'}</button></>}>
     <div className="modal-b stack">
-      <label className="field"><span>Title</span><input className="input" autoFocus maxLength={160} value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && title.trim().length >= 3) create(); }} placeholder="e.g. Green Fellows 2027" /></label>
-      <label className="field"><span>Type</span><select className="select" value={type} onChange={(e) => setType(e.target.value)}>{CALL_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+      <div className="nc-row">
+        <label className="field"><span>Title</span><input className="input" autoFocus maxLength={160} value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && title.trim().length >= 3) create(); }} placeholder="e.g. Green Fellows 2027" /></label>
+        <label className="field"><span>Type</span><select className="select" value={type} onChange={(e) => setType(e.target.value)}>{CALL_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+      </div>
+      {can('apply.form.edit') && <fieldset className="nc-start"><legend>Start the application form from</legend>
+        {!tpls ? <Loading /> : <div className="nc-tpls">
+          {tpls.map((t) => <button type="button" key={t.id} className={`nc-tpl${tpl === t.id ? ' on' : ''}`} aria-pressed={tpl === t.id} onClick={() => pick(t)}><b>{t.name}</b><small>{t.builtIn ? `${t.questions} questions` : `Your template · ${t.questions} questions`}</small></button>)}
+          <button type="button" className={`nc-tpl${tpl === null ? ' on' : ''}`} aria-pressed={tpl === null} onClick={() => pick(null)}><b>Blank form</b><small>Name and email, then your questions</small></button>
+        </div>}
+        <small className="muted">You can change every question afterwards in the call’s Form tab. Your own templates are managed under <Link to="/studio/apply/calls/templates">Calls › Templates</Link>.</small>
+      </fieldset>}
       <small className="muted">It gets a reference (AFCD-year-number) and stays a draft until you submit it for review.</small>
       {err && <div className="notice n-warn" role="alert"><div>{err}</div></div>}
     </div>
@@ -108,7 +126,7 @@ const DONE: Record<string, string> = {
 const EVENT_LABEL = (e: Ev) => e.kind === 'form_published' ? `Form version ${(e.meta?.version as number) ?? ''} published` : e.kind === 'extend' ? 'Deadline extended' : e.kind === 'reopen' ? 'Reopened' : e.kind === 'edit' ? `Edited while released (${((e.meta?.fields as string[]) ?? []).join(', ')})`
   : e.kind === 'duplicate' ? 'Created as a copy' : e.fromStatus ? `${CALL_STATUS[e.fromStatus] ?? e.fromStatus} → ${CALL_STATUS[e.toStatus ?? ''] ?? e.toStatus}` : 'Created';
 
-export function CallEditor({ id }: { id: string }) {
+export function CallEditor({ id, tabs }: { id: string; tabs?: ReactNode }) {
   const can = useCan(); const me = useMe(); const toast = useToast();
   const [c, setC] = useState<Loaded | null>(null); const [f, setF] = useState<Form | null>(null); const [hero, setHero] = useState<MediaItem | null>(null);
   const [pillars, setPillars] = useState<{ key: string; name: string }[]>([]); const [projects, setProjects] = useState<{ slug: string; name: string }[]>([]);
@@ -157,10 +175,10 @@ export function CallEditor({ id }: { id: string }) {
     <EditorHeader back={{ to: '/studio/apply/calls', label: 'Calls' }} title={f.title || 'Untitled call'} file={c.reference} status={null} live={false} dirty={dirty}
       extra={<CallBadge s={status} />}
       actions={<>
-        <Link className="btn" to={`/studio/apply/calls/${id}/form`}><Icon n="log" />Application form</Link>
         {can('apply.call.manage') && <button className="btn" onClick={duplicate} disabled={!!busy}><Icon n="layers" />Duplicate</button>}
         {editable && dirty && <button className="btn btn-primary" onClick={save} disabled={!!busy} title="Save (⌘S)">{busy === 'save' ? 'Saving…' : 'Save'}</button>}
       </>} />
+    {tabs}
     {errs.length > 0 && <div className="notice n-warn" role="alert"><div><ul style={{ margin: 0 }}>{errs.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErrs([])} aria-label="Dismiss"><Icon n="x" /></button></div>}
     {status === 'in_review' && <div className="notice n-info"><div>In review: read-only. {can('apply.call.manage') ? 'Use “Back to draft” to edit.' : ''}</div></div>}
     {released && editable && <div className="notice n-info"><div>This call is {CALL_STATUS[status].toLowerCase()}. You can correct texts, the image and contact details; each save is kept as a revision. Its address, time zone and dates are fixed.</div></div>}

@@ -142,6 +142,24 @@ describe('about pages', () => {
     expect(existsSync(join(h.siteRoot, team.people[0].image.src))).toBe(true);
   });
 
+  it('mission & vision: optional photos beside the overview, mission and vision, checked and exported', async () => {
+    await importAbout(h.db, h.cfg, null, SITE);
+    const { body: mv } = await c.ed.get('/about/mission-vision');
+    expect(mv.content).toMatchObject({ mediaId: null, missionMediaId: null, visionMediaId: null });
+    expect((await c.ed.put('/about/mission-vision', { content: { ...mv.content, missionMediaId: 'not-a-photo' } })).status).toBe(422);
+    const fd = new FormData(); fd.append('file', new File([await pngBytes()], 'mission.png', { type: 'image/png' }));
+    const img = await (await h.app.request('/studio/api/media', { method: 'POST', body: fd, headers: { Cookie: c.ed.cookie, Origin: ORIGIN, 'X-CSRF-Token': c.ed.csrf } })).json();
+    expect((await c.ed.put('/about/mission-vision', { content: { ...mv.content, missionMediaId: img.id } })).status).toBe(200);
+    const blocked = await c.ed.post('/about/mission-vision/transition', { action: 'submit' });
+    expect(blocked.status).toBe(422); expect(JSON.stringify(blocked.body.details)).toMatch(/Confirm AFCD may use/);
+    await h.app.request(`/studio/api/media/${img.id}`, { method: 'PATCH', headers: { Cookie: c.ed.cookie, Origin: ORIGIN, 'X-CSRF-Token': c.ed.csrf, 'Content-Type': 'application/json' }, body: JSON.stringify({ alt: 'Test photo (fake)', rightsConfirmed: true }) });
+    await approve(c, 'mission-vision');
+    expect((await c.admin.post('/about/mission-vision/publish')).status).toBe(200);
+    const page = json('src/data/about.json').pages['mission-vision'];
+    expect(page.missionImage).toMatchObject({ alt: 'Test photo (fake)', src: expect.stringMatching(/^assets\/media\//) });
+    expect(page.image).toBeNull(); expect(page.visionImage).toBeNull();
+  });
+
   it('saves section settings: visibility, order and headings, validated', async () => {
     await importAbout(h.db, h.cfg, null, SITE);
     const { body: p } = await c.ed.get('/about/partners');

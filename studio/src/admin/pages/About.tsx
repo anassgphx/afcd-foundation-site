@@ -121,7 +121,7 @@ function SectionTexts({ c, defs, id }: { c: Ctx; defs: Defs; id: string }) {
 // ---------------------------------------------------------------- the visual editor
 type Item = { id: string; label: string; icon: string; kind: 'page' | 'fixed' | 'section' };
 const DEVICES = [[1280, 'monitor', 'Desktop'], [820, 'tablet', 'Tablet'], [390, 'phone', 'Mobile']] as const;
-const ICONS: Record<string, string> = { statement: 'users', journey: 'calendar', different: 'check', 'what-we-do': 'pillars', approach: 'layers', impact: 'spark',
+const ICONS: Record<string, string> = { statement: 'users', journey: 'calendar', different: 'check', approach: 'layers', impact: 'spark',
   mission: 'send', values: 'check', vision: 'eye', next: 'ext', objectives: 'check', 'who-we-serve': 'users', 'where-we-work': 'pin', directory: 'partner', models: 'layers', how: 'send',
   board: 'users', executive: 'users', staff: 'users', volunteers: 'heart' };
 /** Where a click on the canvas lands: the page header, the overview, a section (by its id) or the closing band. */
@@ -213,9 +213,6 @@ export function AboutEditor({ refKey }: { refKey: string; onChanged?: () => void
     ...order.map((id): Item => ({ id, label: nameOf(id), icon: ICONS[id] ?? 'layers', kind: 'section' })),
     { id: 'closing', label: nameOf('closing'), icon: 'send', kind: 'page' }];
   const move = (from: number, to: number) => { if (to < 0 || to >= order.length) return; const n = [...order]; const [x] = n.splice(from, 1); n.splice(to, 0, x); c.set(['order'], n); };
-  const pillarSelect = (it: Content, i: number) => <label className="ab-inline"><span>Links to pillar</span>
-    <select className="select" value={it.pillar ?? ''} onChange={(e) => c.set(['areas', i, 'pillar'], e.target.value)} aria-label={`Focus area ${i + 1}: pillar`}>
-      <option value="">No link</option>{p.context.pillars.map((x) => <option key={x.key} value={x.key}>{x.name}</option>)}</select></label>;
   const pname = (k: string) => p.context.pillars.find((x) => x.key === k)?.name ?? k;
   const people = (group?: string) => <Repeat c={c} path={['people']} label={group ? 'People (all groups; this group is highlighted on the page)' : 'People'} noun="Person" max={120} blank={{ name: '', role: '', group: group ?? 'executive', bio: '', mediaId: null }}
       fields={[{ k: 'name', label: 'Full name', max: 80, required: true }, { k: 'role', label: 'Role', max: 100, placeholder: 'Role, e.g. Programme coordinator', required: true }, { k: 'bio', label: 'Short bio (optional)', max: 700, rows: 2 }]}
@@ -242,19 +239,20 @@ export function AboutEditor({ refKey }: { refKey: string; onChanged?: () => void
       <Field label="President’s photo" hint="Optional. Shown under the heading, in black and white. Choose the real photo from the Media Library; alt text is optional, e.g. “AKAYA Kamal, President of AFCD Foundation”. Leave it empty to show no photo."><Photo c={c} path={['statement', 'mediaId']} media={media} pick={setPicking} label="Choose the president’s photo" /></Field></>,
     journey: <Repeat c={c} path={['milestones']} label="Milestones, in chronological order" noun="Milestone" max={20} fields={[{ k: 'when', label: 'Date or period', max: 24, placeholder: 'e.g. 2007 or 2020–21', required: true }, { k: 'title', label: 'Title', max: 90, required: true }, { k: 'text', label: 'What happened', max: 500, rows: 2 }]} />,
     different: <Repeat c={c} path={['principles']} label="Principles" noun="Principle" max={10} fields={[{ k: 'title', label: 'Title', max: 90, required: true }, { k: 'text', label: 'Explanation', max: 500, rows: 3 }]} />,
-    'what-we-do': <><Repeat c={c} path={['areas']} label="Focus areas" noun="Area" max={8} blank={{ title: '', text: '', pillar: '' }} fields={[{ k: 'title', label: 'Title', max: 90, required: true }, { k: 'text', label: 'Description', max: 700, rows: 3 }]} extra={pillarSelect} />
-      <small className="muted">The core activities below the areas are a shared list, also used by the pillar pages.</small></>,
     approach: <><TextF c={c} path={['approach', 'title']} label="Statement" max={60} /><TextF c={c} path={['approach', 'soft']} label="Statement, second part" max={60} hint="Written in grey." />
       <Repeat c={c} path={['approach', 'steps']} label="Steps" noun="Step" max={6} fields={[{ k: 'title', label: 'Title', max: 40, required: true }, { k: 'text', label: 'Text', max: 260, rows: 2 }]} /></>,
     impact: <><Repeat c={c} path={['stats']} label="Numbers" noun="Number" max={6} fields={[{ k: 'value', label: 'Value', max: 12, placeholder: 'e.g. 2,700', required: true }, { k: 'label', label: 'Label', max: 60, required: true }]} />
       <small className="muted">Only figures AFCD can stand behind. End a value with + to show it as “more than”. The years counter follows the founding year (Overview).</small></>,
   });
   if (p.key === 'mission-vision') Object.assign(panels, {
-    overview: <p className="muted" style={{ margin: 0 }}>The overview shows the mission and the number of values and objectives. Edit the mission in its own step.</p>,
-    path: <p className="muted" style={{ margin: 0 }}>The heading above the four steps.</p>,
-    mission: <TextF c={c} path={['mission']} label="Mission" max={600} rows={4} />,
-    values: <Repeat c={c} path={['values']} label="Values, numbered I, II, III…" noun="Value" max={8} fields={[{ k: 'title', label: 'Name', max: 40, required: true }, { k: 'text', label: 'What it means', max: 320, rows: 2 }]} />,
-    vision: <TextF c={c} path={['vision']} label="Vision" max={600} rows={4} />,
+    overview: <><p className="muted" style={{ margin: 0 }}>The overview shows the mission. Edit the mission in its own step.</p>
+      <Field label="Photo beside the overview" hint="Optional. Without one, the page uses the cover photo of a live project."><Photo c={c} path={['mediaId']} media={media} pick={setPicking} label="Choose a photo" /></Field></>,
+    path: <p className="muted" style={{ margin: 0 }}>The heading above mission, values and vision.</p>,
+    mission: <><TextF c={c} path={['mission']} label="Mission" max={600} rows={4} />
+      <Field label="Photo beside the mission" hint="Optional. Without one, the page uses the cover photo of a live project."><Photo c={c} path={['missionMediaId']} media={media} pick={setPicking} label="Choose a photo" /></Field></>,
+    values: <Repeat c={c} path={['values']} label="Values" noun="Value" max={8} fields={[{ k: 'title', label: 'Name', max: 40, required: true }, { k: 'text', label: 'What it means', max: 320, rows: 2 }]} />,
+    vision: <><TextF c={c} path={['vision']} label="Vision" max={600} rows={4} />
+      <Field label="Photo beside the vision" hint="Optional. Without one, the page uses the cover photo of a live project."><Photo c={c} path={['visionMediaId']} media={media} pick={setPicking} label="Choose a photo" /></Field></>,
     next: <p className="muted" style={{ margin: 0 }}>Links to the Strategy &amp; Objectives page.</p>,
   });
   if (p.key === 'strategy') Object.assign(panels, {

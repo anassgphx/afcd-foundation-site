@@ -29,6 +29,7 @@ export async function aboutEntries(db: DB, live: LiveAbout[]) {
       if (c.statement) c.statement.image = image(c.statement.mediaId);
     }
     if (key === 'team') c.people = (c.people ?? []).map((p: any) => ({ ...p, image: image(p.mediaId) }));
+    if (key === 'mission-vision') Object.assign(c, { image: image(c.mediaId), missionImage: image(c.missionMediaId), visionImage: image(c.visionMediaId) });
     if (key === 'strategy') c.objectives = (c.objectives ?? []).map((o: any) => ({ ...o, pillars: links.filter((l) => l.ref === o.ref).map((l) => l.key) }));
     pages[key] = { ...c, revision: id };
   }

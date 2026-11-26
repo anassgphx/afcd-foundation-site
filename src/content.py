@@ -489,7 +489,6 @@ ABOUT_SECTIONS = {
         'statement': {'tab': 'President’s statement', 'label': 'President’s Statement'},
         'journey': {'tab': 'Journey', 'label': 'Our Journey', 'title': 'From Ait Ourir', 'soft': 'to across Morocco.', 'meta': 'Since 2007', 'desc': 'How a local volunteer initiative became a national nonprofit.'},
         'different': {'tab': 'What makes us different', 'label': 'What Makes Us Different', 'title': 'How we work,', 'soft': 'and why it lasts.', 'meta': '', 'desc': ''},
-        'what-we-do': {'tab': 'What we do', 'label': 'What We Do', 'title': 'Four areas,', 'soft': 'one approach.', 'desc': 'Programmes combine non-formal education, practical training, mentoring and community action.', 'sub': 'Core activities'},
         'approach': {'tab': 'Approach', 'label': 'Our Approach'},
         'impact': {'tab': 'Impact', 'label': 'Our Impact', 'title': 'A story', 'soft': 'of people.', 'meta': 'Since 2007', 'desc': 'The measure of this work is the people who carry it on.'},
     },
@@ -565,20 +564,10 @@ def about():
     tl = ''.join(f'''<li class="abx-tl-i"><span class="abx-tl-dot" aria-hidden="true"></span><div class="abx-tl-card"><span class="abx-tl-when">{_esc(m["when"])}</span><span class="abx-tl-b"><span class="abx-tl-t">{_esc(m["title"])}</span>{f'<span class="abx-tl-d">{_esc(m["text"])}</span>' if (m.get("text") or "").strip() else ''}</span></div></li>'''
                  for m in c.get('milestones') or [])
     pr = c.get('principles') or []
-    areas = c.get('areas') or []
-    # each area in its pillar's colour, with the pillar's icon from the homepage explorer
-    area_tone = lambda a: f' style="--pc:{PILLAR_TONE.get(a.get("pillar"), "#E7E5E4")}"'
-    area_ico = lambda a: ('<span class="abx-area-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" '
-                          f'stroke-linejoin="round" aria-hidden="true">{HOME_PILLAR_ICO.get(a.get("pillar"), HOME_PILLAR_ICO["youth-empowerment"])}</svg></span>')
-    area_rows = ''.join(
-        (f'<li><a href="pillars.html#{_esc(a["pillar"])}" class="plx-other abx-area"{area_tone(a)}>' if a.get('pillar') in PILLAR_FILE else f'<li><div class="plx-other abx-area"{area_tone(a)}>')
-        + f'{area_ico(a)}<span class="plx-other-n">{j:02d}</span><span class="min-w-0"><span class="plx-other-t">{_esc(a["title"])}</span>'
-        + (f'<span class="plx-other-d">{_esc(a["text"])}</span>' if (a.get('text') or '').strip() else '') + '</span>'
-        + ('<span class="plx-arr" aria-hidden="true">↗</span></a></li>' if a.get('pillar') in PILLAR_FILE else '</div></li>')
-        for j, a in enumerate(areas, 1))
-    acts = ''.join(f'<li class="plx-act"><span class="plx-act-ico">{j:02d}</span><span>{a}</span></li>' for j, a in enumerate(ACTIVITIES, 1))
     ap = c.get('approach') or {}
-    steps = ''.join(f'<li class="plx-step"><span class="plx-step-n">{j:02d}</span><span class="plx-step-t">{_esc(s["title"])}</span><span class="plx-step-d">{_esc(s["text"])}</span></li>'
+    # approach: one journey of steps joined by a thin line (circle number, title, short text)
+    steps = ''.join(f'<li><span class="abx-j-n">{j:02d}</span><span class="abx-j-t">{_esc(s["title"])}</span>'
+                    + (f'<span class="abx-j-d">{_esc(s["text"])}</span>' if (s.get('text') or '').strip() else '') + '</li>'
                     for j, s in enumerate(ap.get('steps') or [], 1))
     stats = abx_stats(c)
     st = c.get('statement') or {}
@@ -613,31 +602,17 @@ def about():
     <div class="mt-8 lg:mt-10">{abx_rows(pr, 'abx-rows abx-2col')}</div>
   </div>
 </section>""" if pr else '',
-        'what-we-do': lambda k, cfg: f"""
-<section id="what-we-do" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{abx_head(k, cfg, right=('Our pillars', 'pillars.html'))}
-    <ul class="plx-others mt-8 lg:mt-10">{area_rows}</ul>
-    {f'<p class="plx-k mt-12">{_esc(cfg["sub"])}</p>' if cfg.get('sub') else '<div class="mt-12"></div>'}
-    <ul class="plx-acts abx-acts mt-4">{acts}</ul>
-  </div>
-</section>""" if areas else '',
         'approach': lambda k, cfg: f"""
 <section id="approach" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">
-    <div class="plx-pv">
-      <div>
-        <div class="sh-top"><span class="sh-num">{k:02d}</span><span class="sh-label">{_esc(cfg.get('label') or '')}</span></div>
-        <h2 class="plx-pv-title">{_esc(ap.get('title') or '')}{f' <span class="text-ink-mid">{_esc(ap["soft"])}</span>' if ap.get('soft') else ''}</h2>
-      </div>
-      <ol class="plx-steps abx-steps">{steps}</ol>
-    </div>
-  </div>
+  <div class="wrap"><div class="abx-ap">{sec_head(f"{k:02d} / {_esc(cfg.get('label') or '')}", _esc(ap.get('title') or '') + (f' <span class="sh-soft">{_esc(ap["soft"])}</span>' if ap.get('soft') else ''))}
+    {f'<ol class="abx-journey cols-{min(len(ap.get("steps") or []), 4)}">{steps}</ol>' if steps else ''}
+  </div></div>
 </section>""" if steps or ap.get('title') else '',
         'impact': lambda k, cfg: f"""
 <section id="impact" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{abx_head(k, cfg)}
-    <div class="mt-8 lg:mt-10">{stats}</div>
-  </div>
+  <div class="wrap"><div class="abx-impact on-dark">{abx_head(k, cfg)}
+    <div class="mt-8 lg:mt-12">{stats}</div>
+  </div></div>
 </section>""" if (c.get('stats') or c.get('foundedYear')) else '',
     }
     secs, tabs = abx_build('our-story', c, blocks)
@@ -656,31 +631,42 @@ def about():
     # ---------------------------------------------------------------- Mission & Vision: one path, from today to tomorrow
     c = about_content('mission-vision')
     vals = c.get('values') or []
-    roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII']
-    vrows = ''.join(f'<li class="abx-val"><span class="abx-val-n">{roman[j] if j < len(roman) else j + 1}</span><span class="min-w-0"><span class="abx-val-t">{_esc(v["title"])}</span><span class="abx-val-d">{_esc(v.get("text") or "")}</span></span></li>' for j, v in enumerate(vals))
+    # photos: the ones chosen in Studio, else the cover photos of live projects (real AFCD photos), each used once
+    covers = [cv[0] for cv in (((p_.get('detail') or {}).get('cover') or []) for p_ in _PROJECT_DATA) if cv]
+    pics, used = {}, set()
+    for slot, key_ in (('overview', 'image'), ('mission', 'missionImage'), ('vision', 'visionImage')):
+        own = c.get(key_)
+        pick = own or next((m for m in covers if m['src'] not in used), None)
+        if pick:
+            used.add(pick['src']); pics[slot] = pick
+    fig = lambda slot, sizes: (f'<figure class="abx-mv-pic">{media_img(pics[slot], "h-full w-full", sizes)}</figure>' if slot in pics else '')
+    check = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10.5 3.2 3L15 6.5"/></svg>'
+    vrows = ''.join(f'<li class="abx-mv-val"><span class="abx-mv-ico">{check}</span><span class="min-w-0"><span class="abx-mv-val-t">{_esc(v["title"])}</span>'
+                    + (f'<span class="abx-mv-val-d">{_esc(v["text"])}</span>' if (v.get('text') or '').strip() else '') + '</span></li>' for v in vals)
     stage_body = {
-        'mission': f'<p class="abx-path-q">{_esc(c.get("mission") or "")}</p>' if c.get('mission') else '',
-        'values': f'<ol class="abx-vals">{vrows}</ol>' if vals else '',
-        'vision': f'<p class="abx-path-q">{_esc(c.get("vision") or "")}</p>' if c.get('vision') else '',
-        'next': f'<a href="strategy.html" class="plx-other abx-next"><span class="plx-other-n">SO</span><span class="min-w-0"><span class="plx-other-t">Strategy &amp; Objectives</span><span class="plx-other-d">{len(OBJECTIVES)} objectives, the people we serve and where we work.</span></span><span class="plx-arr" aria-hidden="true">↗</span></a>',
+        'mission': f'<p class="abx-mv-q">{_esc(c.get("mission") or "")}</p>' if c.get('mission') else '',
+        'values': f'<ul class="abx-mv-vals">{vrows}</ul>' if vals else '',
+        'vision': f'<p class="abx-mv-q">{_esc(c.get("vision") or "")}</p>' if c.get('vision') else '',
+        'next': f'<a href="strategy.html" class="plx-other abx-next"><span class="min-w-0"><span class="plx-other-t">Strategy &amp; Objectives</span><span class="plx-other-d">{len(OBJECTIVES)} objectives, the people we serve and where we work.</span></span><span class="plx-arr" aria-hidden="true">↗</span></a>',
     }
     def stage(sid):
+        pic = fig(sid, '(min-width: 1024px) 40vw, 100vw') if sid in ('mission', 'vision') else ''
         return lambda k, cfg: f"""
-      <li id="{sid}" class="abx-path-i plx-sec">
-        <div class="abx-path-h"><span class="abx-path-n">{k:02d}</span><span class="abx-path-k">{_esc(cfg.get('label') or '')}</span></div>
-        <div class="abx-path-b"><h2 class="abx-path-t">{_esc(cfg.get('title') or '')}</h2>{f'<p class="abx-path-s">{_esc(cfg["desc"])}</p>' if cfg.get('desc') else ''}<div class="abx-path-c">{stage_body[sid]}</div></div>
+      <li id="{sid}" class="abx-mv-i abx-mv-{sid}{' has-pic' if pic else ''} plx-sec">
+        <div class="abx-mv-txt"><p class="abx-mv-k">{_esc(cfg.get('label') or '')}</p><h2 class="abx-mv-t">{_esc(cfg.get('title') or '')}</h2>{f'<p class="abx-mv-s">{_esc(cfg["desc"])}</p>' if cfg.get('desc') else ''}<div class="abx-mv-c">{stage_body[sid]}</div></div>{pic}
       </li>""" if stage_body[sid] else ''
     path, tabs = abx_build('mission-vision', c, {sid: stage(sid) for sid in stage_body})
     ph = about_section('mission-vision', c, 'path')
     ph_title = _esc(ph.get('title') or '') + (f' <span class="sh-soft">{_esc(ph["soft"])}</span>' if ph.get('soft') else '')
     body = page_header([ABOUT, ('Mission &amp; Vision', 'mission-vision.html')], 'About · Mission &amp; Vision', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
 <div class="plx abx"{_rev(c)}>
-{abx_overview('mission-vision.html', 'M·V', _esc(c.get('mission') or ''), [('Mission', '01'), ('Values', f'{len(vals):02d}'), ('Objectives', f'{len(OBJECTIVES):02d}')],
-              [('Read the path <span aria-hidden="true">↓</span>', f'#{tabs[0][0]}' if tabs else '#overview'), ('Our strategy <span aria-hidden="true">↗</span>', 'strategy.html')], '', 'Mission &amp; Vision')}
+{abx_overview('mission-vision.html', 'M·V', _esc(c.get('mission') or ''), [],
+              [('Read the path <span aria-hidden="true">↓</span>', f'#{tabs[0][0]}' if tabs else '#overview'), ('Our strategy <span aria-hidden="true">↗</span>', 'strategy.html')],
+              f'<figure class="plx-photo">{media_img(pics["overview"], "h-full w-full", "(min-width: 1024px) 40vw, 100vw", eager=True)}</figure>' if 'overview' in pics else '', 'Mission &amp; Vision')}
 {abx_tabs(tabs) if tabs else ''}
 <section id="path" class="plx-sec py-14 lg:py-20">
-  <div class="wrap">{sec_head(f'01 / {_esc(ph.get("label") or "")}', ph_title, _esc(ph.get('meta') or ''))}
-    <ol class="abx-path mt-8 lg:mt-12">{path}
+  <div class="wrap">{sec_head(_esc(ph.get("label") or ""), ph_title, _esc(ph.get('meta') or ''))}
+    <ol class="abx-mv mt-8 lg:mt-12">{path}
     </ol>
   </div>
 </section>

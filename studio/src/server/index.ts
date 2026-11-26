@@ -8,6 +8,7 @@ import * as GSC from './modules/google/gsc.ts';
 import { enqueue } from './modules/jobs/service.ts';
 import { runCallSchedule } from './modules/apply/calls.ts';
 import { purgeExpiredDrafts } from './modules/apply/applicant.ts';
+import { processQueue } from './modules/apply/messages.ts';
 
 const cfg = loadConfig();
 const { db } = await openDb(cfg);
@@ -48,6 +49,8 @@ const jobsTick = async () => {
     const c = await GSC.connection(db);
     if (c?.status === 'connected' && c.property && (await GSC.settings(db)).autoSync && (!c.lastSyncAt || Date.now() - c.lastSyncAt.getTime() > 20 * 3600_000)) await enqueue(db, 'gsc_sync');
     for (let i = 0; i < 5; i++) { const j = await runJobs(); if (!j) break; console.log(`[jobs] ${j.kind} ${j.status}${j.error ? `: ${j.error}` : ''}`); }
+    // AFCD Apply outbox: a few emails every 10 seconds, with retries (modules/apply/messages.ts)
+    const m = await processQueue(db, cfg); if (m.sent || m.failed) console.log(`[apply] emails sent ${m.sent}, failed ${m.failed}`);
   } catch (e) { console.error('[jobs]', e); } finally { jobsBusy = false; }
 };
 setInterval(jobsTick, 10_000).unref();

@@ -12,6 +12,7 @@ type Data = {
   kpis: { open: number; paused: number; scheduled: number; inReview: number; closingThisWeek: number; underEvaluation: number; drafts: number; total: number };
   deadlines: Mini[]; openings: Mini[]; waiting: Mini[]; serverTime: string;
   applications: { total: number; drafts: number; status: Record<string, number>; eligibility: Record<string, number> };
+  outbox: null | { queued: number; failed: number; sent: number; ready: boolean };
   recent: null | { id: string; reference: string; applicantName: string; callTitle: string; status: string; eligibility: string; overridden: boolean; submittedAt: string }[];
   activity: { id: string; callId: string; reference: string; title: string; kind: string; fromStatus: string | null; toStatus: string | null; createdAt: string; actorName: string | null }[];
 };
@@ -30,6 +31,7 @@ export function ApplyOverview() {
     ['Applications received', a.total, '/studio/apply/submissions', a.status.submitted ? `${a.status.submitted} not yet looked at` : 'All submitted'],
     ['Drafts in progress', a.drafts, '', 'Started, not submitted yet'],
     ['Needs eligibility review', a.eligibility.needs_review ?? 0, '/studio/apply/submissions?eligibility=needs_review', 'Flagged by the form’s rules'],
+    ...(d.outbox ? [['Email errors', d.outbox.failed, '/studio/apply/communications', d.outbox.ready ? `${d.outbox.queued} waiting to send` : 'Email sending is not set up'] as [string, number, string, string]] : []),
     ['Closing this week', k.closingThisWeek, 'open', 'Open calls with a deadline in 7 days'],
     ['Scheduled', k.scheduled, 'scheduled', 'Approved, opening on their date'],
     ['Awaiting approval', k.inReview, 'in_review', 'Submitted for review'],

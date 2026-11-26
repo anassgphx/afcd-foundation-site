@@ -14,6 +14,7 @@ import { deliver } from '../inbox/mail.ts';
 import { compose } from '../settings/email-layout.ts';
 import { allFields, FIELD_TYPES, FILE_TYPES, t, validate, type Answers, type FileRef, type FormDef } from './engine.ts';
 import { detect, MAX_DRAFT_BYTES, MAX_DRAFT_FILES, removeStored, safeName, store } from './files.ts';
+import { queueReceipt } from './messages.ts';
 
 const DRAFT_DAYS = 30;
 const RESUME_HOURS = 72;
@@ -293,6 +294,7 @@ export async function submitDraft(db: DB, cfg: Config, d0: Draft, raw: unknown, 
     if (keep.length) await t2.update(applyFiles).set({ submissionId: s.id }).where(inArray(applyFiles.id, keep));
     await t2.update(applyDrafts).set({ status: 'submitted', answers: kept as Record<string, unknown>, updatedAt: now }).where(eq(applyDrafts.id, d.id));
     await t2.insert(applySubmissionEvents).values({ submissionId: s.id, kind: 'submitted', toValue: 'submitted', meta: { formVersion: v.number, eligibility: ev.eligibility.result } });
+    await queueReceipt(t2, c, s);   // only when the call sends receipts; sent by the queue after this transaction commits
     await audit(tx, null, 'apply.submission.received', { type: 'apply_submission', id: s.id }, `Application ${reference} received for ${c.reference}`);   // no personal data
     return { reference, submittedAt: s.submittedAt, already: false };
   });

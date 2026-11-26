@@ -18,7 +18,7 @@ const SCREENS = {
   translations: () => import('./pages/Translations.tsx'), menus: () => import('./pages/Menus.tsx'), home: () => import('./pages/Home.tsx'), media: () => import('./pages/Media.tsx'),
   admin: () => import('./pages/Admin.tsx'), approvals: () => import('./pages/Approvals.tsx'),
   open: () => import('./pages/OpenPage.tsx'), settings: () => import('./pages/Settings.tsx'),
-  applyOverview: () => import('./apply/Overview.tsx'), applyCalls: () => import('./apply/Calls.tsx'), applyForms: () => import('./apply/Forms.tsx'), applySubmissions: () => import('./apply/Submissions.tsx'), applyEvaluation: () => import('./apply/Evaluation.tsx'), applySelection: () => import('./apply/Selection.tsx'),
+  applyOverview: () => import('./apply/Overview.tsx'), applyCalls: () => import('./apply/Calls.tsx'), applyForms: () => import('./apply/Forms.tsx'), applySubmissions: () => import('./apply/Submissions.tsx'), applyEvaluation: () => import('./apply/Evaluation.tsx'), applySelection: () => import('./apply/Selection.tsx'), applyComms: () => import('./apply/Communications.tsx'),
 };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const screen = <K extends keyof typeof SCREENS>(k: K, name: string) => lazy(() => SCREENS[k]().then((m) => ({ default: (m as any)[name] as React.ComponentType<any> })));
@@ -34,6 +34,7 @@ const ApplyOverview = screen('applyOverview', 'ApplyOverview'), CallsList = scre
 const FormsList = screen('applyForms', 'FormsList'), CallFormBuilder = screen('applyForms', 'CallFormBuilder'), TemplatesPage = screen('applyForms', 'TemplatesPage'), TemplateBuilder = screen('applyForms', 'TemplateBuilder');
 const SubmissionsList = screen('applySubmissions', 'SubmissionsList'), SubmissionDetail = screen('applySubmissions', 'SubmissionDetail');
 const EvaluationPage = screen('applyEvaluation', 'EvaluationPage'), ReviewScreen = screen('applyEvaluation', 'ReviewScreen'), ShortlistsPage = screen('applySelection', 'ShortlistsPage'), DecisionsPage = screen('applySelection', 'DecisionsPage');
+const CommunicationsPage = screen('applyComms', 'CommunicationsPage');
 const PublicationsList = screen('publications', 'PublicationsList'), PublicationEditor = screen('publications', 'PublicationEditor');
 const OpenPage = screen('open', 'OpenPage');
 const SettingsPage = screen('settings', 'SettingsPage');
@@ -185,6 +186,7 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   if (path.startsWith('/studio/apply/evaluation')) return { title: 'Review & evaluation', el: <EvaluationPage /> };
   if (path.startsWith('/studio/apply/shortlists')) return { title: 'Shortlists', el: <ShortlistsPage /> };
   if (path.startsWith('/studio/apply/decisions')) return { title: 'Decisions', el: <DecisionsPage /> };
+  if (path.startsWith('/studio/apply/communications')) return { title: 'Communications', el: <CommunicationsPage /> };
   const ac = path.match(/^\/studio\/apply\/calls\/([0-9a-f-]{36})$/);
   if (ac) return { title: 'Call', el: <CallEditor key={ac[1]} id={ac[1]} /> };
   if (path.startsWith('/studio/apply/calls')) return { title: 'Calls', el: <CallsList /> };

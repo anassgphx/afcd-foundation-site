@@ -13,6 +13,7 @@ import { pageStatus } from './publish.ts';
 import * as S from './submissions.ts';
 import * as E from './evaluation.ts';
 import * as D from './decisions.ts';
+import * as MSG from './messages.ts';
 import { filePath } from './files.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { HTTPException } from 'hono/http-exception';
@@ -38,7 +39,8 @@ export function registerApplyRoutes(api: Hono<Env>) {
     const recent = can(u.role, 'apply.submission.read') ? (await S.listSubmissions(db, { limit: '10' })).items : null;
     const reviews = can(u.role, 'apply.evaluation.manage') ? await E.workloadSummary(db) : null;
     const mine = can(u.role, 'apply.review') ? (await E.myAssignments(db, actor(c))).filter((a) => a.status !== 'final' && a.status !== 'conflict').length : null;
-    return c.json({ ...o, applications: counts, recent, reviews, myPending: mine });
+    const outbox = can(u.role, 'apply.message') ? await MSG.outboxSummary(db, c.var.cfg) : null;
+    return c.json({ ...o, applications: counts, recent, reviews, myPending: mine, outbox });
   });
 
   // ---------------------------------------------------------------- Applications (personal data)
@@ -167,4 +169,22 @@ export function registerApplyEvaluationRoutes(api: Hono<Env>) {
   api.post('/apply/decisions', perm('apply.submission.manage'), async (c) => c.json(await D.propose(c.var.db, actor(c), await body(c)), 201));
   api.post('/apply/decisions/decide', perm('apply.decide'), async (c) => c.json(await D.decide(c.var.db, actor(c), requireUser(c).role, await body(c))));
   api.post('/apply/decisions/:id/withdraw', perm('apply.submission.manage'), async (c) => c.json(await D.withdrawDecision(c.var.db, actor(c), c.req.param('id'))));
+}
+
+/** Communications: email templates, receipts, decision notices, messages to applicants, the outbox. */
+export function registerApplyMessageRoutes(api: Hono<Env>) {
+  const actor = (c: { var: Env['Variables'] }) => ({ id: c.var.user!.id, email: c.var.user!.email });
+  const body = (c: { req: { json: () => Promise<unknown> } }) => c.req.json().catch(() => ({}));
+  const callOrNull = (v: string | undefined) => (v && v !== 'default' ? v : null);
+  api.get('/apply/email-templates', perm('apply.message'), async (c) => c.json(await MSG.listTemplates(c.var.db, callOrNull(c.req.query('call')))));
+  api.put('/apply/email-templates/:key', perm('apply.message'), async (c) => c.json(await MSG.saveTemplate(c.var.db, actor(c), callOrNull(c.req.query('call')), c.req.param('key'), await body(c))));
+  api.delete('/apply/email-templates/:key', perm('apply.message'), async (c) => c.json(await MSG.resetTemplate(c.var.db, actor(c), c.req.query('call') ?? '', c.req.param('key'))));
+  api.put('/apply/calls/:id/receipts', perm('apply.message'), async (c) => c.json(await MSG.setReceipt(c.var.db, actor(c), c.req.param('id'), await body(c))));
+  api.post('/apply/messages/preview', perm('apply.message'), async (c) => c.json(await MSG.preview(c.var.db, await body(c))));
+  api.post('/apply/messages/decisions', perm('apply.message'), async (c) => c.json(await MSG.queueDecisionNotices(c.var.db, actor(c), await body(c))));
+  api.post('/apply/messages/custom', perm('apply.message'), async (c) => c.json(await MSG.queueCustom(c.var.db, actor(c), await body(c))));
+  api.get('/apply/messages', perm('apply.message'), async (c) => c.json(await MSG.listMessages(c.var.db, { call: c.req.query('call'), status: c.req.query('status'), submission: c.req.query('submission') })));
+  api.get('/apply/messages/:id', perm('apply.message'), async (c) => c.json(await MSG.messageBody(c.var.db, c.req.param('id'))));
+  api.post('/apply/messages/:id/retry', perm('apply.message'), async (c) => c.json(await MSG.retry(c.var.db, actor(c), c.req.param('id'))));
+  api.post('/apply/messages/:id/cancel', perm('apply.message'), async (c) => c.json(await MSG.cancel(c.var.db, actor(c), c.req.param('id'))));
 }

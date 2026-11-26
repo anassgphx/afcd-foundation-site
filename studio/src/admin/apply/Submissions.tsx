@@ -9,6 +9,7 @@ import { Loading } from '../pages/Dashboard.tsx';
 import type { Answers, Field, FileRef, FormDef } from '../../server/modules/apply/engine.ts';
 import { FIELD_TYPES, evaluate, t } from '../../server/modules/apply/engine.ts';
 import './submissions.css';
+import { MessagesTable } from './Communications.tsx';
 
 export const APP_STATUS: Record<string, string> = {
   submitted: 'Submitted', eligibility_review: 'Eligibility review', under_evaluation: 'Under evaluation', shortlisted: 'Shortlisted', interview: 'Interview',
@@ -116,7 +117,7 @@ export function SubmissionDetail({ id }: { id: string }) {
     if (f.type === 'calculated') return `${Number(v).toLocaleString('en-GB', { maximumFractionDigits: f.config?.decimals ?? 2 })}${f.config?.unit ? ` ${f.config.unit}` : ''}`;
     return <span className="sb-pre">{typeof v === 'string' && f.config?.options ? opt(v) : String(v)}</span>;
   };
-  const EV: Record<string, string> = { submitted: 'Submitted by the applicant', status: 'Status changed', eligibility: 'Eligibility corrected', note: 'Note', download: 'File downloaded' };
+  const EV: Record<string, string> = { email: 'Email sent', decision: 'Decision', submitted: 'Submitted by the applicant', status: 'Status changed', eligibility: 'Eligibility corrected', note: 'Note', download: 'File downloaded' };
   return <>
     <div className="ed-head"><div className="min-w-0">
       <Link to="/studio/apply/submissions" className="ed-back"><Icon n="chev" width={14} height={14} style={{ transform: 'rotate(180deg)' }} />Submissions</Link>
@@ -125,7 +126,7 @@ export function SubmissionDetail({ id }: { id: string }) {
     </div>
       {manage && <div className="ap-row"><button className="btn" disabled={!d.moves.length} onClick={() => { setTo(d.moves[0]); setReason(''); setDialog('status'); }}>Change status…</button><button className="btn" onClick={() => { setTo(d.eligibility); setReason(''); setDialog('elig'); }}>Correct eligibility…</button></div>}
     </div>
-    <div className="in-tabs sb-tabs" role="tablist">{['Overview', 'Answers', `Documents (${d.files.length})`, 'Eligibility', ...(can('apply.evaluation.manage') ? ['Evaluation'] : []), 'Activity'].map((x) => <button key={x} role="tab" aria-selected={tab === x.split(' ')[0]} className={tab === x.split(' ')[0] ? 'on' : ''} onClick={() => setTab(x.split(' ')[0])}>{x}</button>)}</div>
+    <div className="in-tabs sb-tabs" role="tablist">{['Overview', 'Answers', `Documents (${d.files.length})`, 'Eligibility', ...(can('apply.evaluation.manage') ? ['Evaluation'] : []), ...(can('apply.message') ? ['Communication'] : []), 'Activity'].map((x) => <button key={x} role="tab" aria-selected={tab === x.split(' ')[0]} className={tab === x.split(' ')[0] ? 'on' : ''} onClick={() => setTab(x.split(' ')[0])}>{x}</button>)}</div>
     {tab === 'Overview' && <section className="card sb-card"><dl className="kv sb-kv">
       <dt>Applicant</dt><dd>{d.applicantName || '—'}</dd><dt>Email</dt><dd>{d.applicantEmail ? <a href={`mailto:${d.applicantEmail}`}>{d.applicantEmail}</a> : '—'}</dd>
       <dt>Call</dt><dd><Link to={`/studio/apply/calls/${d.call.id}`}>{d.call.reference} · {d.call.title}</Link></dd><dt>Form</dt><dd>Version {d.version.number}</dd>
@@ -145,6 +146,7 @@ export function SubmissionDetail({ id }: { id: string }) {
         {manage && <button className="btn btn-sm btn-ghost" onClick={() => act(`/apply/submissions/${d.id}/eligibility`, { clear: true }, 'Back to the automatic result')}>Back to the automatic result</button>}</dd></>}
     </dl><p className="muted sb-note">The automatic result comes from the form’s rules. Nobody is rejected automatically: staff decide.</p></section>}
     {tab === 'Evaluation' && <ReviewsTab id={d.id} />}
+    {tab === 'Communication' && <section className="card"><MessagesTable submissionId={d.id} /></section>}
     {tab === 'Activity' && <section className="card sb-card">
       {manage && <div className="sb-note-f"><textarea className="textarea" rows={2} maxLength={5000} placeholder="Internal note (not shown to the applicant)" value={note} onChange={(e) => setNote(e.target.value)} />
         <button className="btn btn-sm" disabled={!note.trim() || busy} onClick={async () => { await act(`/apply/submissions/${d.id}/notes`, { body: note.trim() }, 'Note added'); setNote(''); }}>Add note</button></div>}

@@ -31,6 +31,8 @@ export const PERMISSIONS = [
   'apply.submission.read', 'apply.submission.manage',
   // evaluation: score applications assigned to me; set up rubrics and assignments and see all scores; approve decisions
   'apply.review', 'apply.evaluation.manage', 'apply.decide',
+  // communications: edit applicant email templates and send (single, receipts settings, decision notices, bulk)
+  'apply.message',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -61,7 +63,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   read_only: READ,
   // AFCD Apply. The manager runs calls end to end (someone else must still approve what they submit); the reviewer will
   // only see the applications assigned to them, and until then only the calls.
-  application_manager: ['dashboard.read', 'media.read', 'media.upload', 'pillar.read', 'project.read', 'apply.read', 'apply.call.manage', 'apply.call.approve', 'apply.call.publish', 'apply.export', 'apply.form.edit', 'apply.submission.read', 'apply.submission.manage', 'apply.review', 'apply.evaluation.manage', 'apply.decide'],
+  application_manager: ['dashboard.read', 'media.read', 'media.upload', 'pillar.read', 'project.read', 'apply.read', 'apply.call.manage', 'apply.call.approve', 'apply.call.publish', 'apply.export', 'apply.form.edit', 'apply.submission.read', 'apply.submission.manage', 'apply.review', 'apply.evaluation.manage', 'apply.decide', 'apply.message'],
   application_reviewer: ['dashboard.read', 'apply.read', 'apply.review'],
 };
 

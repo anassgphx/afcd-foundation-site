@@ -40,3 +40,13 @@
 .ev-reco > span { font-size: 12.5px; font-weight: 600; width: 100%; }
 .ev-d-approved { background: var(--ok-bg); color: var(--ok); }
 .ev-d-rejected, .ev-d-withdrawn { background: var(--canvas); color: var(--muted); }
+/* Communications */
+.cm-box { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-sm); }
+.cm-box h3 { margin: 0; font-size: 14px; }
+.cm-box p { margin: 0; font-size: 12.5px; }
+.cm-body { white-space: pre-wrap; font: inherit; font-size: 13px; background: var(--sunken); border-radius: var(--r-sm); padding: 10px 12px; margin: 0; max-height: 320px; overflow: auto; }
+.cm-sent { background: var(--ok-bg); color: var(--ok); }
+.cm-queued, .cm-sending { background: var(--info-bg); color: var(--info); }
+.cm-failed { background: var(--bad-bg); color: var(--bad); }
+.cm-cancelled { background: var(--canvas); color: var(--muted); }
+.cm-err { display: block; color: var(--bad); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

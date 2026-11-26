@@ -36,6 +36,7 @@ export const NAV: { group: string; items: NavItem[] }[] = [
     { to: '/studio/apply/evaluation', label: 'Review & evaluation', icon: 'checkcircle', perm: 'apply.review', match: /^\/studio\/apply\/(evaluation|reviews)/ },
     { to: '/studio/apply/shortlists', label: 'Shortlists', icon: 'log', perm: 'apply.evaluation.manage', match: /^\/studio\/apply\/shortlists/ },
     { to: '/studio/apply/decisions', label: 'Decisions', icon: 'check', perm: 'apply.submission.read', match: /^\/studio\/apply\/decisions/ },
+    { to: '/studio/apply/communications', label: 'Communications', icon: 'mail', perm: 'apply.message', match: /^\/studio\/apply\/communications/ },
     { to: '/studio/apply/forms', label: 'Form builder', icon: 'layers', perm: 'apply.read', match: /^\/studio\/apply\/(forms|calls\/[0-9a-f-]{36}\/form)/ },
     { to: '/studio/apply/templates', label: 'Templates', icon: 'book', perm: 'apply.read', match: /^\/studio\/apply\/templates/ },
   ] },

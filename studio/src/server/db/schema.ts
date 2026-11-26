@@ -870,6 +870,7 @@ export const applyCalls = pgTable('apply_calls', {
   seoTitle: text('seo_title').notNull().default(''),
   seoDescription: text('seo_description').notNull().default(''),
   unlisted: boolean('unlisted').notNull().default(false),      // reachable by link only: noindex, not in the sitemap
+  receiptEnabled: boolean('receipt_enabled').notNull().default(false),   // email a receipt after each application (0032)
   status: applyCallStatusEnum('status').notNull().default('draft'),
   rev: integer('rev').notNull().default(1),                     // optimistic concurrency: every save must send the rev it loaded
   approvedRevisionId: uuid('approved_revision_id'),
@@ -1119,3 +1120,52 @@ export const applyDecisions = pgTable('apply_decisions', {
   createdAt: createdAt(),
   decidedAt: timestamp('decided_at', { withTimezone: true }),
 }, (t) => [index('apply_decisions_call_idx').on(t.callId, t.status), index('apply_decisions_sub_idx').on(t.submissionId)]);
+
+// ---------------------------------------------------------------- AFCD Apply: communications (0032)
+// Email to applicants goes through Studio's own SMTP (inbox/mail.ts) via a queue: one message per recipient (no shared
+// recipient lists), retries with backoff, delivery status, and a unique key per (purpose, application) so the same
+// email is never queued twice. Decision emails can only be queued for approved decisions, by people allowed to send.
+export type MessageVariant = { subject: string; body: string };
+export const applyMessageTemplates = pgTable('apply_message_templates', {
+  id: id(),
+  callId: uuid('call_id').references(() => applyCalls.id, { onDelete: 'cascade' }),   // null = default for every call
+  key: text('key').notNull(),                                    // receipt | decision_selected | decision_waitlisted | decision_not_selected
+  variants: jsonb('variants').$type<Partial<Record<'en' | 'fr' | 'ar', MessageVariant>>>().notNull(),
+  rev: integer('rev').notNull().default(1),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('apply_message_templates_uq').on(t.callId, t.key)]);
+
+export const applyMessageBatches = pgTable('apply_message_batches', {
+  id: id(),
+  callId: uuid('call_id').notNull().references(() => applyCalls.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(),                                  // decision | custom
+  count: integer('count').notNull(),
+  subject: text('subject').notNull().default(''),
+  queuedBy: uuid('queued_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+});
+
+export const applyMessages = pgTable('apply_messages', {
+  id: id(),
+  callId: uuid('call_id').notNull().references(() => applyCalls.id, { onDelete: 'cascade' }),
+  submissionId: uuid('submission_id').notNull().references(() => applySubmissions.id, { onDelete: 'cascade' }),
+  decisionId: uuid('decision_id').references(() => applyDecisions.id, { onDelete: 'set null' }),
+  batchId: uuid('batch_id').references(() => applyMessageBatches.id, { onDelete: 'set null' }),
+  kind: text('kind').notNull(),                                  // receipt | decision | custom
+  dedupeKey: text('dedupe_key').notNull(),
+  toEmail: text('to_email').notNull(),
+  lang: text('lang').notNull().default('en'),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),                                  // rendered text (variables already filled in)
+  status: text('status').notNull().default('queued'),           // queued | sending | sent | failed | cancelled
+  attempts: integer('attempts').notNull().default(0),
+  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+  lastError: text('last_error'),
+  providerMessageId: text('provider_message_id'),
+  queuedBy: uuid('queued_by').references(() => users.id, { onDelete: 'set null' }),   // null = automatic (receipt)
+  sentAt: timestamp('sent_at', { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('apply_messages_dedupe_uq').on(t.dedupeKey), index('apply_messages_queue_idx').on(t.status, t.nextAttemptAt),
+  index('apply_messages_call_idx').on(t.callId, t.createdAt), index('apply_messages_sub_idx').on(t.submissionId)]);

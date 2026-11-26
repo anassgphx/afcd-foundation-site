@@ -56,7 +56,7 @@ fieldset { min-width: 0; }                                     /* browsers defau
 .shell .pl-master-h h1 { font-size: var(--fs-xl); }
 .shell .dsh-head h1 { font-size: 26px; }
 .shell .page-h p { margin: 6px 0 0; max-width: 72ch; font-size: var(--fs-md); line-height: 1.55; color: var(--muted); }
-.shell .page-h > :not(:first-child) { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.shell .page-h > :not(:first-child):not([hidden]) { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 @media (max-width: 640px) {
   .shell .page-h { flex-direction: column; align-items: stretch; margin-bottom: 16px; }
   .shell :is(.page-h, .mn-head, .ed-head) h1 { font-size: 20px; }

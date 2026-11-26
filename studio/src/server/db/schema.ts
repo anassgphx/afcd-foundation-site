@@ -1,7 +1,7 @@
 // AFCD Studio — PostgreSQL schema (Drizzle). SQL migrations are generated into ./drizzle with `npm run db:generate`.
 import { sql } from 'drizzle-orm';
 import {
-  pgTable, text, integer, boolean, timestamp, date, jsonb, uuid, primaryKey, uniqueIndex, index, pgEnum,
+  pgTable, text, integer, boolean, timestamp, date, jsonb, uuid, primaryKey, uniqueIndex, index, pgEnum, type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
 const id = () => uuid('id').primaryKey().default(sql`gen_random_uuid()`);
@@ -11,6 +11,7 @@ const updatedAt = () => timestamp('updated_at', { withTimezone: true }).notNull(
 // ---------------------------------------------------------------- Identity
 export const roleEnum = pgEnum('role', [
   'super_admin', 'website_admin', 'content_editor', 'content_reviewer', 'media_manager', 'seo_manager', 'read_only',
+  'application_manager', 'application_reviewer',   // AFCD Apply (0027)
 ]);
 
 export const users = pgTable('users', {
@@ -415,7 +416,7 @@ export const eventRevisions = pgTable('event_revisions', {
 
 // ---------------------------------------------------------------- Opportunities (calls for applications, volunteering, jobs, internships, consultancies)
 export const opportunityTypeEnum = pgEnum('opportunity_type', ['call_for_applications', 'volunteering', 'job', 'internship', 'consultancy', 'call_for_partners']);
-export const applyMethodEnum = pgEnum('apply_method', ['external', 'email', 'contact']);
+export const applyMethodEnum = pgEnum('apply_method', ['external', 'email', 'contact', 'studio']);   // studio = an AFCD Apply call (0029)
 
 export const opportunities = pgTable('opportunities', {
   id: id(),
@@ -433,6 +434,7 @@ export const opportunities = pgTable('opportunities', {
   applyMethod: applyMethodEnum('apply_method').notNull().default('external'),
   applyUrl: text('apply_url').notNull().default(''),
   applyEmail: text('apply_email').notNull().default(''),
+  applyCallId: uuid('apply_call_id').references((): AnyPgColumn => applyCalls.id, { onDelete: 'set null' }),   // AFCD Apply call (apply method "studio", 0029)
   pillarId: uuid('pillar_id').references(() => pillars.id, { onDelete: 'restrict' }),
   projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
   heroMediaId: uuid('hero_media_id').references(() => media.id, { onDelete: 'set null' }),
@@ -832,3 +834,288 @@ export const aboutPageRevisions = pgTable('about_page_revisions', {
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex('about_page_revisions_num_uq').on(t.pageId, t.number)]);
+
+// ---------------------------------------------------------------- AFCD Apply: calls for applications (0027, docs/adr/0004-afcd-apply.md)
+// A call has its own lifecycle, run on server time: draft → in_review → approved → scheduled → open (⇄ paused) → closed →
+// under_evaluation → completed → archived. Dates are stored in UTC; `time_zone` is how staff and applicants read them.
+export const applyCallStatusEnum = pgEnum('apply_call_status', [
+  'draft', 'in_review', 'changes_requested', 'approved', 'scheduled', 'open', 'paused', 'closed', 'under_evaluation', 'completed', 'archived',
+]);
+export type ApplyCallI18n = Partial<Record<'fr' | 'ar', { title?: string; summary?: string; description?: string }>>;
+
+export const applyCalls = pgTable('apply_calls', {
+  id: id(),
+  reference: text('reference').notNull(),                       // e.g. AFCD-2027-004, given on creation, never changes
+  slug: text('slug').notNull(),
+  title: text('title').notNull(),
+  summary: text('summary').notNull().default(''),
+  description: text('description').notNull().default(''),
+  i18n: jsonb('i18n').$type<ApplyCallI18n>().notNull().default({}),   // French and Arabic texts (optional)
+  callType: text('call_type').notNull().default('youth_program'),
+  audience: text('audience').notNull().default(''),
+  eligibility: jsonb('eligibility').$type<string[]>().notNull().default([]),
+  location: text('location').notNull().default(''),
+  format: text('format').notNull().default('in_person'),       // in_person | online | hybrid
+  language: text('language').notNull().default('en'),         // en | fr | ar | multi
+  pillarId: uuid('pillar_id').references(() => pillars.id, { onDelete: 'set null' }),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  heroMediaId: uuid('hero_media_id').references(() => media.id, { onDelete: 'set null' }),
+  opensAt: timestamp('opens_at', { withTimezone: true }),
+  closesAt: timestamp('closes_at', { withTimezone: true }),
+  timeZone: text('time_zone').notNull().default('Africa/Casablanca'),
+  places: integer('places'),                                    // null = not limited / not stated
+  contactEmail: text('contact_email').notNull().default(''),
+  terms: text('terms').notNull().default(''),
+  privacyNotice: text('privacy_notice').notNull().default(''),
+  seoTitle: text('seo_title').notNull().default(''),
+  seoDescription: text('seo_description').notNull().default(''),
+  unlisted: boolean('unlisted').notNull().default(false),      // reachable by link only: noindex, not in the sitemap
+  status: applyCallStatusEnum('status').notNull().default('draft'),
+  rev: integer('rev').notNull().default(1),                     // optimistic concurrency: every save must send the rev it loaded
+  approvedRevisionId: uuid('approved_revision_id'),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  openedAt: timestamp('opened_at', { withTimezone: true }),     // first time it opened; after that the slug and opening are fixed
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+  archivedFrom: applyCallStatusEnum('archived_from'),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('apply_calls_slug_uq').on(t.slug), uniqueIndex('apply_calls_reference_uq').on(t.reference),
+  index('apply_calls_status_idx').on(t.status), index('apply_calls_schedule_idx').on(t.status, t.opensAt, t.closesAt)]);
+
+export const applyCallRevisions = pgTable('apply_call_revisions', {
+  id: id(),
+  callId: uuid('call_id').notNull().references(() => applyCalls.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('apply_call_revisions_num_uq').on(t.callId, t.number)]);
+
+/** Lifecycle history of a call: status changes, extensions, reopenings, live edits. Never updated or deleted by the app. */
+export const applyCallEvents = pgTable('apply_call_events', {
+  id: id(),
+  callId: uuid('call_id').notNull().references(() => applyCalls.id, { onDelete: 'cascade' }),
+  actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),   // null = the scheduler (server time)
+  kind: text('kind').notNull(),                                 // status | extend | reopen | edit | duplicate
+  fromStatus: text('from_status'),
+  toStatus: text('to_status'),
+  reason: text('reason').notNull().default(''),
+  meta: jsonb('meta').$type<Record<string, unknown>>(),
+  createdAt: createdAt(),
+}, (t) => [index('apply_call_events_call_idx').on(t.callId, t.createdAt)]);
+
+// ---------------------------------------------------------------- AFCD Apply: application forms (0028)
+// One working form per call (`definition`, saved with optimistic concurrency) and immutable published versions. Every
+// application will point at the exact version it was made with. A definition is JSON data only (modules/apply/engine.ts).
+export const applyForms = pgTable('apply_forms', {
+  id: id(),
+  callId: uuid('call_id').notNull().references(() => applyCalls.id, { onDelete: 'cascade' }),
+  definition: jsonb('definition').$type<Record<string, unknown>>().notNull(),
+  rev: integer('rev').notNull().default(1),
+  sourceTemplate: text('source_template'),                     // built-in key or custom template id it started from
+  publishedVersionId: uuid('published_version_id'),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('apply_forms_call_uq').on(t.callId)]);
+
+export const applyFormVersions = pgTable('apply_form_versions', {
+  id: id(),
+  formId: uuid('form_id').notNull().references(() => applyForms.id, { onDelete: 'cascade' }),
+  callId: uuid('call_id').notNull().references(() => applyCalls.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  definition: jsonb('definition').$type<Record<string, unknown>>().notNull(),
+  sha256: text('sha256').notNull(),
+  note: text('note').notNull().default(''),
+  publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('apply_form_versions_num_uq').on(t.formId, t.number), index('apply_form_versions_call_idx').on(t.callId)]);
+
+/** Custom templates (the built-in ones live in code: modules/apply/templates.ts). `version` goes up on every save. */
+export const applyFormTemplates = pgTable('apply_form_templates', {
+  id: id(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  category: text('category').notNull().default('other'),
+  definition: jsonb('definition').$type<Record<string, unknown>>().notNull(),
+  version: integer('version').notNull().default(1),
+  basedOn: text('based_on'),                                   // built-in key or template id it was copied from
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [index('apply_form_templates_name_idx').on(t.name)]);
+
+// ---------------------------------------------------------------- AFCD Apply: applicant drafts and private files (0029)
+// Applicants are not users: a draft is reached with a random secret (only its SHA-256 is stored) that the browser keeps,
+// or with a single-use, time-limited resume link sent by email (only the token's SHA-256 is stored, never the answers).
+export const applyDrafts = pgTable('apply_drafts', {
+  id: id(),
+  callId: uuid('call_id').notNull().references(() => applyCalls.id, { onDelete: 'cascade' }),
+  versionId: uuid('version_id').notNull().references(() => applyFormVersions.id, { onDelete: 'restrict' }),   // the exact form version
+  secretHash: text('secret_hash').notNull(),
+  answers: jsonb('answers').$type<Record<string, unknown>>().notNull().default({}),
+  page: text('page'),
+  lang: text('lang').notNull().default('en'),
+  rev: integer('rev').notNull().default(1),                     // optimistic concurrency between tabs and devices
+  status: text('status').notNull().default('active'),           // active | submitted
+  ipHash: text('ip_hash'),                                       // salted, for rate limiting only
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, (t) => [index('apply_drafts_call_idx').on(t.callId, t.status), index('apply_drafts_expiry_idx').on(t.status, t.expiresAt), index('apply_drafts_ip_idx').on(t.ipHash, t.createdAt)]);
+
+/** Files applicants upload. Stored privately in <dataDir>/apply-files/<storage_key>; never in the media library, never
+ *  copied to the website, no public address. The type comes from the bytes, not from the name. */
+export const applyFiles = pgTable('apply_files', {
+  id: id(),
+  draftId: uuid('draft_id').references(() => applyDrafts.id, { onDelete: 'set null' }),
+  submissionId: uuid('submission_id').references((): AnyPgColumn => applySubmissions.id, { onDelete: 'set null' }),   // set when the application is submitted (0030)
+  callId: uuid('call_id').notNull().references(() => applyCalls.id, { onDelete: 'cascade' }),
+  fieldId: text('field_id').notNull(),
+  originalName: text('original_name').notNull(),
+  storageKey: text('storage_key').notNull(),
+  kind: text('kind').notNull(),                                  // pdf | image | doc | sheet
+  mime: text('mime').notNull(),
+  bytes: integer('bytes').notNull(),
+  sha256: text('sha256').notNull(),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('apply_files_storage_uq').on(t.storageKey), index('apply_files_draft_idx').on(t.draftId), index('apply_files_submission_idx').on(t.submissionId)]);
+
+export const applyResumeTokens = pgTable('apply_resume_tokens', {
+  id: id(),
+  draftId: uuid('draft_id').notNull().references(() => applyDrafts.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull(),
+  ipHash: text('ip_hash'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('apply_resume_tokens_hash_uq').on(t.tokenHash), index('apply_resume_tokens_draft_idx').on(t.draftId, t.createdAt)]);
+
+// ---------------------------------------------------------------- AFCD Apply: submitted applications (0030)
+// One row per application, written in a single transaction when the applicant submits: the exact form version, the
+// answers the server validated (hidden answers dropped, calculations recomputed), consent texts and times, and the
+// automatic eligibility result with its rule version and reasons. Staff corrections are stored next to it, never over it.
+export const APPLICATION_STATUSES = ['submitted', 'eligibility_review', 'under_evaluation', 'shortlisted', 'interview', 'selected', 'waitlisted', 'not_selected', 'withdrawn'] as const;
+export const ELIGIBILITY = ['eligible', 'needs_review', 'ineligible', 'not_assessed'] as const;
+export type EligibilityAuto = { result: (typeof ELIGIBILITY)[number]; reasons: { en: string; fr?: string; ar?: string }[]; rules: string[]; formVersion: number };
+export type EligibilityOverride = { result: (typeof ELIGIBILITY)[number]; reason: string; by: string; byName: string; at: string };
+
+export const applySubmissions = pgTable('apply_submissions', {
+  id: id(),
+  callId: uuid('call_id').notNull().references(() => applyCalls.id, { onDelete: 'restrict' }),
+  versionId: uuid('version_id').notNull().references(() => applyFormVersions.id, { onDelete: 'restrict' }),
+  draftId: uuid('draft_id').references(() => applyDrafts.id, { onDelete: 'set null' }),
+  reference: text('reference').notNull(),                       // e.g. AFCD-2027-004-0012
+  idempotencyKey: text('idempotency_key').notNull(),
+  answers: jsonb('answers').$type<Record<string, unknown>>().notNull(),
+  applicantName: text('applicant_name').notNull().default(''),
+  applicantEmail: text('applicant_email').notNull().default(''),
+  lang: text('lang').notNull().default('en'),
+  status: text('status').$type<(typeof APPLICATION_STATUSES)[number]>().notNull().default('submitted'),
+  eligibility: text('eligibility').$type<(typeof ELIGIBILITY)[number]>().notNull().default('not_assessed'),   // effective result
+  eligibilityAuto: jsonb('eligibility_auto').$type<EligibilityAuto>().notNull(),
+  eligibilityOverride: jsonb('eligibility_override').$type<EligibilityOverride | null>(),
+  consent: jsonb('consent').$type<{ field: string; label: string; text: string; at: string }[]>().notNull().default([]),
+  ipHash: text('ip_hash'),
+  // evaluation (0031): mean of final reviews in basis points (0–10000 = 0–100.00), how many, and whether reviewers disagree
+  scoreBp: integer('score_bp'),
+  scoreReviews: integer('score_reviews').notNull().default(0),
+  disagreement: boolean('disagreement').notNull().default(false),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('apply_submissions_reference_uq').on(t.reference), uniqueIndex('apply_submissions_draft_uq').on(t.draftId),
+  uniqueIndex('apply_submissions_idem_uq').on(t.callId, t.idempotencyKey), index('apply_submissions_list_idx').on(t.callId, t.submittedAt, t.id),
+  index('apply_submissions_status_idx').on(t.callId, t.status), index('apply_submissions_elig_idx').on(t.callId, t.eligibility), index('apply_submissions_time_idx').on(t.submittedAt, t.id)]);
+
+/** History of an application: status changes, eligibility corrections, internal notes, file downloads. */
+export const applySubmissionEvents = pgTable('apply_submission_events', {
+  id: id(),
+  submissionId: uuid('submission_id').notNull().references(() => applySubmissions.id, { onDelete: 'cascade' }),
+  actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),   // null = the applicant or the system
+  kind: text('kind').notNull(),                                  // submitted | status | eligibility | note | download
+  fromValue: text('from_value'),
+  toValue: text('to_value'),
+  body: text('body').notNull().default(''),
+  meta: jsonb('meta').$type<Record<string, unknown>>(),
+  createdAt: createdAt(),
+}, (t) => [index('apply_submission_events_sub_idx').on(t.submissionId, t.createdAt)]);
+
+// ---------------------------------------------------------------- AFCD Apply: evaluation and decisions (0031)
+// A rubric per call (working copy + immutable versions); reviewers get assignments, declare conflicts of interest before
+// they see an application, and write draft then final reviews. A final review is locked; scores are computed on the
+// server with integer arithmetic from the rubric version the review used. Final outcomes (selected, waitlisted, not
+// selected) are proposed and then approved by someone else; nothing is sent to applicants here.
+export type RubricCriterion = { id: string; label: string; description?: string; weight: number; min: number; max: number; commentRequired?: boolean };
+export type RubricSettings = { mode: 'single' | 'double' | 'committee' | 'panel' | 'consensus'; reviewersPerApplication: number; blind: boolean; disagreementPoints: number };
+
+export const applyRubrics = pgTable('apply_rubrics', {
+  id: id(),
+  callId: uuid('call_id').notNull().references(() => applyCalls.id, { onDelete: 'cascade' }),
+  criteria: jsonb('criteria').$type<RubricCriterion[]>().notNull().default([]),
+  settings: jsonb('settings').$type<RubricSettings>().notNull(),
+  rev: integer('rev').notNull().default(1),
+  publishedVersionId: uuid('published_version_id'),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('apply_rubrics_call_uq').on(t.callId)]);
+
+export const applyRubricVersions = pgTable('apply_rubric_versions', {
+  id: id(),
+  rubricId: uuid('rubric_id').notNull().references(() => applyRubrics.id, { onDelete: 'cascade' }),
+  callId: uuid('call_id').notNull().references(() => applyCalls.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  criteria: jsonb('criteria').$type<RubricCriterion[]>().notNull(),
+  settings: jsonb('settings').$type<RubricSettings>().notNull(),
+  publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('apply_rubric_versions_num_uq').on(t.rubricId, t.number)]);
+
+export const applyAssignments = pgTable('apply_assignments', {
+  id: id(),
+  submissionId: uuid('submission_id').notNull().references(() => applySubmissions.id, { onDelete: 'cascade' }),
+  callId: uuid('call_id').notNull().references(() => applyCalls.id, { onDelete: 'cascade' }),
+  reviewerId: uuid('reviewer_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  rubricVersionId: uuid('rubric_version_id').notNull().references(() => applyRubricVersions.id, { onDelete: 'restrict' }),
+  status: text('status').notNull().default('assigned'),          // assigned | conflict | in_progress | final
+  coi: jsonb('coi').$type<{ hasConflict: boolean; note: string; at: string } | null>(),
+  assignedBy: uuid('assigned_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('apply_assignments_pair_uq').on(t.submissionId, t.reviewerId), index('apply_assignments_reviewer_idx').on(t.reviewerId, t.status), index('apply_assignments_call_idx').on(t.callId)]);
+
+export const applyReviews = pgTable('apply_reviews', {
+  id: id(),
+  assignmentId: uuid('assignment_id').notNull().references(() => applyAssignments.id, { onDelete: 'cascade' }),
+  scores: jsonb('scores').$type<Record<string, number>>().notNull().default({}),
+  comments: jsonb('comments').$type<Record<string, string>>().notNull().default({}),
+  overallComment: text('overall_comment').notNull().default(''),
+  recommendation: text('recommendation'),                        // yes | maybe | no
+  totalBp: integer('total_bp'),                                  // weighted score, 0–10000, set when final
+  status: text('status').notNull().default('draft'),             // draft | final
+  rev: integer('rev').notNull().default(1),
+  finalAt: timestamp('final_at', { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('apply_reviews_assignment_uq').on(t.assignmentId)]);
+
+export const DECISION_OUTCOMES = ['selected', 'waitlisted', 'not_selected'] as const;
+export const applyDecisions = pgTable('apply_decisions', {
+  id: id(),
+  submissionId: uuid('submission_id').notNull().references(() => applySubmissions.id, { onDelete: 'cascade' }),
+  callId: uuid('call_id').notNull().references(() => applyCalls.id, { onDelete: 'cascade' }),
+  outcome: text('outcome').$type<(typeof DECISION_OUTCOMES)[number]>().notNull(),
+  reason: text('reason').notNull(),
+  status: text('status').notNull().default('proposed'),         // proposed | approved | rejected | withdrawn
+  proposedBy: uuid('proposed_by').references(() => users.id, { onDelete: 'set null' }),
+  decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+  decisionNote: text('decision_note').notNull().default(''),
+  notifiedAt: timestamp('notified_at', { withTimezone: true }),  // set by the communications step, never here
+  createdAt: createdAt(),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+}, (t) => [index('apply_decisions_call_idx').on(t.callId, t.status), index('apply_decisions_sub_idx').on(t.submissionId)]);

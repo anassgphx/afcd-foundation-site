@@ -205,6 +205,11 @@ describe('0015_inbox migration', () => {
     expect((await pg.query<{ body: string }>(`select body from submission_events where kind = 'note'`)).rows).toEqual([{ body: 'Fake legacy note' }]);
     await expect(pg.exec(`update form_submissions set status = 'done'`)).rejects.toThrow();   // CHECK constraint
 
+    await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0031_apply_evaluation_down.sql'), 'utf8'));   // newer migrations are undone first
+    await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0030_apply_submissions_down.sql'), 'utf8'));   // newer migrations are undone first
+    await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0029_apply_drafts_down.sql'), 'utf8'));   // newer migrations are undone first
+    await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0028_apply_forms_down.sql'), 'utf8'));   // newer migrations are undone first
+    await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0027_apply_calls_down.sql'), 'utf8'));   // newer migrations are undone first
     await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0026_about_pages_down.sql'), 'utf8'));   // newer migrations are undone first
     await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0025_media_quality_down.sql'), 'utf8'));   // newer migrations are undone first
     await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0024_media_crop_down.sql'), 'utf8'));   // newer migrations are undone first

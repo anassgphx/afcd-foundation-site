@@ -39,6 +39,8 @@ import { registerInboxRoutes } from './modules/inbox/routes.ts';
 import { registerSettingsRoutes } from './modules/settings/routes.ts';
 import { registerOnPageRoutes } from './modules/seo/onpage-routes.ts';
 import { registerPublicationRoutes } from './modules/publications/routes.ts';
+import { registerApplyEvaluationRoutes, registerApplyFormRoutes, registerApplyRoutes } from './modules/apply/routes.ts';
+import { registerApplyPublicRoutes } from './modules/apply/public.ts';
 import { projectManageRoutes } from './modules/projects/manage.ts';
 import { pillarVideoRoutes } from './modules/pillars/video.ts';
 import { contentDeleteRoutes } from './modules/content/delete.ts';
@@ -97,6 +99,8 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     if (key === 'contact') NOTIFY.afterReceive(db, cfg);   // Settings → Notifications (no-op when off)
     return c.json(received);
   });
+  // AFCD Apply applicant API (/apply/v1): outside /studio, no staff session or cookie (modules/apply/public.ts)
+  registerApplyPublicRoutes(app, db, cfg);
   app.use('/studio/*', loadSession);
   app.use('/studio/api/*', csrfGuard);
 
@@ -431,6 +435,9 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
 
   // ---------------------------------------------------------------- Publications (reports, studies…) and their PDF files
   registerPublicationRoutes(api);   // modules/publications
+  registerApplyRoutes(api);   // modules/apply (AFCD Apply)
+  registerApplyFormRoutes(api);
+  registerApplyEvaluationRoutes(api);
 
   // ---------------------------------------------------------------- Inbox: website messages and newsletter list (personal data, forms.read / forms.manage)
   registerInboxRoutes(api);   // modules/inbox

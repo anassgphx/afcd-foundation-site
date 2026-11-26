@@ -25,6 +25,7 @@ afcdfoundation.com {
 		~^/(fr/|ar/)?event-([a-z0-9-]+)(?:\.html)?$ "/${1}events/${2}"
 		~^/(fr/|ar/)?publication-([a-z0-9-]+)(?:\.html)?$ "/${1}publications/${2}"
 		~^/(fr/|ar/)?opportunity-([a-z0-9-]+)(?:\.html)?$ "/${1}opportunities/${2}"
+		~^/(fr/|ar/)?apply-([a-z0-9-]+)(?:\.html)?$ "/${1}apply/${2}"
 		~^/(fr/|ar/)?(our-story|mission-vision|strategy|team)(?:\.html)?$ "/${1}about/${2}"
 		~^/(fr/|ar/)?(youth-empowerment|womens-empowerment|environment-climate|digital-inclusion)(?:\.html)?$ "/${1}pillars/${2}"
 		~^/(fr/|ar/)?index\.html$ "/${1}"
@@ -41,6 +42,7 @@ afcdfoundation.com {
 		~^/(fr/|ar/)?events/([a-z0-9-]+)$ "/${1}event-${2}.html"
 		~^/(fr/|ar/)?publications/([a-z0-9-]+)$ "/${1}publication-${2}.html"
 		~^/(fr/|ar/)?opportunities/([a-z0-9-]+)$ "/${1}opportunity-${2}.html"
+		~^/(fr/|ar/)?apply/([a-z0-9-]+)$ "/${1}apply-${2}.html"
 		~^/(fr/|ar/)?(?:about|pillars)/([a-z0-9-]+)$ "/${1}${2}.html"
 		default ""
 	}

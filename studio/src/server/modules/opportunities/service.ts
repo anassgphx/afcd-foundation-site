@@ -3,7 +3,7 @@
 import { and, asc, desc, eq, max } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
-import { opportunities, opportunityRevisions, pillars, projects, media, reviewComments } from '../../db/schema.ts';
+import { opportunities, opportunityRevisions, pillars, projects, media, reviewComments, applyCalls } from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
@@ -32,9 +32,10 @@ export const opportunitySchema = z.object({
   commitment: plain(80).default(''),
   opensOn: z.string().regex(DATE, 'Use a date like 2027-01-20.').nullable().default(null),
   deadline: z.string().regex(DATE, 'Use a date like 2027-02-15.').nullable().default(null),
-  applyMethod: z.enum(['external', 'email', 'contact']).default('external'),
+  applyMethod: z.enum(['external', 'email', 'contact', 'studio']).default('external'),   // studio = an AFCD Apply call
   applyUrl: z.string().trim().max(500).refine((u) => u === '' || HTTPS.test(u), 'Use a full https:// address.').default(''),
   applyEmail: z.string().trim().max(160).refine((u) => u === '' || EMAIL.test(u), 'Use a valid email address.').default(''),
+  applyCallId: z.string().uuid().nullable().default(null),
   pillarKey: z.string().nullable().default(null),
   projectSlug: z.string().nullable().default(null),
   heroMediaId: z.string().uuid().nullable().default(null),
@@ -43,6 +44,7 @@ export const opportunitySchema = z.object({
 }).strict().superRefine((v, ctx) => {
   if (v.opensOn && v.deadline && v.deadline < v.opensOn) ctx.addIssue({ code: 'custom', path: ['deadline'], message: 'The deadline is before the opening date.' });
   if (v.applyMethod === 'external' && !v.applyUrl) ctx.addIssue({ code: 'custom', path: ['applyUrl'], message: 'Add the application link.' });
+  if (v.applyMethod === 'studio' && !v.applyCallId) ctx.addIssue({ code: 'custom', path: ['applyCallId'], message: 'Choose the AFCD Apply call.' });
   if (v.applyMethod === 'email' && !v.applyEmail) ctx.addIssue({ code: 'custom', path: ['applyEmail'], message: 'Add the email address applications go to.' });
 });
 export type OpportunityInput = z.infer<typeof opportunitySchema>;
@@ -66,7 +68,7 @@ export async function loadOpportunity(db: DB, id: string): Promise<FullOpportuni
 
 export const toOpportunitySnapshot = (o: FullOpportunity): OpportunitySnapshot => ({
   title: o.title, slug: o.slug, type: o.type, summary: o.summary, body: o.body, eligibility: o.eligibility, benefits: o.benefits, location: o.location,
-  commitment: o.commitment, opensOn: o.opensOn, deadline: o.deadline, applyMethod: o.applyMethod, applyUrl: o.applyUrl, applyEmail: o.applyEmail,
+  commitment: o.commitment, opensOn: o.opensOn, deadline: o.deadline, applyMethod: o.applyMethod, applyUrl: o.applyUrl, applyEmail: o.applyEmail, applyCallId: o.applyCallId,
   pillarKey: o.pillarKey, projectSlug: o.projectSlug, heroMediaId: o.heroMediaId, seoTitle: o.seoTitle, seoDescription: o.seoDescription,
 });
 
@@ -75,6 +77,11 @@ export async function opportunityProblems(db: DB, o: FullOpportunity) {
   if (!o.summary) out.push('Add a short summary for the list and search results.');
   if (o.body.trim().split(/\s+/).filter(Boolean).length < 20) out.push('Describe the opportunity (at least 20 words): what it is and what people will do.');
   if (!o.eligibility.length) out.push('Add who can apply (at least one eligibility point).');
+  if (o.applyMethod === 'studio') {
+    const [c] = o.applyCallId ? await db.select({ status: applyCalls.status }).from(applyCalls).where(eq(applyCalls.id, o.applyCallId)) : [];
+    if (!c) out.push('Choose the AFCD Apply call applicants apply to.');
+    else if (['draft', 'in_review', 'changes_requested', 'archived'].includes(c.status)) out.push('The AFCD Apply call is not approved yet: its page will not exist until it is scheduled.');
+  }
   if (o.heroMediaId) {
     const [m] = await db.select().from(media).where(eq(media.id, o.heroMediaId));
     if (!m) out.push('The image no longer exists in the media library.');
@@ -92,6 +99,7 @@ async function relationIds(db: DB, input: OpportunityInput) {
   const projectId = input.projectSlug ? (await db.select({ id: projects.id }).from(projects).where(eq(projects.slug, input.projectSlug)))[0]?.id : null;
   if (input.projectSlug && !projectId) throw new AppError(422, 'Unknown project.');
   if (input.heroMediaId && !(await db.select({ id: media.id }).from(media).where(eq(media.id, input.heroMediaId))).length) throw new AppError(422, 'The image no longer exists in the media library.');
+  if (input.applyCallId && !(await db.select({ id: applyCalls.id }).from(applyCalls).where(eq(applyCalls.id, input.applyCallId))).length) throw new AppError(422, 'Unknown AFCD Apply call.');
   const { pillarKey: _a, projectSlug: _b, ...rest } = input;
   return { ...rest, pillarId: pillarId ?? null, projectId: projectId ?? null };
 }

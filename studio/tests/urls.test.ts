@@ -19,6 +19,8 @@ describe('page addresses', () => {
     expect(prettyPath('news-journey-with-the-afcd-family.html')).toBe('/news/journey-with-the-afcd-family');
     expect(prettyPath('event-climate-advocacy-workshop-in-oujda.html')).toBe('/events/climate-advocacy-workshop-in-oujda');
     expect(prettyPath('publication-policy-paper.html')).toBe('/publications/policy-paper');
+    expect(prettyPath('apply-green-fellows-2027.html')).toBe('/apply/green-fellows-2027');
+    expect(fileFromPath('/fr/apply/green-fellows-2027')).toEqual({ lang: 'fr', file: 'apply-green-fellows-2027.html' });
     expect(prettyPath('opportunity-call-2026.html')).toBe('/opportunities/call-2026');
     expect(prettyPath('projects.html')).toBe('/projects');   // listings keep their section name
     expect(prettyPath('partners.html')).toBe('/partners');

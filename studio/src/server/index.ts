@@ -6,6 +6,8 @@ import { createApp } from './app.ts';
 import { purgeExpired } from './modules/forms/service.ts';
 import * as GSC from './modules/google/gsc.ts';
 import { enqueue } from './modules/jobs/service.ts';
+import { runCallSchedule } from './modules/apply/calls.ts';
+import { purgeExpiredDrafts } from './modules/apply/applicant.ts';
 
 const cfg = loadConfig();
 const { db } = await openDb(cfg);
@@ -16,6 +18,13 @@ const { app, publisher, runJobs } = createApp(db, cfg);
 const tick = async () => {
   try { for (const r of await publisher.runScheduled()) console.log(`[scheduler] ${r.ok ? 'published' : 'FAILED'} ${r.id}${r.error ? `: ${r.error}` : ''}`); }
   catch (e) { console.error('[scheduler]', e); }
+  // AFCD Apply: calls open and close on server time
+  try { for (const r of await runCallSchedule(db)) console.log(`[scheduler] call ${r.reference} ${r.to}`); }
+  catch (e) { console.error('[scheduler] apply calls', e); }
+  try { if (await publisher.refreshApplyPages()) console.log('[scheduler] application pages rebuilt'); }
+  catch (e) { console.error('[scheduler] application pages', e); }
+  try { const n = await purgeExpiredDrafts(db, cfg); if (n) console.log(`[scheduler] deleted ${n} expired application draft(s)`); }
+  catch (e) { console.error('[scheduler] application drafts', e); }
   // Events move from "upcoming" to "past" when their last day ends (Morocco time): rebuild then. At most every 15 minutes.
   if (Date.now() - lastEventCheck > 15 * 60_000) {
     lastEventCheck = Date.now();

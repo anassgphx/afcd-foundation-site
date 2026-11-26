@@ -28,6 +28,17 @@ export const NAV: { group: string; items: NavItem[] }[] = [
     { to: '/studio/seo', label: 'SEO', icon: 'search', perm: 'seo.read', match: /^\/studio\/seo/, key: 's' },
     { to: '/studio/translations', label: 'Translations', icon: 'languages', perm: 'translation.read', match: /^\/studio\/translations/, key: 't' },
   ] },
+  // AFCD Apply (docs/adr/0004-afcd-apply.md): more screens join this group as each phase lands
+  { group: 'Applications', items: [
+    { to: '/studio/apply', label: 'Overview', icon: 'dash', perm: 'apply.read', match: /^\/studio\/apply\/?$/ },
+    { to: '/studio/apply/calls', label: 'Calls', icon: 'spark', perm: 'apply.read', match: /^\/studio\/apply\/calls(?!\/[0-9a-f-]{36}\/form)/ },
+    { to: '/studio/apply/submissions', label: 'Submissions', icon: 'inbox', perm: 'apply.submission.read', match: /^\/studio\/apply\/submissions/ },
+    { to: '/studio/apply/evaluation', label: 'Review & evaluation', icon: 'checkcircle', perm: 'apply.review', match: /^\/studio\/apply\/(evaluation|reviews)/ },
+    { to: '/studio/apply/shortlists', label: 'Shortlists', icon: 'log', perm: 'apply.evaluation.manage', match: /^\/studio\/apply\/shortlists/ },
+    { to: '/studio/apply/decisions', label: 'Decisions', icon: 'check', perm: 'apply.submission.read', match: /^\/studio\/apply\/decisions/ },
+    { to: '/studio/apply/forms', label: 'Form builder', icon: 'layers', perm: 'apply.read', match: /^\/studio\/apply\/(forms|calls\/[0-9a-f-]{36}\/form)/ },
+    { to: '/studio/apply/templates', label: 'Templates', icon: 'book', perm: 'apply.read', match: /^\/studio\/apply\/templates/ },
+  ] },
   { group: 'Workflow', items: [
     { to: '/studio/inbox', label: 'Inbox', icon: 'inbox', perm: 'forms.read', match: /^\/studio\/(inbox|forms)/, key: 'i' },
     { to: '/studio/approvals', label: 'Approval queue', icon: 'checkcircle', perm: 'project.read', match: /^\/studio\/approvals/, key: 'a' },

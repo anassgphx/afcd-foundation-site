@@ -190,6 +190,41 @@
       "when": 1795548963474,
       "tag": "0026_about_pages",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1795682403204,
+      "tag": "0027_apply_calls",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1795683852193,
+      "tag": "0028_apply_forms",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1795685494532,
+      "tag": "0029_apply_drafts",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1795686563863,
+      "tag": "0030_apply_submissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795687160770,
+      "tag": "0031_apply_evaluation",
+      "breakpoints": true
     }
   ]
 }

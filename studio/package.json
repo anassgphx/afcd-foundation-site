@@ -11,6 +11,7 @@
     "dev": "tsx watch src/server/index.ts",
     "start": "node --import tsx src/server/index.ts",
     "build:admin": "vite build",
+    "build:apply": "vite build --config vite.apply.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/server/cli/migrate.ts",
     "db:seed": "tsx src/server/cli/seed.ts",

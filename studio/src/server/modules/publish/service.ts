@@ -53,6 +53,7 @@ import { buildSchemaFile, KEY as SCHEMA_KEY, settingsSchema, type LiveForSchema,
 import * as TR from '../translations/service.ts';
 import * as MENU from '../menus/service.ts';
 import * as SET from '../settings/service.ts';
+import { applyPagesStale, writeApplyPages } from '../apply/publish.ts';
 
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
@@ -429,6 +430,8 @@ export class Publisher {
     // the language copies (fr/, ar/) are removed with the English page: build.mjs only writes pages, it never deletes them
     const pub = await this.writePublications(resolve(this.cfg.siteRoot, 'src/pages'), [this.cfg.siteRoot, ...TR.LANGS.map((l) => resolve(this.cfg.siteRoot, l))], await this.livePublications(o.publication), o.project);
     this.copyDocuments(pub.docs, resolve(this.cfg.siteRoot, PUBLIC_DOC_DIR), true);
+    // AFCD Apply call pages (modules/apply/publish.ts); like publications, removed pages also leave fr/ and ar/
+    const applyMedia = await writeApplyPages(this.db, this.cfg, resolve(this.cfg.siteRoot, 'src/pages'), [this.cfg.siteRoot, ...TR.LANGS.map((l) => resolve(this.cfg.siteRoot, l))]);
     const newsMedia = await this.writeNews(this.newsFile, resolve(this.cfg.siteRoot, 'src/pages'), await this.liveArticles(o.article), o.project);
     const live = await this.livePages(o.page);
     const ctx = await buildCtx(this.db, live.map((x) => x.snap.doc), { projectOverride: o.project, pending });
@@ -439,7 +442,7 @@ export class Publisher {
       const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
       writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
     }
-    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...aboutMedia, ...eventMedia, ...oppMedia, ...pub.mediaIds, ...seoMedia, ...homeMedia, ...settingsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...aboutMedia, ...eventMedia, ...oppMedia, ...applyMedia, ...pub.mediaIds, ...seoMedia, ...homeMedia, ...settingsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
     return { entries, live };
   }
 
@@ -1184,6 +1187,16 @@ export class Publisher {
     if (!stale) return false;
     await this.locked(async () => { const log: string[] = []; await this.rebuildFromDb(log); });
     await audit(this.db, null, 'opportunity.refresh', { type: 'opportunity' }, 'Rebuilt opportunities because one has opened or closed');
+    return true;
+  }
+
+  // ---------------------------------------------------------------- AFCD Apply
+  /** Rebuilds the site when an application page is missing, out of date or should be gone (calls open, close, are
+   *  extended or paused, or get a new form version). Called after those changes and every minute; cheap when nothing changed. */
+  async refreshApplyPages(now = new Date()) {
+    if (!(await applyPagesStale(this.db, this.cfg, now))) return false;
+    await this.locked(async () => { const log: string[] = []; await this.rebuildFromDb(log); });
+    await audit(this.db, null, 'apply.pages_refresh', { type: 'apply_call' }, 'Rebuilt the website: an application page changed');
     return true;
   }
 

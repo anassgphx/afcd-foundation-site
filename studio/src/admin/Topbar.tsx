@@ -29,7 +29,8 @@ function usePopover() {
 }
 
 export function Breadcrumbs({ path, title, nav }: { path: string; title: string; nav: NavLink[] }) {
-  const parent = nav.find((n) => n.to !== '/studio/' && path.startsWith(n.to) && path !== n.to && n.label !== title);
+  // the most specific section wins (/studio/apply/calls/… is under Calls, not the Applications overview)
+  const parent = nav.filter((n) => n.to !== '/studio/' && path.startsWith(n.to) && path !== n.to && n.label !== title).sort((a, b) => b.to.length - a.to.length)[0];
   return <nav className="crumbs" aria-label="Breadcrumb">
     <Link to="/studio/">Studio</Link><NavIcon n="chevRight" width={14} height={14} className="tb-crumb-sep" />
     {parent && <><Link to={parent.to}>{parent.label}</Link><NavIcon n="chevRight" width={14} height={14} className="tb-crumb-sep" /></>}

@@ -3,7 +3,7 @@
 // Every editor-supplied string is escaped; the description uses the safe text subset of News & Stories.
 import { inArray } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
-import { media, pillars } from '../../db/schema.ts';
+import { applyCalls, media, pillars } from '../../db/schema.ts';
 import { publicRef } from '../media/service.ts';
 import { esc, type MediaRef, type ProjectCard } from '../pages/blocks.ts';
 import { buildCtx } from '../pages/render.ts';
@@ -26,7 +26,10 @@ export async function oppCtx(db: DB, snaps: OpportunitySnapshot[], opts: { proje
   const ids = [...new Set(snaps.map((s) => s.heroMediaId).filter(Boolean) as string[])];
   const rows = ids.length ? await db.select().from(media).where(inArray(media.id, ids)) : [];
   const byId = new Map(rows.map((m) => [m.id, publicRef(m, 'assets/media/') as MediaRef]));
-  return { media: (id: string | null) => (id ? byId.get(id) ?? null : null), pillars: await db.select().from(pillars),
+  // AFCD Apply calls these opportunities point to (apply method "studio"): their page exists once the call is released
+  const callIds = [...new Set(snaps.map((s) => (s.applyMethod === 'studio' ? s.applyCallId : null)).filter(Boolean) as string[])];
+  const calls = new Map((callIds.length ? await db.select({ id: applyCalls.id, slug: applyCalls.slug, status: applyCalls.status }).from(applyCalls).where(inArray(applyCalls.id, callIds)) : []).map((c) => [c.id, c]));
+  return { calls, media: (id: string | null) => (id ? byId.get(id) ?? null : null), pillars: await db.select().from(pillars),
     projects: (await buildCtx(db, [], { projectOverride: opts.projectOverride })).projects as ProjectCard[], today: todayMorocco() };
 }
 type Ctx = Awaited<ReturnType<typeof oppCtx>>;
@@ -65,7 +68,12 @@ function badge(st: OppState) {
   return `<span class="inline-flex min-h-[28px] items-center gap-2 rounded-full bg-[#F6F6F6] px-3 text-[12.5px] font-medium"><span class="pj-dot" style="--c:${c}"></span>${STATE_LABEL[st]}</span>`;
 }
 
-function applyButton(s: OpportunitySnapshot, cls: string) {
+function applyButton(s: OpportunitySnapshot, cls: string, ctx?: Ctx) {
+  if (s.applyMethod === 'studio') {
+    const c = s.applyCallId ? ctx?.calls.get(s.applyCallId) : undefined;
+    if (c && ['open', 'paused', 'closed', 'under_evaluation', 'completed'].includes(c.status)) return `<a href="apply-${esc(c.slug)}.html" class="btn-dark btn-cta ${cls}">${c.status === 'open' ? 'Apply online' : 'See the call'} ${ARR}</a>`;
+    return `<p class="mt-5 rounded-2xl bg-[#F6F6F6] px-4 py-3 text-[14px] text-ink-dark">The application form opens here soon.</p>`;
+  }
   if (s.applyMethod === 'external') return `<a href="${esc(s.applyUrl)}" target="_blank" rel="noopener" class="btn-dark btn-cta ${cls}">Apply now ${ARR}</a>`;
   if (s.applyMethod === 'email') return `<a href="mailto:${esc(s.applyEmail)}?subject=${encodeURIComponent('Application: ' + s.title)}" class="btn-dark btn-cta ${cls}">Apply by email ${ARR}</a>`;
   return `<a href="contact.html?topic=${encodeURIComponent(TOPIC[s.type] ?? 'General question').replace(/%20/g, '+')}#message" class="btn-dark btn-cta ${cls}">Apply through our contact form ${ARR}</a>`;
@@ -125,7 +133,7 @@ export function detailSource(o: LiveOpp, ctx: Ctx) {
   if (p) facts.push(['Pillar', `<a class="underline underline-offset-2" href="${esc(p.publicFile)}">${esc(p.name)}</a>`]);
   if (project?.file) facts.push(['Project', `<a class="underline underline-offset-2" href="${esc(project.file)}">${esc(project.name)}</a>`]);
   const list = (items: string[]) => `<ul class="mt-4 grid gap-2.5">${items.map((x) => `<li class="gi-check">${CHECK}<span>${esc(x)}</span></li>`).join('')}</ul>`;
-  const apply = st === 'open' ? `${applyButton(s, 'mt-5 min-h-[50px] w-full justify-center px-6')}${s.deadline ? `<p class="mt-3 text-[12.5px] leading-relaxed text-ink-mid">Applications close at the end of ${dateLabel(s.deadline)} (Morocco time).</p>` : ''}`
+  const apply = st === 'open' ? `${applyButton(s, 'mt-5 min-h-[50px] w-full justify-center px-6', ctx)}${s.deadline ? `<p class="mt-3 text-[12.5px] leading-relaxed text-ink-mid">Applications close at the end of ${dateLabel(s.deadline)} (Morocco time).</p>` : ''}`
     : st === 'soon' ? `<p class="mt-5 rounded-2xl bg-[#F6F6F6] px-4 py-3 text-[14px] text-ink-dark">Applications open on ${dateLabel(s.opensOn!)}.</p>`
     : `<p class="mt-5 rounded-2xl bg-[#F6F6F6] px-4 py-3 text-[14px] text-ink-dark">This opportunity is closed. <a class="underline underline-offset-2" href="opportunities.html">See open opportunities</a>.</p>`;
   const body = header([['Get Involved', 'get-involved.html'], ['Opportunities', 'opportunities.html'], [esc(s.title.length > 40 ? s.title.slice(0, 40) + '…' : s.title), opportunityFile(s.slug)]],

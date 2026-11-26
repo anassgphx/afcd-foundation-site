@@ -18,6 +18,7 @@ const SCREENS = {
   translations: () => import('./pages/Translations.tsx'), menus: () => import('./pages/Menus.tsx'), home: () => import('./pages/Home.tsx'), media: () => import('./pages/Media.tsx'),
   admin: () => import('./pages/Admin.tsx'), approvals: () => import('./pages/Approvals.tsx'),
   open: () => import('./pages/OpenPage.tsx'), settings: () => import('./pages/Settings.tsx'),
+  applyOverview: () => import('./apply/Overview.tsx'), applyCalls: () => import('./apply/Calls.tsx'), applyForms: () => import('./apply/Forms.tsx'), applySubmissions: () => import('./apply/Submissions.tsx'), applyEvaluation: () => import('./apply/Evaluation.tsx'), applySelection: () => import('./apply/Selection.tsx'),
 };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const screen = <K extends keyof typeof SCREENS>(k: K, name: string) => lazy(() => SCREENS[k]().then((m) => ({ default: (m as any)[name] as React.ComponentType<any> })));
@@ -29,6 +30,10 @@ const OpportunityEditor = screen('opportunities', 'OpportunityEditor'), InboxPag
 const TranslationsPage = screen('translations', 'TranslationsPage'), MenusPage = screen('menus', 'MenusPage'), HomeEditor = screen('home', 'HomeEditor');
 const MediaLibrary = screen('media', 'MediaLibrary'), Publishing = screen('admin', 'Publishing'), ActivityLog = screen('admin', 'ActivityLog'), Users = screen('admin', 'Users');
 const ApprovalsPage = screen('approvals', 'ApprovalsPage');
+const ApplyOverview = screen('applyOverview', 'ApplyOverview'), CallsList = screen('applyCalls', 'CallsList'), CallEditor = screen('applyCalls', 'CallEditor');
+const FormsList = screen('applyForms', 'FormsList'), CallFormBuilder = screen('applyForms', 'CallFormBuilder'), TemplatesPage = screen('applyForms', 'TemplatesPage'), TemplateBuilder = screen('applyForms', 'TemplateBuilder');
+const SubmissionsList = screen('applySubmissions', 'SubmissionsList'), SubmissionDetail = screen('applySubmissions', 'SubmissionDetail');
+const EvaluationPage = screen('applyEvaluation', 'EvaluationPage'), ReviewScreen = screen('applyEvaluation', 'ReviewScreen'), ShortlistsPage = screen('applySelection', 'ShortlistsPage'), DecisionsPage = screen('applySelection', 'DecisionsPage');
 const PublicationsList = screen('publications', 'PublicationsList'), PublicationEditor = screen('publications', 'PublicationEditor');
 const OpenPage = screen('open', 'OpenPage');
 const SettingsPage = screen('settings', 'SettingsPage');
@@ -166,6 +171,24 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   if (path.startsWith('/studio/translations')) return { title: 'Translations', el: <TranslationsPage /> };
   if (path.startsWith('/studio/menus')) return { title: 'Menus', el: <MenusPage /> };
   if (path.startsWith('/studio/inbox') || path.startsWith('/studio/forms')) return { title: 'Inbox', el: <InboxPage /> };
+  const af = path.match(/^\/studio\/apply\/calls\/([0-9a-f-]{36})\/form$/);
+  if (af) return { title: 'Application form', el: <CallFormBuilder key={af[1]} callId={af[1]} />, full: true };
+  const at = path.match(/^\/studio\/apply\/templates\/([0-9a-f-]{36})$/);
+  if (at) return { title: 'Template', el: <TemplateBuilder key={at[1]} id={at[1]} />, full: true };
+  if (path.startsWith('/studio/apply/templates')) return { title: 'Templates', el: <TemplatesPage /> };
+  if (path.startsWith('/studio/apply/forms')) return { title: 'Form builder', el: <FormsList /> };
+  const as = path.match(/^\/studio\/apply\/submissions\/([0-9a-f-]{36})$/);
+  if (as) return { title: 'Application', el: <SubmissionDetail key={as[1]} id={as[1]} /> };
+  if (path.startsWith('/studio/apply/submissions')) return { title: 'Submissions', el: <SubmissionsList /> };
+  const ar = path.match(/^\/studio\/apply\/reviews\/([0-9a-f-]{36})$/);
+  if (ar) return { title: 'Review', el: <ReviewScreen key={ar[1]} id={ar[1]} /> };
+  if (path.startsWith('/studio/apply/evaluation')) return { title: 'Review & evaluation', el: <EvaluationPage /> };
+  if (path.startsWith('/studio/apply/shortlists')) return { title: 'Shortlists', el: <ShortlistsPage /> };
+  if (path.startsWith('/studio/apply/decisions')) return { title: 'Decisions', el: <DecisionsPage /> };
+  const ac = path.match(/^\/studio\/apply\/calls\/([0-9a-f-]{36})$/);
+  if (ac) return { title: 'Call', el: <CallEditor key={ac[1]} id={ac[1]} /> };
+  if (path.startsWith('/studio/apply/calls')) return { title: 'Calls', el: <CallsList /> };
+  if (/^\/studio\/apply\/?$/.test(path)) return { title: 'Applications', el: <ApplyOverview /> };
   const op = path.match(/^\/studio\/opportunities\/([0-9a-f-]{36})$/);
   if (op) return { title: 'Opportunity', el: <OpportunityEditor key={op[1]} id={op[1]} /> };
   if (path.startsWith('/studio/opportunities')) return { title: 'Opportunities', el: <OpportunitiesList /> };

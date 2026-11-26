@@ -311,11 +311,14 @@
   drawer.setAttribute('tabindex', '-1');
   // the current page: highlighted in the menu, and its group opened
   (function () {
-    var here = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    // full paths, so /about/team and /team.html (a preview build) both match their menu link
+    var norm = function (p) { p = (p || '/').split('#')[0].split('?')[0].toLowerCase().replace(/\.html$/, '').replace(/\/index$/, '/'); return p.length > 1 ? p.replace(/\/$/, '') : '/'; };
+    var here = norm(location.pathname);
     $$('nav[aria-label="Mobile"] > *', drawer).forEach(function (el, i) { el.style.setProperty('--i', i); });
     $$('a.m-link', drawer).forEach(function (a) {
-      var href = (a.getAttribute('href') || '').split('#')[0].split('?')[0].toLowerCase();
-      if (!href || href !== here) return;
+      var raw = a.getAttribute('href'); if (!raw || raw.charAt(0) === '#') return;
+      var href; try { href = norm(new URL(raw, location.href).pathname); } catch (e) { return; }
+      if (href !== here) return;
       a.classList.add('is-current'); a.setAttribute('aria-current', 'page');
       var panel = a.closest('.m-panel'); if (panel) { var acc = panel.previousElementSibling; if (acc) acc.classList.add('is-current'); }
     });
@@ -691,7 +694,9 @@
        Studio editor for that page (Studio still asks to sign in). The x hides it until "Staff login" is used again. */
     var staff = false; try { staff = localStorage.getItem('afcd.staff') === '1'; } catch (e) { /* storage off */ }
     if (!staff) return;
-    var file = location.pathname.split('/').pop() || 'index.html';
+    // the page's file: named in the page (category/page addresses have no .html), else the last part of the address
+    var fm = document.querySelector('meta[name="afcd-file"]');
+    var file = (fm && fm.getAttribute('content')) || location.pathname.split('/').pop() || 'index.html';
     if (!/^[a-z0-9-]+\.html$/i.test(file)) return;
     var box = document.createElement('div');
     box.className = 'studio-edit';

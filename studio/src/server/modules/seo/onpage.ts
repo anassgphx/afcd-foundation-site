@@ -179,7 +179,8 @@ export function pageChecklist(ctx: Ctx, p: PageScan, st: PageState) {
   fromAudit('meta.unique', 'meta', 'Description used only on this page', ['meta.desc-dup'], 'Unique to this page.', 'Describe what is unique about this page.');
 
   // 5. URL
-  const slug = p.file.replace(/\.html$/, ''); const slugWords = slug.split('-').filter(Boolean);
+  // the address's own last part: /projects/cso-care → "cso-care" (old-style builds: the file name)
+  const slug = (new URL(p.url).pathname.split('/').filter(Boolean).pop() ?? 'index').replace(/\.html$/, ''); const slugWords = slug.split('-').filter(Boolean);
   if (!is404) {
     add({ id: 'url.format', group: 'url', label: 'Readable address (lowercase words and hyphens)', status: /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) ? 'pass' : 'warn', detail: p.url, fix: 'Use lowercase words separated by hyphens; no spaces, underscores or special characters.' });
     add({ id: 'url.length', group: 'url', label: 'Short address', status: slug.length <= 60 && slugWords.length <= 6 ? 'pass' : 'warn', detail: `${plural(slugWords.length, 'word')}, ${slug.length} characters.`, fix: 'Keep only the words that describe the page. Changing an address needs a redirect from the old one (SEO → Redirects).' });

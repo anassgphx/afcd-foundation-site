@@ -12,6 +12,7 @@ import { renderPage, closeIndex } from './lib/page-fields.mjs';
 import { activeLangs, decorateEnglish, buildLanguages } from './lib/i18n.mjs';
 import { renderMenus } from './lib/menu.mjs';
 import { loadSiteSettings, applyHead, applyPage, applyOrg } from './lib/site-settings.mjs';
+import { pillarStems, prettifyHtml, prettifyAbsolute } from './lib/urls.mjs';
 import { execSync } from 'node:child_process';
 
 const SRC = 'src';
@@ -284,6 +285,18 @@ if (LANGS.length) {
   sitemap.push(...r.sitemap);
 }
 
+// Category/page addresses (lib/urls.mjs: /projects/x, /pillars/x, /about/team, no ".html"): production builds of the site
+// root only. Every page, in every language, gets root-relative links and pretty absolute URLs; previews keep file links.
+if (PRODUCTION && OUT_DIR === '.') {
+  const pillars = pillarStems('.');
+  for (const dir of ['', ...LANGS]) {
+    for (const f of readdirSync(join(OUT_DIR, dir)).filter((x) => /^[a-z0-9][a-z0-9-]*\.html$/.test(x))) {
+      const p = join(OUT_DIR, dir, f);
+      writeFileSync(p, prettifyHtml(readFileSync(p, 'utf8'), { file: f, lang: dir, site: SITE, pillars }));
+    }
+  }
+  for (let i = 0; i < sitemap.length; i++) sitemap[i] = prettifyAbsolute(sitemap[i], SITE, pillars);
+}
 // Sitemap: indexable canonical pages only, absolute production URLs.
 writeFileSync(join(OUT_DIR, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemap.join('\n')}\n</urlset>\n`);
 // robots.txt: open on production, closed on preview builds. (Not access control: private systems need auth.)

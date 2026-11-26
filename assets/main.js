@@ -278,7 +278,9 @@
 
   /* ---------- Header: hide the top bar once the page scrolls ---------- */
   var header = $('#site-header'), ticking = false;
-  function onScroll() { header.classList.toggle('is-scrolled', window.scrollY > 120); ticking = false; }
+  // two thresholds: condensing the header shortens the page and the browser shifts the scroll by that much, so one
+  // threshold made it flip back and forth near 120px (the menu jittered). Condense past 140px, expand below 60px.
+  function onScroll() { var y = window.scrollY, on = header.classList.contains('is-scrolled'); if (!on && y > 140) header.classList.add('is-scrolled'); else if (on && y < 60) header.classList.remove('is-scrolled'); ticking = false; }
   window.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
   onScroll();
 

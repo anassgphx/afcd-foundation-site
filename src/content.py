@@ -1154,10 +1154,20 @@ def status_badge(st, cls=''):
     return f'<span class="pjg-badge is-{st.lower()} {cls}"><span class="pjg-pulse" aria-hidden="true"></span>{st}</span>' if st else ''
 
 
+def project_poster(name, slug, pname):
+    """A project card's picture: its main photo, else its first cover photo, else a poster tile in the pillar colour."""
+    d = (next((y for y in _PROJECT_DATA if y.get('name') == name), None) or {}).get('detail') or {}
+    pic = d.get('hero') or next(iter(d.get('cover') or []), None)
+    if pic and pic.get('src') and pic.get('srcset'):
+        return f'<div class="pj-card-pic">{media_img(pic, "aspect-[4/3] w-full", "(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw")}</div>'
+    return (f'<div class="pj-card-pic pj-poster aspect-[4/3] w-full" style="--c:{PILLAR_TONE.get(slug, "#E7E5E4")}">'
+            f'<span class="pj-poster-k">{pname}</span><span class="pj-poster-t">{name}</span></div>')
+
+
 def project_card(p, featured=False):
     name, slug, pname, cat, href, summary = p
     inner = f'''
-        {ph(name, 'aspect-[4/3] w-full', '#D4D4D4')}
+        {project_poster(name, slug, pname)}
         <div class="mt-5 flex flex-wrap items-center gap-2">{status_badge(project_status(name), 'is-sm')}{tag(pname)}<span class="label text-ink-mid">{cat}</span></div>
         <h3 class="mt-4 text-2xl font-semibold leading-[1.15] tracking-[-0.03em]">{name}</h3>
 '''

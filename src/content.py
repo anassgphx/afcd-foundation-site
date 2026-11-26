@@ -1166,19 +1166,33 @@ def project_poster(name, slug, pname):
             f'<span class="pj-poster-k">{pname}</span><span class="pj-poster-t">{name}</span></div>')
 
 
+def project_partners(name):
+    """A project's partner names: the partners linked in Studio, else its "Partner" fact."""
+    d = (next((y for y in _PROJECT_DATA if y.get('name') == name), None) or {}).get('detail') or {}
+    names = [p['name'] for p in (d.get('partners') or []) if p.get('name')]
+    return names or [v for k, v in (d.get('facts') or []) if k in ('Partner', 'Partners') and v]
+
+
 def project_card(p, featured=False):
+    """A project card: picture; pillar; name; description; partner; the button to the project page and the status."""
     name, slug, pname, cat, href, summary = p
+    partners = project_partners(name)
+    tone = PILLAR_TONE.get(slug, '#D6D3D1')
+    meta = f'<div class="pjc-meta"><span class="pjc-pillar" title="{pname}"><i style="--c:{tone}" aria-hidden="true"></i><span>{pname}</span></span></div>'
+    desc = f'<p class="pjc-desc">{summary}</p>' if summary else ''
+    partner = (f'<p class="pjc-partner"><span class="pjc-k">{"Partner" if len(partners) == 1 else "Partners"}</span>'
+               f'<span class="pjc-v">{", ".join(partners)}</span></p>') if partners else ''
+    btn = (f'<span class="pjc-btn">Explore project <span class="pjc-arr" aria-hidden="true">↗</span></span>' if href
+           else '<span class="pjc-soon">Project page coming soon</span>')
     inner = f'''
         {project_poster(name, slug, pname)}
-        <div class="mt-5 flex flex-wrap items-center gap-2">{status_badge(project_status(name), 'is-sm')}{tag(pname)}<span class="label text-ink-mid">{cat}</span></div>
-        <h3 class="mt-4 text-2xl font-semibold leading-[1.15] tracking-[-0.03em]">{name}</h3>
-'''
-    if summary:
-        inner += f'\n        <p class="mt-2 text-[15px] leading-relaxed text-ink-dark">{summary}</p>'
+        <div class="pjc-body">{meta}
+          <h3 class="pjc-title">{name}</h3>{desc}
+          <div class="pjc-foot">{partner}<div class="pjc-act">{btn}{status_badge(project_status(name), "is-sm")}</div></div>
+        </div>'''
     if href:
-        inner += f'\n        <span class="link-arrow mt-5">Explore project {ARR}</span>'
-        return f'<li data-pillar="{slug}" class="proj-card"><a href="{href}" class="group block">{inner}\n      </a></li>'
-    return f'<li data-pillar="{slug}" class="proj-card">{inner}\n        <span class="mt-5 inline-block text-[13px] text-ink-mid">Project page coming soon</span>\n      </li>'
+        return f'<li data-pillar="{slug}" class="proj-card"><a href="{href}" class="pjc group">{inner}\n      </a></li>'
+    return f'<li data-pillar="{slug}" class="proj-card"><div class="pjc">{inner}\n      </div></li>'
 
 
 def projects():

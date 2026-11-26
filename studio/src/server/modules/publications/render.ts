@@ -21,6 +21,11 @@ const ARR = '<span class="arr" aria-hidden="true">↗</span>';
 const HOME_ICO = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.2 8 2.8l5.5 4.4V13a.8.8 0 0 1-.8.8H9.6V10H6.4v3.8H3.3a.8.8 0 0 1-.8-.8V7.2Z"/></svg>';
 const DOC_ICO = '<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>';
 const line = (v: string) => v.replace(/[\r\n<>]+/g, ' ').trim();
+/** '<title> · Publications · AFCD Foundation', shortened step by step (section, then site name) to stay within the 70
+ *  characters search results show without cutting; the publication's own title is never cut. */
+export function fitTitle(t: string, section = 'Publications') {
+  return [`${t} · ${section} · AFCD Foundation`, `${t} · AFCD Foundation`].find((x) => x.length <= 70) ?? t;
+}
 const ident = (v: string) => v.toLowerCase().replace(/[^a-z0-9-]/g, '');
 const byDate = (a: LivePub, b: LivePub) => (b.snap.publishedOn ?? '').localeCompare(a.snap.publishedOn ?? '') || a.snap.title.localeCompare(b.snap.title);
 
@@ -187,7 +192,7 @@ export function detailSource(p: LivePub, ctx: Ctx) {
   </div>`}
 </section>
 <section class="border-t border-ink-light py-10"><div class="wrap flex flex-wrap gap-x-6 gap-y-3"><a href="publications.html" class="link-arrow">All publications ${ARR}</a>${projects[0] ? `<a href="${esc(projects[0].file!)}" class="link-arrow">${esc(projects[0].name)} ${ARR}</a>` : ''}</div></section>`;
-  return `---\ntitle: ${line(s.seoTitle || s.title)} · Publications · AFCD Foundation\ndescription: ${line(s.seoDescription || s.summary || s.title)}\nactive: none\nparent: Publications|publications.html\n---\n<span id="top"></span>\n<article data-studio-publication-rev="${p.id}">\n${body}\n</article>\n`;
+  return `---\ntitle: ${fitTitle(line(s.seoTitle || s.title))}\ndescription: ${line(s.seoDescription || s.summary || s.title)}\nactive: none\nparent: Publications|publications.html\n---\n<span id="top"></span>\n<article data-studio-publication-rev="${p.id}">\n${body}\n</article>\n`;
 }
 
 /** Public files each live publication needs: cover image ids and PDF rows. */

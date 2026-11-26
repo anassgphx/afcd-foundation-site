@@ -266,7 +266,7 @@ for (const file of pages) {
     markActive(header, meta.active).replace(/\{\{opps_href\}\}/g, OPPS_HREF).replace('{{pubs_link}}', PUBS_LINK).trimEnd(),
     '',
     `<main id="main" data-page="${meta.active}">`,
-    renderPage(body.trim(), FIELDS[file]),
+    renderPage(body.trim(), FIELDS[file]).replace(/\{\{opps_href\}\}/g, OPPS_HREF),
     '</main>',
     '',
     markActive(footer, meta.active).trimEnd(),

@@ -2480,6 +2480,63 @@ def involved():
          'Volunteer, join a programme, partner with us or join the alumni club at AFCD Foundation.', 'involved', body)
 
 
+# ---------------------------------------------------------------- Careers (About › Careers)
+def careers():
+    """Careers: where AFCD's open roles, internships and calls are published, and the other ways to join the team.
+    No role is listed here by hand: open calls live in AFCD Apply / Opportunities ({{opps_href}}, filled in by build.mjs)."""
+    about_link = ('About Us', 'about.html')
+    ways = [
+        ('Jobs and staff roles', 'When AFCD opens a paid position, it is published as an open call with the role, the profile and how to apply.', '{{opps_href}}', 'See open calls'),
+        ('Internships', 'Students and recent graduates can apply to internship calls, or write to us about an internship in one of our programmes.', 'contact.html?topic=General+question#message', 'Ask about an internship'),
+        ('Volunteering', 'Give time to activities in Ait Ourir and beyond, alongside AFCD’s team and participants.', 'get-involved.html#volunteer', 'Become a volunteer'),
+        ('Programmes', 'Young people and women can join AFCD’s programmes in leadership, environment and digital skills when calls open.', 'get-involved.html#programs', 'Join a programme'),
+    ]
+    tiles = ''.join(f'''
+        <li><a href="{h}" class="gi-tile group">
+          <span class="flex items-center justify-between"><span class="text-[12px] tabular-nums text-ink-mid">{i:02d}</span><span class="gi-arr" aria-hidden="true">↗</span></span>
+          <span class="mt-3 block text-[20px] font-semibold leading-[1.1] tracking-[-0.03em] sm:mt-8 md:text-[24px]">{t}</span>
+          <span class="mt-2 block text-[14px] leading-relaxed text-ink-dark">{d}</span>
+          <span class="mt-4 block text-[13.5px] font-semibold">{a} {ARR}</span>
+        </a></li>''' for i, (t, d, h, a) in enumerate(ways, 1))
+    steps = [('Read the call', 'Each call says what the role involves, who it is for and the deadline.'),
+             ('Apply as it asks', 'Send your application through the call’s form before the deadline.'),
+             ('Hear back', 'Applications are reviewed against the call’s criteria, and shortlisted people are contacted.')]
+    shtml = ''.join(f'<li class="os-step"><span class="os-step-k">{i:02d}</span><span class="os-step-dot" aria-hidden="true"></span><span class="mt-5 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for i, (t, d) in enumerate(steps, 1))
+    body = page_header([about_link, ('Careers', 'careers.html')], 'About · Careers',
+                       'Work with <span class="text-ink-mid">AFCD.</span>',
+                       'Jobs, internships and calls for applications at AFCD Foundation, a Moroccan nonprofit working with young people and women since 2007.') + f'''
+
+<section id="open" class="pt-8 lg:pt-10">
+  <div class="wrap">
+    <a href="{{{{opps_href}}}}" class="gi-calls group">
+      <span class="cta-kicker" style="background:#fff;color:#000"><span class="tb-dot" aria-hidden="true"></span>Open calls</span>
+      <span class="mt-6 block text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[44px]">Every open role <span class="text-white/45">in one place.</span></span>
+      <span class="mt-4 block max-w-[52ch] text-[15.5px] leading-relaxed text-white/65">Jobs, internships and calls for applications are published as open calls, each with its deadline and form.</span>
+      <span class="btn-light btn-cta mt-8 min-h-[48px] px-6 text-[14px]">See open calls {ARR}</span>
+    </a>
+  </div>
+</section>
+
+<section id="ways" class="py-14 lg:py-16">
+  <div class="wrap">{sec_head('01 / Ways to join', 'Join the team <span class="sh-soft">your way.</span>', 'Since 2007', desc='A role, an internship, your time as a volunteer or a place in a programme.')}
+    <ul class="mt-8 grid gap-3 sm:grid-cols-2 lg:mt-10 lg:grid-cols-4">{tiles}
+    </ul>
+  </div>
+</section>
+
+<section id="how" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('02 / How to apply', 'Three steps <span class="sh-soft">to apply.</span>', 'Open calls')}
+    <ol class="os-steps gi-journey mt-8 lg:mt-10">{shtml}
+    </ol>
+  </div>
+</section>
+''' + cta_band('No open role for you yet?', 'Write to us about the work you would like to do with AFCD, and meet the people behind it.',
+               ('Contact us', 'contact.html#message'), ('Meet the team', 'team.html'))
+    page('careers.html', 'Careers at AFCD Foundation: jobs, internships and calls',
+         'Jobs, internships and calls for applications at AFCD Foundation, and other ways to join the team: volunteering and programmes.',
+         'about', body, parent=about_link)
+
+
 # ---------------------------------------------------------------- Contact
 SOCIAL_ICO = {'Facebook': '<path d="M9.2 14.5V8.6h2l.3-2.3H9.2V4.8c0-.7.2-1.1 1.1-1.1h1.2V1.6a16 16 0 0 0-1.8-.1c-1.8 0-3 1.1-3 3.1v1.7h-2v2.3h2v5.9h2.5Z" fill="currentColor"/>', 'Instagram': '<rect x="2" y="2" width="12" height="12" rx="3.5" stroke="currentColor" stroke-width="1.4" fill="none"/><circle cx="8" cy="8" r="2.8" stroke="currentColor" stroke-width="1.4" fill="none"/><circle cx="11.6" cy="4.4" r=".8" fill="currentColor"/>', 'LinkedIn': '<path d="M3.6 6h2.3v7.5H3.6zM4.7 2.4a1.3 1.3 0 1 1 0 2.7 1.3 1.3 0 0 1 0-2.7ZM7.4 6h2.2v1c.3-.6 1.1-1.2 2.3-1.2 2.4 0 2.9 1.6 2.9 3.7v4H12.5V10c0-.9 0-2-1.2-2s-1.4.9-1.4 1.9v3.6H7.4z" fill="currentColor"/>'}
 CT_ICON = {'phone': '<path d="M3.2 1.8h2.4l1.2 3-1.6 1a8 8 0 0 0 5 5l1-1.6 3 1.2v2.4a1.4 1.4 0 0 1-1.5 1.4C6.7 13.8 2.2 9.3 1.8 3.3a1.4 1.4 0 0 1 1.4-1.5Z"/>', 'mail': '<rect x="1.8" y="3.2" width="12.4" height="9.6" rx="1.6"/><path d="m2.5 4.5 5.5 4 5.5-4"/>', 'board': '<path d="M8 1.8 2 4.6v1.2h12V4.6L8 1.8Z"/><path d="M3.5 6.5v5M6.5 6.5v5M9.5 6.5v5M12.5 6.5v5M2 13.6h12"/>', 'pin': '<path d="M8 14.5s4.5-4.2 4.5-8a4.5 4.5 0 0 0-9 0c0 3.8 4.5 8 4.5 8Z"/><circle cx="8" cy="6.5" r="1.6"/>'}
@@ -2632,5 +2689,5 @@ def studio_contact_fields(s):
 
 
 if __name__ == '__main__':
-    about(); pillars(); projects(); project_details(); home_projects(); home_events(); home_partners(); home_pillars(); news(); news_articles(); events(); partners(); involved(); contact()
+    about(); pillars(); projects(); project_details(); home_projects(); home_events(); home_partners(); home_pillars(); news(); news_articles(); events(); partners(); involved(); careers(); contact()
     print('pages written to', OUT)

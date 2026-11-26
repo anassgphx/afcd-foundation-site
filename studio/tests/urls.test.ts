@@ -13,6 +13,7 @@ describe('page addresses', () => {
     expect(prettyPath('index.html')).toBe('/');
     expect(prettyPath('about.html')).toBe('/about');
     expect(prettyPath('team.html')).toBe('/about/team');
+    expect(prettyPath('careers.html')).toBe('/about/careers'); expect(fileFromPath('/about/careers')).toEqual({ lang: '', file: 'careers.html' });
     expect(prettyPath('womens-empowerment.html')).toBe('/pillars/womens-empowerment');
     expect(prettyPath('climate-justice.html', ['climate-justice'])).toBe('/pillars/climate-justice');   // a pillar added in Studio
     expect(prettyPath('project-cso-care.html')).toBe('/projects/cso-care');

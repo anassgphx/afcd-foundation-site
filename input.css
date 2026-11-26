@@ -3099,3 +3099,9 @@ ol.abx-tl .abx-tl-d { margin-top: 8px; max-width: none; font-size: 15px; color: 
 .abx-regs2 + .abx-note { max-width: none; padding: 26px 28px; }
 @media (min-width: 1024px) { .abx-regs2 + .abx-note { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; padding: 32px 36px; } .abx-regs2 + .abx-note > p { margin-top: 0; } }
 @media (prefers-reduced-motion: reduce) { .abx-reg2, .abx-reg2:hover { transition: none; transform: none; } }
+
+/* Partners page: the logo box takes the logo's own shape (a square logo gets a square box, a 2:1 logo a 2:1 box…) and
+   the whole logo fills it: the image keeps its width/height ratio and sets the box's height. */
+.pr-stage:has(.pr-logo.has-img) { height: auto; padding: 16px; }
+.pr-stage .pr-logo.has-img { height: auto !important; }
+.pr-stage .pr-logo.has-img .pr-logo-img { width: 100% !important; height: auto !important; max-width: 100% !important; max-height: none; object-fit: contain !important; }

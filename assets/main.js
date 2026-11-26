@@ -650,7 +650,7 @@
       if (typeof p === 'string') p = { name: p, logo: '' };
       var shape = /^is-(square|mid|wide)$/.test(p.shape || '') ? ' ' + p.shape : '';
       var initials = p.name.replace(/[()]/g, '').split(/\s+/).filter(function (w) { return /^[A-Za-zÀ-ÿ]/.test(w) && !/^(of|in|for|the|and)$/i.test(w); }).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase();
-      var logo = /^assets\/media\/[\w.-]+$/.test(p.logo) ? '<span class="pt-logo has-img' + shape + '"><img src="' + esc(p.logo) + '" alt="' + esc(p.alt || p.name) + '" loading="lazy" decoding="async"></span>'
+      var logo = /^(?:\.\.\/|\/)?assets\/media\/[\w.-]+$/.test(p.logo) ? '<span class="pt-logo has-img' + shape + '"><img src="' + esc(p.logo) + '" alt="' + esc(p.alt || p.name) + '" loading="lazy" decoding="async"></span>'
         : '<span class="pt-logo is-initials" aria-hidden="true"><span>' + esc(initials) + '</span></span>';   /* no logo yet: the initials */
       return '<li class="pt-tile">' + logo + '<span class="pt-name">' + esc(p.name) + '</span><span class="pt-tag">' + esc(label(group)) + '</span></li>';
     }

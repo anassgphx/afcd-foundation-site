@@ -688,7 +688,9 @@ def about():
     groups = ''.join(f'<li>{b}</li>' for b in BENEFICIARIES)
     summary = ''.join(f'<p>{_esc(p)}</p>' for p in c.get('summary') or [])
     regions = c.get('regions') or []
-    reg = ''.join(f'<li class="abx-reg"><span class="abx-reg-n">{j:02d}</span><span class="abx-reg-t">{_esc(r["name"])}</span><span class="abx-reg-d">{_esc(r.get("places") or "")}</span></li>' for j, r in enumerate(regions, 1))
+    pin = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17.5s5.5-4.6 5.5-9a5.5 5.5 0 0 0-11 0c0 4.4 5.5 9 5.5 9Z"/><circle cx="10" cy="8.5" r="2"/></svg>'
+    reg = ''.join(f'<li class="abx-reg2"><span class="abx-reg2-ico">{pin}</span><span class="abx-reg2-t">{_esc(r["name"])}</span>'
+                  + (f'<span class="abx-reg2-d">{_esc(r["places"])}</span>' if (r.get('places') or '').strip() else '') + '</li>' for r in regions)
     def who_block(k, cfg):
         head = abx_head(k, dict(cfg, desc=cfg.get('desc') or c.get('whoIntro') or ''), f'{len(BENEFICIARIES)} groups')
         sub = f'<p class="plx-k">{_esc(cfg["sub"])}</p>' if cfg.get('sub') else ''
@@ -711,7 +713,7 @@ def about():
         return f"""
 <section id="where-we-work" class="plx-sec py-10 lg:py-14">
   <div class="wrap">{abx_head(k, cfg)}
-    <ol class="abx-regs mt-8 lg:mt-10">{reg}</ol>
+    <ul class="abx-regs2 mt-8 lg:mt-10">{reg}</ul>
     {note}
   </div>
 </section>"""
@@ -729,7 +731,7 @@ def about():
     secs, tabs = abx_build('strategy', c, blocks)
     body = page_header([ABOUT, ('Strategy &amp; Objectives', 'strategy.html')], 'About · Strategy', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
 <div class="plx abx"{_rev(c)}>
-{abx_overview('strategy.html', f'{len(OBJECTIVES):02d}', _esc(c.get('objectivesIntro') or ''), [('Objectives', f'{len(OBJECTIVES):02d}'), ('Pillars', f'{PILLAR_COUNT:02d}'), ('Regions', f'{len(regions):02d}')],
+{abx_overview('strategy.html', 'SO', _esc(c.get('objectivesIntro') or ''), [],
               [('See the objectives <span aria-hidden="true">↓</span>', f'#{tabs[0][0]}' if tabs else '#overview'), ('Who we serve <span aria-hidden="true">↓</span>', '#who-we-serve')], '', 'Strategy &amp; Objectives')}
 {abx_tabs(tabs) if tabs else ''}
 {secs}

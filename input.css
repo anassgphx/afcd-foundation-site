@@ -2899,3 +2899,6 @@ a.abx-chip:hover { background: #000; color: #fff; border-color: #000; }
   font-size: 16px; font-weight: 400; line-height: 1.7; letter-spacing: 0; color: #44403C; }
 @media (min-width: 768px) { .plx:not(.abx) .plx-pv-quote { font-size: 17px; } }
 @media (min-width: 1280px) { .plx:not(.abx) .plx-pv-quote { font-size: 18px; } }
+
+/* Project pages: a smaller title than other page headers (project names are often long) */
+.phd-title.sh-title.phd-title-md { font-size: clamp(30px, 3.4vw, 52px); line-height: 1.06; letter-spacing: -.035em; text-wrap: balance; }

@@ -1509,7 +1509,8 @@ def project_details():
   <div class="wrap grid gap-3 md:grid-cols-2">{more}</div>
 </nav>''' if more else ''
 
-        body = page_header([('Projects', 'projects.html'), (d['name'], file)], f'{d["pillar"]} · {d["cat"]}', d['name'], d['lede']) + f"""
+        # the label names the pillar only; project names can be long, so the title is a step smaller than on other pages
+        body = page_header([('Projects', 'projects.html'), (d['name'], file)], d['pillar'], d['name'], d['lede']).replace('class="sh-title sh-xl phd-title"', 'class="sh-title sh-xl phd-title phd-title-md"', 1) + f"""
 <div class="pl-page" style="--pc:{tone}">
 <section id="summary" class="pl-sec pt-8 lg:pt-10" data-studio-rev="{rev}">
   <div class="wrap">

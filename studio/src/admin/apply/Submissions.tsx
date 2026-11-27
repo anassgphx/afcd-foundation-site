@@ -9,10 +9,11 @@ import { Loading } from '../pages/Dashboard.tsx';
 import type { Answers, Field, FileRef, FormDef } from '../../server/modules/apply/engine.ts';
 import { FIELD_TYPES, evaluate, t } from '../../server/modules/apply/engine.ts';
 import './submissions.css';
+import { StatusBadge as StatusBadge2 } from './badges.tsx';
 import { MessagesTable } from './Communications.tsx';
 
 export const APP_STATUS: Record<string, string> = {
-  submitted: 'Submitted', eligibility_review: 'Eligibility review', under_evaluation: 'Under evaluation', shortlisted: 'Shortlisted', interview: 'Interview',
+  submitted: 'New', eligibility_review: 'Eligibility screening', under_evaluation: 'In review', shortlisted: 'Shortlisted', interview: 'Interview',
   selected: 'Selected', waitlisted: 'Waitlisted', not_selected: 'Not selected', withdrawn: 'Withdrawn',
 };
 export const ELIG: Record<string, string> = { eligible: 'Eligible', needs_review: 'Needs review', ineligible: 'Ineligible', not_assessed: 'Not assessed' };
@@ -24,7 +25,7 @@ type Row = { id: string; reference: string; applicantName: string; applicantEmai
 type Page = { items: Row[]; total: number; next: string | null };
 
 /** The applications table: filtered by the Applicants pipeline (call, stage statuses, eligibility, search). Bulk status changes for managers. */
-export function SubmissionsTable({ call, status, eligibility, q, hint, onChanged }: { call: string; status: string; eligibility: string; q: string; hint?: React.ReactNode; onChanged?: () => void }) {
+export function SubmissionsTable({ call, status, eligibility, q, hint, onChanged, onOpen, onRows, reloadKey }: { call: string; status: string; eligibility: string; q: string; hint?: React.ReactNode; onChanged?: () => void; onOpen?: (id: string) => void; onRows?: (ids: string[]) => void; reloadKey?: number }) {
   const can = useCan(); const toast = useToast();
   const [rows, setRows] = useState<Row[] | null>(null); const [total, setTotal] = useState(0); const [next, setNext] = useState<string | null>(null);
   const [sel, setSel] = useState<Set<string>>(new Set()); const [bulk, setBulk] = useState(false); const [busy, setBusy] = useState(false);
@@ -32,8 +33,10 @@ export function SubmissionsTable({ call, status, eligibility, q, hint, onChanged
   const load = useCallback(async () => {
     setRows(null); setSel(new Set());
     try { const r = await api<Page>(`/apply/submissions?${qs()}`); setRows(r.items); setTotal(r.total); setNext(r.next); } catch (e) { setRows([]); toast((e as Error).message, true); }
-  }, [call, status, eligibility, q]);
+  }, [call, status, eligibility, q, reloadKey]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (rows) onRows?.(rows.map((r) => r.id)); }, [rows]);
+  const toIn = async (r: Row) => { setBusy(true); try { await post(`/apply/submissions/${r.id}/status`, { to: 'under_evaluation', reason: '' }); toast(`${r.reference} sent to In review`); await load(); onChanged?.(); } catch (e) { toast(e instanceof ApiError ? e.message : 'Could not change the status.', true); } finally { setBusy(false); } };
   async function more() { if (!next) return; setBusy(true); try { const r = await api<Page>(`/apply/submissions?${qs(next)}`); setRows((x) => [...(x ?? []), ...r.items]); setNext(r.next); } finally { setBusy(false); } }
   const chosen = (rows ?? []).filter((r) => sel.has(r.id));
   const commonMoves = chosen.length ? chosen.map((r) => MOVES[r.status] ?? []).reduce((a, b) => a.filter((x) => b.includes(x))) : [];
@@ -46,14 +49,16 @@ export function SubmissionsTable({ call, status, eligibility, q, hint, onChanged
       {!rows ? <TableSkeleton /> : !rows.length ? <p className="sb-empty">{eligibility || q ? 'No applications match these filters.' : status ? 'No applications at this stage.' : 'No applications yet. They appear here when applicants submit.'}</p> :
         <div className="sb-scroll"><table className="table sb-table">
           <thead><tr>{can('apply.submission.manage') && <th className="sb-c"><input type="checkbox" aria-label="Select all shown" checked={chosen.length === rows.length} onChange={(e) => setSel(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} /></th>}
-            <th>Reference</th><th>Applicant</th>{!call && <th className="sb-hide">Call</th>}<th>Status</th><th>Eligibility</th><th className="r">Submitted</th></tr></thead>
+            <th>Reference</th><th>Applicant</th>{!call && <th className="sb-hide">Call</th>}<th>Stage</th><th>Eligibility</th><th className="r">Submitted</th>{onOpen && <th className="r"><span className="sr-only">Actions</span></th>}</tr></thead>
           <tbody>{rows.map((r) => <tr key={r.id} className={sel.has(r.id) ? 'on' : ''}>
             {can('apply.submission.manage') && <td className="sb-c"><input type="checkbox" aria-label={`Select ${r.reference}`} checked={sel.has(r.id)} onChange={(e) => setSel((x) => { const n = new Set(x); if (e.target.checked) n.add(r.id); else n.delete(r.id); return n; })} /></td>}
-            <td><Link to={`/studio/apply/applicants/${r.id}`} className="mono sb-ref">{r.reference}</Link></td>
-            <td><span className="sb-name">{r.applicantName || '—'}</span><small>{r.applicantEmail}</small></td>
+            <td>{onOpen ? <button type="button" className="linkish mono sb-ref" onClick={() => onOpen(r.id)}>{r.reference}</button> : <Link to={`/studio/apply/applicants/${r.id}`} className="mono sb-ref">{r.reference}</Link>}</td>
+            <td>{onOpen ? <button type="button" className="linkish sb-name sb-open" onClick={() => onOpen(r.id)}>{r.applicantName || '—'}</button> : <span className="sb-name">{r.applicantName || '—'}</span>}<small>{r.applicantEmail}</small></td>
             {!call && <td className="sb-hide"><small>{r.callTitle}</small></td>}
-            <td><StatusBadge s={r.status} /></td><td><EligBadge e={r.eligibility} o={r.overridden} /></td>
-            <td className="r"><small>{fmtDate(r.submittedAt)}</small></td></tr>)}</tbody></table></div>}
+            <td><StatusBadge2 category="stage" status={r.status} /></td><td><StatusBadge2 category="eligibility" status={r.eligibility} title={r.overridden ? 'Confirmed by staff' : 'Automatic result'} /></td>
+            <td className="r"><small>{fmtDate(r.submittedAt)}</small></td>
+            {onOpen && <td className="r sb-acts">{can('apply.submission.manage') && (r.status === 'submitted' || r.status === 'eligibility_review') && r.eligibility !== 'ineligible' && <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void toIn(r)} title="Move to In review">Send to In review</button>}
+              <button type="button" className="btn btn-sm btn-ghost" onClick={() => onOpen(r.id)}>View</button></td>}</tr>)}</tbody></table></div>}
       {rows && rows.length > 0 && <div className="sb-foot"><span>{rows.length} of {total} shown</span>{next && <button className="btn btn-sm" disabled={busy} onClick={more}>{busy ? 'Loading…' : 'Show 50 more'}</button>}</div>}
     </section>
     {bulk && <BulkDialog rows={chosen} moves={commonMoves} onClose={() => setBulk(false)} onDone={() => { setBulk(false); void load(); onChanged?.(); }} />}

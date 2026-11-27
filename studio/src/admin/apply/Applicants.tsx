@@ -1,7 +1,8 @@
 // AFCD Apply → Applicants: a table of calls with how many people applied to each. A call's Applicants tab holds the
 // pipeline (New → Eligibility → In review → Shortlist → Decision), where each stage shows the actions that fit it.
 // Counts come from the server only.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ApplicationDrawer } from './Drawer.tsx';
 import { api } from '../api.ts';
 import { Link, navigate, useCan, useToast } from '../ui.tsx';
 import { DataTable, EmptyState, ListToolbar, TableSkeleton, useUrlState, type Column } from '../DataTable.tsx';
@@ -76,6 +77,12 @@ export function CallApplicants({ callId }: { callId: string }) {
 function Pipeline({ call, fixed, stage: key, setStage, q, setQ, eligibility, setEligibility }: { call: string; fixed?: boolean; stage: string; setStage: (v: string) => void; q: string; setQ: (v: string) => void; eligibility: string; setEligibility: (v: string) => void }) {
   const can = useCan();
   const [counts, setCounts] = useState<Counts | null>(null); const [search, setSearch] = useState(q); const [gen, setGen] = useState(0);
+  // the application drawer: ?app=<id> in the address, so it can be linked to, and Back closes it
+  const [app, setApp] = useState(() => new URLSearchParams(location.search).get('app') ?? '');
+  const [ids, setIds] = useState<string[]>([]); const pushed = useRef(false);
+  useEffect(() => { const f = () => setApp(new URLSearchParams(location.search).get('app') ?? ''); window.addEventListener('popstate', f); return () => window.removeEventListener('popstate', f); }, []);
+  const openApp = (id: string) => { const u = new URL(location.href); u.searchParams.set('app', id); if (!app) { history.pushState(history.state, '', u); pushed.current = true; } else history.replaceState(history.state, '', u); setApp(id); };
+  const closeApp = () => { if (pushed.current) { pushed.current = false; history.back(); } else { const u = new URL(location.href); u.searchParams.delete('app'); history.replaceState(history.state, '', u); } setApp(''); };
   const loadCounts = useCallback(() => { api<Counts>(`/apply/submissions/counts${call ? `?call=${call}` : ''}`).then(setCounts).catch(() => setCounts(null)); }, [call]);
   useEffect(() => { loadCounts(); }, [loadCounts, gen]);
   useEffect(() => { const h = setTimeout(() => { if (search !== q) setQ(search); }, 350); return () => clearTimeout(h); }, [search]);
@@ -87,7 +94,7 @@ function Pipeline({ call, fixed, stage: key, setStage, q, setQ, eligibility, set
   return <>
     <nav className="pl-stages" aria-label="Pipeline stages">
       {STAGES.map((s, i) => { const n = stageCount(counts, s.statuses); const on = s.key === stage.key;
-        return <button key={s.key} type="button" className={`pl-stage${on ? ' on' : ''}`} aria-current={on ? 'step' : undefined} onClick={() => setStage(s.key)}>
+        return <button key={s.key} type="button" className={`pl-stage s-${s.key}${on ? ' on' : ''}`} aria-current={on ? 'step' : undefined} onClick={() => setStage(s.key)}>
           <small>{s.key === 'all' ? 'Everything' : s.key === 'withdrawn' ? 'Finished' : `Step ${i}`}</small><span><b>{s.label}</b><em>{n ?? '·'}</em></span></button>; })}
     </nav>
     {!ranked && !decisions && <div className="pl-tools">
@@ -97,8 +104,9 @@ function Pipeline({ call, fixed, stage: key, setStage, q, setQ, eligibility, set
     </div>}
     {ranked || decisions ? <>
       <div className="pl-hint pl-hint-card">{stage.hint}{stage.key === 'review' && can('apply.evaluation.manage') && <> <Link to={`/studio/apply/calls/${call}/reviews`}>Assign reviewers</Link></>}</div>
-      {decisions ? <DecisionStage key={`${call}:${gen}`} callId={call} onChanged={changed} /> : <ShortlistStage key={`${call}:${stage.key}`} callId={call} stages={stage.statuses} onChanged={changed} />}
-    </> : <SubmissionsTable call={call} onChanged={changed} status={stage.statuses.join(',')} eligibility={eligibility} q={q}
+      {decisions ? <DecisionStage key={call} callId={call} onChanged={changed} onOpen={openApp} onRows={setIds} reloadKey={gen} /> : <ShortlistStage key={`${call}:${stage.key}`} callId={call} stages={stage.statuses} onChanged={changed} onOpen={openApp} onRows={setIds} reloadKey={gen} />}
+    </> : <SubmissionsTable call={call} onChanged={changed} onOpen={openApp} onRows={setIds} reloadKey={gen} status={stage.statuses.join(',')} eligibility={eligibility} q={q}
       hint={<>{stage.hint}{!call && ['review', 'shortlist', 'decision'].includes(stage.key) && !fixed && ' Choose a call above to rank by score and decide.'}</>} />}
+    {app && <ApplicationDrawer key="drawer" id={app} ids={ids.includes(app) ? ids : [app]} onClose={closeApp} onNav={openApp} onChanged={changed} />}
   </>;
 }

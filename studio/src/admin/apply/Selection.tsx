@@ -24,7 +24,7 @@ function Confirm({ title, n, children, okLabel, onClose, onRun, needReason = tru
 }
 
 /** Ranked applications of one call at the given stages (In review: under_evaluation; Shortlist: shortlisted and interview). */
-export function ShortlistStage({ callId: call, stages, onChanged }: { callId: string; stages: string[]; onChanged?: () => void }) {
+export function ShortlistStage({ callId: call, stages, onChanged, onOpen, onRows, reloadKey }: { callId: string; stages: string[]; onChanged?: () => void; onOpen?: (id: string) => void; onRows?: (ids: string[]) => void; reloadKey?: number }) {
   const can = useCan(); const toast = useToast();
   const [rows, setRows] = useState<A[] | null>(null); const [sel, setSel] = useState<Set<string>>(new Set());
   const [dlg, setDlg] = useState<null | { kind: 'move'; to: string } | { kind: 'decide'; outcome: string }>(null);
@@ -33,7 +33,8 @@ export function ShortlistStage({ callId: call, stages, onChanged }: { callId: st
     setRows(null); setSel(new Set());
     try { const p = await api<{ applications: A[] }>(`/apply/calls/${call}/evaluation`); setRows(p.applications.filter((a) => stages.includes(a.status)).sort((a, b) => (b.scoreBp ?? -1) - (a.scoreBp ?? -1) || a.reference.localeCompare(b.reference))); }
     catch (e) { setRows([]); toast((e as Error).message, true); }
-  }, [call, stages.join()]);
+  }, [call, stages.join(), reloadKey]);
+  useEffect(() => { if (rows) onRows?.(rows.map((r) => r.id)); }, [rows]);
   useEffect(() => { void load(); }, [load]);
   const reload = async () => { await load(); onChanged?.(); };
   const chosen = (rows ?? []).filter((r) => sel.has(r.id));
@@ -48,7 +49,7 @@ export function ShortlistStage({ callId: call, stages, onChanged }: { callId: st
           {rows.map((r, i) => <tr key={r.id} className={sel.has(r.id) ? 'on' : ''}>
             {can('apply.submission.manage') && <td className="sb-c"><input type="checkbox" aria-label={`Select ${r.reference}`} checked={sel.has(r.id)} onChange={(e) => setSel((x) => { const n = new Set(x); if (e.target.checked) n.add(r.id); else n.delete(r.id); return n; })} /></td>}
             <td><small>{r.scoreBp !== null ? i + 1 : '—'}</small></td>
-            <td><Link to={`/studio/apply/applicants/${r.id}`} className="mono sb-ref">{r.reference}</Link><small>{r.applicantName}</small></td>
+            <td>{onOpen ? <button type="button" className="linkish mono sb-ref" onClick={() => onOpen(r.id)}>{r.reference}</button> : <Link to={`/studio/apply/applicants/${r.id}`} className="mono sb-ref">{r.reference}</Link>}<small>{r.applicantName}</small></td>
             <td><small>{APP_STATUS[r.status]}</small></td><td><EligBadge e={r.eligibility} /></td>
             <td className="r"><b>{pts(r.scoreBp)}</b><small>{r.scoreReviews} final review{r.scoreReviews === 1 ? '' : 's'}</small>{r.disagreement && <small className="ev-flag">Disagreement</small>}</td></tr>)}</tbody></table></div>}
     </section>
@@ -64,10 +65,11 @@ type Dec = { id: string; outcome: string; reason: string; status: string; decisi
   submissionId: string; reference: string; applicantName: string; scoreBp: number | null; callTitle: string };
 
 /** Proposed decisions waiting for a second person, and the decisions already taken, for one call. */
-export function DecisionStage({ callId: call, onChanged }: { callId: string; onChanged?: () => void }) {
+export function DecisionStage({ callId: call, onChanged, onOpen, onRows, reloadKey }: { callId: string; onChanged?: () => void; onOpen?: (id: string) => void; onRows?: (ids: string[]) => void; reloadKey?: number }) {
   const can = useCan(); const toast = useToast();
   const [rows, setRows] = useState<Dec[] | null>(null); const [sel, setSel] = useState<Set<string>>(new Set()); const [dlg, setDlg] = useState<null | boolean>(null);
-  const load = useCallback(async () => { if (!call) return; setRows(null); setSel(new Set()); try { setRows(await api<Dec[]>(`/apply/decisions?call=${call}`)); } catch (e) { setRows([]); toast((e as Error).message, true); } }, [call]);
+  const load = useCallback(async () => { if (!call) return; setRows(null); setSel(new Set()); try { setRows(await api<Dec[]>(`/apply/decisions?call=${call}`)); } catch (e) { setRows([]); toast((e as Error).message, true); } }, [call, reloadKey]);
+  useEffect(() => { if (rows) onRows?.([...new Set(rows.map((r) => r.submissionId))]); }, [rows]);
   useEffect(() => { void load(); }, [load]);
   const proposed = (rows ?? []).filter((r) => r.status === 'proposed'), done = (rows ?? []).filter((r) => r.status !== 'proposed');
   const chosen = proposed.filter((r) => sel.has(r.id));
@@ -78,11 +80,11 @@ export function DecisionStage({ callId: call, onChanged }: { callId: string; onC
         {!proposed.length ? <p className="sb-empty">Nothing is waiting. Propose results from the Shortlist stage.</p> : <div className="sb-scroll"><table className="table sb-table"><thead><tr>{can('apply.decide') && <th className="sb-c" />}<th>Application</th><th>Proposed outcome</th><th>Reason</th><th>Proposed by</th><th className="r">Score</th></tr></thead><tbody>
           {proposed.map((r) => <tr key={r.id} className={sel.has(r.id) ? 'on' : ''}>
             {can('apply.decide') && <td className="sb-c"><input type="checkbox" aria-label={`Select ${r.reference}`} checked={sel.has(r.id)} onChange={(e) => setSel((x) => { const n = new Set(x); if (e.target.checked) n.add(r.id); else n.delete(r.id); return n; })} /></td>}
-            <td><Link to={`/studio/apply/applicants/${r.submissionId}`} className="mono sb-ref">{r.reference}</Link><small>{r.applicantName}</small></td>
+            <td>{onOpen ? <button type="button" className="linkish mono sb-ref" onClick={() => onOpen(r.submissionId)}>{r.reference}</button> : <Link to={`/studio/apply/applicants/${r.submissionId}`} className="mono sb-ref">{r.reference}</Link>}<small>{r.applicantName}</small></td>
             <td><b>{OUTCOME[r.outcome]}</b></td><td><small>{r.reason}</small></td><td><small>{r.proposer}</small><small>{fmtDate(r.createdAt)}</small></td><td className="r">{pts(r.scoreBp)}</td></tr>)}</tbody></table></div>}
         <header className="ap-h"><h2>Decided</h2>{can('apply.message') && done.some((r) => r.status === 'approved' && !r.notifiedAt) && <Link className="btn btn-sm" to={`/studio/apply/calls/${call}/emails?tab=send`}>Send results…</Link>}</header>
         {!done.length ? <p className="sb-empty">No decisions yet.</p> : <div className="sb-scroll"><table className="table sb-table"><thead><tr><th>Application</th><th>Outcome</th><th>Result</th><th>By</th><th>Applicant told</th></tr></thead><tbody>
-          {done.map((r) => <tr key={r.id}><td><Link to={`/studio/apply/applicants/${r.submissionId}`} className="mono sb-ref">{r.reference}</Link><small>{r.applicantName}</small></td><td>{OUTCOME[r.outcome]}<small>{r.reason}</small></td>
+          {done.map((r) => <tr key={r.id}><td>{onOpen ? <button type="button" className="linkish mono sb-ref" onClick={() => onOpen(r.submissionId)}>{r.reference}</button> : <Link to={`/studio/apply/applicants/${r.submissionId}`} className="mono sb-ref">{r.reference}</Link>}<small>{r.applicantName}</small></td><td>{OUTCOME[r.outcome]}<small>{r.reason}</small></td>
             <td><span className={`badge ev-d-${r.status}`}>{r.status[0].toUpperCase() + r.status.slice(1)}</span>{r.decisionNote && <small>{r.decisionNote}</small>}</td><td><small>{r.proposer} → {r.decider}</small><small>{r.decidedAt ? fmtDate(r.decidedAt) : ''}</small></td>
             <td><small>{r.notifiedAt ? fmtDate(r.notifiedAt) : 'Not yet'}</small></td></tr>)}</tbody></table></div>}
       </>}

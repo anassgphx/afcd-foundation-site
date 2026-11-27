@@ -83,3 +83,15 @@
 .ac-n { font-variant-numeric: tabular-nums; color: var(--ink-2); }
 .ac-n.zero { color: var(--faint); }
 .ac-n.strong { display: inline-block; min-width: 24px; padding: 1px 8px; border-radius: 999px; background: var(--ink); color: var(--accent-ink); font-weight: 600; font-size: var(--fs-sm); text-align: center; }
+
+/* active pipeline stage in its status colour (inactive stages stay neutral) */
+.pl-stage.on.s-eligibility { background: #1D4ED8; }
+.pl-stage.on.s-review { background: #5B21B6; }
+.pl-stage.on.s-shortlist { background: #92400E; }
+.pl-stage.on.s-decision { background: #166534; }
+.pl-stage.on.s-withdrawn { background: #475569; }
+/* the applicant list: open by name or reference; quick actions at the end */
+.sb-open { display: block; font-weight: 600; text-align: left; color: var(--ink); text-decoration: none; }
+.sb-open:hover { text-decoration: underline; }
+.sb-acts { white-space: nowrap; }
+.sb-acts .btn + .btn { margin-left: 4px; }

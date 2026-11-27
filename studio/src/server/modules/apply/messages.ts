@@ -255,7 +255,7 @@ export async function listMessages(db: DB, q: { call?: string; status?: string; 
   const w = [q.call && uuid.safeParse(q.call).success ? eq(applyMessages.callId, q.call) : undefined, q.status ? eq(applyMessages.status, q.status) : undefined,
     q.submission && uuid.safeParse(q.submission).success ? eq(applyMessages.submissionId, q.submission) : undefined].filter(Boolean);
   return db.select({ id: applyMessages.id, kind: applyMessages.kind, toEmail: applyMessages.toEmail, subject: applyMessages.subject, status: applyMessages.status, attempts: applyMessages.attempts,
-    lastError: applyMessages.lastError, sentAt: applyMessages.sentAt, createdAt: applyMessages.createdAt, nextAttemptAt: applyMessages.nextAttemptAt, reference: applySubmissions.reference, submissionId: applyMessages.submissionId })
+    lastError: applyMessages.lastError, sentAt: applyMessages.sentAt, createdAt: applyMessages.createdAt, nextAttemptAt: applyMessages.nextAttemptAt, reference: applySubmissions.reference, submissionId: applyMessages.submissionId, decisionId: applyMessages.decisionId })
     .from(applyMessages).innerJoin(applySubmissions, eq(applySubmissions.id, applyMessages.submissionId)).where(w.length ? and(...(w as never[])) : undefined).orderBy(desc(applyMessages.createdAt)).limit(500);
 }
 

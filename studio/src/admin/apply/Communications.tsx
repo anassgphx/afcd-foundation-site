@@ -11,7 +11,8 @@ import './evaluation.css';
 const errText = (e: unknown) => (e instanceof ApiError && e.details?.length ? `${e.message} ${e.details.map((d) => d.message).join(' ')}` : (e as Error).message);
 type Msg = { id: string; kind: string; toEmail: string; subject: string; status: string; attempts: number; lastError: string | null; sentAt: string | null; createdAt: string; nextAttemptAt: string; reference: string; submissionId: string };
 const KIND: Record<string, string> = { receipt: 'Receipt', decision: 'Decision', custom: 'Message' };
-const STATUS: Record<string, string> = { queued: 'Waiting', sending: 'Sending', sent: 'Sent', failed: 'Failed', cancelled: 'Cancelled' };
+// "sent" = the email server accepted it (we get no delivery receipts, so nothing claims "delivered")
+const STATUS: Record<string, string> = { queued: 'Queued', sending: 'Sending', sent: 'Accepted by the email server', failed: 'Failed', cancelled: 'Cancelled' };
 
 function NotReady() {
   const [ready, setReady] = useState<boolean | null>(null);

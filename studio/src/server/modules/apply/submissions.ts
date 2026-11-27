@@ -2,11 +2,12 @@
 // application with its answers in the form's order, audited file downloads, status changes (single or bulk, with a
 // reason and a confirmed count) and eligibility corrections that keep the automatic result next to the staff one.
 import { readFileSync, existsSync } from 'node:fs';
+import { alias } from 'drizzle-orm/pg-core';
 import { and, asc, count, desc, eq, ilike, inArray, lt, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
-import { APPLICATION_STATUSES, ELIGIBILITY, applyCalls, applyDrafts, applyFiles, applyFormVersions, applySubmissionEvents, applySubmissions, users } from '../../db/schema.ts';
+import { APPLICATION_STATUSES, ELIGIBILITY, applyCalls, applyDecisions, applyDrafts, applyFiles, applyFormVersions, applySubmissionEvents, applySubmissions, users } from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import { filePath } from './files.ts';
@@ -108,8 +109,15 @@ export async function getSubmission(db: DB, id: string) {
   const events = await db.select({ id: applySubmissionEvents.id, kind: applySubmissionEvents.kind, fromValue: applySubmissionEvents.fromValue, toValue: applySubmissionEvents.toValue, body: applySubmissionEvents.body,
     meta: applySubmissionEvents.meta, createdAt: applySubmissionEvents.createdAt, actorName: users.name }).from(applySubmissionEvents).leftJoin(users, eq(users.id, applySubmissionEvents.actorId))
     .where(eq(applySubmissionEvents.submissionId, s.id)).orderBy(desc(applySubmissionEvents.createdAt), desc(applySubmissionEvents.id)).limit(300);
+  const proposer = alias(users, 'proposer'), decider = alias(users, 'decider');
+  const decisions = await db.select({ id: applyDecisions.id, outcome: applyDecisions.outcome, status: applyDecisions.status, reason: applyDecisions.reason, decisionNote: applyDecisions.decisionNote,
+    createdAt: applyDecisions.createdAt, decidedAt: applyDecisions.decidedAt, notifiedAt: applyDecisions.notifiedAt, proposedBy: applyDecisions.proposedBy, proposer: proposer.name, decider: decider.name })
+    .from(applyDecisions).leftJoin(proposer, eq(proposer.id, applyDecisions.proposedBy)).leftJoin(decider, eq(decider.id, applyDecisions.decidedBy))
+    .where(eq(applyDecisions.submissionId, s.id)).orderBy(desc(applyDecisions.createdAt));
+  const [cx] = await db.select({ eligibility: applyCalls.eligibility, places: applyCalls.places }).from(applyCalls).where(eq(applyCalls.id, s.callId));
+  const [{ n: selected }] = await db.select({ n: count() }).from(applySubmissions).where(and(eq(applySubmissions.callId, s.callId), eq(applySubmissions.status, 'selected')));
   const { ipHash: _ip, idempotencyKey: _k, ...rest } = s;
-  return { ...rest, call: c, version: v, files, events, moves: MOVES[s.status] ?? [] };
+  return { ...rest, call: { ...c, eligibility: cx?.eligibility ?? [], places: cx?.places ?? null, selected }, version: v, files, events, decisions, moves: MOVES[s.status] ?? [] };
 }
 
 /** Downloads one file of an application: signed in, permission checked by the route, recorded, always an attachment. */
@@ -126,8 +134,11 @@ export async function fileForDownload(db: DB, cfg: Config, me: Me, submissionId:
 // ---------------------------------------------------------------- Status
 const statusSchema = z.object({ to: z.enum(APPLICATION_STATUSES), reason: z.string().trim().max(1000).default('') }).strict();
 
+const FORWARD: Status[] = ['under_evaluation', 'shortlisted', 'interview'];
 async function move(tx: DB, me: Me, s: typeof applySubmissions.$inferSelect, to: Status, reason: string) {
   if (!(MOVES[s.status] ?? []).includes(to)) throw new AppError(409, `${s.reference}: cannot move from ${STATUS_LABEL[s.status]} to ${STATUS_LABEL[to]}.`);
+  // an application marked ineligible moves forward only with a recorded reason (an override); it never becomes eligible by moving
+  if (s.eligibility === 'ineligible' && FORWARD.includes(to) && reason.trim().length < 3) throw new AppError(422, `${s.reference} is marked ineligible: give the reason for moving it forward anyway.`);
   await tx.update(applySubmissions).set({ status: to, updatedAt: new Date() }).where(eq(applySubmissions.id, s.id));
   await tx.insert(applySubmissionEvents).values({ submissionId: s.id, actorId: me.id, kind: 'status', fromValue: s.status, toValue: to, body: reason });
 }

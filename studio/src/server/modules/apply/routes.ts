@@ -52,7 +52,9 @@ export function registerApplyRoutes(api: Hono<Env>) {
     const f = await S.fileForDownload(c.var.db, c.var.cfg, actor(c), c.req.param('id'), c.req.param('file'));
     c.header('Content-Type', f.mime); c.header('Cache-Control', 'private, no-store'); c.header('X-Content-Type-Options', 'nosniff');
     c.header('Content-Security-Policy', "default-src 'none'; sandbox");
-    c.header('Content-Disposition', `attachment; filename="${f.name.replace(/[^\w.\- ()]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(f.name)}`);
+    // ?inline=1 shows a PDF or an image in Studio's viewer (still signed in, still recorded); everything else downloads
+    const inline = c.req.query('inline') === '1' && (f.mime === 'application/pdf' || /^image\/(jpeg|png|webp)$/.test(f.mime));
+    c.header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${f.name.replace(/[^\w.\- ()]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(f.name)}`);
     return c.body(f.bytes);
   });
   api.post('/apply/submissions/bulk-status', perm('apply.submission.manage'), async (c) => c.json(await S.bulkStatus(c.var.db, actor(c), await c.req.json().catch(() => ({})))));

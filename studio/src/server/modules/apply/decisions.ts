@@ -2,7 +2,7 @@
 // rejected by someone else (four eyes; a Super Administrator may approve their own). Approval changes the application's
 // status and records who and why. Nothing here sends anything to applicants: notifying them is a separate, authorized
 // communications step (apply_decisions.notified_at stays empty until then).
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
@@ -37,7 +37,7 @@ export async function propose(db: DB, me: Me, raw: unknown) {
 
 /** Approve or reject proposed decisions, all or none; the person who proposed cannot approve (except a Super Administrator). */
 export async function decide(db: DB, me: Me, role: Role, raw: unknown) {
-  const b = z.object({ ids: z.array(z.string().uuid()).min(1).max(500), approve: z.boolean(), note: z.string().trim().max(2000).default(''), confirm: z.number().int() }).strict().safeParse(raw);
+  const b = z.object({ ids: z.array(z.string().uuid()).min(1).max(500), approve: z.boolean(), note: z.string().trim().max(2000).default(''), confirm: z.number().int(), overCapacity: z.boolean().optional() }).strict().safeParse(raw);
   if (!b.success) throw new AppError(422, 'Check the selection.');
   const ids = [...new Set(b.data.ids)];
   if (b.data.confirm !== ids.length) throw new AppError(422, `Confirm the number of decisions (${ids.length}).`);
@@ -47,6 +47,17 @@ export async function decide(db: DB, me: Me, role: Role, raw: unknown) {
     const ds = await t2.select().from(applyDecisions).where(inArray(applyDecisions.id, ids)).for('update');
     if (ds.length !== ids.length || ds.some((d) => d.status !== 'proposed')) throw new AppError(409, 'Some decisions are no longer waiting for approval. Reload.');
     if (role !== 'super_admin' && ds.some((d) => d.proposedBy === me.id)) throw new AppError(409, 'You proposed some of these decisions: someone else must approve or reject them.');
+    // capacity: a call with a number of places cannot get more "Selected" than that, unless the approver overrides it with a note
+    if (b.data.approve) {
+      const sel = ds.filter((d) => d.outcome === 'selected');
+      for (const callId of [...new Set(sel.map((d) => d.callId))]) {
+        const [c] = await t2.select({ places: applyCalls.places }).from(applyCalls).where(eq(applyCalls.id, callId));
+        if (!c?.places) continue;
+        const [{ n }] = await t2.select({ n: count() }).from(applySubmissions).where(and(eq(applySubmissions.callId, callId), eq(applySubmissions.status, 'selected')));
+        const adding = sel.filter((d) => d.callId === callId).length;
+        if (n + adding > c.places && !(b.data.overCapacity && b.data.note.length >= 3)) throw new AppError(409, `This would select ${n + adding} people for ${c.places} place${c.places === 1 ? '' : 's'}. To go over, confirm it and say why.`);
+      }
+    }
     const now = new Date();
     for (const d of ds) {
       await t2.update(applyDecisions).set({ status: b.data.approve ? 'approved' : 'rejected', decidedBy: me.id, decidedAt: now, decisionNote: b.data.note }).where(eq(applyDecisions.id, d.id));

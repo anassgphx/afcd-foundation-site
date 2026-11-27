@@ -94,9 +94,9 @@ function Photo({ c, path, media, pick, label, small }: { c: Ctx; path: (string |
 
 // ---------------------------------------------------------------- section headings (built-in text unless edited)
 const SECTION_FIELDS: [string, string, number, string][] = [
-  ['tab', 'Menu label', 40, 'In the sticky menu under the overview.'], ['label', 'Small label', 60, 'Next to the section number.'],
-  ['title', 'Heading', 120, 'Written in black.'], ['soft', 'Heading, second part', 120, 'Written in grey. Leave empty for none.'],
-  ['meta', 'Note on the right', 60, 'Short note at the end of the label line. Leave empty for none.'], ['desc', 'Description', 400, 'One or two lines beside the heading.'],
+  ['title', 'Title', 120, 'Written in black.'], ['soft', 'Title, second part', 120, 'Written in grey. Leave empty for none.'],
+  ['label', 'Small label', 60, 'Next to the section number.'], ['meta', 'Note on the right', 60, 'Short note at the end of the label line. Leave empty for none.'],
+  ['desc', 'Description', 400, 'One or two lines beside the title.'], ['tab', 'Menu label', 40, 'In the sticky menu under the overview.'],
   ['sub', 'Sub-heading', 60, 'Small heading inside the section.'], ['sub2', 'Second sub-heading', 60, 'Small heading inside the section.'],
 ];
 type Defs = Record<string, Record<string, string | boolean>>;
@@ -110,8 +110,9 @@ function setSec(c: Ctx, defs: Defs, id: string, k: string, v: string | boolean) 
 function SectionTexts({ c, defs, id }: { c: Ctx; defs: Defs; id: string }) {
   const fields = SECTION_FIELDS.filter(([k]) => defs[id] && k in defs[id]);
   if (!fields.length) return null;
-  return <details className="ab-heads" open><summary>Heading and menu</summary>
-    <div className="stack" style={{ gap: 10 }}>{fields.map(([k, lab, max, hint]) => <Field key={k} label={lab} count={[secVal(c, defs, id, k).length, max]} hint={hint}>
+  const head = secVal(c, defs, id, 'title'), soft = secVal(c, defs, id, 'soft');
+  return <details className="ab-heads" open><summary>Section title</summary>
+    <div className="stack" style={{ gap: 10 }}>{(head || soft) && <p className="pl-title-prev" aria-label="Title preview" style={{ margin: 0 }}>{head} <span>{soft}</span></p>}{fields.map(([k, lab, max, hint]) => <Field key={k} label={lab} count={[secVal(c, defs, id, k).length, max]} hint={hint}>
       {k === 'desc' ? <textarea className="textarea" rows={2} maxLength={max} value={secVal(c, defs, id, k)} onChange={(e) => setSec(c, defs, id, k, e.target.value)} aria-label={lab} />
         : <input className="input" maxLength={max} value={secVal(c, defs, id, k)} onChange={(e) => setSec(c, defs, id, k, e.target.value)} aria-label={lab} />}</Field>)}
       {ownCfg(c, id) && Object.keys(ownCfg(c, id)!).some((k) => k !== 'show') && <button type="button" className="btn btn-sm btn-ghost" style={{ justifySelf: 'start' }} onClick={() => c.set(['sections', id], ownCfg(c, id)?.show === false ? { show: false } : undefined)}><Icon n="undo" />Reset to built-in text</button>}
@@ -346,8 +347,8 @@ export function AboutEditor({ refKey }: { refKey: string; onChanged?: () => void
         : <fieldset className="b-scroll b-insp stack" disabled={!editable}>
           <div><small className="muted">{selItem.kind === 'section' ? 'Section' : selItem.kind === 'fixed' ? 'Frame' : 'Page'}</small><h3 style={{ margin: '2px 0 0', fontSize: 16 }}>{selItem.label}</h3></div>
           {selItem.kind === 'section' && <label className="check"><input type="checkbox" checked={shown(selItem.id)} onChange={(e) => setSec(c, defs, selItem.id, 'show', e.target.checked)} /><span>Show on the page</span></label>}
-          {panels[selItem.id]}
           {defs[selItem.id] && <SectionTexts c={c} defs={defs} id={selItem.id} />}
+          {panels[selItem.id]}
         </fieldset>}
       </aside>
     </div>

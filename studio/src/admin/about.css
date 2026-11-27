@@ -34,7 +34,7 @@
 .ab-builder .b-layer-act { display: flex; align-items: center; gap: 0; padding-right: 4px; }
 .ab-layer-act .b-more { min-width: 24px; height: 26px; padding: 0 4px; font-size: 13px; }
 .ab-layer-act .b-more:disabled { opacity: .3; }
-.ab-heads { border-top: 1px solid var(--line); padding-top: 10px; }
+.ab-heads { border-bottom: 1px solid var(--line); padding-bottom: 14px; }
 .ab-heads summary { font-size: 12.5px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
 .b-insp .ab-rows li { grid-template-columns: 30px minmax(0, 1fr) auto; gap: 6px; padding: 8px; }
 .b-insp .pl-step-a { flex-direction: column; }

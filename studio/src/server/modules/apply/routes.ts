@@ -11,6 +11,7 @@ import * as C from './calls.ts';
 import * as F from './forms.ts';
 import { pageStatus } from './publish.ts';
 import * as S from './submissions.ts';
+import * as EX from './export.ts';
 import * as E from './evaluation.ts';
 import * as D from './decisions.ts';
 import * as MSG from './messages.ts';
@@ -56,6 +57,13 @@ export function registerApplyRoutes(api: Hono<Env>) {
     const inline = c.req.query('inline') === '1' && (f.mime === 'application/pdf' || /^image\/(jpeg|png|webp)$/.test(f.mime));
     c.header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${f.name.replace(/[^\w.\- ()]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(f.name)}`);
     return c.body(f.bytes);
+  });
+  // Excel export of chosen applications: needs both reading applications and exporting; recorded in the audit log
+  api.post('/apply/submissions/export.xlsx', perm('apply.submission.read'), perm('apply.export'), async (c) => {
+    const x = await EX.exportApplicants(c.var.db, actor(c), await c.req.json().catch(() => ({})));
+    c.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); c.header('Cache-Control', 'private, no-store'); c.header('X-Content-Type-Options', 'nosniff');
+    c.header('Content-Disposition', `attachment; filename="${x.filename}"`);
+    return c.body(new Uint8Array(x.bytes));
   });
   api.post('/apply/submissions/bulk-eligibility', perm('apply.submission.manage'), async (c) => c.json(await S.bulkEligibility(c.var.db, actor(c), await c.req.json().catch(() => ({})))));
   api.post('/apply/submissions/bulk-status', perm('apply.submission.manage'), async (c) => c.json(await S.bulkStatus(c.var.db, actor(c), await c.req.json().catch(() => ({})))));

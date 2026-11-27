@@ -3,6 +3,7 @@
 // forward only with a reason, and one approval email per decision. No real email is sent.
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { eq } from 'drizzle-orm';
+import { inflateRawSync } from 'node:zlib';
 import { makeApp, addUser, client } from './helpers.ts';
 import { applyMessages, applySubmissionEvents, applySubmissions, auditLog, users } from '../src/server/db/schema.ts';
 import { setSender, type SendInput } from '../src/server/modules/inbox/mail.ts';
@@ -108,6 +109,37 @@ describe('decision center', () => {
     expect((await admin.post('/apply/submissions/bulk-status', { ids: [a.id, b.id], to: 'under_evaluation', reason: 'Eligible, to review', confirm: 2 })).body).toEqual({ moved: 2 });
     const rv = await client(h!.app, 'rev@afcd.test');
     expect((await rv.post('/apply/submissions/bulk-eligibility', { ids: [a.id], result: 'ineligible', reason: 'Not allowed', confirm: 1 })).status).toBe(403);
+  });
+
+  it('exports chosen applications to a styled Excel workbook, for staff allowed to export, recorded', async () => {
+    const a = await apply(9, { full_name: '=HYPERLINK("http://x")' }), b = await apply(10);
+    await admin.post(`/apply/submissions/${b.id}/status`, { to: 'under_evaluation', reason: '' });
+    const res = await h!.app.request('/studio/api/apply/submissions/export.xlsx', { method: 'POST', headers: { Cookie: admin.cookie, Origin: 'http://localhost:4400', 'X-CSRF-Token': admin.csrf, 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [a.id, b.id] }) });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('spreadsheetml.sheet');
+    expect(res.headers.get('content-disposition')).toMatch(/attachment; filename="AFCD-\d{4}-\d{3}-applicants-\d{4}-\d{2}-\d{2}\.xlsx"/);
+    const zip = Buffer.from(await res.arrayBuffer());
+    expect(zip.subarray(0, 2).toString()).toBe('PK');
+    // read the zip's entries (local headers + deflate)
+    const files: Record<string, string> = {}; let o = 0;
+    while (zip.readUInt32LE(o) === 0x04034b50) {
+      const comp = zip.readUInt32LE(o + 18), n = zip.readUInt16LE(o + 26), ex = zip.readUInt16LE(o + 28);
+      const name = zip.subarray(o + 30, o + 30 + n).toString(); const data = zip.subarray(o + 30 + n + ex, o + 30 + n + ex + comp);
+      files[name] = inflateRawSync(data).toString('utf8'); o += 30 + n + ex + comp;
+    }
+    expect(Object.keys(files)).toEqual(expect.arrayContaining(['[Content_Types].xml', 'xl/workbook.xml', 'xl/styles.xml', 'xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml']));
+    expect(files['xl/workbook.xml']).toContain('name="Applicants"');
+    expect(files['xl/workbook.xml']).toMatch(/name="Answers AFCD-\d{4}-\d{3}"/);
+    const s1 = files['xl/worksheets/sheet1.xml'];
+    expect(s1).toContain('state="frozen"'); expect(s1).toContain('<autoFilter ref="A4:');
+    expect(s1).toContain('In review'); expect(s1).toContain('New'); expect(s1).toContain(a.reference);
+    expect(s1).not.toContain('<f>');                                                    // never a formula
+    expect(s1).toContain('=HYPERLINK(&quot;http://x&quot;)');                           // the text stays text
+    expect(files['xl/worksheets/sheet2.xml']).toContain('Why do you want to join this programme?');
+    expect((await h!.db.select().from(auditLog)).some((x) => x.action === 'apply.submission.export')).toBe(true);
+    const rv = await client(h!.app, 'rev@afcd.test');   // content reviewer: may not read applications
+    expect((await rv.raw('POST', '/apply/submissions/export.xlsx', { ids: [a.id] })).status).toBe(403);
+    expect((await mgr.raw('POST', '/apply/submissions/export.xlsx', { ids: [] })).status).toBe(422);
   });
 
   it('keeps applications from people who may not read them', async () => {

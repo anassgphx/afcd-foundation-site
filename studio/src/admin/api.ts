@@ -27,6 +27,17 @@ export async function api<T = any>(path: string, init: RequestInit & { json?: un
   return data as T;
 }
 
+/** POST that answers with a file (an export): saves it in the browser under the name the server gives. */
+export async function postDownload(path: string, json: unknown) {
+  const res = await fetch(`/studio/api${path}`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(json) });
+  if (!res.ok) { const d = await res.json().catch(() => ({})); throw new ApiError(res.status, d.error || `Request failed (${res.status})`, d.details ?? null); }
+  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? 'export.xlsx';
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return name;
+}
+
 export const post = <T = any>(path: string, json?: unknown) => api<T>(path, { method: 'POST', json: json ?? {} });
 export const put = <T = any>(path: string, json: unknown) => api<T>(path, { method: 'PUT', json });
 export const patch = <T = any>(path: string, json: unknown) => api<T>(path, { method: 'PATCH', json });

@@ -2,7 +2,7 @@
 // the action applies to and which ones are skipped, and why; the count must be typed to confirm. Every action goes
 // through the existing, permission-checked API (all or none per call), and each application records the change.
 import { useEffect, useState } from 'react';
-import { api, post, ApiError } from '../api.ts';
+import { api, post, postDownload, ApiError } from '../api.ts';
 import { Icon, Modal, useCan, useToast } from '../ui.tsx';
 import { StatusBadge, stageLabel } from './badges.tsx';
 
@@ -30,6 +30,12 @@ const byCall = (rows: BulkRow[]) => { const m = new Map<string, BulkRow[]>(); fo
 export function BulkBar({ rows, onClear, onDone }: { rows: BulkRow[]; onClear: () => void; onDone: () => void }) {
   const can = useCan();
   const [kind, setKind] = useState<Kind | null>(null);
+  const toast = useToast(); const [exporting, setExporting] = useState(false);
+  async function exportXlsx() {
+    setExporting(true);
+    try { const name = await postDownload('/apply/submissions/export.xlsx', { ids: rows.map((r) => r.id) }); toast(`${name} downloaded: ${rows.length} application${rows.length === 1 ? '' : 's'}. It holds personal data: keep it private.`); }
+    catch (e) { toast(errText(e), true); } finally { setExporting(false); }
+  }
   const n = (k: Kind) => split(k, rows).ok.length;
   const btn = (k: Kind, icon?: string) => <button type="button" className="btn btn-sm" onClick={() => setKind(k)} disabled={!n(k)} title={n(k) ? `${n(k)} of ${rows.length} can be changed` : 'None of the selected applications can'}>{icon && <Icon n={icon} />}{TITLE[k]}{n(k) !== rows.length && n(k) > 0 ? ` (${n(k)})` : ''}</button>;
   return <div className="sb-bulk bk-bar" role="toolbar" aria-label="Actions on the selected applications">
@@ -39,6 +45,7 @@ export function BulkBar({ rows, onClear, onDone }: { rows: BulkRow[]; onClear: (
     {can('apply.message') && btn('email', 'mail')}
     {btn('withdraw')}
     <span style={{ flex: 1 }} />
+    {can('apply.export') && <button type="button" className="btn btn-sm" disabled={exporting} onClick={exportXlsx} title="Download the selected applications as an Excel workbook"><Icon n="upload" style={{ transform: 'rotate(180deg)' }} />{exporting ? 'Preparing…' : 'Export to Excel'}</button>}
     <button type="button" className="btn btn-sm btn-ghost" onClick={onClear}>Clear</button>
     {kind && <BulkDialog kind={kind} rows={rows} onClose={() => setKind(null)} onDone={() => { setKind(null); onDone(); }} />}
   </div>;

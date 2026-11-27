@@ -19,6 +19,7 @@ export const applyFile = (slug: string) => `apply-${slug}.html`;
 export const APPLY_STATUSES = ['open', 'paused', 'closed', 'under_evaluation', 'completed'] as const;
 const STATE_LABEL = { upcoming: 'Opening soon', open: 'Open', paused: 'Paused', closed: 'Closed' } as const;
 const ARR = '<span class="arr" aria-hidden="true">↗</span>';
+const ARR_BACK = '<span aria-hidden="true">←</span>';
 const HOME_ICO = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.2 8 2.8l5.5 4.4V13a.8.8 0 0 1-.8.8H9.6V10H6.4v3.8H3.3a.8.8 0 0 1-.8-.8V7.2Z"/></svg>';
 const CHECK = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10.5 3.2 3L15 6.5"/></svg>';
 const line = (v: string) => v.replace(/[\r\n<>]+/g, ' ').trim();
@@ -32,7 +33,9 @@ const LANGUAGE = { en: 'English', fr: 'French', ar: 'Arabic', multi: 'Several la
 export type ApplyPage = { call: typeof applyCalls.$inferSelect; version: typeof applyFormVersions.$inferSelect | null };
 
 /** What the page must show; any change makes Studio rebuild it (the marker is compared with the file on disk). */
-export const pageMarker = (p: ApplyPage, now = new Date()) => `${p.call.id}:${p.call.rev}:${p.version?.number ?? 0}:${publicState(p.call, now) ?? 'none'}`;
+// TEMPLATE goes up when this page's markup changes, so every live application page is rebuilt once after a deploy
+const TEMPLATE = 2;
+export const pageMarker = (p: ApplyPage, now = new Date()) => `${p.call.id}:${p.call.rev}:${p.version?.number ?? 0}:${publicState(p.call, now) ?? 'none'}:t${TEMPLATE}`;
 
 export async function livePages(db: DB): Promise<ApplyPage[]> {
   const calls = await db.select().from(applyCalls).where(inArray(applyCalls.status, [...APPLY_STATUSES]));
@@ -66,10 +69,21 @@ export async function pageSource(db: DB, cfg: Config, p: ApplyPage, now = new Da
   const list = (items: string[]) => `<ul class="mt-4 grid gap-2.5">${items.map((x) => `<li class="gi-check">${CHECK}<span>${esc(x)}</span></li>`).join('')}</ul>`;
   const para = (t: string) => t.split(/\n{2,}/).map((x) => x.trim()).filter(Boolean).map((x) => `<p>${esc(x).replace(/\n/g, '<br>')}</p>`).join('');
   const notice = st === 'open' ? '' : `<p class="ap-state ap-state-${st}" role="status">${st === 'paused' ? 'Applications are paused for a moment. Drafts are kept; please come back later.' : st === 'upcoming' ? 'Applications are not open yet.' : 'Applications for this call are closed. Thank you to everyone who applied.'}</p>`;
+  const title = esc(c.title);
   const form = p.version && (st === 'open' || st === 'paused')
-    ? `<section id="apply" class="border-t border-ink-light py-12 lg:py-16" aria-labelledby="apply-h">
+    ? `<section id="apply" class="ap-sec border-t border-ink-light py-12 lg:py-16" aria-labelledby="apply-h">
   <div class="wrap"><div class="ap-wrap">
-    <h2 id="apply-h" class="sh-title text-[30px] font-semibold tracking-[-0.04em] md:text-[40px]">Apply</h2>
+    <!-- application mode (Apply now): the page shows only this banner and the form; assets/apply.js switches it on -->
+    <header class="ap-banner${hero ? ' has-img' : ''}">
+      ${hero ? `<img class="ap-banner-img" src="${esc(hero.src)}" srcset="${esc(hero.srcset)}" sizes="(min-width:1024px) 800px, 100vw" width="${hero.w}" height="${hero.h}" alt="" decoding="async">` : ''}
+      <div class="ap-banner-in">
+        <a class="ap-exit" href="#top" data-ap-exit>${ARR_BACK} Call details</a>
+        <p class="ap-banner-kicker">Application form · <span>${esc(c.reference)}</span></p>
+        <p class="ap-banner-title">${title}</p>
+        ${c.closesAt ? `<p class="ap-banner-meta"><span class="ap-banner-dot" aria-hidden="true"></span>Deadline ${when(c.closesAt, c.timeZone)} (${esc(zoneName(c.timeZone))})</p>` : ''}
+      </div>
+    </header>
+    <h2 id="apply-h" class="ap-h2 sh-title text-[30px] font-semibold tracking-[-0.04em] md:text-[40px]">Apply</h2>
     ${notice}
     <div id="apply-app" class="ap-app" data-slug="${esc(c.slug)}" data-version="${p.version.number}">
       <noscript><p class="ap-state">The application form needs JavaScript. You can also write to <a href="mailto:${esc(c.contactEmail)}">${esc(c.contactEmail)}</a>.</p></noscript>
@@ -83,7 +97,6 @@ export async function pageSource(db: DB, cfg: Config, p: ApplyPage, now = new Da
 <script src="assets/apply.js?v=${assetVersion(cfg.siteRoot, 'apply.js')}" defer></script>`
     : `<section id="apply" class="border-t border-ink-light py-12"><div class="wrap">${notice || '<p class="ap-state">The application form is not available.</p>'}</div></section>
 <link rel="stylesheet" href="assets/apply.css?v=${assetVersion(cfg.siteRoot, 'apply.css')}">`;
-  const title = esc(c.title);
   const body = `<section class="page-head phd">
   <div class="phd-glow" aria-hidden="true"></div>
   <div class="wrap relative pb-7 pt-4 lg:pb-9 lg:pt-5">

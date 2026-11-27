@@ -32,6 +32,13 @@ const UI: Record<string, Record<Lng, string>> = {
   paused: { en: 'Applications are paused for a moment. Your answers are kept; please come back later.', fr: 'Les candidatures sont suspendues un moment. Vos réponses sont conservées.', ar: 'تم إيقاف الترشح مؤقتًا. إجاباتك محفوظة؛ يرجى العودة لاحقًا.' },
   done: { en: 'Application received', fr: 'Candidature reçue', ar: 'تم استلام الطلب' }, ref: { en: 'Your reference', fr: 'Votre référence', ar: 'رقمك المرجعي' },
   deadline: { en: 'Deadline: {d}', fr: 'Date limite : {d}', ar: 'آخر أجل: {d}' },
+  thanks: { en: 'Thank you. We have your application.', fr: 'Merci. Nous avons bien reçu votre candidature.', ar: 'شكرًا. لقد استلمنا طلبك.' },
+  keepRef: { en: 'Keep this reference: it identifies your application if you contact us.', fr: 'Gardez cette référence : elle identifie votre candidature si vous nous écrivez.', ar: 'احتفظ بهذا الرقم المرجعي: يعرّف طلبك إذا تواصلت معنا.' },
+  copy: { en: 'Copy', fr: 'Copier', ar: 'نسخ' }, copied: { en: 'Copied', fr: 'Copié', ar: 'تم النسخ' },
+  next2: { en: 'What happens next', fr: 'La suite', ar: 'ماذا بعد' },
+  questions: { en: 'Questions? Write to {e}.', fr: 'Des questions ? Écrivez à {e}.', ar: 'أسئلة؟ اكتب إلى {e}.' },
+  backCall: { en: 'Back to the call', fr: 'Retour à l’appel', ar: 'العودة إلى الدعوة' }, more: { en: 'Other opportunities', fr: 'Autres opportunités', ar: 'فرص أخرى' },
+  reviewStep: { en: 'Review', fr: 'Vérification', ar: 'المراجعة' },
 };
 
 function boot() {
@@ -59,6 +66,16 @@ function boot() {
   let errors: Record<string, Lang> = {};
   let saveTimer = 0, saving: Promise<void> | null = null, dirty = false, frozen = false;
   const started = Date.now();
+
+  // Application mode: "Apply now" turns the call page into just the banner and the form (#apply in the address);
+  // "Call details" or the browser's Back button returns to the full page. Without JavaScript the page is unchanged.
+  const html = document.documentElement;
+  const focusOn = () => { html.classList.add('ap-focus'); window.scrollTo({ top: 0 }); };
+  const focusOff = () => { html.classList.remove('ap-focus'); };
+  document.querySelectorAll<HTMLAnchorElement>('a[href="#apply"]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); if (location.hash !== '#apply') history.pushState(null, '', '#apply'); focusOn(); }));
+  document.querySelector('[data-ap-exit]')?.addEventListener('click', (e) => { e.preventDefault(); if (location.hash.startsWith('#apply')) history.back(); else focusOff(); setTimeout(() => window.scrollTo({ top: 0 }), 0); });
+  window.addEventListener('popstate', () => { if (location.hash.startsWith('#apply') || location.hash.startsWith('#resume=')) focusOn(); else focusOff(); });
+  if (location.hash.startsWith('#apply') || location.hash.startsWith('#resume=')) focusOn();
 
   // ---------------------------------------------------------------- DOM helpers (text only)
   function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string | boolean | number | undefined | null | EventListener> = {}, ...kids: (Node | string | null | undefined | false)[]) {
@@ -162,6 +179,7 @@ function boot() {
     const langs = def.settings.languages.length > 1 ? h('div', { className: 'ap-langs', role: 'group', 'aria-label': 'Language' }, ...def.settings.languages.map((l) => h('button', { type: 'button', className: `ap-lang${l === lang ? ' on' : ''}`, 'aria-pressed': l === lang ? 'true' : 'false', lang: l, onclick: () => { lang = l; scheduleSave(); render(); } }, l === 'en' ? 'English' : l === 'fr' ? 'Français' : 'العربية'))) : null;
     const bar = h('div', { className: 'ap-progress', role: 'progressbar', 'aria-valuemin': 1, 'aria-valuemax': total, 'aria-valuenow': idx + 1, 'aria-label': u('step', { n: idx + 1, m: total }) }, h('span', { style: `width:${Math.round(((idx + 1) / total) * 100)}%` }));
     const heading = h('h3', { className: 'ap-page-title', tabindex: '-1' }, t(p.title, lang));
+    const steps = stepList(ev.path, idx);
     const summary = h('div', { className: 'ap-summary' });
     const msgs = h('div', { className: 'ap-msgs' });
     const fields = h('div', { className: 'ap-fields' });
@@ -196,10 +214,18 @@ function boot() {
       if (!n && !def.settings.reviewStep) return void submit();
       scheduleSave(); render(); focusTitle();
     }
-    put(h('div', { className: 'ap-pagehead' }, h('div', { className: 'ap-head' }, h('p', { className: 'ap-step' }, u('step', { n: idx + 1, m: total })), langs), bar, heading,
+    put(h('div', { className: 'ap-pagehead' }, h('div', { className: 'ap-head' }, h('p', { className: 'ap-step' }, u('step', { n: idx + 1, m: total })), langs), bar, steps, heading,
       p.description ? h('p', { className: 'ap-page-desc' }, t(p.description, lang)) : null), summary, msgs, fields,
       h('div', { className: 'ap-nav' }, back, h('span', { className: 'ap-sp' }), status, next), resumeBox());
     refresh();
+  }
+  /** The wizard's steps by name: done ones ticked, the current one highlighted; the review step last when the form has one. */
+  function stepList(path: string[], at: number) {
+    const names = path.map((pid) => t(def.pages.find((x) => x.id === pid)?.title, lang));
+    if (def.settings.reviewStep) names.push(u('reviewStep'));
+    if (names.length < 2) return null;
+    return h('ol', { className: 'ap-steps' }, ...names.map((n, i) => h('li', { className: i < at ? 'done' : i === at ? 'on' : '', 'aria-current': i === at ? 'step' : undefined },
+      h('span', { className: 'ap-steps-n', 'aria-hidden': 'true' }, i < at ? '✓' : String(i + 1)), h('span', { className: 'ap-steps-t' }, n || `${i + 1}`))));
   }
   const focusTitle = () => { (root.querySelector('.ap-page-title') as HTMLElement | null)?.focus(); root.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
 
@@ -300,7 +326,10 @@ function boot() {
     };
     const msg = h('div');
     const submitBtn = h('button', { type: 'button', className: 'ap-btn ap-primary', disabled: !all.ok || frozen, onclick: () => void submit(msg, submitBtn as HTMLButtonElement) }, t(def.settings.submitLabel, lang) || u('submit'));
-    put(h('div', { className: 'ap-pagehead' }, h('h3', { className: 'ap-page-title', tabindex: '-1' }, u('reviewTitle'))),
+    const rTotal = ev.path.length + 1;
+    put(h('div', { className: 'ap-pagehead' }, h('div', { className: 'ap-head' }, h('p', { className: 'ap-step' }, u('step', { n: rTotal, m: rTotal }))),
+      h('div', { className: 'ap-progress', role: 'progressbar', 'aria-valuemin': 1, 'aria-valuemax': rTotal, 'aria-valuenow': rTotal, 'aria-label': u('step', { n: rTotal, m: rTotal }) }, h('span', { style: 'width:100%' })),
+      stepList(ev.path, ev.path.length), h('h3', { className: 'ap-page-title', tabindex: '-1' }, u('reviewTitle'))),
       ...ev.path.map((pid) => { const p = def.pages.find((x) => x.id === pid)!; return h('section', { className: 'ap-review' }, h('div', { className: 'ap-review-h' }, h('h4', {}, t(p.title, lang)), h('button', { type: 'button', className: 'ap-link', onclick: () => { page = pid; render(); focusTitle(); } }, u('edit'))),
         h('dl', {}, ...p.fields.filter((f) => ev.visibleFields.has(f.id) && (FIELD_TYPES[f.type].input || f.type === 'calculated')).map((f) => h('div', {}, h('dt', {}, t(f.label, lang)), h('dd', {}, show(f, ev.values[f.id])))))); }),
       !all.ok ? banner(`${u('fix')} ${all.errors.map((e) => t(def.pages.flatMap((x) => x.fields).find((x) => x.id === e.field)?.label, lang)).join(', ')}`, 'warn') : null,
@@ -331,7 +360,20 @@ function boot() {
       }
       if (!r.reference) throw new Error(u('error'));
       store.set(null); dirty = false; frozen = true; clear();
-      put(h('div', { className: 'ap-done', role: 'status' }, h('h3', { tabindex: '-1' }, u('done')), h('p', {}, t(def.settings.confirmation, lang)), h('p', {}, `${u('ref')}: `, h('strong', {}, r.reference))));
+      const ref = r.reference;
+      const copyBtn = h('button', { type: 'button', className: 'ap-copy' }, u('copy'));
+      copyBtn.addEventListener('click', async () => { try { await navigator.clipboard.writeText(ref); copyBtn.textContent = u('copied'); setTimeout(() => { copyBtn.textContent = u('copy'); }, 2000); } catch { /* clipboard blocked: the reference stays selectable */ } });
+      const confirmation = t(def.settings.confirmation, lang);
+      put(h('div', { className: 'ap-done', role: 'status' },
+        h('span', { className: 'ap-done-ico', 'aria-hidden': 'true' }, '✓'),
+        h('h3', { tabindex: '-1' }, u('done')), h('p', { className: 'ap-done-lead' }, u('thanks')),
+        h('div', { className: 'ap-ref' }, h('span', { className: 'ap-ref-l' }, u('ref')), h('strong', { className: 'ap-ref-v' }, ref), copyBtn),
+        h('p', { className: 'ap-help' }, u('keepRef')),
+        confirmation ? h('div', { className: 'ap-next-box' }, h('h4', {}, u('next2')), h('p', {}, confirmation)) : null,
+        embedded.contactEmail ? h('p', { className: 'ap-help' }, u('questions', { e: embedded.contactEmail })) : null,
+        h('div', { className: 'ap-done-actions' }, h('a', { className: 'ap-btn', href: '#top', 'data-ap-done-exit': '' }, u('backCall')), h('a', { className: 'ap-btn ap-primary', href: 'get-involved.html' }, u('more')))));
+      root.querySelector('[data-ap-done-exit]')?.addEventListener('click', (e) => { e.preventDefault(); history.replaceState(null, '', location.pathname + location.search); focusOff(); window.scrollTo({ top: 0 }); });
+      window.scrollTo({ top: 0 });
       (root.querySelector('.ap-done h3') as HTMLElement | null)?.focus();
     } catch (e) {
       (msg ?? root).prepend(banner((e as Error).message || u('error'), 'bad'));

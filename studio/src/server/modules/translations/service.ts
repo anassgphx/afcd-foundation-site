@@ -36,16 +36,54 @@ type Published = LangData & { _revision?: string };
 /** Emails, language and objective codes, initials and file names: the same in every language. */
 export const CODE = /^(?:\S+@\S+\.\S+|[A-Z]{1,4}|[A-Z]{1,4}-?\d+|[A-Z0-9]*\d[A-Z0-9]*|[\w.-]+\.(?:org|com|ma|html))$/;
 export const PLACEHOLDER = /lorem|ipsum|consectetur|adipiscing|\bdolor\b|\bamet\b|vestibulum|aenean|curabitur|etiam|cras mattis|nulla vitae|sed posuere|\but enim\b|minim veniam|nostrud|eiusmod|tempor|integer posuere|\bsample (?:text|event)\b/i;
-const tagsOf = (s: string) => (s.match(/<[^>]+>/g) ?? []).slice().sort().join('\n');
 const MAX = 4000;
+const VOID = new Set(['br', 'wbr', 'img', 'hr']);
+/** A tag the translator may type without its attributes: <span>, </span>, < span >. In a right-to-left box a closing
+ *  tag is drawn as "<span/>", so a translator copying what they see types that: it is read as </span> (never for <br/>). */
+const BARE = /^<\s*(\/)?\s*([a-zA-Z][a-zA-Z0-9]*)\s*(\/)?\s*>$/;
+const tagSlot = (t: string) => {
+  const b = t.match(BARE);
+  if (b) { const name = b[2].toLowerCase(); return { slot: `${!VOID.has(name) && (b[1] || b[3]) ? '/' : ''}${name}`, bare: true }; }
+  const m = t.match(/^<\s*(\/)?\s*([a-zA-Z][a-zA-Z0-9]*)/);
+  return { slot: m ? `${m[1] ? '/' : ''}${m[2].toLowerCase()}` : t, bare: false };
+};
+const showSlot = (s: string) => `<${s}>`;
+
+/** The translation's tags, each replaced by the English tag it stands for. Translators see tags as <span> and </span>
+ *  (Studio hides the attributes), so a bare tag takes the attributes of the matching English tag, in order. A tag typed
+ *  with attributes must be exactly one of the English tags: a translation can never add a link or change where it goes. */
+function restoreTags(key: string, v: string): { value: string } | { error: string } {
+  const keyTags = key.match(/<[^>]+>/g) ?? [];
+  const want = new Map<string, string[]>();
+  for (const t of keyTags) { const s = tagSlot(t).slot; want.set(s, [...(want.get(s) ?? []), t]); }
+  const parts = v.split(/(<[^>]+>)/);
+  const bare: number[] = []; const extra: string[] = [];
+  for (let i = 1; i < parts.length; i += 2) {
+    const { slot, bare: isBare } = tagSlot(parts[i]);
+    const free = want.get(slot) ?? [];
+    const exact = free.indexOf(parts[i]);
+    if (exact >= 0) { free.splice(exact, 1); continue; }
+    if (isBare && want.has(slot)) { bare.push(i); continue; }
+    extra.push(isBare || !want.has(slot) ? showSlot(slot) : parts[i]);
+  }
+  // bare tags take the English tags of their kind not already typed in full, in the order they appear
+  for (const i of bare) { const free = want.get(tagSlot(parts[i]).slot)!; if (free.length) parts[i] = free.shift()!; else extra.push(showSlot(tagSlot(parts[i]).slot)); }
+  const missing = [...want.entries()].flatMap(([s, l]) => l.map(() => showSlot(s)));
+  if (!missing.length && !extra.length) return { value: parts.join('') };
+  if (!keyTags.length) return { error: 'Remove the HTML tags: this text has none in English.' };
+  const say = (l: string[]) => [...new Set(l)].map((t) => { const n = l.filter((x) => x === t).length; return n > 1 ? `${t} ×${n}` : t; }).join(', ');
+  return { error: `Keep the same HTML tags as the English text (links, bold text and icons), in any order.${missing.length ? ` Missing: ${say(missing)}.` : ''}${extra.length ? ` Not in the English: ${say(extra)}.` : ''}` };
+}
 
 /** Makes a translation safe to drop into both HTML text and attribute values, keeping the English segment's tags. */
 export function cleanValue(key: string, raw: string): { value?: string; error?: string } {
-  const v = raw.replace(/\r\n?/g, '\n').replace(/\s*\n\s*/g, ' ').trim();
+  let v = raw.replace(/\r\n?/g, '\n').replace(/\s*\n\s*/g, ' ').trim();
   if (!v) return { value: '' };
   if (v.length > MAX) return { error: `Too long (max ${MAX} characters).` };
-  // Tags are part of the page design (links, emphasis, icons). The translation must keep exactly the same ones.
-  if (tagsOf(v) !== tagsOf(key)) return { error: tagsOf(key) ? 'Keep the same HTML tags as the English text (links, bold text and icons), in any order.' : 'Remove the HTML tags: this text has none in English.' };
+  // Tags are part of the page design (links, emphasis, icons). The translation must keep the same ones.
+  const tags = restoreTags(key, v);
+  if ('error' in tags) return { error: tags.error };
+  v = tags.value;
   if (/<script|\son\w+\s*=|javascript:/i.test(v)) return { error: 'Scripts and event handlers are not allowed.' };
   // Escape what sits between tags: bare &, quotes (the same text may go into an attribute) and stray < >.
   const value = v.split(/(<[^>]+>)/).map((part, i) => (i % 2 ? part : part

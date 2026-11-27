@@ -134,7 +134,7 @@ export function TranslationsPage() {
                 <span className="tr-meta">
                   {i.files.slice(0, 3).map((x) => <button key={x} type="button" className="tr-page" onClick={() => setFile(x)} title={`Show only ${pageName(x)}`}>{pageName(x)}</button>)}
                   {i.files.length > 3 && <span className="muted">+{i.files.length - 3} more</span>}
-                  {i.tags > 0 && <span className="tr-hint" title="Links, bold text and icons are part of the design; the translation must contain the same tags.">Keep {i.tags} tag{i.tags === 1 ? '' : 's'}</span>}
+                  {i.tags > 0 && <span className="tr-hint" title="Links, bold text and icons are part of the design. Type the same tags as shown, e.g. <span> and </span>: Studio keeps their links and styling.">Keep {i.tags} tag{i.tags === 1 ? '' : 's'}</span>}
                 </span>
               </div>
               <div className="tr-dst">

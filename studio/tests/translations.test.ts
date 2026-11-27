@@ -34,6 +34,29 @@ describe('translation values', () => {
     expect(cleanValue('<a href="x">Go</a>', '<a href="x" onclick="alert(1)">Aller</a>').error).toBeTruthy();
     expect(cleanValue('Hello', '  \n ').value).toBe('');
   });
+  // Before: Studio shows tags as <span> … </span> (attributes hidden), so a translator typing what they saw was refused
+  // ("5 translations need attention. Nothing was saved.") because the English tag is <span class="hx-soft">.
+  it('accepts tags typed as Studio shows them and restores the English attributes', () => {
+    const HEAD = 'When Women Rise, <span class="hx-soft">Communities Thrive.</span>';
+    expect(cleanValue(HEAD, 'عندما تنهض المرأة، <span>تزدهر المجتمعات.</span>').value).toBe('عندما تنهض المرأة، <span class="hx-soft">تزدهر المجتمعات.</span>');
+    // a right-to-left box draws </span> as <span/>: copying that is read as the closing tag
+    expect(cleanValue(HEAD, 'عندما تنهض المرأة، <span>تزدهر المجتمعات. <span/>').value).toBe('عندما تنهض المرأة، <span class="hx-soft">تزدهر المجتمعات. </span>');
+    expect(cleanValue(HEAD, 'Quand <span class="hx-soft">les femmes</span> s’élèvent').value).toBe('Quand <span class="hx-soft">les femmes</span> s’élèvent');
+    // several tags of one kind are filled in order; full copies are kept where they are
+    const TWO = '<a href="a.html">A</a> and <a href="b.html">B</a>';
+    expect(cleanValue(TWO, '<a>A</a> et <a>B</a>').value).toBe('<a href="a.html">A</a> et <a href="b.html">B</a>');
+    expect(cleanValue(TWO, '<a>B</a> puis <a href="a.html">A</a>').value).toBe('<a href="b.html">B</a> puis <a href="a.html">A</a>');
+    expect(cleanValue('Line one<br>two', 'Ligne un<br/>deux').value).toBe('Ligne un<br>deux');
+  });
+  it('still refuses tags that change the page, and says which tags are wrong', () => {
+    const HEAD = 'When Women Rise, <span class="hx-soft">Communities Thrive.</span>';
+    expect(cleanValue(HEAD, 'تزدهر <span>المجتمعات').error).toBe('Keep the same HTML tags as the English text (links, bold text and icons), in any order. Missing: </span>.');
+    expect(cleanValue(HEAD, '<b>تزدهر</b> المجتمعات').error).toMatch(/Missing: <span>, <\/span>\. Not in the English: <b>, <\/b>\.$/);
+    // a tag typed with attributes must be the English one: no new link targets, classes or handlers
+    expect(cleanValue(LINK, 'Lisez <a href="https://evil.example">notre histoire</a>.').error).toMatch(/Not in the English: <a href="https:\/\/evil.example">/);
+    expect(cleanValue(HEAD, 'تزدهر <span class="x">المجتمعات</span>').error).toMatch(/same HTML tags/);
+    expect(cleanValue(HEAD, '<span>a</span> <span>b</span>').error).toMatch(/Not in the English: <span>, <\/span>\.$/);
+  });
   it('writes the file the website build reads, in the same shape as the hand-made one', () => {
     expect(JSON.parse(fileContent('ar', { strings: { Hello: 'مرحبا' }, live: false }))).toEqual({ status: 'draft', language: 'Arabic', note: expect.any(String), strings: { Hello: 'مرحبا' } });
     expect(JSON.parse(fileContent('fr', { strings: {}, live: true }, 'rev-1'))).toMatchObject({ status: 'approved', revision: 'rev-1' });

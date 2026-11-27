@@ -55,10 +55,13 @@ export const pillarSchema = z.object({
   extraActivities: z.array(need(160, 'Remove empty activities.')).max(6).default([]),
   extraGroups: z.array(need(100, 'Remove empty participant groups.')).max(6).default([]),
   // the edited lists for How we work; once saved they replace the picks and extras above (empty = those are used)
-  workItems: z.array(z.object({ icon: z.number().int().min(0).max(30), text: need(160, 'Remove empty cards.') }).strict()).max(10, 'Up to 10 cards.').default([]),
+  workItems: z.array(z.object({ icon: z.number().int().min(0).max(99), text: need(160, 'Remove empty cards.') }).strict()).max(10, 'Up to 10 cards.').default([]),
   // Who we work with: each group's name and an optional short description (older drafts saved names only)
   audience: z.array(z.preprocess((v) => (typeof v === 'string' ? { title: v, text: '' } : v),
     z.object({ title: need(100, 'Give every group a name, or remove the empty one.'), text: plain(160).default('') }).strict())).max(10, 'Up to 10 groups.').default([]),
+  // How we work's own heading (black + grey part) and lead, and the titles above its two lists; empty = the site's wording
+  howTitle: plain(60).default(''), howSoft: plain(60).default(''), howLead: plain(220).default(''),
+  actsLabel: plain(40).default(''), whoLabel: plain(40).default(''),
   mediaId: z.string().uuid().nullable().default(null),
   // optional video in the overview (a platform link or an uploaded file); the photo above is its poster
   video: videoSchema,
@@ -81,13 +84,13 @@ function parse(raw: unknown): PillarInput {
 
 // ---------------------------------------------------------------- the site's shared lists (activities, participant groups)
 /** Shared lists written in src/content.py. Pillars pick from them by position; the texts themselves stay in one place. */
-export type SiteLists = { activities: string[]; groups: string[]; icons: string[] };
+export type SiteLists = { activities: string[]; groups: string[]; icons: string[]; iconNames: string[]; iconTags: string[] };
 let listsCache: { root: string; lists: SiteLists } | null = null;
 export function siteLists(cfg: Config): SiteLists {
   if (listsCache?.root === cfg.siteRoot) return listsCache.lists;
-  let lists: SiteLists = { activities: [], groups: [], icons: [] };
+  let lists: SiteLists = { activities: [], groups: [], icons: [], iconNames: [], iconTags: [] };
   try {
-    const py = `import sys, json; sys.path.insert(0, 'src'); import content as c\nprint(json.dumps(dict(activities=c.ACTIVITIES, groups=c.BENEFICIARIES, icons=c.ACT_ICONS)))`;
+    const py = `import sys, json; sys.path.insert(0, 'src'); import content as c\nprint(json.dumps(dict(activities=c.ACTIVITIES, groups=c.BENEFICIARIES, icons=c.ACT_ICONS, iconNames=[n for n, _k, _d in c.ACT_ICON_SET], iconTags=[k for _n, k, _d in c.ACT_ICON_SET])))`;
     lists = JSON.parse(execFileSync('python3', ['-I', '-c', py], { cwd: cfg.siteRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
   } catch { /* site without the generator (tests): no lists to offer */ }
   listsCache = { root: cfg.siteRoot, lists };
@@ -119,7 +122,7 @@ export async function loadPillar(db: DB, id: string): Promise<FullPillar> {
   const { highlights: _h, page: _pg, ...d } = (p.draft ?? {}) as unknown as PillarInput & { highlights?: unknown; page?: unknown };
   const hasDraft = !!p.draft;
   // drafts from before objectives, custom items or page texts existed have none
-  const content = hasDraft ? { ...d, objectives: d.objectives ?? [], extraActivities: d.extraActivities ?? [], extraGroups: d.extraGroups ?? [], workItems: d.workItems ?? [], audience: d.audience ?? [], video: d.video ?? null, workMediaId: d.workMediaId ?? null, objectivesMediaIds: d.objectivesMediaIds ?? [], mediaId: p.mediaId, provenance: p.provenance } : null;
+  const content = hasDraft ? { ...d, objectives: d.objectives ?? [], extraActivities: d.extraActivities ?? [], extraGroups: d.extraGroups ?? [], workItems: d.workItems ?? [], howTitle: d.howTitle ?? '', howSoft: d.howSoft ?? '', howLead: d.howLead ?? '', actsLabel: d.actsLabel ?? '', whoLabel: d.whoLabel ?? '', audience: d.audience ?? [], video: d.video ?? null, workMediaId: d.workMediaId ?? null, objectivesMediaIds: d.objectivesMediaIds ?? [], mediaId: p.mediaId, provenance: p.provenance } : null;
   return { ...p, content, projects: await linkedProjects(db, id), usage: await pillarUsage(db, id) };
 }
 
@@ -275,7 +278,7 @@ export async function createPillar(db: DB, cfg: Config, actor: NonNullable<Actor
     const colour = COLOURS.find((c) => !used.has(c.value))?.value ?? COLOURS[all.length % COLOURS.length].value;
     const sort = Math.max(-1, ...all.map((x) => x.sort)) + 1;
     const draft: Omit<PillarInput, 'provenance' | 'mediaId'> = { name, short: name.split(/\s+/)[0].slice(0, 20), summary: '', intro: '', colour, brand: '',
-      approachTitle: '', approachSoft: '', view: '', principles: [], steps: [], objectives: [], activities: [], groups: [], extraActivities: [], extraGroups: [], workItems: [], audience: [], video: null, workMediaId: null, objectivesMediaIds: [] };
+      approachTitle: '', approachSoft: '', view: '', principles: [], steps: [], objectives: [], activities: [], groups: [], extraActivities: [], extraGroups: [], workItems: [], audience: [], howTitle: '', howSoft: '', howLead: '', actsLabel: '', whoLabel: '', video: null, workMediaId: null, objectivesMediaIds: [] };
     const [p] = await t.insert(pillars).values({ key, number: String(all.length + 1).padStart(2, '0'), name, description: '', colour, publicFile: file, sort,
       draft: draft as unknown as Record<string, unknown>, provenance: 'Added in Studio', status: 'draft', updatedBy: actor.id }).returning();
     await audit(tx, actor, 'pillar.create', { type: 'pillar', id: p.id }, `Added pillar “${name}” (${file})`);

@@ -326,6 +326,16 @@ describe('pillar pages through the real generator', () => {
     expect(how).not.toContain('plx-step'); expect(how).not.toContain('How this pillar');          // the numbered steps are gone
     expect(how.indexOf('Card B &amp; C')).toBeLessThan(how.indexOf('Card A'));
     expect((how.match(/class="plx-act"/g) ?? []).length).toBe(2);
+    expect(how).toContain('<span class="sh-label">How We Work</span>'); expect(how).not.toContain('sh-title');   // no heading of its own: the small label only
+
+    // its own heading, lead and list titles; an icon from the extended library
+    const titled = live.map((x) => (x.snap.key === 'green-thumbs' ? { ...x, snap: { ...x.snap, workItems: [{ icon: 14, text: 'Tree planting' }], audience: [{ title: 'Schools', text: '' }],
+      howTitle: 'Action & care', howSoft: 'in every village.', howLead: 'What we do, with whom.', actsLabel: 'On the ground', whoLabel: 'Alongside' } } : x));
+    const tt = readFileSync(join(realBuild(join(root, 'titled'), await write(join(root, 'titled.json'), titled)), 'environment-climate.html'), 'utf8');
+    const how2 = tt.slice(tt.indexOf('id="how-we-work"'), tt.indexOf('id="projects"'));
+    expect(how2).toMatch(/sh-title[^>]*>Action &amp; care <span class="sh-soft">in every village\.<\/span>/);
+    expect(how2).toContain('What we do, with whom.'); expect(how2).toContain('>On the ground</p>'); expect(how2).toContain('>Alongside</p>');
+    expect(how2).toContain('M4 16c0-7 4-11.5 12-12');                                          // icon 14 (Leaf)
 
     // a fifth pillar added in Studio gets its own page, and the count follows everywhere
     const fifth = { id: 'rev-new', sort: 10, snap: { ...live[3].snap, key: 'health-wellbeing', publicFile: 'health-wellbeing.html', name: 'Health and Well-being', short: 'Health', summary: 'A new pillar summary.', intro: 'A new pillar.', highlights: [] } };

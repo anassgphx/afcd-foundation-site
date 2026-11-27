@@ -841,7 +841,70 @@ PILLAR_ACTS = {'youth-empowerment': [1, 2, 3, 4], 'women-empowerment': [0, 1, 2,
               'green-thumbs': [3, 4, 2, 0], 'digital-empowerment': [5, 0, 1, 7]}
 PILLAR_GROUPS = {'youth-empowerment': [0, 3, 4], 'women-empowerment': [1, 3, 5],
                  'green-thumbs': [0, 5, 6, 4], 'digital-empowerment': [0, 1, 2, 5]}
-ACT_ICONS = ['<path d="M2.5 6 10 3l7.5 3L10 9 2.5 6Z"/><path d="M5.5 7.3v4c0 1.2 2 2.2 4.5 2.2s4.5-1 4.5-2.2v-4"/>', '<path d="M10 2.5v3M4.7 4.7l2.1 2.1M15.3 4.7l-2.1 2.1"/><circle cx="10" cy="11.5" r="4"/><path d="M8.5 17.5h3"/>', '<circle cx="7" cy="6.5" r="2.5"/><circle cx="13.5" cy="8" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M11.5 13.2c.6-.5 1.3-.7 2-.7 1.8 0 3.2 1.3 3.7 3.5"/>', '<path d="M3 8.5v3l9 3.5V5L3 8.5Z"/><path d="M12 7h2.5a2 2 0 0 1 0 4H12M5.5 12.5 6.5 16"/>', '<path d="M3.5 4.5h13v8h-7l-4 3v-3h-2v-8Z"/><path d="M7 8.5h6"/>', '<rect x="3" y="4" width="14" height="9.5" rx="1.5"/><path d="M7.5 16.5h5M10 13.5v3M7.5 8.7l1.7 1.6 3.3-3.3"/>', '<path d="M10 2.5 3 6v1.5h14V6L10 2.5Z"/><path d="M4.5 8.5v6M8 8.5v6M12 8.5v6M15.5 8.5v6M2.5 16.5h15"/>', '<circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3c2 2.2 2.8 4.6 2.8 7s-.8 4.8-2.8 7c-2-2.2-2.8-4.6-2.8-7S8 5.2 10 3Z"/>']
+# Icons for the How we work cards: name, search words, SVG (20 × 20, line). Positions are stored in Studio: only append.
+ACT_ICON_SET = [
+    ('Education', 'school training graduation learning course', '<path d="M2.5 6 10 3l7.5 3L10 9 2.5 6Z"/><path d="M5.5 7.3v4c0 1.2 2 2.2 4.5 2.2s4.5-1 4.5-2.2v-4"/>'),
+    ('Leadership', 'idea lamp ideas workshop bootcamp light', '<path d="M10 2.5v3M4.7 4.7l2.1 2.1M15.3 4.7l-2.1 2.1"/><circle cx="10" cy="11.5" r="4"/><path d="M8.5 17.5h3"/>'),
+    ('Mentoring', 'people coaching pair support youth', '<circle cx="7" cy="6.5" r="2.5"/><circle cx="13.5" cy="8" r="2"/><path d="M2.5 16c.6-2.8 2.4-4.3 4.5-4.3s3.9 1.5 4.5 4.3M11.5 13.2c.6-.5 1.3-.7 2-.7 1.8 0 3.2 1.3 3.7 3.5"/>'),
+    ('Megaphone', 'outreach awareness campaign volunteer announce', '<path d="M3 8.5v3l9 3.5V5L3 8.5Z"/><path d="M12 7h2.5a2 2 0 0 1 0 4H12M5.5 12.5 6.5 16"/>'),
+    ('Dialogue', 'consultation policy talk speech message', '<path d="M3.5 4.5h13v8h-7l-4 3v-3h-2v-8Z"/><path d="M7 8.5h6"/>'),
+    ('Digital', 'laptop computer literacy innovation online', '<rect x="3" y="4" width="14" height="9.5" rx="1.5"/><path d="M7.5 16.5h5M10 13.5v3M7.5 8.7l1.7 1.6 3.3-3.3"/>'),
+    ('Institution', 'organisation civil society building capacity', '<path d="M10 2.5 3 6v1.5h14V6L10 2.5Z"/><path d="M4.5 8.5v6M8 8.5v6M12 8.5v6M15.5 8.5v6M2.5 16.5h15"/>'),
+    ('Globe', 'international intercultural world cooperation exchange', '<circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3c2 2.2 2.8 4.6 2.8 7s-.8 4.8-2.8 7c-2-2.2-2.8-4.6-2.8-7S8 5.2 10 3Z"/>'),
+    ('Book', 'reading library learning study', '<path d="M10 5.5c-1.8-1.3-4-1.8-6.5-1.5v11c2.5-.3 4.7.2 6.5 1.5 1.8-1.3 4-1.8 6.5-1.5V4c-2.5-.3-4.7.2-6.5 1.5Z"/><path d="M10 5.5v11"/>'),
+    ('Pencil', 'writing edit create design', '<path d="M12.5 4.5 15.5 7.5 7 16H4v-3l8.5-8.5Z"/><path d="M11 6l3 3"/>'),
+    ('Idea', 'lightbulb innovation creativity think', '<path d="M7 13.5c-1.6-1-2.5-2.7-2.5-4.5a5.5 5.5 0 0 1 11 0c0 1.8-.9 3.5-2.5 4.5v1.5H7v-1.5Z"/><path d="M8 17.5h4"/>'),
+    ('Target', 'goal objective aim focus', '<circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="4"/><circle cx="10" cy="10" r="1"/>'),
+    ('Handshake', 'partnership agreement cooperation deal', '<path d="M2.5 9 6 5.5l3 1.5 2-1 3.5.5L17.5 9"/><path d="M5 10.5l3.5 3.5a1.2 1.2 0 0 0 1.7 0l4.3-4.3"/><path d="M9 8.5l2.5 2.5"/>'),
+    ('Heart', 'care love solidarity wellbeing volunteer', '<path d="M10 16.5s-6.5-3.9-6.5-8.3A3.5 3.5 0 0 1 10 6.3a3.5 3.5 0 0 1 6.5 1.9c0 4.4-6.5 8.3-6.5 8.3Z"/>'),
+    ('Leaf', 'environment nature green ecology climate', '<path d="M4 16c0-7 4-11.5 12-12 0 8-4.5 12-11 12"/><path d="M4 16c2.5-3.5 5-5.5 8-7"/>'),
+    ('Sprout', 'growth plant seed youth development', '<path d="M10 17v-6"/><path d="M10 11c0-3.3 2.5-5.5 6-5.5 0 3.3-2.5 5.5-6 5.5Z"/><path d="M10 12.5c0-2.8-2.1-4.5-5-4.5 0 2.8 2.1 4.5 5 4.5Z"/>'),
+    ('Water', 'drop water resources climate', '<path d="M10 3s5 5.3 5 9a5 5 0 0 1-10 0c0-3.7 5-9 5-9Z"/>'),
+    ('Sun', 'energy solar climate light', '<circle cx="10" cy="10" r="3.2"/><path d="M10 2.5v1.8M10 15.7v1.8M2.5 10h1.8M15.7 10h1.8M4.7 4.7l1.3 1.3M14 14l1.3 1.3M4.7 15.3 6 14M14 6l1.3-1.3"/>'),
+    ('Recycle', 'cycle reuse circular waste renew', '<path d="M15.5 8A6 6 0 0 0 4.8 6.5M4.5 12a6 6 0 0 0 10.7 1.5"/><path d="M15.8 4v4h-4M4.2 16v-4h4"/>'),
+    ('Mountain', 'atlas rural region landscape', '<path d="M2.5 16 8 7l3 5 2-3 4.5 7h-15Z"/>'),
+    ('Home', 'house community family local', '<path d="M3.5 9 10 3.5 16.5 9v7.5h-4.5v-4.5H8v4.5H3.5V9Z"/>'),
+    ('Location', 'place map pin region where', '<path d="M10 17.5s5.5-4.6 5.5-9a5.5 5.5 0 0 0-11 0c0 4.4 5.5 9 5.5 9Z"/><circle cx="10" cy="8.5" r="2"/>'),
+    ('Calendar', 'event date schedule agenda', '<rect x="3.5" y="4.5" width="13" height="12" rx="1.5"/><path d="M3.5 8.5h13M7 3v3M13 3v3"/>'),
+    ('Clock', 'time hours duration', '<circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 1.5"/>'),
+    ('Chart', 'data statistics results report', '<path d="M3.5 16.5h13"/><path d="M5.5 16.5v-5M9 16.5v-9M12.5 16.5v-7M16 16.5V5"/>'),
+    ('Growth', 'trend progress impact increase', '<path d="M3 14.5 8 9.5l3 3 6-6.5"/><path d="M13 6h4v4"/>'),
+    ('Trophy', 'award prize competition success', '<path d="M6.5 3.5h7v4a3.5 3.5 0 0 1-7 0v-4Z"/><path d="M6.5 5H4a2.5 2.5 0 0 0 2.5 3M13.5 5H16a2.5 2.5 0 0 1-2.5 3M10 11v3M7 16.5h6l-.5-2.5h-5L7 16.5Z"/>'),
+    ('Star', 'excellence highlight quality', '<path d="m10 3 2.2 4.5 4.8.7-3.5 3.4.8 4.9L10 14.2l-4.3 2.3.8-4.9L3 8.2l4.8-.7L10 3Z"/>'),
+    ('Flag', 'milestone mission national goal', '<path d="M4.5 17.5V3.5"/><path d="M4.5 4h10l-2 3.5 2 3.5h-10"/>'),
+    ('Rocket', 'launch startup entrepreneurship incubation', '<path d="M11.5 3.5c3 0 5 2 5 5-1.5 3-4 5-7 6.5l-4-4C7 8 8.5 5 11.5 3.5Z"/><circle cx="12" cy="8" r="1.3"/><path d="M5.5 11 3 12l2.5 2.5M9 14.5 8 17l-2.5-2.5"/>'),
+    ('Layers', 'programme levels structure stack', '<path d="M10 3 2.5 7 10 11l7.5-4L10 3Z"/><path d="M2.5 10.5 10 14.5l7.5-4M2.5 13.5 10 17.5l7.5-4"/>'),
+    ('Shield', 'protection safety rights safeguarding', '<path d="M10 2.5 4 5v4.5c0 3.7 2.6 6.6 6 8 3.4-1.4 6-4.3 6-8V5l-6-2.5Z"/><path d="M7.5 10l1.8 1.8L12.8 8"/>'),
+    ('Justice', 'scales rights equality law gender', '<path d="M10 3v14M6 17h8M4 6h12"/><path d="M4 6 2 11a2.5 2.5 0 0 0 4 0L4 6ZM16 6l-2 5a2.5 2.5 0 0 0 4 0l-2-5Z"/>'),
+    ('Microphone', 'podcast speak voice testimony', '<rect x="7.5" y="2.5" width="5" height="9" rx="2.5"/><path d="M4.5 9.5a5.5 5.5 0 0 0 11 0M10 15v2.5M7.5 17.5h5"/>'),
+    ('Camera', 'photo media storytelling', '<path d="M3 7h3l1.5-2h5L14 7h3v9H3V7Z"/><circle cx="10" cy="11.2" r="2.8"/>'),
+    ('Video', 'film festival screening play', '<rect x="3" y="4.5" width="14" height="11" rx="2"/><path d="m8.5 7.5 4 2.5-4 2.5v-5Z"/>'),
+    ('Mobile', 'phone app sms', '<rect x="6" y="2.5" width="8" height="15" rx="1.8"/><path d="M9 14.5h2"/>'),
+    ('Code', 'programming coding developer tech', '<path d="m7 6-4 4 4 4M13 6l4 4-4 4M11 4.5l-2 11"/>'),
+    ('Connectivity', 'wifi internet access network online', '<path d="M2.5 8a11 11 0 0 1 15 0M5 10.8a7.3 7.3 0 0 1 10 0M7.5 13.5a3.6 3.6 0 0 1 5 0"/><circle cx="10" cy="16" r=".6"/>'),
+    ('AI', 'artificial intelligence chip processor technology', '<rect x="5.5" y="5.5" width="9" height="9" rx="1.5"/><path d="M8 3v2.5M12 3v2.5M8 14.5V17M12 14.5V17M3 8h2.5M3 12h2.5M14.5 8H17M14.5 12H17"/><path d="M8.5 8.5h3v3h-3z"/>'),
+    ('Work', 'job employment briefcase career', '<rect x="3" y="6" width="14" height="10" rx="1.5"/><path d="M7.5 6V4.5h5V6M3 10.5h14"/>'),
+    ('Finance', 'money coins economic empowerment income', '<ellipse cx="10" cy="5.5" rx="5.5" ry="2"/><path d="M4.5 5.5v4.5c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V5.5M4.5 10v4.5c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V10"/>'),
+    ('Business', 'shop store market cooperative entrepreneur', '<path d="M3.5 7.5 4.5 3.5h11l1 4"/><path d="M3.5 7.5a2.2 2.2 0 0 0 4.3 0 2.2 2.2 0 0 0 4.4 0 2.2 2.2 0 0 0 4.3 0"/><path d="M4.5 9.5v7h11v-7M8.5 16.5v-4h3v4"/>'),
+    ('Woman', 'women girl gender empowerment', '<circle cx="10" cy="5.5" r="2.5"/><path d="M10 8.5c-2 0-3.2 1.6-4 5h8c-.8-3.4-2-5-4-5ZM8.5 13.5v4M11.5 13.5v4"/>'),
+    ('Person', 'user individual participant member', '<circle cx="10" cy="6.5" r="3"/><path d="M4 17c.8-3.4 3-5.2 6-5.2s5.2 1.8 6 5.2"/>'),
+    ('Group', 'team community people network', '<circle cx="10" cy="6" r="2.3"/><circle cx="4.8" cy="8" r="1.8"/><circle cx="15.2" cy="8" r="1.8"/><path d="M6.5 15.5c.5-2.6 1.8-4 3.5-4s3 1.4 3.5 4M2 14.5c.3-1.8 1.3-2.8 2.8-2.8M18 14.5c-.3-1.8-1.3-2.8-2.8-2.8"/>'),
+    ('Conversation', 'discussion debate chat exchange', '<path d="M3 4h9v6.5H7L4.5 12.5v-2H3V4Z"/><path d="M12 7.5h5v6.5h-1.5v2L13 14H8.5v-1.5"/>'),
+    ('Mail', 'email newsletter contact message', '<rect x="3" y="4.5" width="14" height="11" rx="1.5"/><path d="m3.5 5.5 6.5 5 6.5-5"/>'),
+    ('Link', 'connection network partners', '<path d="M8.5 11.5a3.2 3.2 0 0 0 4.5 0l2.5-2.5a3.2 3.2 0 0 0-4.5-4.5l-1 1"/><path d="M11.5 8.5a3.2 3.2 0 0 0-4.5 0L4.5 11a3.2 3.2 0 0 0 4.5 4.5l1-1"/>'),
+    ('Checklist', 'tasks plan steps process', '<path d="M8.5 5.5h8M8.5 10h8M8.5 14.5h8"/><path d="m3 5.5 1.2 1.2L6.5 4.5M3 10l1.2 1.2L6.5 9M3 14.5l1.2 1.2 2.3-2.2"/>'),
+    ('Research', 'search study analysis survey', '<circle cx="9" cy="9" r="5"/><path d="m13 13 4 4"/>'),
+    ('Compass', 'orientation guidance direction', '<circle cx="10" cy="10" r="7"/><path d="m12.8 7.2-1.6 4-4 1.6 1.6-4 4-1.6Z"/>'),
+    ('Arts', 'culture creativity palette painting', '<path d="M10 3a7 7 0 0 0 0 14c1 0 1.5-.6 1.5-1.4 0-1.2-1-1.4-1-2.4 0-.8.6-1.2 1.4-1.2H14a3 3 0 0 0 3-3C17 5.8 13.9 3 10 3Z"/><circle cx="6.5" cy="9" r=".8"/><circle cx="9" cy="6" r=".8"/><circle cx="12.5" cy="6.5" r=".8"/>'),
+    ('Music', 'culture concert song', '<path d="M7.5 15V5l9-2v10"/><circle cx="5.5" cy="15" r="2"/><circle cx="14.5" cy="13" r="2"/>'),
+    ('Sport', 'football ball games activity', '<circle cx="10" cy="10" r="7"/><path d="m10 6.5 3 2.2-1.1 3.6H8.1L7 8.7l3-2.2Z"/><path d="M10 3v3.5M13 8.7l3.6-1.2M11.9 12.3l2.2 3M8.1 12.3l-2.2 3M7 8.7 3.4 7.5"/>'),
+    ('Health', 'medical care wellbeing clinic', '<path d="M8 3.5h4v4.5h4.5v4H12v4.5H8V12H3.5V8H8V3.5Z"/>'),
+    ('Food', 'nutrition meal agriculture', '<circle cx="10" cy="10.5" r="5"/><path d="M2.5 4v4.5a1.5 1.5 0 0 0 3 0V4M4 8.5V17M17.5 4c-1.3.6-2 2-2 4v2h2V17"/>'),
+    ('ID card', 'identity citizenship membership', '<rect x="2.5" y="4.5" width="15" height="11" rx="1.5"/><circle cx="7" cy="9.5" r="1.8"/><path d="M4.5 13.5c.4-1.3 1.3-2 2.5-2s2.1.7 2.5 2M11.5 8.5h4M11.5 11.5h3"/>'),
+    ('Certificate', 'badge diploma recognition certification', '<circle cx="10" cy="8" r="4.5"/><path d="M7.5 11.7 6.5 17.5 10 15.5l3.5 2-1-5.8"/>'),
+    ('Sparkle', 'new highlight special inspiration', '<path d="M10 3c.6 3.6 2.4 5.4 6 6-3.6.6-5.4 2.4-6 6-.6-3.6-2.4-5.4-6-6 3.6-.6 5.4-2.4 6-6Z"/>'),
+]
+ACT_ICONS = [d for _n, _k, d in ACT_ICON_SET]
 PILLAR_STEPS = [('Learn', 'Non-formal education and practical training build knowledge and skills.'),
                 ('Practise', 'Workshops, mentoring and hands-on activities turn skills into action.'),
                 ('Lead', 'Participants design and run their own initiatives in their communities.'),
@@ -917,6 +980,7 @@ def pillars():
             return (t_ or '') + (f' <span class="sh-soft">{s_}</span>' if s_ else '')
         extra_acts, extra_groups = sp.get('extraActivities') or [], sp.get('extraGroups') or []
         work_items, audience = sp.get('workItems') or [], sp.get('audience') or []   # edited in Studio: replace the picks above
+        how = sp.get('how') or {}   # How we work's own heading, lead and list titles (escaped by Studio); empty = the site's wording
         # -- overview: flagship programmes (the pillar's highlights) link to their project page when it exists
         def flag(name):
             pr = proj_by_name.get(name); href = pr.get('file') if pr and pr.get('detail') else None
@@ -1075,9 +1139,9 @@ def pillars():
 {f"""<section id="how-we-work" class="plx-sec py-10 lg:py-14">
   <span id="approach" class="pl-anchor" aria-hidden="true"></span><span id="what-we-do" class="pl-anchor" aria-hidden="true"></span>
   <div class="wrap">
-    <header class="sh"><div class="sh-top"><span class="sh-num">{next(num):02d}</span><span class="sh-label">How We Work</span><span class="sh-rule" aria-hidden="true"></span></div></header>
+    {sec_head(f'{next(num):02d} / How We Work', how['title'] + (f' <span class="sh-soft">{how["soft"]}</span>' if how.get('soft') else ''), desc=how.get('lead') or '') if how.get('title') else f'<header class="sh"><div class="sh-top"><span class="sh-num">{next(num):02d}</span><span class="sh-label">How We Work</span><span class="sh-rule" aria-hidden="true"></span></div></header>'}
     <div class="plx-work{'' if acts and groups else ' plx-work-1'}{' has-pic' if work_pic_html else ''} mt-8 lg:mt-10">
-      {f'<div><p class="plx-k">What it looks like</p><ul class="plx-acts mt-4">{acts}</ul></div>' if acts else ''}{work_pic_html}{f'<div><p class="plx-k">Who we work with</p><ul class="plx-who is-check mt-4">{groups}</ul></div>' if groups else ''}
+      {f'<div><p class="plx-k">{how.get("acts") or "What it looks like"}</p><ul class="plx-acts mt-4">{acts}</ul></div>' if acts else ''}{work_pic_html}{f'<div><p class="plx-k">{how.get("who") or "Who we work with"}</p><ul class="plx-who is-check mt-4">{groups}</ul></div>' if groups else ''}
     </div>
   </div>
 </section>

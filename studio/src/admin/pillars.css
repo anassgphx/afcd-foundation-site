@@ -34,12 +34,6 @@
 .pl-step-n { padding-top: 8px; color: var(--muted); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .pl-step-f { display: grid; gap: 6px; }
 .pl-step-a { display: flex; gap: 2px; }
-.pl-work-ico { display: grid; place-items: center; width: 28px; height: 28px; margin-top: 4px; border-radius: 8px; background: var(--canvas); color: var(--ink); }
-.pl-icons { display: flex; flex-wrap: wrap; gap: 4px; }
-.pl-icons button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--muted); cursor: pointer; }
-.pl-icons button:hover { color: var(--ink); border-color: var(--ink); }
-.pl-icons button.on { color: #fff; background: var(--ink); border-color: var(--ink); }
-.pl-icons button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 .pl-projects { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
 .pl-projects li { display: inline-flex; align-items: center; gap: 6px; }
@@ -129,3 +123,20 @@ a.pl-item:hover { background: var(--canvas); }
 .pl-tabbar .tabs button:hover { color: var(--ink); }
 .pl-tabbar .tabs button.on::after { left: 12px; right: 12px; }
 .pl-tab-todo { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #EAB308; }
+
+/* How we work: the icon library (one button per card, a searchable popover) and the titles above the two lists */
+.pl-ipick { position: relative; align-self: start; }
+.pl-ipick-btn { display: grid; justify-items: center; gap: 3px; width: 48px; padding: 6px 0 5px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); cursor: pointer; }
+.pl-ipick-btn small { font-size: 10.5px; color: var(--muted); }
+.pl-ipick-btn:hover, .pl-ipick-btn[aria-expanded="true"] { border-color: var(--ink); }
+.pl-ipick-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.pl-ipop { position: absolute; z-index: 30; top: calc(100% + 6px); inset-inline-start: 0; display: grid; gap: 8px; width: min(380px, calc(100vw - 48px)); padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 18px 40px -16px rgba(0,0,0,.28); }
+.pl-igrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 4px; max-height: 280px; overflow-y: auto; }
+.pl-igrid button { display: grid; justify-items: center; gap: 4px; padding: 8px 2px 6px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--ink); cursor: pointer; }
+.pl-igrid button small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; color: var(--muted); }
+.pl-igrid button:hover { background: var(--canvas); }
+.pl-igrid button.on { border-color: var(--ink); background: var(--canvas); }
+.pl-igrid button:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.pl-list-title { margin: 6px 0 10px; max-width: 360px; }
+.pl-work li { grid-template-columns: 48px minmax(0, 1fr) auto; }
+@media (max-width: 640px) { .pl-work li { grid-template-columns: 48px minmax(0, 1fr) auto; } }

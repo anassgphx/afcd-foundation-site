@@ -34,6 +34,7 @@ export async function pillarEntries(db: DB, live: { id: string; snap: PillarSnap
       activities: s.activities, groups: s.groups, image: image(s.mediaId), workImage: image(s.workMediaId ?? null), objectivesImages: (s.objectivesMediaIds ?? []).map(image).filter(Boolean), video: videoOut(s.video, esc),
       // custom items (escaped like every other string)
       extraActivities: (s.extraActivities ?? []).map(esc), extraGroups: (s.extraGroups ?? []).map(esc),
+      how: { title: esc(s.howTitle ?? ''), soft: esc(s.howSoft ?? ''), lead: esc(s.howLead ?? ''), acts: esc(s.actsLabel ?? ''), who: esc(s.whoLabel ?? '') },
       workItems: (s.workItems ?? []).map((w) => ({ icon: w.icon, text: esc(w.text) })), audience: (s.audience ?? []).map((a) => (typeof a === 'string' ? { title: esc(a), text: '' } : { title: esc(a.title), text: esc(a.text ?? '') })),
     }));
 }

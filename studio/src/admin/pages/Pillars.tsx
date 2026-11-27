@@ -1,7 +1,7 @@
 // Pillars: AFCD's strategic pillars and the pages built from them (Our Pillars and one page per pillar).
 // One master–detail screen: every pillar on the left (add, reorder), the selected pillar's editor on the right. On a
 // phone the list and the editor are separate steps. Adding, editing and removing all go through review.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, del, post, put, ApiError } from '../api.ts';
 import { Icon, Link, Modal, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { EditorHeader, Field, ListEditor, Section, WorkflowPanel } from '../Editor.tsx';
@@ -112,6 +112,31 @@ export function PillarsScreen({ id }: { id?: string }) {
 }
 
 const icoSvg = (d: string) => `<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+/** One icon button per card; it opens the icon library (searchable by name), with the current icon highlighted. */
+function IconPicker({ value, icons, names, tags, onChange, label, disabled }: { value: number; icons: string[]; names: string[]; tags: string[]; onChange: (i: number) => void; label: string; disabled?: boolean }) {
+  const [open, setOpen] = useState(false); const [q, setQ] = useState('');
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const down = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', down); document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key); };
+  }, [open]);
+  const ql = q.trim().toLowerCase();
+  const shown = icons.map((_d, i) => i).filter((i) => !ql || (names[i] ?? '').toLowerCase().includes(ql) || (tags[i] ?? '').includes(ql));
+  const name = names[value] ?? 'Icon';
+  return <div className="pl-ipick" ref={box}>
+    <button type="button" className="pl-ipick-btn" aria-haspopup="dialog" aria-expanded={open} disabled={disabled} onClick={() => setOpen(!open)} title={`${name}: change the icon`} aria-label={`${label} icon: ${name}. Change`}>
+      <span dangerouslySetInnerHTML={{ __html: icoSvg(icons[value] ?? icons[1] ?? '') }} /><small>Change</small></button>
+    {open && <div className="pl-ipop" role="dialog" aria-label={`Icon library for ${label}`}>
+      <input className="input" autoFocus placeholder="Search, e.g. leaf, women, digital" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search icons" />
+      <div className="pl-igrid">{shown.map((i) => <button key={i} type="button" className={i === value ? 'on' : ''} aria-pressed={i === value} title={names[i]} onClick={() => { onChange(i); setOpen(false); setQ(''); }}>
+        <span dangerouslySetInnerHTML={{ __html: icoSvg(icons[i]) }} /><small>{names[i] ?? `Icon ${i + 1}`}</small></button>)}</div>
+      {shown.length === 0 && <p className="muted" style={{ margin: '6px 2px 2px', fontSize: 13 }}>No icon matches “{q}”.</p>}
+    </div>}
+  </div>;
+}
 type Step = { title: string; text: string };
 type WorkItem = { icon: number; text: string };
 type Group = { title: string; text: string };
@@ -119,10 +144,11 @@ type PTab = 'overview' | 'perspective' | 'objectives' | 'work' | 'translations' 
 const NEXT: Partial<Record<PTab, [PTab, string]>> = { overview: ['perspective', 'Perspective'], perspective: ['objectives', 'Objectives'], objectives: ['work', 'How we work'], work: ['translations', 'Translations'] };   // Who we work with: name and optional short description
 type Form = { name: string; short: string; summary: string; intro: string; colour: string; brand: string; approachTitle: string; approachSoft: string;
   view: string; principles: string[]; steps: Step[]; objectives: Step[]; activities: number[]; groups: number[]; extraActivities: string[]; extraGroups: string[]; workItems: WorkItem[]; audience: (Group | string)[];
+  howTitle: string; howSoft: string; howLead: string; actsLabel: string; whoLabel: string;
   mediaId: string | null; video: PillarVideo; workMediaId: string | null; objectivesMediaIds: string[]; provenance: string };
 type Loaded = { id: string; key: string; number: string; publicFile: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; verifiedAt: string | null; removeRequested: boolean; usage: string[];
   content: Form | null; projects: { id: string; slug: string; name: string; live: boolean; primary: boolean }[]; media: MediaItem[]; problems: string[];
-  lists: { activities: string[]; groups: string[]; icons: string[] }; colours: { value: string; label: string }[];
+  lists: { activities: string[]; groups: string[]; icons: string[]; iconNames?: string[]; iconTags?: string[] }; colours: { value: string; label: string }[];
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] } };
 
 export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => void }) {
@@ -291,17 +317,20 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
         </Section>
         </>}
         {tab === 'work' && <>
-        <Section id="work" title="How we work: activities and people" desc="The two lists in the pillar page’s How we work section. Add, edit, remove and reorder them here; the page shows them exactly in this order.">
+        <Section id="work" title="How we work" desc="Read top to bottom like the page: the heading, then the cards, the photo between the lists, and the groups. Leave a title empty to keep the site’s wording, shown in grey.">
+          <Field label="Heading" span={2} hint="Optional. Written in black. Leave it empty to show only the small “How We Work” label."><input className="input" maxLength={60} value={f.howTitle} onChange={(x) => set('howTitle', x.target.value)} aria-label="How we work heading" /></Field>
+          <Field label="Heading, second part" hint="Optional, written in grey."><input className="input" maxLength={60} value={f.howSoft} onChange={(x) => set('howSoft', x.target.value)} aria-label="How we work heading, second part" /></Field>
+          {(f.howTitle || f.howSoft) && <p className="pl-title-prev s3" aria-label="Heading preview">{f.howTitle} <span>{f.howSoft}</span></p>}
+          <Field label="Lead" span={3} count={[f.howLead.length, 220]} hint="Optional. The line beside the heading; shown only with a heading."><textarea className="textarea" rows={2} maxLength={220} value={f.howLead} onChange={(x) => set('howLead', x.target.value)} aria-label="How we work lead" /></Field>
           {!listsOk && <p className="muted s3" style={{ margin: 0 }}>The site’s lists could not be read, so these lists can’t be edited right now.</p>}
           {listsOk && <>
-          <div className="s3"><span className="ed-lbl">What it looks like <span className="muted">({work.length}/10)</span></span>
+          <div className="s3"><span className="ed-lbl">Cards <span className="muted">({work.length}/10)</span></span>
+            <input className="input pl-list-title" maxLength={40} value={f.actsLabel} placeholder="What it looks like" onChange={(x) => set('actsLabel', x.target.value)} aria-label="Title above the cards" />
             {work.length === 0 && <p className="muted" style={{ margin: '4px 0 8px' }}>No cards. The page shows only “Who we work with”.</p>}
             {work.length > 0 && <ol className="pl-steps pl-work">{work.map((w, i) => <li key={i}>
-              <span className="pl-work-ico" aria-hidden="true" dangerouslySetInnerHTML={{ __html: icoSvg(p.lists.icons[w.icon] ?? p.lists.icons[1] ?? '') }} />
+              <IconPicker value={w.icon} icons={p.lists.icons} names={p.lists.iconNames ?? []} tags={p.lists.iconTags ?? []} label={`Card ${i + 1}`} disabled={!editable} onChange={(k) => setWork(work.map((y, j) => (j === i ? { ...y, icon: k } : y)))} />
               <div className="pl-step-f">
                 <textarea className="textarea" rows={2} maxLength={160} value={w.text} placeholder="What this pillar does (required)" onChange={(x) => setWork(work.map((y, j) => (j === i ? { ...y, text: x.target.value } : y)))} aria-label={`Card ${i + 1} text`} aria-invalid={!w.text.trim()} />
-                {p.lists.icons.length > 0 && <div className="pl-icons" role="radiogroup" aria-label={`Card ${i + 1} icon`}>{p.lists.icons.map((d, k) =>
-                  <button key={k} type="button" role="radio" aria-checked={w.icon === k} aria-label={`Icon ${k + 1}`} className={w.icon === k ? 'on' : ''} onClick={() => setWork(work.map((y, j) => (j === i ? { ...y, icon: k } : y)))} dangerouslySetInnerHTML={{ __html: icoSvg(d) }} />)}</div>}
               </div>
               <span className="pl-step-a">
                 <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === 0} onClick={() => moveWork(i, -1)} aria-label={`Move card ${i + 1} up`}>↑</button>
@@ -311,7 +340,21 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
             {work.length < 10 ? <button type="button" className="btn btn-sm" onClick={() => setWork([...work, { icon: 1, text: '' }])}><Icon n="plus" />Add a card</button>
               : <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>10 cards is the maximum.</p>}
           </div>
-          <div className="field ed-f s3"><span className="ed-lbl">Who we work with</span>
+          </>}
+          <div className="field ed-f s3"><span className="ed-lbl">Photo between the two lists <span className="muted">(optional)</span></span>
+            <div className="ed-media">
+              {f.workMediaId && workPhoto ? <div className="ed-media-img pl-photo"><img src={workPhoto.url} alt={workPhoto.alt} />{editable && <button type="button" className="btn btn-sm" onClick={() => { set('workMediaId', null); setWorkPhoto(null); }}><Icon n="x" />Remove</button>}</div>
+                : <button type="button" className="ed-drop" disabled={!editable} onClick={() => setDialog('workphoto')}><Icon n="image" /><b>Choose a photo</b><small>Shown between What it looks like and Who we work with. Use a different picture from the overview photo.</small></button>}
+              {f.workMediaId && workPhoto && <div className="pl-photo-meta">
+                <span className={workPhoto.alt ? 'ok' : 'warn'}><Icon n={workPhoto.alt ? 'check' : 'alert'} width={14} height={14} />{workPhoto.alt ? `Alt text: “${workPhoto.alt}”` : 'No alt text yet'}</span>
+                <span className={workPhoto.rightsConfirmed ? 'ok' : 'warn'}><Icon n={workPhoto.rightsConfirmed ? 'check' : 'alert'} width={14} height={14} />{workPhoto.rightsConfirmed ? 'Usage rights confirmed' : 'Usage rights not confirmed'}</span>
+                {editable && <span className="pl-photo-actions"><button type="button" className="btn btn-sm" onClick={() => setDialog('workphoto')}><Icon n="image" />Change</button></span>}
+              </div>}
+            </div>
+            <small>Without one, the page uses the cover photo of another of this pillar’s live projects, never the overview photo.</small></div>
+          {listsOk && <>
+          <div className="field ed-f s3"><span className="ed-lbl">Groups</span>
+            <input className="input pl-list-title" maxLength={40} value={f.whoLabel} placeholder="Who we work with" onChange={(x) => set('whoLabel', x.target.value)} aria-label="Title above the groups" />
             {aud.length > 0 && <ol className="pl-steps pl-aud">{aud.map((g, i) => <li key={i}>
               <span className="pl-step-n">{String(i + 1).padStart(2, '0')}</span>
               <div className="pl-step-f">
@@ -327,17 +370,6 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
               : <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>10 groups is the maximum.</p>)}
             <small>In the order shown. The description appears under the name on the page; leave it empty to show the name only. Remove every group to hide the column.</small></div>
           </>}
-          <div className="field ed-f s3"><span className="ed-lbl">Photo between the two lists <span className="muted">(optional)</span></span>
-            <div className="ed-media">
-              {f.workMediaId && workPhoto ? <div className="ed-media-img pl-photo"><img src={workPhoto.url} alt={workPhoto.alt} />{editable && <button type="button" className="btn btn-sm" onClick={() => { set('workMediaId', null); setWorkPhoto(null); }}><Icon n="x" />Remove</button>}</div>
-                : <button type="button" className="ed-drop" disabled={!editable} onClick={() => setDialog('workphoto')}><Icon n="image" /><b>Choose a photo</b><small>Shown between What it looks like and Who we work with. Use a different picture from the overview photo.</small></button>}
-              {f.workMediaId && workPhoto && <div className="pl-photo-meta">
-                <span className={workPhoto.alt ? 'ok' : 'warn'}><Icon n={workPhoto.alt ? 'check' : 'alert'} width={14} height={14} />{workPhoto.alt ? `Alt text: “${workPhoto.alt}”` : 'No alt text yet'}</span>
-                <span className={workPhoto.rightsConfirmed ? 'ok' : 'warn'}><Icon n={workPhoto.rightsConfirmed ? 'check' : 'alert'} width={14} height={14} />{workPhoto.rightsConfirmed ? 'Usage rights confirmed' : 'Usage rights not confirmed'}</span>
-                {editable && <span className="pl-photo-actions"><button type="button" className="btn btn-sm" onClick={() => setDialog('workphoto')}><Icon n="image" />Change</button></span>}
-              </div>}
-            </div>
-            <small>Without one, the page uses the cover photo of another of this pillar’s live projects, never the overview photo.</small></div>
         </Section>
         </>}
         {tab === 'perspective' && <>
@@ -360,6 +392,7 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
       <Section id="translations" title="Translations" desc="French and Arabic of this pillar’s pages. Reviewed and published on the Translations screen.">
         <RecordTranslations noun="pillar" dirty={status !== 'published'} files={[p.publicFile, 'pillars.html']} fields={[{ label: 'Name', value: f.name }, { label: 'Summary', value: f.summary }, { label: 'Page introduction', value: f.intro },
           ...f.objectives.flatMap((o) => [{ label: 'Objective', value: o.title }, { label: 'Objective explanation', value: o.text }]), { label: 'Approach heading', value: f.approachTitle }, { label: 'Our perspective', value: f.view }, ...f.principles.map((x) => ({ label: 'Guiding principle', value: x })),
+          { label: 'How we work heading', value: [f.howTitle, f.howSoft].filter(Boolean).join(' ') }, { label: 'How we work lead', value: f.howLead }, { label: 'Title above the cards', value: f.actsLabel }, { label: 'Title above the groups', value: f.whoLabel },
           ...work.map((x) => ({ label: 'Activity', value: x.text })), ...aud.flatMap((x) => [{ label: 'Who we work with', value: x.title }, { label: 'Who we work with: description', value: x.text }]),
           ]} />
       </Section>

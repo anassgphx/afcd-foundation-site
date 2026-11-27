@@ -1183,3 +1183,68 @@ export const applyMessages = pgTable('apply_messages', {
   updatedAt: updatedAt(),
 }, (t) => [uniqueIndex('apply_messages_dedupe_uq').on(t.dedupeKey), index('apply_messages_queue_idx').on(t.status, t.nextAttemptAt),
   index('apply_messages_call_idx').on(t.callId, t.createdAt), index('apply_messages_sub_idx').on(t.submissionId)]);
+
+// ---------------------------------------------------------------- Team (0034): the people on team.html, one record per person
+// Before 0034 the people were a list inside the About page "team" (about_pages.draft.people); 0034 copied them here once and
+// left that row untouched (rollback: drizzle/recovery/0034_team_down.sql). Each member has its own review workflow.
+// Groups and the order of the page are a separate, lighter "layout": staff edit the working copy (team_groups, team_members.sort)
+// and someone with team.publish publishes it as a team_layout_revisions row. Hiding a live member (team_members.hidden) takes
+// it off the page without touching its published revision.
+export type TeamLink = { kind: 'linkedin' | 'x' | 'facebook' | 'instagram' | 'website'; url: string };
+export const teamGroups = pgTable('team_groups', {
+  id: id(),
+  key: text('key').notNull(),                         // section id on team.html (#board); never changes
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  sort: integer('sort').notNull().default(100),
+  show: boolean('show').notNull().default(true),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('team_groups_key_uq').on(t.key)]);
+
+export const teamMembers = pgTable('team_members', {
+  id: id(),
+  slug: text('slug').notNull(),
+  name: text('name').notNull(),
+  nameKey: text('name_key').notNull(),                // normalised name, to warn about duplicates (homonyms are allowed)
+  role: text('role').notNull().default(''),
+  bio: text('bio').notNull().default(''),
+  groupId: uuid('group_id').notNull().references(() => teamGroups.id, { onDelete: 'restrict' }),
+  photoMediaId: uuid('photo_media_id').references(() => media.id, { onDelete: 'set null' }),
+  email: text('email').notNull().default(''),        // only the foundation's public addresses may be shown
+  links: jsonb('links').$type<TeamLink[]>().notNull().default([]),
+  sort: integer('sort').notNull().default(100),       // working order inside the group (published with the layout)
+  hidden: boolean('hidden').notNull().default(false), // live member taken off the page
+  provenance: text('provenance').notNull().default(''),
+  status: workflowEnum('status').notNull().default('draft'),
+  publishedRevisionId: uuid('published_revision_id'),
+  approvedRevisionId: uuid('approved_revision_id'),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  verifiedAt: timestamp('verified_at', { withTimezone: true }),
+  submittedBy: uuid('submitted_by').references(() => users.id, { onDelete: 'set null' }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex('team_members_slug_uq').on(t.slug), index('team_members_status_idx').on(t.status), index('team_members_group_idx').on(t.groupId, t.sort)]);
+
+export const teamMemberRevisions = pgTable('team_member_revisions', {
+  id: id(),
+  memberId: uuid('member_id').notNull().references(() => teamMembers.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('team_member_revisions_num_uq').on(t.memberId, t.number)]);
+
+/** Groups (key, name, description, shown) and member order as published. The live one is the newest with published_at. */
+export const teamLayoutRevisions = pgTable('team_layout_revisions', {
+  id: id(),
+  number: integer('number').notNull(),
+  snapshot: jsonb('snapshot').$type<{ groups: { key: string; name: string; description: string; show: boolean }[]; order: string[] }>().notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+}, (t) => [uniqueIndex('team_layout_revisions_num_uq').on(t.number)]);

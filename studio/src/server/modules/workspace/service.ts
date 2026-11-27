@@ -3,7 +3,7 @@
 import { ABOUT_META, type AboutKey } from '../about/service.ts';
 import { and, count, desc, eq, gte, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
-import { aboutPages, articles, events, formSubmissions, opportunities, pageContents, pages, partners, pillars, projects, publications, publishJobs, seoOverrides } from '../../db/schema.ts';
+import { aboutPages, articles, events, formSubmissions, opportunities, pageContents, pages, partners, pillars, projects, publications, publishJobs, seoOverrides, teamMembers } from '../../db/schema.ts';
 import { can, type Role } from '../../rbac.ts';
 import { TEXT_PAGES } from '../home/service.ts';
 
@@ -34,6 +34,7 @@ export async function search(db: DB, role: Role, raw: string): Promise<Hit[]> {
   if (can(role, 'opportunity.read')) for (const r of await db.select({ id: opportunities.id, t: opportunities.title, s: opportunities.deadline, st: opportunities.status }).from(opportunities).where(ilike(opportunities.title, pat)).limit(LIMIT)) out.push({ kind: 'Opportunity', id: r.id, title: r.t, sub: r.s ? `Deadline ${r.s}` : 'Rolling', href: `/studio/opportunities/${r.id}`, status: r.st });
   if (can(role, 'publication.read')) for (const r of await db.select({ id: publications.id, t: publications.title, s: publications.publishedOn, st: publications.status }).from(publications).where(ilike(publications.title, pat)).limit(LIMIT)) out.push({ kind: 'Publication', id: r.id, title: r.t, sub: r.s ? `Published ${r.s}` : 'No date yet', href: `/studio/publications/${r.id}`, status: r.st });
   if (can(role, 'partner.read')) for (const r of await db.select({ id: partners.id, t: partners.name, s: partners.scope, st: partners.status }).from(partners).where(ilike(partners.name, pat)).limit(LIMIT)) out.push({ kind: 'Partner', id: r.id, title: r.t, sub: r.s, href: `/studio/partners/${r.id}`, status: r.st });
+  if (can(role, 'team.read')) for (const r of await db.select({ id: teamMembers.id, t: teamMembers.name, s: teamMembers.role, st: teamMembers.status }).from(teamMembers).where(ilike(teamMembers.name, pat)).limit(LIMIT)) out.push({ kind: 'Team member', id: r.id, title: r.t, sub: r.s, href: `/studio/team/${r.id}`, status: r.st });
   if (can(role, 'pillar.read')) for (const r of await db.select({ id: pillars.id, t: pillars.name, s: pillars.number, st: pillars.status }).from(pillars).where(ilike(pillars.name, pat)).limit(LIMIT)) out.push({ kind: 'Pillar', id: r.id, title: r.t, sub: `Pillar ${r.s}`, href: `/studio/pillars/${r.id}`, status: r.st });
   if (can(role, 'page.read')) for (const r of await db.select({ id: pages.id, t: pages.title, s: pages.slug, st: pages.status }).from(pages).where(or(ilike(pages.title, pat), ilike(pages.slug, pat))).limit(LIMIT)) out.push({ kind: 'Page', id: r.id, title: r.t, sub: `${r.s}.html`, href: `/studio/pages/${r.id}`, status: r.st });
   return out;
@@ -63,6 +64,8 @@ export async function notifications(db: DB, user: { id: string; role: Role }): P
       rows: () => db.select({ id: publications.id, title: publications.title, status: publications.status, submittedBy: publications.submittedBy, updatedAt: publications.updatedAt }).from(publications).where(inArray(publications.status, ['in_review', 'approved', 'changes_requested'])) },
     { kind: 'Partner', perm: { read: 'partner.read', approve: 'partner.approve', publish: 'partner.publish' }, href: (id) => `/studio/partners/${id}`,
       rows: () => db.select({ id: partners.id, title: partners.name, status: partners.status, submittedBy: partners.submittedBy, updatedAt: partners.updatedAt }).from(partners).where(inArray(partners.status, ['in_review', 'approved', 'changes_requested'])) },
+    { kind: 'Team member', perm: { read: 'team.read', approve: 'team.approve', publish: 'team.publish' }, href: (id) => `/studio/team/${id}`,
+      rows: () => db.select({ id: teamMembers.id, title: teamMembers.name, status: teamMembers.status, submittedBy: teamMembers.submittedBy, updatedAt: teamMembers.updatedAt }).from(teamMembers).where(inArray(teamMembers.status, ['in_review', 'approved', 'changes_requested'])) },
     { kind: 'Pillar', perm: { read: 'pillar.read', approve: 'pillar.approve', publish: 'pillar.publish' }, href: (id) => `/studio/pillars/${id}`,
       rows: () => db.select({ id: pillars.id, title: pillars.name, status: pillars.status, submittedBy: pillars.submittedBy, updatedAt: pillars.updatedAt }).from(pillars).where(inArray(pillars.status, ['in_review', 'approved', 'changes_requested'])) },
     { kind: 'About page', perm: { read: 'about.read', approve: 'about.approve', publish: 'about.publish' }, href: (id) => `/studio/pages/site/${id}`,

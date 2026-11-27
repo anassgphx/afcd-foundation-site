@@ -2,7 +2,7 @@
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm';
 import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
-import { articles, events, formSubmissions, media, opportunities, publications, pageContents, pages, partners, pillars, projects, publishJobs, seoAudits } from '../../db/schema.ts';
+import { articles, events, formSubmissions, media, opportunities, publications, pageContents, pages, partners, pillars, projects, publishJobs, seoAudits, teamMembers } from '../../db/schema.ts';
 import { can, type Role } from '../../rbac.ts';
 import { TEXT_PAGES } from '../home/service.ts';
 import { todayMorocco } from '../events/render.ts';
@@ -20,11 +20,12 @@ const JOB_LABEL: Record<string, string> = {
   publish_home: 'Published the homepage', unpublish_home: 'Restored the original homepage', rebuild: 'Rebuilt the website',
   publish_redirects: 'Published redirects', publish_seo_schema: 'Published structured data', unpublish_seo_schema: 'Removed structured data',
   publish_translations: 'Published translations',
+  publish_team: 'Published a team member', unpublish_team: 'Removed a team member', hide_team: 'Hid a team member', show_team: 'Showed a team member', publish_team_layout: 'Published the team order and groups',
 };
 
 export async function overview(db: DB, user: { id: string; role: Role }, cfg?: Config) {
   const role = user.role; const today = todayMorocco();
-  const statusCounts = async (table: typeof projects | typeof articles | typeof events | typeof opportunities | typeof publications | typeof partners | typeof pages | typeof pillars) => {
+  const statusCounts = async (table: typeof projects | typeof articles | typeof events | typeof opportunities | typeof publications | typeof partners | typeof pages | typeof pillars | typeof teamMembers) => {
     const t = table as typeof projects;
     const rows = await db.select({ status: t.status, live: sql<boolean>`${t.publishedRevisionId} is not null`, n: count() }).from(t).groupBy(t.status, sql`${t.publishedRevisionId} is not null`);
     const sum = (f: (r: typeof rows[number]) => boolean) => rows.filter(f).reduce((a, r) => a + r.n, 0);
@@ -47,6 +48,7 @@ export async function overview(db: DB, user: { id: string; role: Role }, cfg?: C
   if (can(role, 'publication.read')) modules.push({ key: 'publications', label: 'Publications', href: '/studio/publications', icon: 'book', ...(await statusCounts(publications)) });
   if (can(role, 'pillar.read')) modules.push({ key: 'pillars', label: 'Pillars', href: '/studio/pillars', icon: 'pillars', ...(await statusCounts(pillars)) });
   if (can(role, 'partner.read')) modules.push({ key: 'partners', label: 'Partners', href: '/studio/partners', icon: 'partner', ...(await statusCounts(partners)) });
+  if (can(role, 'team.read')) modules.push({ key: 'team', label: 'Team', href: '/studio/team', icon: 'users', ...(await statusCounts(teamMembers)) });
   if (can(role, 'page.read')) modules.push({ key: 'pages', label: 'Custom pages', href: '/studio/pages', icon: 'layers', ...(await statusCounts(pages)) });
 
   // recently edited, across modules (archived left out)
@@ -59,6 +61,7 @@ export async function overview(db: DB, user: { id: string; role: Role }, cfg?: C
   if (can(role, 'opportunity.read')) await take('Opportunity', (id) => `/studio/opportunities/${id}`, q(opportunities as never, opportunities.title as never));
   if (can(role, 'publication.read')) await take('Publication', (id) => `/studio/publications/${id}`, q(publications as never, publications.title as never));
   if (can(role, 'partner.read')) await take('Partner', (id) => `/studio/partners/${id}`, q(partners as never, partners.name as never));
+  if (can(role, 'team.read')) await take('Team member', (id) => `/studio/team/${id}`, q(teamMembers as never, teamMembers.name as never));
   if (can(role, 'pillar.read')) await take('Pillar', (id) => `/studio/pillars/${id}`, db.select({ id: pillars.id, title: pillars.name, status: pillars.status, live: sql<boolean>`${pillars.publishedRevisionId} is not null`, at: pillars.updatedAt }).from(pillars).where(isNotNull(pillars.draft)).orderBy(desc(pillars.updatedAt)).limit(6));
   if (can(role, 'page.read')) {
     await take('Page', (id) => `/studio/pages/${id}`, q(pages as never, pages.title as never));
@@ -113,7 +116,7 @@ export async function overview(db: DB, user: { id: string; role: Role }, cfg?: C
   const ids = jobs.map((j) => j.entityId).filter(Boolean) as string[];
   const names = new Map<string, string>();
   if (ids.length) {
-    for (const [t, col] of [[projects, projects.name], [articles, articles.title], [events, events.title], [opportunities, opportunities.title], [publications, publications.title], [partners, partners.name], [pillars, pillars.name], [pages, pages.title]] as const) {
+    for (const [t, col] of [[projects, projects.name], [articles, articles.title], [events, events.title], [opportunities, opportunities.title], [publications, publications.title], [partners, partners.name], [pillars, pillars.name], [pages, pages.title], [teamMembers, teamMembers.name]] as const) {
       for (const r of await db.select({ id: (t as typeof projects).id, n: col as typeof projects.name }).from(t as typeof projects).where(inArray((t as typeof projects).id, ids))) names.set(r.id, r.n);
     }
   }

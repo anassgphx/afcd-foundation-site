@@ -203,7 +203,8 @@ export function AboutEditor({ refKey }: { refKey: string; onChanged?: () => void
   }
 
   // ---- the page's parts: header, overview, fixed frames, movable sections (in their order), closing
-  const movable = Object.keys(defs).filter((id) => !defs[id].fixed);
+  // Our Team: the groups (its sections), their order and the people are managed in Team (modules/team, since 0034)
+  const movable = p.key === 'team' ? [] : Object.keys(defs).filter((id) => !defs[id].fixed);
   const saved: string[] = (f.order ?? []).filter((x: string) => movable.includes(x));
   const order = [...saved, ...movable.filter((x) => !saved.includes(x))];
   const shown = (id: string) => ownCfg(c, id)?.show !== false;
@@ -212,16 +213,10 @@ export function AboutEditor({ refKey }: { refKey: string; onChanged?: () => void
   const items: Item[] = [{ id: 'hero', label: nameOf('hero'), icon: 'log', kind: 'page' }, { id: 'overview', label: nameOf('overview'), icon: 'dash', kind: 'page' },
     ...Object.keys(defs).filter((id) => defs[id].fixed).map((id): Item => ({ id, label: nameOf(id), icon: 'layers', kind: 'fixed' })),
     ...order.map((id): Item => ({ id, label: nameOf(id), icon: ICONS[id] ?? 'layers', kind: 'section' })),
+    ...(p.key === 'team' ? [{ id: 'team-groups', label: 'Groups and people', icon: 'users', kind: 'page' } as Item] : []),
     { id: 'closing', label: nameOf('closing'), icon: 'send', kind: 'page' }];
   const move = (from: number, to: number) => { if (to < 0 || to >= order.length) return; const n = [...order]; const [x] = n.splice(from, 1); n.splice(to, 0, x); c.set(['order'], n); };
   const pname = (k: string) => p.context.pillars.find((x) => x.key === k)?.name ?? k;
-  const people = (group?: string) => <Repeat c={c} path={['people']} label={group ? 'People (all groups; this group is highlighted on the page)' : 'People'} noun="Person" max={120} blank={{ name: '', role: '', group: group ?? 'executive', bio: '', mediaId: null }}
-      fields={[{ k: 'name', label: 'Full name', max: 80, required: true }, { k: 'role', label: 'Role', max: 100, placeholder: 'Role, e.g. Programme coordinator', required: true }, { k: 'bio', label: 'Short bio (optional)', max: 700, rows: 2 }]}
-      head={(it, i) => <span title={p.context.groups.find((g) => g.value === it.group)?.label} style={{ opacity: group && it.group !== group ? .4 : 1 }}>{String(i + 1).padStart(2, '0')}</span>}
-      extra={(it, i) => <div className="ab-person" style={{ opacity: group && it.group !== group ? .55 : 1 }}>
-        <label className="ab-inline"><span>Group</span><select className="select" value={it.group} onChange={(e) => c.set(['people', i, 'group'], e.target.value)} aria-label={`Person ${i + 1}: group`}>{p.context.groups.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}</select></label>
-        <Photo c={c} path={['people', i, 'mediaId']} media={media} pick={setPicking} label="Portrait" small />
-      </div>} />;
   const closingFields = <><TextF c={c} path={['closing', 'title']} label="Heading" max={90} /><TextF c={c} path={['closing', 'text']} label="Text" max={300} rows={3} /></>;
   const heroFields = <><TextF c={c} path={['hero', 'title']} label="Title" max={90} big /><TextF c={c} path={['hero', 'soft']} label="Title, second part" max={90} hint="Optional, written in grey." />
     <p className="pl-title-prev" aria-label="Title preview" style={{ margin: 0 }}>{f.hero?.title} <span>{f.hero?.soft}</span></p>
@@ -270,8 +265,10 @@ export function AboutEditor({ refKey }: { refKey: string; onChanged?: () => void
   });
   if (p.key === 'team') Object.assign(panels, {
     overview: <TextF c={c} path={['intro']} label="Introduction" max={700} rows={5} hint="The large text in the black overview." />,
-    people: <><p className="muted" style={{ margin: 0 }}>Shown instead of the groups while no one is listed. The message is the section’s description.</p>{people()}</>,
-    ...Object.fromEntries(p.context.groups.map((g) => [g.value, people(g.value)])),
+    people: <p className="muted" style={{ margin: 0 }}>Shown instead of the groups while no one is on the page. The message is the section’s description.</p>,
+    'team-groups': <><p className="muted" style={{ margin: 0 }}>The people, the groups (the page’s sections) and their order are managed in Team: one record per person, each reviewed and published on its own.</p>
+      <Link className="btn btn-sm" to="/studio/team" style={{ justifySelf: 'start' }}><Icon n="users" />Open Team</Link>
+      <Link className="btn btn-sm btn-ghost" to="/studio/team?view=order" style={{ justifySelf: 'start' }}>Order and groups</Link></>,
   });
   if (p.key === 'partners') Object.assign(panels, {
     overview: <TextF c={c} path={['hero', 'lead']} label="Introduction" max={280} rows={4} hint="The large text in the black overview." />,

@@ -27,6 +27,7 @@ export const RECORDS: RecordSrc[] = [
   R('opportunity', 'Opportunity', 'opportunity', t.opportunities, t.opportunities.title, t.opportunityRevisions, 'opportunityId', (id) => `/studio/opportunities/${id}`, (id) => `/opportunities/${id}`),
   R('publication', 'Publication', 'publication', t.publications, t.publications.title, t.publicationRevisions, 'publicationId', (id) => `/studio/publications/${id}`, (id) => `/publications/${id}`),
   R('partner', 'Partner', 'partner', t.partners, t.partners.name, t.partnerRevisions, 'partnerId', (id) => `/studio/partners/${id}`, (id) => `/partners/${id}`),
+  R('team', 'Team member', 'team', t.teamMembers, t.teamMembers.name, t.teamMemberRevisions, 'memberId', (id) => `/studio/team/${id}`, (id) => `/team/members/${id}`),
   R('pillar', 'Pillar', 'pillar', t.pillars, t.pillars.name, t.pillarRevisions, 'pillarId', (id) => `/studio/pillars/${id}`, (id) => `/pillars/${id}`),
   R('about', 'About page', 'about', t.aboutPages, sql<string>`case ${t.aboutPages.key} when 'our-story' then 'Our Story' when 'mission-vision' then 'Mission & Vision' when 'strategy' then 'Strategy & Objectives' when 'team' then 'Our Team' else 'Partners page' end`, t.aboutPageRevisions, 'pageId', (id) => `/studio/pages/site/${id}`, (id) => `/about/${id}`),
   R('page', 'Page', 'page', t.pages, t.pages.title, t.pageRevisions, 'pageId', (id) => `/studio/pages/${id}`, (id) => `/pages/${id}`),

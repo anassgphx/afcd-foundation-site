@@ -20,7 +20,7 @@ type Data = {
 type Cache = { d: Data; langs: Lang[] | null; unread: number | null; at: number };
 type Lang = { lang: string; name: string; native: string; dir: string; total: number; translated: number; status: string | null; live: boolean; publishedLive: boolean };
 
-const KIND_ICON: Record<string, string> = { Project: 'folder', Story: 'log', Event: 'calendar', Opportunity: 'spark', Publication: 'book', Partner: 'partner', Page: 'layers', Homepage: 'home', 'Contact page': 'mail' };
+const KIND_ICON: Record<string, string> = { Project: 'folder', Story: 'log', Event: 'calendar', Opportunity: 'spark', Publication: 'book', Partner: 'partner', 'Team member': 'users', Page: 'layers', Homepage: 'home', 'Contact page': 'mail' };
 const DECISION: Record<Kind, { icon: string; cta: string; label: string }> = {
   review: { icon: 'inbox', cta: 'Review', label: 'Review' }, publish: { icon: 'rocket', cta: 'Publish', label: 'Ready' },
   changes: { icon: 'undo', cta: 'Update', label: 'Changes' }, failed: { icon: 'alert', cta: 'Details', label: 'Failed' },

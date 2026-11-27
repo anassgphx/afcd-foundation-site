@@ -54,6 +54,16 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
         writeFileSync(join(out, k === 'partners' ? 'partners.html' : files[k]), (k === 'partners' && existsSync(join(out, 'partners.html')) ? readFileSync(join(out, 'partners.html'), 'utf8') : '')
           + `<div data-studio-rev="${pg.revision}"><h1>${esc(pg.hero?.title ?? '')}</h1>${(pg.people ?? []).map((p: any) => `<li>${esc(p.name)}${p.image ? `<img src="${p.image.src}">` : ''}</li>`).join('')}</div>`);
     }
+    // Stand-in for content.py's team.html with src/data/team.json (Team module): layout marker, shown groups in order, one marker per person.
+    const teamFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/team.json') : mode.teamFile;
+    if (teamFile && existsSync(teamFile)) {
+      const tj = JSON.parse(readFileSync(teamFile, 'utf8'));
+      const e = (x: string) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      // like content.py, the page also keeps the published Our Team page's own revision marker (from about.json)
+      const aboutRev = existsSync(join(out, 'team.html')) ? (readFileSync(join(out, 'team.html'), 'utf8').match(/data-studio-rev="[^"]*"/)?.[0] ?? '') : '';
+      writeFileSync(join(out, 'team.html'), `<div ${aboutRev} data-studio-team-layout="${tj.layoutRevision}">` + (tj.groups as any[]).filter((g) => g.show).map((g) => `<section id="${g.key}"><h2>${e(g.name)}</h2>`
+        + (tj.members as any[]).filter((m) => m.group === g.key).map((m) => `<li data-studio-team-rev="${m.revision}">${e(m.name)}${m.image ? `<img src="${m.image.src}">` : ''}</li>`).join('') + '</section>').join('') + '</div>');
+    }
     // Stand-in for the events templates: listing + one page per event with the revision marker.
     const eventsFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/events.json') : mode.eventsFile;
     if (eventsFile && existsSync(eventsFile)) {

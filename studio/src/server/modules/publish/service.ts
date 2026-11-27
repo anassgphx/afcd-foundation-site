@@ -54,11 +54,14 @@ import * as TR from '../translations/service.ts';
 import * as MENU from '../menus/service.ts';
 import * as SET from '../settings/service.ts';
 import { applyPagesStale, writeApplyPages } from '../apply/publish.ts';
+import { teamMembers, teamMemberRevisions, teamLayoutRevisions } from '../../db/schema.ts';
+import { liveMembers, teamEntries, type TeamOverride } from '../team/render.ts';
+import { addLayoutRevision, liveLayout, workingLayout, type LayoutSnapshot, type MemberSnapshot } from '../team/service.ts';
 
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
 
-export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string; partnersFile?: string; eventsFile?: string; fieldsFile?: string; pillarsFile?: string; aboutFile?: string }) => Promise<string>;
+export type BuildRunner = (cfg: Config, mode: { kind: 'live' } | { kind: 'preview'; dataFile: string; pagesDir: string; outDir: string; only?: 'pages'; newsFile?: string; partnersFile?: string; eventsFile?: string; fieldsFile?: string; pillarsFile?: string; aboutFile?: string; teamFile?: string }) => Promise<string>;
 
 /** Default runner: the real generator and build. Tests inject a fake. */
 export const realRunner: BuildRunner = async (cfg, mode) => {
@@ -68,7 +71,7 @@ export const realRunner: BuildRunner = async (cfg, mode) => {
     const b = await run('npm', ['run', 'build'], { ...opts, env: { ...process.env } });
     return [a.stdout, b.stdout, b.stderr].join('\n');
   }
-  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}), ...(mode.partnersFile ? { STUDIO_PARTNERS_JSON: mode.partnersFile } : {}), ...(mode.eventsFile ? { STUDIO_EVENTS_JSON: mode.eventsFile } : {}), ...(mode.fieldsFile ? { PAGE_FIELDS_JSON: mode.fieldsFile } : {}), ...(mode.pillarsFile ? { STUDIO_PILLARS_JSON: mode.pillarsFile } : {}), ...(mode.aboutFile ? { STUDIO_ABOUT_JSON: mode.aboutFile } : {}) };
+  const env = { ...process.env, STUDIO_PROJECTS_JSON: mode.dataFile, STUDIO_OUT: mode.pagesDir, PAGES_DIR: mode.pagesDir, OUT_DIR: mode.outDir, ...(mode.newsFile ? { STUDIO_NEWS_JSON: mode.newsFile } : {}), ...(mode.partnersFile ? { STUDIO_PARTNERS_JSON: mode.partnersFile } : {}), ...(mode.eventsFile ? { STUDIO_EVENTS_JSON: mode.eventsFile } : {}), ...(mode.fieldsFile ? { PAGE_FIELDS_JSON: mode.fieldsFile } : {}), ...(mode.pillarsFile ? { STUDIO_PILLARS_JSON: mode.pillarsFile } : {}), ...(mode.aboutFile ? { STUDIO_ABOUT_JSON: mode.aboutFile } : {}), ...(mode.teamFile ? { STUDIO_TEAM_JSON: mode.teamFile } : {}) };
   const a = mode.only === 'pages' ? { stdout: '' } : await run('python3', ['-I', 'src/content.py'], { ...opts, env });
   const b = await run('node', ['build.mjs'], { ...opts, env });
   return [a.stdout, b.stdout].join('\n');
@@ -254,6 +257,20 @@ export class Publisher {
     return mediaIds;
   }
 
+  get teamFile() { return resolve(this.cfg.siteRoot, 'src/data/team.json'); }
+
+  /** team.json: the live Team members in the live layout (0034 publishes the first layout, so it exists from then on).
+   *  Without a live layout the file is removed and team.html keeps the people of about.json. Returns photo media ids. */
+  private async writeTeam(file: string, o: { member?: TeamOverride; layout?: { id: string; snapshot: LayoutSnapshot } } = {}) {
+    const layout = o.layout ?? await liveLayout(this.db);
+    if (!layout) { if (existsSync(file)) rmSync(file); return [] as string[]; }
+    const { mediaIds, ...data } = await teamEntries(this.db, await liveMembers(this.db, o.member), layout);
+    mkdirSync(resolve(file, '..'), { recursive: true });
+    const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), ...data }, null, 2) + '\n'); renameSync(tmp, file);
+    return mediaIds;
+  }
+
   get eventsFile() { return resolve(this.cfg.siteRoot, 'src/data/events.json'); }
 
   /** Live events (optionally overriding one). */
@@ -411,13 +428,14 @@ export class Publisher {
     return ids;
   }
 
-  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; pillar?: { pillarId: string; revisionId: string | null }; about?: { pageId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; publication?: { publicationId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { file?: string; revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string }; settings?: { values: SET.Values; revision: string } } = {}) {
+  private async writeSite(o: { project?: { projectId: string; revisionId: string | null }; page?: { pageId: string; revisionId: string | null }; article?: { articleId: string; revisionId: string | null }; partner?: { partnerId: string; revisionId: string | null }; pillar?: { pillarId: string; revisionId: string | null }; about?: { pageId: string; revisionId: string | null }; event?: { eventId: string; revisionId: string | null }; opportunity?: { opportunityId: string; revisionId: string | null }; publication?: { publicationId: string; revisionId: string | null }; seo?: { overrideId: string; revisionId: string | null }; home?: { file?: string; revisionId: string | null }; redirects?: 'pending'; schema?: { settings: SchemaSettings; revision: string } | null; translations?: { lang: TR.Lang; data: TR.LangData; revision: string }; menus?: { menu: MENU.Menu; revision: string }; settings?: { values: SET.Values; revision: string }; team?: { member?: TeamOverride; layout?: { id: string; snapshot: LayoutSnapshot } } } = {}) {
     const entries = await this.liveEntries(o.project, o.publication);
     await this.writeRedirects(o.redirects === 'pending');
     this.writeData(this.dataFile, entries);
     const partnerMedia = await this.writePartners(this.partnersFile, o.partner, o.project);
     const pillarMedia = await this.writePillars(this.pillarsFile, o.pillar);
     const aboutMedia = await this.writeAbout(this.aboutFile, await this.liveAbout(o.about));
+    const teamMedia = await this.writeTeam(this.teamFile, o.team);
     const eventMedia = await this.writeEvents(this.eventsFile, o.event, o.project);
     const seoMedia = await this.writeSeo(o.seo);
     await this.writeSchema(o.schema, o.article, o.event);
@@ -442,7 +460,7 @@ export class Publisher {
       const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
       writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
     }
-    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...aboutMedia, ...eventMedia, ...oppMedia, ...applyMedia, ...pub.mediaIds, ...seoMedia, ...homeMedia, ...settingsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...aboutMedia, ...teamMedia, ...eventMedia, ...oppMedia, ...applyMedia, ...pub.mediaIds, ...seoMedia, ...homeMedia, ...settingsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
     return { entries, live };
   }
 
@@ -591,7 +609,7 @@ export class Publisher {
       const msg = (e as Error).message;
       try { await this.rebuildFromDb(log); } catch (e2) { log.push(`Restore also failed: ${(e2 as Error).message}`); }
       await this.db.update(publishJobs).set({ status: 'failed', error: msg, log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
-      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('settings') ? 'settings' : kind.includes('about') ? 'about_page' : kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('pillar') ? 'pillar' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('publication') ? 'publication' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
+      await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('settings') ? 'settings' : kind.includes('about') ? 'about_page' : kind.includes('team') ? 'team_member' : kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('pillar') ? 'pillar' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('publication') ? 'publication' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
       throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
     }
     void confirmPublic(this.db, this.cfg, job.id, actor);   // in the background: is the public copy serving this build?
@@ -890,6 +908,135 @@ export class Publisher {
       const file = ABOUT_META[snap.key].file;
       if (!existsSync(resolve(outDir, file))) throw new AppError(409, 'The preview could not be generated.');
       return { token, file, mediaIds: [] as string[] };
+    });
+  }
+
+  // ---------------------------------------------------------------- Team
+  /** Checks team.html carries the live layout and shows (or no longer shows) the member's revision. */
+  private verifyTeam(expect: { layoutId?: string; revisionId?: string; removed?: boolean }) {
+    const f = resolve(this.cfg.siteRoot, 'team.html');
+    if (!existsSync(f)) throw new Error('team.html was not generated.');
+    const html = readFileSync(f, 'utf8');
+    if (expect.layoutId && !html.includes(`data-studio-team-layout="${expect.layoutId}"`)) throw new Error('team.html does not use the published order and groups.');
+    if (expect.revisionId) {
+      const present = html.includes(`data-studio-team-rev="${expect.revisionId}"`);
+      if (expect.removed && present) throw new Error('The person is still on team.html.');
+      if (!expect.removed && !present) throw new Error('The person is missing from team.html.');
+    }
+  }
+
+  private async memberGroupLive(groupKey: string) {
+    const layout = await liveLayout(this.db);
+    const g = layout?.snapshot.groups.find((x) => x.key === groupKey);
+    if (!g) throw new AppError(409, 'This person’s group is not on the website yet. Publish the order and groups first (Team › Order and groups).');
+    return g;
+  }
+
+  async publishTeamMember(actor: NonNullable<Actor>, memberId: string) {
+    return this.locked(async () => {
+      const [m] = await this.db.select().from(teamMembers).where(eq(teamMembers.id, memberId));
+      if (!m) throw new AppError(404, 'Team member not found.');
+      if (m.status !== 'approved' || !m.approvedRevisionId) throw new AppError(409, 'Only an approved team member can be published.');
+      const [rev] = await this.db.select().from(teamMemberRevisions).where(eq(teamMemberRevisions.id, m.approvedRevisionId));
+      const g = await this.memberGroupLive((rev.snapshot as unknown as MemberSnapshot).groupKey);
+      const { job, log } = await this.deliver('publish_team', actor, memberId, rev.id, async (log) => {
+        await this.writeSite({ team: { member: { memberId, revisionId: rev.id } } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        if (!m.hidden && g.show) this.verifyTeam({ revisionId: rev.id });
+      }, `Publishing “${m.name}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(teamMembers).set({ status: 'published', publishedRevisionId: rev.id, publishedAt: new Date(), approvedRevisionId: null, updatedAt: new Date() }).where(eq(teamMembers.id, memberId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'team.publish', { type: 'team_member', id: memberId }, `Published team member “${m.name}” (revision ${rev.number})${m.hidden ? ', still hidden from the page' : ''}`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file: 'team.html', hidden: m.hidden };
+    });
+  }
+
+  async unpublishTeamMember(actor: NonNullable<Actor>, memberId: string) {
+    return this.locked(async () => {
+      const [m] = await this.db.select().from(teamMembers).where(eq(teamMembers.id, memberId));
+      if (!m) throw new AppError(404, 'Team member not found.');
+      if (!m.publishedRevisionId) throw new AppError(409, 'This person is not on the website.');
+      const revId = m.publishedRevisionId;
+      const { job, log } = await this.deliver('unpublish_team', actor, memberId, revId, async (log) => {
+        await this.writeSite({ team: { member: { memberId, revisionId: null } } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyTeam({ revisionId: revId, removed: true });
+      }, `Removing “${m.name}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(teamMembers).set({ status: 'draft', publishedRevisionId: null, publishedAt: null, hidden: false, updatedAt: new Date() }).where(eq(teamMembers.id, memberId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'team.unpublish', { type: 'team_member', id: memberId }, `Removed team member “${m.name}” from the website`, { jobId: job.id });
+      });
+      return { jobId: job.id };
+    });
+  }
+
+  /** Hides a live member from team.html, or shows them again, at once (the published revision stays as it is). */
+  async setTeamMemberHidden(actor: NonNullable<Actor>, memberId: string, hidden: boolean) {
+    return this.locked(async () => {
+      const [m] = await this.db.select().from(teamMembers).where(eq(teamMembers.id, memberId));
+      if (!m) throw new AppError(404, 'Team member not found.');
+      if (!m.publishedRevisionId) throw new AppError(409, 'Only a published team member can be hidden or shown. Publish this person first.');
+      if (m.hidden === hidden) return { hidden };
+      const revId = m.publishedRevisionId;
+      const [rev] = await this.db.select().from(teamMemberRevisions).where(eq(teamMemberRevisions.id, revId));
+      const g = hidden ? null : await this.memberGroupLive((rev.snapshot as unknown as MemberSnapshot).groupKey);
+      const { job, log } = await this.deliver(hidden ? 'hide_team' : 'show_team', actor, memberId, revId, async (log) => {
+        await this.writeSite({ team: { member: { memberId, hidden } } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        if (hidden || g?.show) this.verifyTeam({ revisionId: revId, removed: hidden });
+      }, `${hidden ? 'Hiding' : 'Showing'} “${m.name}” failed`);
+      await this.db.transaction(async (tx) => {
+        await tx.update(teamMembers).set({ hidden, updatedAt: new Date() }).where(eq(teamMembers.id, memberId));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, hidden ? 'team.hide' : 'team.show', { type: 'team_member', id: memberId }, `${hidden ? 'Hid' : 'Showed'} “${m.name}” ${hidden ? 'from' : 'on'} the team page`, { jobId: job.id });
+      });
+      return { hidden, jobId: job.id };
+    });
+  }
+
+  /** Publishes the working groups and order of the people (team.publish, no review step: nothing new is said about anyone). */
+  async publishTeamLayout(actor: NonNullable<Actor>) {
+    return this.locked(async () => {
+      const snap = await workingLayout(this.db);
+      const keys = new Set(snap.groups.map((g) => g.key));
+      const lost = (await liveMembers(this.db)).filter((m) => !keys.has(m.snap.groupKey));
+      if (lost.length) throw new AppError(409, `${lost.map((m) => m.snap.name).join(', ')} would disappear from the page: their published group no longer exists. Publish them in their new group first.`);
+      const rev = await addLayoutRevision(this.db, snap, 'published', actor.id);   // stays unpublished if the build fails
+      const { job, log } = await this.deliver('publish_team_layout', actor, rev.id, rev.id, async (log) => {
+        await this.writeSite({ team: { layout: { id: rev.id, snapshot: snap } } });
+        log.push(await this.runner(this.cfg, { kind: 'live' }));
+        this.verifyTeam({ layoutId: rev.id });
+      }, 'Publishing the team order and groups failed');
+      await this.db.transaction(async (tx) => {
+        await tx.update(teamLayoutRevisions).set({ publishedAt: new Date() }).where(eq(teamLayoutRevisions.id, rev.id));
+        await tx.update(publishJobs).set({ status: 'succeeded', log: log.join('\n').slice(-20000), finishedAt: new Date() }).where(eq(publishJobs.id, job.id));
+        await audit(tx, actor, 'team.layout_publish', { type: 'team_layout', id: rev.id }, `Published the team order and groups (version ${rev.number})`, { revisionId: rev.id, jobId: job.id });
+      });
+      return { jobId: job.id, revisionId: rev.id, file: 'team.html' };
+    });
+  }
+
+  /** Builds team.html with this member's saved working copy (and the working order and groups) in an isolated folder. */
+  async previewTeam(memberId: string | null, snap: MemberSnapshot | null) {
+    return this.locked(async () => {
+      this.cleanupPreviews();
+      const token = randomBytes(16).toString('hex');
+      const dir = resolve(this.cfg.previewDir, token);
+      const pagesDir = resolve(dir, 'pages'), outDir = resolve(dir, 'site'), dataFile = resolve(dir, 'projects.json'), teamFile = resolve(dir, 'team.json');
+      mkdirSync(pagesDir, { recursive: true }); mkdirSync(outDir, { recursive: true });
+      this.writeData(dataFile, await this.liveEntries());
+      const layout = { id: 'preview', snapshot: await workingLayout(this.db) };
+      let live = await liveMembers(this.db, memberId ? { memberId, revisionId: null } : undefined);
+      if (memberId && snap) live = live.concat({ id: memberId, revisionId: 'preview', snap });
+      const { mediaIds, ...data } = await teamEntries(this.db, live, layout);
+      writeFileSync(teamFile, JSON.stringify({ version: 1, source: 'AFCD Studio (preview)', ...data }, null, 2));
+      await this.writeNews(resolve(dir, 'news.json'), pagesDir, await this.liveArticles());
+      await this.runner(this.cfg, { kind: 'preview', dataFile, pagesDir, outDir, newsFile: resolve(dir, 'news.json'), teamFile });
+      if (!existsSync(resolve(outDir, 'team.html'))) throw new AppError(409, 'The preview could not be generated.');
+      return { token, file: 'team.html', mediaIds };
     });
   }
 

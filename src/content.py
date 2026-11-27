@@ -383,6 +383,14 @@ ABOUT_DEFAULTS = {
 }
 # Team groups, in the order the page shows them (Studio offers the same list).
 TEAM_GROUPS = [('board', 'Board'), ('executive', 'Executive team'), ('staff', 'Staff'), ('volunteers', 'Volunteers & ambassadors')]
+# Since Studio 0034 the people are Team records (AFCD Studio > Team): src/data/team.json (or env STUDIO_TEAM_JSON) holds the
+# live people, the groups (name, description, shown) and their order. While it exists it replaces the people of about.json
+# and the group list above; the page texts (title, intro, closing) still come from the Our Team page. Plain text: escaped here.
+_TEAM_JSON = Path(os.environ.get('STUDIO_TEAM_JSON') or Path(__file__).parent / 'data' / 'team.json')
+STUDIO_TEAM = _json.loads(_TEAM_JSON.read_text(encoding='utf-8')) if _TEAM_JSON.is_file() else None
+_TEAM_GROUP_INFO = {g['key']: g for g in (STUDIO_TEAM or {}).get('groups') or []}
+if STUDIO_TEAM is not None:
+    TEAM_GROUPS = [(g['key'], g['name']) for g in STUDIO_TEAM.get('groups') or []]
 
 _ABOUT_JSON = Path(os.environ.get('STUDIO_ABOUT_JSON') or Path(__file__).parent / 'data' / 'about.json')
 STUDIO_ABOUT = _json.loads(_ABOUT_JSON.read_text(encoding='utf-8')).get('pages', {}) if _ABOUT_JSON.is_file() else {}
@@ -505,7 +513,8 @@ ABOUT_SECTIONS = {
         'where-we-work': {'tab': 'Where we work', 'label': 'Where We Work', 'title': 'Places', 'soft': 'we serve.', 'meta': 'Across Morocco', 'sub': 'Coverage'},
     },
     'team': {
-        **{g: {'tab': lab, 'label': lab, 'title': lab + '.', 'soft': '', 'meta': '', 'desc': ''} for g, lab in TEAM_GROUPS},
+        **{g: {'tab': lab, 'label': lab, 'title': lab + '.', 'soft': '', 'meta': '', 'desc': _TEAM_GROUP_INFO.get(g, {}).get('description') or '',
+               'show': _TEAM_GROUP_INFO.get(g, {}).get('show', True)} for g, lab in TEAM_GROUPS},
         'people': {'fixed': True, 'tab': 'The team', 'label': 'The Team', 'title': 'Meet', 'soft': 'the team.', 'desc': 'Team profiles are not published yet. They appear here as soon as AFCD publishes them.'},
     },
     'partners': {
@@ -742,6 +751,12 @@ def about():
 
     # ---------------------------------------------------------------- Our Team
     c = about_content('team')
+    team_attr = ''
+    if STUDIO_TEAM is not None:   # Team records: their groups, order and people; the groups' own settings replace the page's
+        gk = {g for g, _l in TEAM_GROUPS}
+        c = dict(c, people=STUDIO_TEAM.get('members') or [], order=[g for g, _l in TEAM_GROUPS],
+                 sections={k: v for k, v in (c.get('sections') or {}).items() if k not in gk})
+        team_attr = f' data-studio-team-layout="{_esc(STUDIO_TEAM.get("layoutRevision") or "")}"'
     n = num()
     people = c.get('people') or []
     by_group = [(g, label, [p for p in people if p.get('group') == g]) for g, label in TEAM_GROUPS]
@@ -750,8 +765,13 @@ def about():
         img = p.get('image')
         vis = media_img(img, 'h-full w-full', '(min-width: 1024px) 22vw, 50vw') if img else f'<span class="abx-p-ini" aria-hidden="true">{_esc("".join(w[0] for w in (p.get("name") or "?").split()[:2]).upper())}</span>'
         bio = (p.get('bio') or '').strip()
-        return (f'<li class="abx-p"><div class="abx-p-vis{" has-img" if img else ""}">{vis}</div><div class="abx-p-b"><span class="abx-p-n">{_esc(p["name"])}</span>'
-                f'<span class="abx-p-r">{_esc(p.get("role") or "")}</span>' + (f'<span class="abx-p-d">{_esc(bio)}</span>' if bio else '') + '</div></li>')
+        rev = f' data-studio-team-rev="{_esc(p["revision"])}"' if p.get('revision') else ''
+        links = ([f'<a href="mailto:{_esc(p["email"])}">Email</a>'] if p.get('email') else []) + [
+            f'<a href="{_esc(l["url"])}" target="_blank" rel="noopener noreferrer">{_esc(l["label"])} <span aria-hidden="true">↗</span></a>'
+            for l in p.get('links') or [] if str(l.get('url') or '').startswith('https://')]
+        more = f'<span class="abx-p-l">{"".join(links)}</span>' if links else ''
+        return (f'<li class="abx-p"{rev}><div class="abx-p-vis{" has-img" if img else ""}">{vis}</div><div class="abx-p-b"><span class="abx-p-n">{_esc(p["name"])}</span>'
+                f'<span class="abx-p-r">{_esc(p.get("role") or "")}</span>' + (f'<span class="abx-p-d">{_esc(bio)}</span>' if bio else '') + more + '</div></li>')
     grouped = {g: [p for p in people if p.get('group') == g] for g, _l in TEAM_GROUPS}
     def group_block(g):
         return lambda k, cfg: f"""
@@ -772,7 +792,7 @@ def about():
         tabs = [('people', _esc(ec.get('tab') or ec.get('label') or ''))]
     facts = [(lab, f'{len(grouped[g]):02d}') for g, lab in TEAM_GROUPS if grouped[g] and about_section('team', c, g).get('show', True)][:4]
     body = page_header([ABOUT, ('Our Team', 'team.html')], 'About · Our Team', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
-<div class="plx abx"{_rev(c)}>
+<div class="plx abx"{_rev(c)}{team_attr}>
 {abx_overview('team.html', f'{len(people):02d}' if people else 'AFCD', _esc(c.get('intro') or ''), facts,
               [('Meet the team <span aria-hidden="true">↓</span>', f'#{tabs[0][0]}'), ('Join us <span aria-hidden="true">↗</span>', 'get-involved.html')], '', 'Our Team')}
 {abx_tabs(tabs)}

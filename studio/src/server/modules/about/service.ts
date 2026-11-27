@@ -16,7 +16,7 @@ import { and, asc, desc, eq, max } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
-import { aboutPages, aboutPageRevisions, media, objectivePillars, objectives, pillars, reviewComments } from '../../db/schema.ts';
+import { aboutPages, aboutPageRevisions, media, objectivePillars, objectives, pillars, reviewComments, teamMembers } from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
@@ -28,7 +28,7 @@ export const ABOUT_META: Record<AboutKey, { title: string; file: string; desc: s
   'our-story': { title: 'Our Story', file: 'our-story.html', desc: 'Introduction, president’s statement, journey, principles, focus areas, approach and impact numbers.' },
   'mission-vision': { title: 'Mission & Vision', file: 'mission-vision.html', desc: 'Mission, values and vision, shown as one path from today to tomorrow.' },
   strategy: { title: 'Strategy & Objectives', file: 'strategy.html', desc: 'The strategic objectives SO-01 to SO-06, who we serve and where we work.' },
-  team: { title: 'Our Team', file: 'team.html', desc: 'The people of AFCD by group: board, executive team, staff, volunteers.' },
+  team: { title: 'Our Team', file: 'team.html', desc: 'The page’s title, introduction and closing. The people and groups are managed in Team.' },
   partners: { title: 'Partners page', file: 'partners.html', desc: 'The texts around the partner directory. The organisations themselves are edited in Partners.' },
 };
 export const TEAM_GROUPS = [
@@ -274,11 +274,13 @@ export async function restoreAboutRevision(db: DB, actor: NonNullable<Actor>, re
 
 export async function listAbout(db: DB) {
   const rows = await db.select().from(aboutPages);
+  // Our Team: the people are Team records since 0034; count the ones on the website
+  const onTeamPage = (await db.select({ hidden: teamMembers.hidden, live: teamMembers.publishedRevisionId }).from(teamMembers)).filter((m) => m.live && !m.hidden).length;
   return ABOUT_KEYS.map((k) => rows.find((r) => r.key === k)).filter(Boolean).map((r) => {
     const m = ABOUT_META[r!.key as AboutKey];
     const c = r!.draft as Record<string, any> | null;
     return { id: r!.id, key: r!.key, title: m.title, file: m.file, desc: m.desc, status: r!.status, imported: !!c, publishedRevisionId: r!.publishedRevisionId,
-      publishedAt: r!.publishedAt, updatedAt: r!.updatedAt, people: r!.key === 'team' && c ? (c.people ?? []).length : null };
+      publishedAt: r!.publishedAt, updatedAt: r!.updatedAt, people: r!.key === 'team' ? onTeamPage : null };
   });
 }
 

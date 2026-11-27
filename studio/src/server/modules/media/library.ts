@@ -40,6 +40,8 @@ export async function usage(db: DB, ids: string[]): Promise<Record<string, Use[]
     add(r.m, { kind: 'Publication', title: r.name, href: `/studio/publications/${r.id}`, where: 'Cover', live: false });
   for (const r of await db.select({ id: t.partners.id, name: t.partners.name, m: t.partners.logoMediaId }).from(t.partners).where(inArray(t.partners.logoMediaId, ids)))
     add(r.m, { kind: 'Partner', title: r.name, href: `/studio/partners/${r.id}`, where: 'Logo', live: false });
+  for (const r of await db.select({ id: t.teamMembers.id, name: t.teamMembers.name, m: t.teamMembers.photoMediaId }).from(t.teamMembers).where(inArray(t.teamMembers.photoMediaId, ids)))
+    add(r.m, { kind: 'Team member', title: r.name, href: `/studio/team/${r.id}`, where: 'Photo', live: false });
   for (const r of await db.select({ id: t.seoOverrides.id, file: t.seoOverrides.file, m: t.seoOverrides.imageMediaId }).from(t.seoOverrides).where(inArray(t.seoOverrides.imageMediaId, ids)))
     add(r.m, { kind: 'SEO', title: r.file, href: '/studio/seo/pages', where: 'Share image', live: false });
   for (const r of await db.select({ id: t.pillars.id, name: t.pillars.name, m: t.pillars.mediaId }).from(t.pillars).where(inArray(t.pillars.mediaId, ids)))

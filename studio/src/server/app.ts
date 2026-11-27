@@ -40,6 +40,7 @@ import { registerInboxRoutes } from './modules/inbox/routes.ts';
 import { registerSettingsRoutes } from './modules/settings/routes.ts';
 import { registerOnPageRoutes } from './modules/seo/onpage-routes.ts';
 import { registerPublicationRoutes } from './modules/publications/routes.ts';
+import { registerTeamRoutes } from './modules/team/routes.ts';
 import { registerApplyEvaluationRoutes, registerApplyFormRoutes, registerApplyMessageRoutes, registerApplyRoutes } from './modules/apply/routes.ts';
 import { registerApplyPublicRoutes } from './modules/apply/public.ts';
 import { projectManageRoutes } from './modules/projects/manage.ts';
@@ -442,6 +443,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
 
   // ---------------------------------------------------------------- Publications (reports, studies…) and their PDF files
   registerPublicationRoutes(api);   // modules/publications
+  registerTeamRoutes(api);   // modules/team
   registerApplyRoutes(api);   // modules/apply (AFCD Apply)
   registerApplyFormRoutes(api);
   registerApplyEvaluationRoutes(api);

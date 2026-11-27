@@ -195,6 +195,25 @@ function schemaOrg() {
 }
 const schemaPage = (file) => (SCHEMA?.pages?.[file] ?? []).filter((x) => x && (x['@type'] === 'Article' || x['@type'] === 'Event'));
 const jsonLd = (obj) => JSON.stringify(obj).replace(/</g, '\\u003c');   // editor text can never close the script tag
+// Team (AFCD Studio > Team): Person markup for the people team.html shows, from src/data/team.json (or env STUDIO_TEAM_JSON).
+// Without the file nothing is added. Only https profile links and the foundation's public email addresses pass.
+const TEAM_FILE = process.env.STUDIO_TEAM_JSON || join(SRC, 'data', 'team.json');
+const TEAM = existsSync(TEAM_FILE) ? JSON.parse(readFileSync(TEAM_FILE, 'utf8')) : null;
+function teamLd() {
+  const shown = new Set((TEAM?.groups ?? []).filter((g) => g.show !== false).map((g) => g.key));
+  const people = (TEAM?.members ?? []).filter((m) => shown.has(m.group) && m.name);
+  if (!people.length) return null;
+  return {
+    '@context': 'https://schema.org', '@type': 'ItemList', name: `${SITE_NAME} team`, url: pageUrl('team.html'),
+    itemListElement: people.map((m, i) => {
+      const sameAs = (m.links ?? []).map((l) => l.url).filter((u) => typeof u === 'string' && /^https:\/\/[^\s"'<>]+$/.test(u));
+      return { '@type': 'ListItem', position: i + 1, item: {
+        '@type': 'Person', name: m.name, ...(m.role ? { jobTitle: m.role } : {}), ...(m.image?.src ? { image: SITE + m.image.src } : {}),
+        ...(m.email && PUBLIC_EMAILS.includes(m.email) ? { email: m.email } : {}), ...(sameAs.length ? { sameAs } : {}), worksFor: { '@id': SITE + '#organization' },
+      } };
+    }),
+  };
+}
 
 function seoTags(file, meta) {
   const noindex = !PRODUCTION || meta.noindex === 'true';
@@ -230,6 +249,7 @@ function seoTags(file, meta) {
   const bc = breadcrumbs(file, meta);
   if (bc) ld.push(bc);
   ld.push(...schemaPage(file));
+  if (file === 'team.html' && TEAM) { const t = teamLd(); if (t) ld.push(t); }
   for (const obj of ld) tags.push(`<script type="application/ld+json">${jsonLd(obj)}</script>`);
   return tags.join('\n');
 }

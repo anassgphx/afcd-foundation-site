@@ -3167,3 +3167,28 @@ ol.abx-tl .abx-tl-d { margin-top: 8px; max-width: none; font-size: 15px; color: 
 .pjc-grid { display: grid; gap: 48px 24px; }
 @media (min-width: 640px) { .pjc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1024px) { .pjc-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Our Team: each person a bordered card (photo, then name, role, bio and links as small buttons); a soft initials tile
+   without a photo; board and executive team in larger cards. No counts. */
+.abx-ps { gap: 12px; }
+@media (min-width: 900px) { .abx-ps { gap: 16px; } }
+@media (min-width: 1024px) { .abx-ps-board, .abx-ps-executive { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.abx-p { display: flex; flex-direction: column; overflow: hidden; border: 1px solid #ECECEA; border-radius: 24px; background: #fff;
+  transition: border-color .3s ease, transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .3s ease; }
+.abx-p:hover { border-color: #000; transform: translateY(-2px); box-shadow: 0 14px 30px -20px rgba(0,0,0,.35); }
+.abx-p .abx-p-vis { aspect-ratio: 1 / 1; border-radius: 0; background: linear-gradient(180deg, #F7F7F6, #EDEDEB); }
+.abx-p .abx-p-vis.has-img { background: #F4F4F3; }
+.abx-ps-board .abx-p-vis, .abx-ps-executive .abx-p-vis { aspect-ratio: 4 / 4.2; }
+.abx-p .abx-p-ini { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 9999px; background: #fff; border: 1px solid #E7E5E4;
+  color: #44403C; -webkit-text-stroke: 0; font-size: 24px; font-weight: 600; letter-spacing: -.02em; }
+.abx-p .abx-p-b { display: flex; flex: 1; flex-direction: column; padding: 16px 16px 18px; }
+@media (min-width: 900px) { .abx-p .abx-p-b { padding: 18px 20px 20px; } }
+.abx-p .abx-p-n { font-size: 17px; }
+.abx-p .abx-p-r { margin-top: 4px; font-size: 13.5px; line-height: 1.45; color: #78716C; }
+.abx-p .abx-p-d { margin-top: 10px; font-size: 14px; line-height: 1.6; color: #57534E; }
+.abx-p .abx-p-l { gap: 6px; margin-top: auto; padding-top: 14px; }
+.abx-p .abx-p-l a { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 12px; border: 1px solid #E7E5E4; border-radius: 9999px;
+  font-size: 12.5px; font-weight: 500; text-decoration: none; transition: border-color .2s ease, background-color .2s ease, color .2s ease; }
+.abx-p .abx-p-l a:hover { border-color: #000; background: #000; color: #fff; }
+@media (max-width: 480px) { .abx-p .abx-p-ini { width: 56px; height: 56px; font-size: 19px; } .abx-p .abx-p-n { font-size: 15.5px; } .abx-p .abx-p-d { font-size: 13.5px; } }
+@media (prefers-reduced-motion: reduce) { .abx-p, .abx-p:hover { transition: none; transform: none; } }

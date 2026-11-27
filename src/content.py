@@ -776,8 +776,8 @@ def about():
     def group_block(g):
         return lambda k, cfg: f"""
 <section id="{g}" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{abx_head(k, cfg, f'{len(grouped[g])} ' + ('person' if len(grouped[g]) == 1 else 'people'))}
-    <ul class="abx-ps mt-8 lg:mt-10">{''.join(person(p) for p in grouped[g])}</ul>
+  <div class="wrap">{abx_head(k, cfg)}
+    <ul class="abx-ps abx-ps-{_esc(g)} mt-8 lg:mt-10">{''.join(person(p) for p in grouped[g])}</ul>
   </div>
 </section>""" if grouped[g] else ''
     groups_html, tabs = abx_build('team', c, {g: group_block(g) for g, _l in TEAM_GROUPS})
@@ -790,10 +790,9 @@ def about():
   </div>
 </section>'''
         tabs = [('people', _esc(ec.get('tab') or ec.get('label') or ''))]
-    facts = [(lab, f'{len(grouped[g]):02d}') for g, lab in TEAM_GROUPS if grouped[g] and about_section('team', c, g).get('show', True)][:4]
     body = page_header([ABOUT, ('Our Team', 'team.html')], 'About · Our Team', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
 <div class="plx abx"{_rev(c)}{team_attr}>
-{abx_overview('team.html', f'{len(people):02d}' if people else 'AFCD', _esc(c.get('intro') or ''), facts,
+{abx_overview('team.html', 'AFCD', _esc(c.get('intro') or ''), [],
               [('Meet the team <span aria-hidden="true">↓</span>', f'#{tabs[0][0]}'), ('Join us <span aria-hidden="true">↗</span>', 'get-involved.html')], '', 'Our Team')}
 {abx_tabs(tabs)}
 {groups_html}

@@ -95,3 +95,19 @@
 .sb-open:hover { text-decoration: underline; }
 .sb-acts { white-space: nowrap; }
 .sb-acts .btn + .btn { margin-left: 4px; }
+
+/* bulk actions (Bulk.tsx) */
+.bk-bar { flex-wrap: wrap; gap: 6px 8px; }
+.bk-bar .btn svg { width: 14px; height: 14px; }
+.bk-sum { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 12px; border-radius: 10px; background: var(--sunken); border: 1px solid var(--line); font-size: var(--fs-md); }
+.bk-sum b { font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
+.bk-skip summary { cursor: pointer; font-size: var(--fs-sm); color: var(--warn); font-weight: 600; }
+.bk-skip ul { margin: 6px 0 0; padding-left: 18px; font-size: var(--fs-sm); color: var(--ink-2); max-height: 160px; overflow: auto; }
+.bk-seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.bk-seg label { display: inline-flex; align-items: center; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.bk-seg label.on { border-color: var(--ink); background: var(--hover); }
+.bk-seg input { position: absolute; opacity: 0; pointer-events: none; }
+.bk-seg label:focus-within { box-shadow: var(--focus); }
+.bk-revs { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 220px; overflow: auto; }
+.bk-revs legend { font-size: var(--fs-sm); font-weight: 500; color: var(--ink-2); padding-bottom: 6px; }
+.bk-report { margin: 0; padding-left: 18px; display: grid; gap: 6px; }

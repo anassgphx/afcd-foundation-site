@@ -10,6 +10,7 @@ import type { Answers, Field, FileRef, FormDef } from '../../server/modules/appl
 import { FIELD_TYPES, evaluate, t } from '../../server/modules/apply/engine.ts';
 import './submissions.css';
 import { StatusBadge as StatusBadge2 } from './badges.tsx';
+import { BulkBar } from './Bulk.tsx';
 import { MessagesTable } from './Communications.tsx';
 
 export const APP_STATUS: Record<string, string> = {
@@ -28,7 +29,7 @@ type Page = { items: Row[]; total: number; next: string | null };
 export function SubmissionsTable({ call, status, eligibility, q, hint, onChanged, onOpen, onRows, reloadKey }: { call: string; status: string; eligibility: string; q: string; hint?: React.ReactNode; onChanged?: () => void; onOpen?: (id: string) => void; onRows?: (ids: string[]) => void; reloadKey?: number }) {
   const can = useCan(); const toast = useToast();
   const [rows, setRows] = useState<Row[] | null>(null); const [total, setTotal] = useState(0); const [next, setNext] = useState<string | null>(null);
-  const [sel, setSel] = useState<Set<string>>(new Set()); const [bulk, setBulk] = useState(false); const [busy, setBusy] = useState(false);
+  const [sel, setSel] = useState<Set<string>>(new Set()); const [busy, setBusy] = useState(false);
   const qs = (cursor?: string) => new URLSearchParams(Object.entries({ call, status, eligibility, q, cursor: cursor ?? '' }).filter(([, v]) => v)).toString();
   const load = useCallback(async () => {
     setRows(null); setSel(new Set());
@@ -39,13 +40,10 @@ export function SubmissionsTable({ call, status, eligibility, q, hint, onChanged
   const toIn = async (r: Row) => { setBusy(true); try { await post(`/apply/submissions/${r.id}/status`, { to: 'under_evaluation', reason: '' }); toast(`${r.reference} sent to In review`); await load(); onChanged?.(); } catch (e) { toast(e instanceof ApiError ? e.message : 'Could not change the status.', true); } finally { setBusy(false); } };
   async function more() { if (!next) return; setBusy(true); try { const r = await api<Page>(`/apply/submissions?${qs(next)}`); setRows((x) => [...(x ?? []), ...r.items]); setNext(r.next); } finally { setBusy(false); } }
   const chosen = (rows ?? []).filter((r) => sel.has(r.id));
-  const commonMoves = chosen.length ? chosen.map((r) => MOVES[r.status] ?? []).reduce((a, b) => a.filter((x) => b.includes(x))) : [];
   return <>
     <section className="card">
       {hint && <div className="pl-hint">{hint}</div>}
-      {can('apply.submission.manage') && chosen.length > 0 && <div className="sb-bulk"><b>{chosen.length} selected</b>
-        <button className="btn btn-sm" disabled={!commonMoves.length} title={commonMoves.length ? undefined : 'These applications have no status change in common'} onClick={() => setBulk(true)}>Change status…</button>
-        <button className="btn btn-sm btn-ghost" onClick={() => setSel(new Set())}>Clear</button></div>}
+      {can('apply.submission.manage') && chosen.length > 0 && <BulkBar rows={chosen} onClear={() => setSel(new Set())} onDone={() => { void load(); onChanged?.(); }} />}
       {!rows ? <TableSkeleton /> : !rows.length ? <p className="sb-empty">{eligibility || q ? 'No applications match these filters.' : status ? 'No applications at this stage.' : 'No applications yet. They appear here when applicants submit.'}</p> :
         <div className="sb-scroll"><table className="table sb-table">
           <thead><tr>{can('apply.submission.manage') && <th className="sb-c"><input type="checkbox" aria-label="Select all shown" checked={chosen.length === rows.length} onChange={(e) => setSel(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} /></th>}
@@ -61,26 +59,7 @@ export function SubmissionsTable({ call, status, eligibility, q, hint, onChanged
               <button type="button" className="btn btn-sm btn-ghost" onClick={() => onOpen(r.id)}>View</button></td>}</tr>)}</tbody></table></div>}
       {rows && rows.length > 0 && <div className="sb-foot"><span>{rows.length} of {total} shown</span>{next && <button className="btn btn-sm" disabled={busy} onClick={more}>{busy ? 'Loading…' : 'Show 50 more'}</button>}</div>}
     </section>
-    {bulk && <BulkDialog rows={chosen} moves={commonMoves} onClose={() => setBulk(false)} onDone={() => { setBulk(false); void load(); onChanged?.(); }} />}
   </>;
-}
-
-function BulkDialog({ rows, moves, onClose, onDone }: { rows: Row[]; moves: string[]; onClose: () => void; onDone: () => void }) {
-  const toast = useToast();
-  const [to, setTo] = useState(moves[0]); const [reason, setReason] = useState(''); const [confirm, setConfirm] = useState(''); const [busy, setBusy] = useState(false);
-  const ok = reason.trim().length >= 3 && Number(confirm) === rows.length;
-  async function run() {
-    setBusy(true);
-    try { const r = await post<{ moved: number }>('/apply/submissions/bulk-status', { ids: rows.map((x) => x.id), to, reason: reason.trim(), confirm: Number(confirm) }); toast(`${r.moved} application(s) moved to ${APP_STATUS[to]}. Each one records the change and your reason.`); onDone(); }
-    catch (e) { toast(e instanceof ApiError ? e.message : 'Could not change the status.', true); } finally { setBusy(false); }
-  }
-  return <Modal size="sm" title={`Change the status of ${rows.length} application${rows.length === 1 ? '' : 's'}`} onClose={() => !busy && onClose()} footer={<><button className="btn" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" disabled={!ok || busy} onClick={run}>{busy ? 'Saving…' : 'Change status'}</button></>}>
-    <div className="modal-b stack">
-      <label className="field"><span>New status</span><select className="select" value={to} onChange={(e) => setTo(e.target.value)}>{moves.map((m) => <option key={m} value={m}>{APP_STATUS[m]}</option>)}</select></label>
-      <label className="field"><span>Reason (kept on each application)</span><textarea className="textarea" rows={3} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} /></label>
-      <label className="field"><span>Type {rows.length} to confirm</span><input className="input" inputMode="numeric" value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ''))} /></label>
-      <small className="muted">Applicants are not notified. Decisions and emails come with evaluation, and need approval first.</small>
-    </div></Modal>;
 }
 
 // ---------------------------------------------------------------- Detail

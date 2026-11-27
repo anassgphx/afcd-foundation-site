@@ -93,6 +93,23 @@ describe('decision center', () => {
     expect(u).toBeTruthy();
   });
 
+  it('bulk eligibility: one assessment with its reason on every chosen application, all or none, recorded', async () => {
+    const a = await apply(7), b = await apply(8);
+    expect((await admin.post('/apply/submissions/bulk-eligibility', { ids: [a.id, b.id], result: 'eligible', reason: 'ok', confirm: 2 })).status).toBe(422);   // reason too short
+    expect((await admin.post('/apply/submissions/bulk-eligibility', { ids: [a.id, b.id], result: 'eligible', reason: 'Checked the ages', confirm: 1 })).status).toBe(422);   // wrong count
+    expect((await admin.post('/apply/submissions/bulk-eligibility', { ids: [a.id, b.id], result: 'eligible', reason: 'Checked the ages', confirm: 2 })).body).toEqual({ updated: 2 });
+    for (const s of [a, b]) {
+      const d = (await admin.get(`/apply/submissions/${s.id}`)).body;
+      expect(d.eligibility).toBe('eligible');
+      expect(d.eligibilityOverride).toMatchObject({ result: 'eligible', reason: 'Checked the ages' });
+      expect(d.events.some((e: { kind: string; body: string }) => e.kind === 'eligibility' && e.body === 'Checked the ages')).toBe(true);
+    }
+    // then both to In review in one go, and a reviewer role cannot do either
+    expect((await admin.post('/apply/submissions/bulk-status', { ids: [a.id, b.id], to: 'under_evaluation', reason: 'Eligible, to review', confirm: 2 })).body).toEqual({ moved: 2 });
+    const rv = await client(h!.app, 'rev@afcd.test');
+    expect((await rv.post('/apply/submissions/bulk-eligibility', { ids: [a.id], result: 'ineligible', reason: 'Not allowed', confirm: 1 })).status).toBe(403);
+  });
+
   it('keeps applications from people who may not read them', async () => {
     const s = await apply(6);
     const rv = await client(h!.app, 'rev@afcd.test');

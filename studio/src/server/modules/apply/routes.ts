@@ -57,6 +57,7 @@ export function registerApplyRoutes(api: Hono<Env>) {
     c.header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${f.name.replace(/[^\w.\- ()]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(f.name)}`);
     return c.body(f.bytes);
   });
+  api.post('/apply/submissions/bulk-eligibility', perm('apply.submission.manage'), async (c) => c.json(await S.bulkEligibility(c.var.db, actor(c), await c.req.json().catch(() => ({})))));
   api.post('/apply/submissions/bulk-status', perm('apply.submission.manage'), async (c) => c.json(await S.bulkStatus(c.var.db, actor(c), await c.req.json().catch(() => ({})))));
   api.post('/apply/submissions/:id/status', perm('apply.submission.manage'), async (c) => c.json(await S.setStatus(c.var.db, actor(c), c.req.param('id'), await c.req.json().catch(() => ({})))));
   api.post('/apply/submissions/:id/eligibility', perm('apply.submission.manage'), async (c) => c.json(await S.setEligibility(c.var.db, actor(c), c.req.param('id'), await c.req.json().catch(() => ({})))));

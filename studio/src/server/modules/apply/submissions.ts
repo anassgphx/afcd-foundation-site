@@ -194,6 +194,28 @@ export async function setEligibility(db: DB, me: Me, id: string, raw: unknown) {
   return { ok: true };
 }
 
+/** Bulk eligibility: the same staff assessment, with its reason, on every chosen application; all or none, each recorded. */
+export async function bulkEligibility(db: DB, me: Me, raw: unknown) {
+  const b = z.object({ ids: z.array(z.string().uuid()).min(1).max(500), result: z.enum(ELIGIBILITY), reason: z.string().trim().min(3, 'Explain the assessment.').max(1000), confirm: z.number().int() }).strict().safeParse(raw);
+  if (!b.success) throw new AppError(422, b.error.issues[0]?.message ?? 'Choose a result and explain it.');
+  const ids = [...new Set(b.data.ids)];
+  if (b.data.confirm !== ids.length) throw new AppError(422, `Confirm the number of applications (${ids.length}).`);
+  const [u] = await db.select({ name: users.name }).from(users).where(eq(users.id, me.id));
+  return db.transaction(async (tx) => {
+    const t2 = tx as unknown as DB;
+    const rows = await t2.select().from(applySubmissions).where(inArray(applySubmissions.id, ids)).for('update');
+    if (rows.length !== ids.length) throw new AppError(404, 'Some applications no longer exist. Reload and try again.');
+    const at = new Date();
+    const o = { result: b.data.result, reason: b.data.reason, by: me.id, byName: u?.name ?? me.email, at: at.toISOString() };
+    for (const s of rows) {
+      await t2.update(applySubmissions).set({ eligibility: b.data.result, eligibilityOverride: o, updatedAt: at }).where(eq(applySubmissions.id, s.id));
+      await t2.insert(applySubmissionEvents).values({ submissionId: s.id, actorId: me.id, kind: 'eligibility', fromValue: s.eligibility, toValue: b.data.result, body: b.data.reason });
+    }
+    await audit(tx, me, 'apply.submission.bulk_eligibility', { type: 'apply_submission' }, `${rows.length} application(s): eligibility → ${b.data.result}`, { ids, reason: b.data.reason });
+    return { updated: rows.length };
+  });
+}
+
 export async function addNote(db: DB, me: Me, id: string, raw: unknown) {
   const b = z.object({ body: z.string().trim().min(1).max(5000) }).strict().safeParse(raw);
   if (!b.success) throw new AppError(422, 'Write the note.');

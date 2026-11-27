@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto';
 import { renderPage, closeIndex } from './lib/page-fields.mjs';
 import { activeLangs, decorateEnglish, buildLanguages } from './lib/i18n.mjs';
 import { renderMenus } from './lib/menu.mjs';
-import { loadSiteSettings, applyHead, applyPage, applyOrg } from './lib/site-settings.mjs';
+import { loadSiteSettings, applyHead, applyPage, applyOrg, PUBLIC_EMAILS } from './lib/site-settings.mjs';
 import { pillarStems, prettifyHtml, prettifyAbsolute } from './lib/urls.mjs';
 import { execSync } from 'node:child_process';
 
@@ -186,8 +186,9 @@ const FIELDS = existsSync(FIELDS_FILE) ? JSON.parse(readFileSync(FIELDS_FILE, 'u
 // numbers, the legal representative or the street address), and only the foundation's public email addresses.
 const SCHEMA_FILE = process.env.SCHEMA_JSON || join(SRC, 'data', 'schema.json');
 const SCHEMA = existsSync(SCHEMA_FILE) ? JSON.parse(readFileSync(SCHEMA_FILE, 'utf8')) : null;
-const SCHEMA_ORG_KEYS = ['alternateName', 'legalName', 'description', 'email', 'telephone', 'foundingDate', 'sameAs'];
-const PUBLIC_EMAILS = ['contact@afcdteam.com', 'akaya@afcdteam.com'];
+// The public email and phone are not taken from schema.json: Studio's Settings › Contact & social owns them (applyOrg,
+// lib/site-settings.mjs), so an older schema.json that still lists them cannot override the published contact details.
+const SCHEMA_ORG_KEYS = ['alternateName', 'legalName', 'description', 'foundingDate', 'sameAs'];
 function schemaOrg() {
   const o = SCHEMA?.organization ?? {}; const out = { ...ORG };
   for (const k of SCHEMA_ORG_KEYS) if (o[k] !== undefined && o[k] !== '' && (k !== 'email' || PUBLIC_EMAILS.includes(o[k]))) out[k] = o[k];

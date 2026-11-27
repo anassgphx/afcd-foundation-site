@@ -51,6 +51,7 @@ import * as NOTIFY from './modules/settings/notify.ts';
 import * as HM from './modules/home/service.ts';
 import * as WS from './modules/workspace/service.ts';
 import { overview as dashboardOverview } from './modules/workspace/overview.ts';
+import * as HEALTH from './modules/health/service.ts';
 import { fieldSections, readFields, SECTION_LABEL, siteSections } from './modules/home/fields.ts';
 import { currentLayout, validateLayout, HOME_BLOCKS } from './modules/home/layout.ts';
 import { homeCanvas } from './modules/home/render.ts';
@@ -587,6 +588,10 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
 
   // ---------------------------------------------------------------- Top bar: search and notifications (permission-filtered)
   api.get('/search', async (c) => { const u = requireUser(c); return c.json(await WS.search(db, u.role, c.req.query('q') ?? '')); });
+  // Health (modules/health/service.ts): a public yes/no for the container healthcheck and uptime monitors (nothing else is
+  // revealed), and the facts behind it for signed-in staff.
+  api.get('/health', async (c) => { c.header('Cache-Control', 'no-store'); const h = await HEALTH.liveness(db); return c.json({ ok: h.ok }, h.ok ? 200 : 503); });
+  api.get('/health/details', perm('dashboard.read'), async (c) => c.json(await HEALTH.details(db, cfg)));
   api.get('/overview', perm('dashboard.read'), async (c) => c.json(await dashboardOverview(db, requireUser(c), cfg)));
   api.get('/notifications', async (c) => { const u = requireUser(c); return c.json(await WS.notifications(db, u)); });
 

@@ -15,7 +15,8 @@ const story = { title: 'Climate camp in Ait Ourir', slug: 'climate-camp', excerp
 describe('structured data builders', () => {
   it('keeps only filled-in organization fields and validates generated markup', () => {
     const s = settingsSchema.parse({ organization: { email: 'contact@afcdteam.com', telephone: '+212 663 618 536', sameAs: ['https://www.facebook.com/afcd.foundation'] } });
-    expect(orgOverrides(s)).toEqual({ email: 'contact@afcdteam.com', telephone: '+212663618536', sameAs: ['https://www.facebook.com/afcd.foundation'] });
+    // the public email and phone are accepted (older saved drafts keep parsing) but not published from here: Settings › Contact owns them
+    expect(orgOverrides(s)).toEqual({ sameAs: ['https://www.facebook.com/afcd.foundation'] });
     expect(settingsSchema.safeParse({ organization: { taxID: '123' } }).success).toBe(false);   // no field for internal identifiers
     expect(settingsSchema.safeParse({ organization: { description: 'Too short' } }).success).toBe(false);
     expect(settingsSchema.safeParse({ organization: { sameAs: ['http://insecure.example'] } }).success).toBe(false);
@@ -68,7 +69,7 @@ describe('Schema studio workflow', () => {
     const pub = await admin.post('/seo/schema/publish');
     expect(pub.status).toBe(200);
     const data = JSON.parse(readFileSync(join(h.siteRoot, 'src/data/schema.json'), 'utf8'));
-    expect(data.organization).toEqual({ email: 'contact@afcdteam.com', sameAs: ['https://www.instagram.com/afcd.foundation'] });
+    expect(data.organization).toEqual({ sameAs: ['https://www.instagram.com/afcd.foundation'] });   // email: from Settings › Contact, not here
     expect(data.pages['news-climate-camp.html'][0]['@type']).toBe('Article');
     expect(readFileSync(join(h.siteRoot, 'index.html'), 'utf8')).toContain(`<meta name="studio-schema-rev" content="${pub.body.revision}">`);
     expect(readFileSync(join(h.siteRoot, 'news-climate-camp.html'), 'utf8')).toContain('"@type":"Article"');

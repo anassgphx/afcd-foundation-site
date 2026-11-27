@@ -27,7 +27,8 @@ type Data = {
   studio: { origin: string; publicSiteUrl: string };
   email: Mail | { ready: boolean };
 };
-const PUBLIC_EMAILS = ['contact@afcdteam.com', 'akaya@afcdteam.com'];
+import { PUBLIC_EMAILS } from '../../server/identity.ts';
+import { AREA_GROUPS, AREA_TITLE, settingsArea } from './settingsArea.ts';
 const GROUPS = ['Organization', 'Communication', 'Website', 'System'];
 /** A badge in the category list: only real states from the server. */
 function Badge({ v, id }: { v: string | null | undefined; id: string }) {
@@ -41,12 +42,13 @@ function Badge({ v, id }: { v: string | null | undefined; id: string }) {
 
 export function SettingsPage() {
   const path = usePath();
-  const cat = path.match(/^\/studio\/settings\/([a-z]+)/)?.[1] ?? 'general';
+  const area = settingsArea(path); const A = AREA_TITLE[area];   // Website settings or System (pages/settingsArea.ts)
+  const cat = path.match(/^\/studio\/settings\/([a-z]+)/)?.[1] ?? A.first;
   const [data, setData] = useState<Data | null>(null);
   const [err, setErr] = useState('');
   const load = () => api<Data>('/settings').then(setData).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
-  useEffect(() => { document.title = 'Settings · AFCD Studio'; }, []);
+  useEffect(() => { document.title = `${A.title} · AFCD Studio`; }, [A.title]);
   // phones: the category list is one scrolling row; keep the current category in view
   useEffect(() => {
     const nav = document.querySelector<HTMLElement>('.set-nav'), on = nav?.querySelector<HTMLElement>('a.on');
@@ -54,17 +56,17 @@ export function SettingsPage() {
   }, [cat, !!data]);
   if (err) return <div className="notice n-warn"><Icon n="alert" />{err}</div>;
   if (!data) return <div className="stack"><div className="skeleton" style={{ height: 28, width: 200 }} /><div className="skeleton" style={{ height: 64 }} /><div className="skeleton" style={{ height: 320 }} /></div>;
-  const current = data.categories.find((c) => c.id === cat) ?? data.categories[0];
+  const current = data.categories.find((c) => c.id === cat) ?? data.categories.find((c) => c.id === A.first) ?? data.categories[0];
   return (
     <div className="set">
       <div className="page-h set-head">
-        <div><h1>Settings</h1><p>Organization, website and Studio settings. Website changes are saved as drafts until you publish them.</p></div>
+        <div><h1>{A.title}</h1><p>{A.intro}</p></div>
         <SettingsSearch fields={data.fields} categories={data.categories} />
       </div>
       <SummaryStrip data={data} onPublished={load} />
       <div className="set-body">
         <nav className="set-nav" aria-label="Settings categories">
-          {GROUPS.map((g) => (
+          {GROUPS.filter((g) => AREA_GROUPS[area].includes(g)).map((g) => (
             <div key={g} className="set-nav-g" role="group" aria-label={g}>
               <span className="set-nav-gl">{g}</span>
               {data.categories.filter((c) => c.group === g).map((c) => {
@@ -74,7 +76,7 @@ export function SettingsPage() {
                 </Link>;
               })}
             </div>))}
-          <div className="set-nav-g set-nav-hist"><Link to="/studio/settings/history" className={cat === 'history' ? 'on' : ''} aria-current={cat === 'history' ? 'page' : undefined}><Icon n="history" /><span>History</span></Link></div>
+          {area === 'website' && <div className="set-nav-g set-nav-hist"><Link to="/studio/settings/history" className={cat === 'history' ? 'on' : ''} aria-current={cat === 'history' ? 'page' : undefined}><Icon n="history" /><span>History</span></Link></div>}
         </nav>
         <section className="set-panel" aria-labelledby="set-title">
           {cat === 'history' ? <History admin={data.permissions.admin} onRestored={load} />
@@ -253,7 +255,7 @@ function ContactPanel({ data, onSaved }: { data: Data; onSaved: () => void }) {
   const st = data.site.categories.contact; const p = data.permissions;
   const f = useForm<Contact>(st.draft, '/settings/contact', onSaved);
   const id = data.identity.published;
-  const overrides = id ? [id.email && `email (${id.email})`, id.telephone && `telephone (${id.telephone})`, id.sameAs?.length && 'social profiles'].filter(Boolean) : [];
+  const overrides = id ? [id.sameAs?.length && 'social profiles'].filter(Boolean) : [];   // the public email and phone always come from here
   const soc = (k: keyof Contact['social'], label: string, ex: string) => (
     <F id={`social.${k}`} label={label} effect="publish" error={f.errs[`social.${k}`]} hint={`Leave empty to hide the ${label} link everywhere.`}>
       <input id={`set-social.${k}`} className="input" placeholder={ex} value={f.v.social[k]} disabled={!p.update} onChange={(e) => f.setV({ ...f.v, social: { ...f.v.social, [k]: e.target.value } })} aria-invalid={!!f.errs[`social.${k}`]} />

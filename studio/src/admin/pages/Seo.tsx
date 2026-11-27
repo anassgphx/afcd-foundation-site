@@ -201,9 +201,9 @@ type SchemaSet = { organization: OrgForm; articles: boolean; events: boolean };
 type Gen = { kind: 'Article' | 'Event'; file: string; title: string; ld: Record<string, unknown>; check: { errors: string[]; warnings: string[] } };
 type SchemaView = { buildSupport: boolean; status: string | null; draft: SchemaSet; published: (SchemaSet & { _revision?: string }) | null; publishedAt: string | null; updatedAt: string | null; updatedByName: string | null; submittedBy: string | null;
   organization: { built: Record<string, unknown> | null; preview: Record<string, unknown> | null }; generated: Gen[] };
-const ORG_FIELDS: [keyof Omit<OrgForm, 'sameAs'>, string, string, number][] = [
-  ['alternateName', 'Short name', 'e.g. AFCD', 60], ['legalName', 'Legal name', 'Registered name of the association', 160], ['email', 'Public email', 'contact@…', 120],
-  ['telephone', 'Public phone', '+212 …', 24], ['foundingDate', 'Founded (year)', '2007', 4]];
+// The public email and phone are not edited here: Settings › Contact & social owns them (src/server/identity.ts).
+const ORG_FIELDS: [keyof Omit<OrgForm, 'sameAs' | 'email' | 'telephone'>, string, string, number][] = [
+  ['alternateName', 'Short name', 'e.g. AFCD', 60], ['legalName', 'Legal name', 'Registered name of the association', 160], ['foundingDate', 'Founded (year)', '2007', 4]];
 
 function SchemaStudio() {
   const toast = useToast(); const can = useCan(); const me = useMe();
@@ -237,6 +237,7 @@ function SchemaStudio() {
         <p className="muted sch-help">Leave a field empty to keep what the website already says. Only public contact details belong here. Tax identifiers, CNSS numbers and internal registration records are never published.</p>
         <div className="sch-fields">
           {ORG_FIELDS.map(([k, l, ph, max]) => <label key={k} className="field"><span>{l}</span><input className="input" maxLength={max} placeholder={String(v.organization.built?.[k] ?? ph)} value={org[k]} onChange={(e) => setOrg(k, e.target.value)} /></label>)}
+          <p className="field s2 muted" style={{ margin: 0, fontSize: 12.5 }}>Public email <b>{String(v.organization.built?.email ?? '—')}</b> · phone <b>{String(v.organization.built?.telephone ?? '—')}</b>. These come from <Link to="/studio/settings/contact">Website settings › Contact &amp; social</Link>, so they are the same everywhere on the website.</p>
           <label className="field s2"><span>Description <em className={org.description.length > 290 ? 'near' : ''} style={{ fontStyle: 'normal', float: 'right', fontSize: 11.5 }}>{org.description.length} / 320</em></span>
             <textarea className="textarea" maxLength={320} placeholder={String(v.organization.built?.description ?? '')} value={org.description} onChange={(e) => setOrg('description', e.target.value.replace(/\n/g, ' '))} /></label>
           <label className="field s2"><span>Official profiles (sameAs)</span>

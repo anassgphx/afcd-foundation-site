@@ -36,7 +36,8 @@ export const TEAM_GROUPS = [
   { value: 'staff', label: 'Staff' }, { value: 'volunteers', label: 'Volunteers & ambassadors' },
 ] as const;
 /** The only email addresses that may appear on the public website. */
-export const PUBLIC_EMAILS = ['contact@afcdteam.com', 'akaya@afcdteam.com'];
+export { PUBLIC_EMAILS } from '../../identity.ts';
+import { PUBLIC_EMAILS } from '../../identity.ts';
 
 // ---------------------------------------------------------------- content schemas (plain text; the generator escapes)
 const plain = (max: number) => z.string().trim().max(max, `Up to ${max} characters.`).refine((v) => !/[<>]/.test(v), 'Use plain text without < or >.');

@@ -8,6 +8,7 @@ import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
 import { altProblem } from '../media/alt.ts';
+import { runTransition, transitionPerm, type WorkflowSpec } from '../content/workflow.ts';
 
 type Status = typeof events.$inferSelect['status'];
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -128,15 +129,8 @@ export async function updateEvent(db: DB, actor: NonNullable<Actor>, id: string,
   });
 }
 
-const RULES: Record<string, { from: Status[]; to: Status; perm: 'event.update' | 'event.approve' }> = {
-  submit: { from: ['draft', 'changes_requested'], to: 'in_review', perm: 'event.update' },
-  withdraw: { from: ['in_review', 'approved'], to: 'draft', perm: 'event.update' },
-  request_changes: { from: ['in_review'], to: 'changes_requested', perm: 'event.approve' },
-  approve: { from: ['in_review'], to: 'approved', perm: 'event.approve' },
-  archive: { from: ['draft', 'changes_requested', 'approved', 'in_review'], to: 'archived', perm: 'event.update' },
-  restore: { from: ['archived'], to: 'draft', perm: 'event.update' },
-};
-export const eventTransitionPerm = (a: string) => RULES[a]?.perm;
+// The review rules are shared with every content kind (modules/content/workflow.ts).
+export const eventTransitionPerm = (a: string) => transitionPerm('event', a);
 
 async function addRevision(db: DB, eventId: string, snap: EventSnapshot, reason: string, userId: string) {
   const [{ n }] = await db.select({ n: max(eventRevisions.number) }).from(eventRevisions).where(eq(eventRevisions.eventId, eventId));
@@ -144,35 +138,13 @@ async function addRevision(db: DB, eventId: string, snap: EventSnapshot, reason:
   return rev;
 }
 
+const WORKFLOW: WorkflowSpec<typeof events.$inferSelect, Awaited<ReturnType<typeof loadEvent>>, ReturnType<typeof toEventSnapshot>> = {
+  table: events, kind: 'event', noun: { a: 'an event', the: 'the event', this: 'this event', Name: 'Event' }, title: (r) => r.title,
+  load: loadEvent, problems: eventProblems, snapshot: toEventSnapshot, addRevision,
+};
+
 export async function transitionEvent(db: DB, actor: NonNullable<Actor>, role: Role, id: string, action: string, opts: { comment?: string } = {}) {
-  const rule = RULES[action];
-  if (!rule) throw new AppError(422, 'Unknown action.');
-  const comment = (opts.comment ?? '').trim();
-  return db.transaction(async (tx) => {
-    const t = tx as unknown as DB;
-    const [cur] = await t.select().from(events).where(eq(events.id, id)).for('update');
-    if (!cur) throw new AppError(404, 'Event not found.');
-    if (!rule.from.includes(cur.status)) throw new AppError(409, `Cannot ${action.replace('_', ' ')} an event that is ${cur.status.replace('_', ' ')}.`);
-    if (action === 'archive' && cur.publishedRevisionId) throw new AppError(409, 'Remove the event from the website before archiving it.');
-    if (action === 'request_changes' && !comment) throw new AppError(422, 'Explain what needs to change.');
-    if (action === 'approve' && cur.submittedBy === actor.id && role !== 'super_admin') throw new AppError(409, 'Someone other than the author must approve this event.');
-    const patch: Partial<typeof events.$inferInsert> = { status: rule.to, updatedAt: new Date() };
-    let revId: string | null = null;
-    if (action === 'submit' || action === 'approve') {
-      const full = await loadEvent(t, id);
-      const problems = await eventProblems(t, full);
-      if (problems.length) throw new AppError(422, 'This event is not ready yet.', problems.map((m) => ({ path: '', message: m })));
-      const rev = await addRevision(t, id, toEventSnapshot(full), action === 'submit' ? 'submitted' : 'approved', actor.id);
-      revId = rev.id;
-      if (action === 'submit') patch.submittedBy = actor.id;
-      if (action === 'approve') patch.approvedRevisionId = rev.id;
-    }
-    if (action === 'withdraw' || action === 'restore') patch.approvedRevisionId = null;
-    await t.update(events).set(patch).where(eq(events.id, id));
-    if (comment || action !== 'withdraw') await t.insert(reviewComments).values({ entityType: 'event', entityId: id, authorId: actor.id, kind: action, body: comment.slice(0, 2000) });
-    await audit(tx, actor, `event.${action}`, { type: 'event', id }, `${cur.title}: ${cur.status} → ${rule.to}`, { revisionId: revId });
-    return { status: rule.to, revisionId: revId };
-  });
+  return runTransition(WORKFLOW, db, actor, role, id, action, opts.comment ?? '');
 }
 
 export async function restoreEventRevision(db: DB, actor: NonNullable<Actor>, id: string, revisionId: string) {

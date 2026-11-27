@@ -8,6 +8,7 @@ import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
 import { altProblem } from '../media/alt.ts';
+import { runTransition, transitionPerm, type WorkflowSpec } from '../content/workflow.ts';
 
 type Status = typeof partners.$inferSelect['status'];
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -119,15 +120,8 @@ export async function updatePartner(db: DB, actor: NonNullable<Actor>, id: strin
   });
 }
 
-const RULES: Record<string, { from: Status[]; to: Status; perm: 'partner.update' | 'partner.approve' }> = {
-  submit: { from: ['draft', 'changes_requested'], to: 'in_review', perm: 'partner.update' },
-  withdraw: { from: ['in_review', 'approved'], to: 'draft', perm: 'partner.update' },
-  request_changes: { from: ['in_review'], to: 'changes_requested', perm: 'partner.approve' },
-  approve: { from: ['in_review'], to: 'approved', perm: 'partner.approve' },
-  archive: { from: ['draft', 'changes_requested', 'approved', 'in_review'], to: 'archived', perm: 'partner.update' },
-  restore: { from: ['archived'], to: 'draft', perm: 'partner.update' },
-};
-export const partnerTransitionPerm = (a: string) => RULES[a]?.perm;
+// The review rules are shared with every content kind (modules/content/workflow.ts).
+export const partnerTransitionPerm = (a: string) => transitionPerm('partner', a);
 
 async function addRevision(db: DB, partnerId: string, snap: PartnerSnapshot, reason: string, userId: string | null) {
   const [{ n }] = await db.select({ n: max(partnerRevisions.number) }).from(partnerRevisions).where(eq(partnerRevisions.partnerId, partnerId));
@@ -136,35 +130,13 @@ async function addRevision(db: DB, partnerId: string, snap: PartnerSnapshot, rea
 }
 export { addRevision as addPartnerRevision };
 
+const WORKFLOW: WorkflowSpec<typeof partners.$inferSelect, Awaited<ReturnType<typeof loadPartner>>, ReturnType<typeof toPartnerSnapshot>> = {
+  table: partners, kind: 'partner', noun: { a: 'a partner', the: 'the partner', this: 'this partner', Name: 'Partner' }, title: (r) => r.name,
+  load: loadPartner, problems: partnerProblems, snapshot: toPartnerSnapshot, addRevision, onApprove: () => ({ verifiedAt: new Date() }),
+};
+
 export async function transitionPartner(db: DB, actor: NonNullable<Actor>, role: Role, id: string, action: string, opts: { comment?: string } = {}) {
-  const rule = RULES[action];
-  if (!rule) throw new AppError(422, 'Unknown action.');
-  const comment = (opts.comment ?? '').trim();
-  return db.transaction(async (tx) => {
-    const t = tx as unknown as DB;
-    const [cur] = await t.select().from(partners).where(eq(partners.id, id)).for('update');
-    if (!cur) throw new AppError(404, 'Partner not found.');
-    if (!rule.from.includes(cur.status)) throw new AppError(409, `Cannot ${action.replace('_', ' ')} a partner that is ${cur.status.replace('_', ' ')}.`);
-    if (action === 'archive' && cur.publishedRevisionId) throw new AppError(409, 'Remove the partner from the website before archiving it.');
-    if (action === 'request_changes' && !comment) throw new AppError(422, 'Explain what needs to change.');
-    if (action === 'approve' && cur.submittedBy === actor.id && role !== 'super_admin') throw new AppError(409, 'Someone other than the author must approve this partner.');
-    const patch: Partial<typeof partners.$inferInsert> = { status: rule.to, updatedAt: new Date() };
-    let revId: string | null = null;
-    if (action === 'submit' || action === 'approve') {
-      const full = await loadPartner(t, id);
-      const problems = await partnerProblems(t, full);
-      if (problems.length) throw new AppError(422, 'This partner is not ready yet.', problems.map((m) => ({ path: '', message: m })));
-      const rev = await addRevision(t, id, toPartnerSnapshot(full), action === 'submit' ? 'submitted' : 'approved', actor.id);
-      revId = rev.id;
-      if (action === 'submit') patch.submittedBy = actor.id;
-      if (action === 'approve') { patch.approvedRevisionId = rev.id; patch.verifiedAt = new Date(); }
-    }
-    if (action === 'withdraw' || action === 'restore') patch.approvedRevisionId = null;
-    await t.update(partners).set(patch).where(eq(partners.id, id));
-    if (comment || action !== 'withdraw') await t.insert(reviewComments).values({ entityType: 'partner', entityId: id, authorId: actor.id, kind: action, body: comment.slice(0, 2000) });
-    await audit(tx, actor, `partner.${action}`, { type: 'partner', id }, `${cur.name}: ${cur.status} → ${rule.to}`, { revisionId: revId });
-    return { status: rule.to, revisionId: revId };
-  });
+  return runTransition(WORKFLOW, db, actor, role, id, action, opts.comment ?? '');
 }
 
 export async function restorePartnerRevision(db: DB, actor: NonNullable<Actor>, id: string, revisionId: string) {

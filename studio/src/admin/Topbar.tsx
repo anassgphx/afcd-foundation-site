@@ -32,7 +32,9 @@ function usePopover() {
 
 export function Breadcrumbs({ path, title, nav }: { path: string; title: string; nav: NavLink[] }) {
   // the most specific section wins (/studio/apply/calls/… is under Calls, not the Applications overview)
-  const parent = nav.filter((n) => n.to !== '/studio/' && path.startsWith(n.to) && path !== n.to && n.label !== title).sort((a, b) => b.to.length - a.to.length)[0];
+  // a page that is itself a sidebar section (System is under /studio/settings/…, beside Website settings) has no parent
+  const parent = nav.some((n) => n.label === title) ? undefined
+    : nav.filter((n) => n.to !== '/studio/' && path.startsWith(n.to) && path !== n.to).sort((a, b) => b.to.length - a.to.length)[0];
   return <nav className="crumbs" aria-label="Breadcrumb">
     <Link to="/studio/">Studio</Link><NavIcon n="chevRight" width={14} height={14} className="tb-crumb-sep" />
     {parent && <><Link to={parent.to}>{parent.to === '/studio/apply' ? 'Applications' : parent.label}</Link><NavIcon n="chevRight" width={14} height={14} className="tb-crumb-sep" /></>}

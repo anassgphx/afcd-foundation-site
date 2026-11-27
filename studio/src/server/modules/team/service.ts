@@ -18,7 +18,8 @@ import { altProblem } from '../media/alt.ts';
 
 type Status = typeof teamMembers.$inferSelect['status'];
 /** The only email addresses that may appear on the public website (same rule as the About pages and build.mjs). */
-export const PUBLIC_EMAILS = ['contact@afcdteam.com', 'akaya@afcdteam.com'];
+export { PUBLIC_EMAILS } from '../../identity.ts';
+import { PUBLIC_EMAILS } from '../../identity.ts';
 export const LINK_KINDS = { linkedin: 'LinkedIn', x: 'X', facebook: 'Facebook', instagram: 'Instagram', website: 'Website' } as const;
 const LINK_HOSTS: Record<string, RegExp> = {
   linkedin: /(^|\.)linkedin\.com$/, x: /(^|\.)(x|twitter)\.com$/, facebook: /(^|\.)(facebook|fb)\.com$/, instagram: /(^|\.)instagram\.com$/, website: /./,

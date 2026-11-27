@@ -9,6 +9,7 @@ import { Icon, Link, MeCtx, ToastHost, initials, navigate, useCan, useMe, usePat
 import { Dashboard, Loading } from './pages/Dashboard.tsx';
 import { Breadcrumbs, Notifications, SearchButton, UserMenu, useRecent, type NavLink } from './Topbar.tsx';
 import { NAV, Sidebar } from './Sidebar.tsx';
+import { AREA_TITLE, settingsArea } from './pages/settingsArea.ts';
 
 // Screens load on demand: the first visit downloads the shell and the dashboard only. Each screen is its own file,
 // fetched the first time it is opened, and all of them are fetched in the background once Studio is idle.
@@ -251,11 +252,12 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   if (m) return { title: m[1] === 'new' ? 'New project' : 'Edit project', el: <ProjectEditor key={m[1]} id={m[1]} /> };
   if (path.startsWith('/studio/projects')) return { title: 'Projects', el: <ProjectsList /> };
   if (path.startsWith('/studio/media')) return { title: 'Media library', el: <MediaLibrary /> };
-  if (path.startsWith('/studio/approvals')) return { title: 'Approval queue', el: <ApprovalsPage /> };
-  if (path.startsWith('/studio/publishing')) return { title: 'Publishing', el: <Publishing /> };
+  // Publishing: what waits for review or publishing (the approval queue) and what was delivered (the history), one place
+  if (path.startsWith('/studio/approvals')) return { title: 'Publishing', el: <PublishingHub view="waiting" /> };
+  if (path.startsWith('/studio/publishing')) return { title: 'Publishing', el: <PublishingHub view="history" /> };
   if (path.startsWith('/studio/activity')) return { title: 'Activity log', el: <ActivityLog /> };
   if (path.startsWith('/studio/users')) return { title: 'Users & roles', el: <Users /> };
-  if (path.startsWith('/studio/settings')) return { title: 'Settings', el: <SettingsPage /> };
+  if (path.startsWith('/studio/settings')) return { title: AREA_TITLE[settingsArea(path)].title, el: <SettingsPage /> };
   if (path !== '/studio/' && path !== '/studio') { setTimeout(() => navigate('/studio/')); }
   return { title: 'Dashboard', el: <Dashboard /> };
 }
@@ -264,3 +266,15 @@ function localStorageGet(k: string) { try { return localStorage.getItem(k); } ca
 function localStorageSet(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* private mode */ } }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
+
+/** Publishing in one place: "Waiting" is the approval queue (needs project.read, as before), "History" every delivery. */
+function PublishingHub({ view }: { view: 'waiting' | 'history' }) {
+  const can = useCan();
+  const waiting = can('project.read');
+  const v = waiting ? view : 'history';
+  const tab = (k: 'waiting' | 'history', label: string, to: string) => <button type="button" className={v === k ? 'on' : ''} aria-current={v === k ? 'page' : undefined} onClick={() => navigate(to)}>{label}</button>;
+  return <>
+    {waiting && <nav className="seg" aria-label="Publishing" style={{ marginBottom: 12 }}>{tab('waiting', 'Waiting', '/studio/approvals')}{tab('history', 'History', '/studio/publishing')}</nav>}
+    {v === 'waiting' ? <ApprovalsPage /> : <Publishing />}
+  </>;
+}

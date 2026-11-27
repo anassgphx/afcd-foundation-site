@@ -49,6 +49,10 @@ export function PagesList() {
       {!site ? <Loading /> : <DataTable id="site-pages" rows={site} total={site.length} rowKey={(r) => r.id} columns={siteColumns} csvName="afcd-site-pages"
         onOpen={(r) => { if (r.imported) navigate(`/studio/pages/site/${r.key}`); }} empty={<EmptyState icon="book" text="No site pages." />} />}
     </section>}
+    {can('page.read') && <section className="card" style={{ marginBottom: 16 }}>
+      <div className="card-h"><h2>Contact page</h2><Link className="btn btn-sm" to="/studio/contact"><Icon n="mail" />Edit the contact page</Link></div>
+      <p className="muted" style={{ margin: 0, padding: '0 16px 14px', fontSize: 13 }}>The texts of the website’s contact page. The phone, emails and social links come from Website settings › Contact &amp; social.</p>
+    </section>}
     <section className="card">
       <div className="card-h"><h2>Builder pages</h2></div>
       <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search pages" />

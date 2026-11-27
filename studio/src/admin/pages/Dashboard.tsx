@@ -25,7 +25,7 @@ const DECISION: Record<Kind, { icon: string; cta: string; label: string }> = {
   review: { icon: 'inbox', cta: 'Review', label: 'Review' }, publish: { icon: 'rocket', cta: 'Publish', label: 'Ready' },
   changes: { icon: 'undo', cta: 'Update', label: 'Changes' }, failed: { icon: 'alert', cta: 'Details', label: 'Failed' },
 };
-const HEALTH_ICON: Record<string, string> = { delivery: 'globe', seo: 'search', media: 'image', forms: 'mail' };
+const HEALTH_ICON: Record<string, string> = { delivery: 'globe', seo: 'search', media: 'image', forms: 'mail', background: 'history', email: 'send' };
 const isoAgo = (s: string) => s.replace(/(\d{4}-\d{2}-\d{2}T[\d:.]+Z)/, (m) => ago(m));
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const nf = new Intl.NumberFormat('en-GB');

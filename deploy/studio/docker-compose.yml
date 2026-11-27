@@ -28,6 +28,14 @@ services:
       - ./site:/app            # the website checkout Studio publishes into
       - ./data:/data           # Studio data folder: media originals, keys, salts
     networks: [internal, web]
+    # GET /studio/api/health: 200 when Studio and its database answer (nothing else is revealed). Docker marks the
+    # container unhealthy after 3 failed checks; details for staff are at /studio/api/health/details.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||4400)+'/studio/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
 volumes:
   studio_pgdata:

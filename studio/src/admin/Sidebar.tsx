@@ -6,30 +6,35 @@ import { Link, navigate, useCan, useMe } from './ui.tsx';
 import { NavIcon } from './navIcons.tsx';
 import './sidebar.css';
 
-export type NavItem = { to: string; label: string; icon: string; perm: string; match?: RegExp; key?: string };
+import { settingsArea } from './pages/settingsArea.ts';
+const SETTINGS_WEBSITE = (p: string) => p.startsWith('/studio/settings') && settingsArea(p) === 'website';
+const SETTINGS_SYSTEM = (p: string) => p.startsWith('/studio/settings') && settingsArea(p) === 'system';
+export type NavItem = { to: string; label: string; icon: string; perm: string; match?: RegExp | ((path: string) => boolean); key?: string };
 // `key`: the second key of a "g then key" shortcut (listed in the Keyboard shortcuts dialog)
+// Groups follow the jobs people do (audit 27 Nov 2026): Publishing joins the approval queue and the delivery history,
+// the Contact page is listed under Pages, and Settings is split into what changes the website and what runs Studio.
+// Every item keeps the permission check it had, so no role gains or loses access; old addresses still open.
 export const NAV: { group: string; items: NavItem[] }[] = [
-  { group: 'Overview', items: [{ to: '/studio/', label: 'Dashboard', icon: 'dash', perm: 'dashboard.read', match: /^\/studio\/?$/, key: 'd' }] },
+  { group: 'Overview', items: [
+    { to: '/studio/', label: 'Dashboard', icon: 'dash', perm: 'dashboard.read', match: /^\/studio\/?$/, key: 'd' },
+    { to: '/studio/approvals', label: 'Publishing', icon: 'rocket', perm: 'dashboard.read', match: /^\/studio\/(approvals|publishing)/, key: 'a' },
+  ] },
+  { group: 'Website', items: [
+    { to: '/studio/home', label: 'Homepage', icon: 'home', perm: 'page.read', match: /^\/studio\/home/, key: 'h' },
+    { to: '/studio/pages', label: 'Pages', icon: 'layers', perm: 'page.read', match: /^\/studio\/(pages|about|contact)/ },
+    { to: '/studio/menus', label: 'Menus', icon: 'menu', perm: 'page.read', match: /^\/studio\/menus/ },
+    { to: '/studio/translations', label: 'Translations', icon: 'languages', perm: 'translation.read', match: /^\/studio\/translations/, key: 't' },
+  ] },
   { group: 'Content', items: [
     { to: '/studio/projects', label: 'Projects', icon: 'folder', perm: 'project.read', match: /^\/studio\/projects/, key: 'p' },
     { to: '/studio/news', label: 'News & stories', icon: 'log', perm: 'news.read', match: /^\/studio\/news/, key: 'n' },
     { to: '/studio/events', label: 'Events', icon: 'calendar', perm: 'event.read', match: /^\/studio\/events/, key: 'e' },
-    { to: '/studio/opportunities', label: 'Opportunities', icon: 'spark', perm: 'opportunity.read', match: /^\/studio\/opportunities/, key: 'o' },
     { to: '/studio/publications', label: 'Publications', icon: 'book', perm: 'publication.read', match: /^\/studio\/publications/ },
     { to: '/studio/pillars', label: 'Pillars', icon: 'pillars', perm: 'pillar.read', match: /^\/studio\/pillars/ },
     { to: '/studio/team', label: 'Team', icon: 'team', perm: 'team.read', match: /^\/studio\/team/ },
     { to: '/studio/partners', label: 'Partners', icon: 'partner', perm: 'partner.read', match: /^\/studio\/partners/ },
     { to: '/studio/media', label: 'Media library', icon: 'image', perm: 'media.read', match: /^\/studio\/media/, key: 'm' },
   ] },
-  { group: 'Website', items: [
-    { to: '/studio/home', label: 'Homepage', icon: 'home', perm: 'page.read', match: /^\/studio\/home/, key: 'h' },
-    { to: '/studio/contact', label: 'Contact page', icon: 'mail', perm: 'page.read', match: /^\/studio\/contact/ },
-    { to: '/studio/pages', label: 'Pages', icon: 'layers', perm: 'page.read', match: /^\/studio\/(pages|about)/ },
-    { to: '/studio/menus', label: 'Menus', icon: 'menu', perm: 'page.read', match: /^\/studio\/menus/ },
-    { to: '/studio/seo', label: 'SEO', icon: 'search', perm: 'seo.read', match: /^\/studio\/seo/, key: 's' },
-    { to: '/studio/translations', label: 'Translations', icon: 'languages', perm: 'translation.read', match: /^\/studio\/translations/, key: 't' },
-  ] },
-  // AFCD Apply (docs/adr/0004-afcd-apply.md): four places, each call a workspace with tabs, applicants one pipeline
   { group: 'Applications', items: [
     { to: '/studio/apply', label: 'Overview', icon: 'gauge', perm: 'apply.submission.read', match: /^\/studio\/apply\/?$/ },
     { to: '/studio/apply/calls', label: 'Calls', icon: 'megaphone', perm: 'apply.read', match: /^\/studio\/apply\/calls/ },
@@ -37,15 +42,18 @@ export const NAV: { group: string; items: NavItem[] }[] = [
     { to: '/studio/apply/reviews', label: 'My reviews', icon: 'clipboard', perm: 'apply.review', match: /^\/studio\/apply\/reviews/ },
     { to: '/studio/apply/messages', label: 'Messages', icon: 'send', perm: 'apply.message', match: /^\/studio\/apply\/messages/ },
   ] },
-  { group: 'Workflow', items: [
+  { group: 'Engagement', items: [
     { to: '/studio/inbox', label: 'Inbox', icon: 'inbox', perm: 'forms.read', match: /^\/studio\/(inbox|forms)/, key: 'i' },
-    { to: '/studio/approvals', label: 'Approval queue', icon: 'checkcircle', perm: 'project.read', match: /^\/studio\/approvals/, key: 'a' },
-    { to: '/studio/publishing', label: 'Publishing', icon: 'rocket', perm: 'dashboard.read', match: /^\/studio\/publishing/ },
+    { to: '/studio/opportunities', label: 'Opportunities', icon: 'spark', perm: 'opportunity.read', match: /^\/studio\/opportunities/, key: 'o' },
+  ] },
+  { group: 'Optimization', items: [
+    { to: '/studio/seo', label: 'SEO', icon: 'search', perm: 'seo.read', match: /^\/studio\/seo/, key: 's' },
   ] },
   { group: 'Administration', items: [
     { to: '/studio/users', label: 'Users & roles', icon: 'users', perm: 'users.read', match: /^\/studio\/users/ },
     { to: '/studio/activity', label: 'Activity log', icon: 'history', perm: 'audit.read', match: /^\/studio\/activity/ },
-    { to: '/studio/settings', label: 'Settings', icon: 'settings', perm: 'settings.read', match: /^\/studio\/settings/ },
+    { to: '/studio/settings', label: 'Website settings', icon: 'globe', perm: 'settings.read', match: SETTINGS_WEBSITE },
+    { to: '/studio/settings/email', label: 'System', icon: 'settings', perm: 'settings.read', match: SETTINGS_SYSTEM },
   ] },
 ];
 
@@ -57,7 +65,7 @@ type QueueItem = { status: string; canApprove: boolean; canPublish: boolean };
 export function Sidebar({ path, collapsed, onToggle, unread, onCloseMobile }: { path: string; collapsed: boolean; onToggle: () => void; unread: number; onCloseMobile: () => void }) {
   const me = useMe(); const can = useCan();
   const groups = NAV.map((g) => ({ ...g, items: g.items.filter((i) => can(i.perm)) })).filter((g) => g.items.length);
-  const isOn = (i: NavItem) => (i.match ? i.match.test(path) : path.startsWith(i.to));
+  const isOn = (i: NavItem) => (typeof i.match === 'function' ? i.match(path) : i.match ? i.match.test(path) : path.startsWith(i.to));
 
   // review queue: what is waiting on this user (to review, or approved and theirs to publish)
   const [queue, setQueue] = useState(0);

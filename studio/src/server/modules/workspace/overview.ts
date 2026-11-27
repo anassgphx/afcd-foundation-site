@@ -7,7 +7,8 @@ import { can, type Role } from '../../rbac.ts';
 import { TEXT_PAGES } from '../home/service.ts';
 import { todayMorocco } from '../events/render.ts';
 import { notifications, openFailures } from './service.ts';
-import { recentPublicState } from '../publish/public-check.ts';
+import { recentPublicState, type PublicState } from '../publish/public-check.ts';
+import { details as healthDetails } from '../health/service.ts';
 
 type Mod = { key: string; label: string; href: string; icon: string; live: number; drafts: number; review: number; note?: string; scheduled?: number };
 type Recent = { kind: string; title: string; status: string; live: boolean; href: string; at: string };
@@ -90,6 +91,17 @@ export async function overview(db: DB, user: { id: string; role: Role }, cfg?: C
       detail: failed ? 'In the last 24 hours. Open Publishing for details.'
         : stale ? `The last publish was built, but the public site still serves an older version${pub.error ? ` (${pub.error})` : ''}. Check the site sync on the server.`
         : lastOk?.at ? `Last update delivered ${lastOk.at.toISOString()}${pub.checked && pub.match ? ', public site confirmed' : ''}` : 'No delivery yet' });
+    // background loops (scheduler, jobs and outbox): shown once the server has registered them (modules/health)
+    if (cfg) {
+      const h = await healthDetails(db, cfg, { publicCheck: async () => pub as PublicState });
+      if (h.loops.length) {
+        const bad = h.loops.filter((l) => !l.ok);
+        const first = bad[0];
+        health.push({ key: 'background', label: 'Background work', value: bad.length ? 'Needs attention' : 'Running', tone: bad.some((l) => l.late) ? 'bad' : bad.length ? 'warn' : 'ok', href: '/studio/publishing',
+          detail: first ? (first.late ? `${first.label} has not run since ${first.lastStartedAt ?? 'the server started'}.` : `${first.label}: ${first.lastErrors[0]}`)
+            : `Scheduler last ran ${h.loops.find((l) => l.name === 'scheduler')?.lastStartedAt ?? h.loops[0].lastStartedAt ?? 'not yet'}` });
+      }
+    }
   }
   if (can(role, 'seo.read')) {
     const [a] = await db.select().from(seoAudits).orderBy(desc(seoAudits.createdAt)).limit(1);
@@ -109,6 +121,16 @@ export async function overview(db: DB, user: { id: string; role: Role }, cfg?: C
   if (can(role, 'forms.read')) {
     const [{ n }] = await db.select({ n: count() }).from(formSubmissions).where(and(eq(formSubmissions.formKey, 'contact'), eq(formSubmissions.spam, false), isNull(formSubmissions.archivedAt), isNull(formSubmissions.readAt)));
     health.push({ key: 'forms', label: 'Messages', value: n ? `${n} unread` : 'None unread', tone: n ? 'warn' : 'ok', href: '/studio/inbox', detail: n ? 'From the website contact form, not opened yet.' : 'Inbox is clear' });
+  }
+  if (cfg && (can(role, 'settings.read') || can(role, 'apply.message'))) {
+    // one email server for the whole of Studio (inbox/mail.ts); applicant emails wait in an outbox with retries
+    const { email: e } = await healthDetails(db, cfg, { publicCheck: async () => ({ checked: false, built: null, live: null, match: null, error: null, at: '' }) });
+    const o = e.outbox;
+    health.push({ key: 'email', label: 'Email', value: o.failed ? `${o.failed} not sent` : !e.serverReady ? 'Not set up' : o.queued ? `${o.queued} waiting` : 'Working',
+      tone: o.failed ? 'bad' : !e.serverReady ? 'warn' : 'ok', href: '/studio/settings/email',
+      detail: o.failed ? 'Emails to applicants that failed after every retry. Open Applications › Messages.'
+        : !e.serverReady ? `No email server is set up, so Studio cannot send password resets, Inbox replies or applicant emails${o.queued ? ` (${o.queued} waiting)` : ''}.`
+        : o.queued ? 'Being sent now, a few every 10 seconds.' : 'The email server is set up and nothing is waiting.' });
   }
 
   // website delivery, in plain words, with what it was about

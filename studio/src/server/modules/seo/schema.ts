@@ -23,10 +23,11 @@ export const KEY = 'organization';
 const orgId = (site: string) => site + '#organization';
 const plain = (n: number) => z.string().trim().max(n).refine((v) => !/[<>]/.test(v), 'Use plain text.');
 const HTTPS = /^https:\/\/[a-z0-9.-]+\.[a-z]{2,}(\/[^\s"'<>]*)?$/i;
-/** The foundation's public addresses. Any other address (personal, administrative) never goes into public markup. */
-export const PUBLIC_EMAILS = ['contact@afcdteam.com', 'akaya@afcdteam.com'];
+/** The foundation's public addresses (src/server/identity.ts). Any other address never goes into public markup. */
+export { PUBLIC_EMAILS } from '../../identity.ts';
+import { PUBLIC_EMAILS } from '../../identity.ts';
 /** Keys build.mjs may take from schema.json for the Organization: names, description and public contacts only. */
-export const ORG_KEYS = ['alternateName', 'legalName', 'description', 'email', 'telephone', 'foundingDate', 'sameAs'] as const;
+export const ORG_KEYS = ['alternateName', 'legalName', 'description', 'foundingDate', 'sameAs'] as const;
 /** Sample or placeholder text that must never be described to search engines as real content. */
 const PLACEHOLDER = /lorem ipsum|consectetur adipiscing|\bsample\b|placeholder|\bdummy\b|\btest (event|story|article)\b|\bto be confirmed\b|\bTBC\b|\bTBD\b/i;
 
@@ -46,10 +47,13 @@ export const settingsSchema = z.object({
 export type SchemaSettings = z.infer<typeof settingsSchema>;
 export const EMPTY: SchemaSettings = settingsSchema.parse({});
 
-/** Only the fields an editor filled in: build.mjs keeps its own value for every other field. */
+/** Only the fields an editor filled in: build.mjs keeps its own value for every other field. The public email and phone
+ *  are not taken from here: Settings › Contact & social owns them (src/server/identity.ts). Older saved values for them
+ *  are still accepted when parsing, so nothing saved is rejected, but they are no longer published. */
+export const CONTACT_FROM_SETTINGS = ['email', 'telephone'] as const;
 export function orgOverrides(s: SchemaSettings) {
   const o = s.organization; const out: Record<string, unknown> = {};
-  for (const k of ['alternateName', 'legalName', 'description', 'email', 'telephone', 'foundingDate'] as const) if (o[k]) out[k] = k === 'telephone' ? o[k].replace(/\s+/g, '') : o[k];
+  for (const k of ['alternateName', 'legalName', 'description', 'foundingDate'] as const) if (o[k]) out[k] = o[k];
   if (o.sameAs.length) out.sameAs = o.sameAs;
   return out;
 }

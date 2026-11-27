@@ -43,7 +43,7 @@ describe('dashboard overview', () => {
     expect(status).toBe(200);
     expect(body.modules.map((m: any) => m.key)).toEqual(['projects', 'news', 'events', 'opportunities', 'publications', 'pillars', 'partners', 'team', 'pages']);
     expect(body.modules.find((m: any) => m.key === 'projects').live).toBe(1);
-    expect(body.health.map((x: any) => x.key)).toEqual(['delivery', 'seo', 'media', 'forms']);
+    expect(body.health.map((x: any) => x.key)).toEqual(['delivery', 'seo', 'media', 'forms', 'email']);
     expect(body.recent[0]).toMatchObject({ kind: 'Project', title: 'Eco Citizen' });
     expect(body.decisionCounts).toEqual({ review: 0, publish: 0, changes: 0, failed: 0 });
     expect(body.modules.find((m: any) => m.key === 'news').scheduled).toBe(0);

@@ -98,7 +98,9 @@ _PILLARS_JSON = Path(os.environ.get('STUDIO_PILLARS_JSON') or Path(__file__).par
 STUDIO_PILLARS = __import__('json').loads(_PILLARS_JSON.read_text(encoding='utf-8'))['pillars'] if _PILLARS_JSON.is_file() else []
 STUDIO_PILLAR_BY_KEY = {p_['key']: p_ for p_ in STUDIO_PILLARS}   # per-pillar extras, e.g. 'objectives': [{title, text}]
 if STUDIO_PILLARS:
-    PILLARS = [(p['key'], p['number'], p['name'], p['summary'], p['highlights']) for p in STUDIO_PILLARS]
+    # programme tags on the pillar cards are not edited in Studio: they stay the ones written above
+    _HIGHLIGHTS = {k_: r_ for k_, _n, _t, _d, r_ in PILLARS}
+    PILLARS = [(p['key'], p['number'], p['name'], p['summary'], _HIGHLIGHTS.get(p['key'], [])) for p in STUDIO_PILLARS]
     _names = {p['key']: p['name'] for p in STUDIO_PILLARS}
     OBJECTIVES = [(r, t, d, [(_names.get(sl, n), sl) for n, sl in links]) for r, t, d, links in OBJECTIVES]
 # How many pillars there are, for "Pillar 02 / 04" and "Four pillars" (Studio can add and remove pillars).
@@ -488,7 +490,6 @@ ABOUT_SECTIONS = {
         'statement': {'tab': 'President’s statement', 'label': 'President’s Statement'},
         'journey': {'tab': 'Journey', 'label': 'Our Journey', 'title': 'From Ait Ourir', 'soft': 'to across Morocco.', 'meta': 'Since 2007', 'desc': 'How a local volunteer initiative became a national nonprofit.'},
         'different': {'tab': 'What makes us different', 'label': 'What Makes Us Different', 'title': 'How we work,', 'soft': 'and why it lasts.', 'meta': '', 'desc': ''},
-        'what-we-do': {'tab': 'What we do', 'label': 'What We Do', 'title': 'Four areas,', 'soft': 'one approach.', 'desc': 'Programmes combine non-formal education, practical training, mentoring and community action.', 'sub': 'Core activities'},
         'approach': {'tab': 'Approach', 'label': 'Our Approach'},
         'impact': {'tab': 'Impact', 'label': 'Our Impact', 'title': 'A story', 'soft': 'of people.', 'meta': 'Since 2007', 'desc': 'The measure of this work is the people who carry it on.'},
     },
@@ -561,19 +562,13 @@ def about():
     side = (f'<figure class="plx-photo">{media_img(photo, "h-full w-full", "(min-width: 1024px) 40vw, 100vw", eager=True)}</figure>' if photo else
             f'<div class="plx-side abx-side"><p class="plx-k">In short</p><div class="abx-paras">{paras}</div>{legal}</div>' if paras or legal else '')
     facts = [(_esc(f['label']), _esc(f['value'])) for f in c.get('facts') or []] + [('Pillars', f'{PILLAR_COUNT:02d}')]
-    tl = ''.join(f'''<li class="abx-tl-i"><span class="abx-tl-when">{_esc(m["when"])}</span><span class="abx-tl-dot" aria-hidden="true"></span><span class="abx-tl-b"><span class="abx-tl-t">{_esc(m["title"])}</span>{f'<span class="abx-tl-d">{_esc(m["text"])}</span>' if (m.get("text") or "").strip() else ''}</span></li>'''
+    tl = ''.join(f'''<li class="abx-tl-i"><span class="abx-tl-dot" aria-hidden="true"></span><div class="abx-tl-card"><span class="abx-tl-when">{_esc(m["when"])}</span><span class="abx-tl-b"><span class="abx-tl-t">{_esc(m["title"])}</span>{f'<span class="abx-tl-d">{_esc(m["text"])}</span>' if (m.get("text") or "").strip() else ''}</span></div></li>'''
                  for m in c.get('milestones') or [])
     pr = c.get('principles') or []
-    areas = c.get('areas') or []
-    area_rows = ''.join(
-        (f'<li><a href="pillars.html#{_esc(a["pillar"])}" class="plx-other abx-area">' if a.get('pillar') in PILLAR_FILE else '<li><div class="plx-other abx-area">')
-        + f'<span class="plx-other-n">{j:02d}</span><span class="min-w-0"><span class="plx-other-t">{_esc(a["title"])}</span>'
-        + (f'<span class="plx-other-d">{_esc(a["text"])}</span>' if (a.get('text') or '').strip() else '') + '</span>'
-        + ('<span class="plx-arr" aria-hidden="true">↗</span></a></li>' if a.get('pillar') in PILLAR_FILE else '</div></li>')
-        for j, a in enumerate(areas, 1))
-    acts = ''.join(f'<li class="plx-act"><span class="plx-act-ico">{j:02d}</span><span>{a}</span></li>' for j, a in enumerate(ACTIVITIES, 1))
     ap = c.get('approach') or {}
-    steps = ''.join(f'<li class="plx-step"><span class="plx-step-n">{j:02d}</span><span class="plx-step-t">{_esc(s["title"])}</span><span class="plx-step-d">{_esc(s["text"])}</span></li>'
+    # approach: one journey of steps joined by a thin line (circle number, title, short text)
+    steps = ''.join(f'<li><span class="abx-j-n">{j:02d}</span><span class="abx-j-t">{_esc(s["title"])}</span>'
+                    + (f'<span class="abx-j-d">{_esc(s["text"])}</span>' if (s.get('text') or '').strip() else '') + '</li>'
                     for j, s in enumerate(ap.get('steps') or [], 1))
     stats = abx_stats(c)
     st = c.get('statement') or {}
@@ -584,7 +579,7 @@ def about():
     fy = str(c.get('foundedYear') or 2007)
     blocks = {
         'statement': lambda k, cfg: f"""
-<section id="statement" class="plx-sec py-14 lg:py-20">
+<section id="statement" class="plx-sec abx-stx py-10 lg:py-14">
   <div class="wrap">
     <div class="plx-pv">
       <div>
@@ -608,31 +603,17 @@ def about():
     <div class="mt-8 lg:mt-10">{abx_rows(pr, 'abx-rows abx-2col')}</div>
   </div>
 </section>""" if pr else '',
-        'what-we-do': lambda k, cfg: f"""
-<section id="what-we-do" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{abx_head(k, cfg, right=('Our pillars', 'pillars.html'))}
-    <ul class="plx-others mt-8 lg:mt-10">{area_rows}</ul>
-    {f'<p class="plx-k mt-12">{_esc(cfg["sub"])}</p>' if cfg.get('sub') else '<div class="mt-12"></div>'}
-    <ul class="plx-acts abx-acts mt-4">{acts}</ul>
-  </div>
-</section>""" if areas else '',
         'approach': lambda k, cfg: f"""
 <section id="approach" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">
-    <div class="plx-pv">
-      <div>
-        <div class="sh-top"><span class="sh-num">{k:02d}</span><span class="sh-label">{_esc(cfg.get('label') or '')}</span></div>
-        <h2 class="plx-pv-title">{_esc(ap.get('title') or '')}{f' <span class="text-ink-mid">{_esc(ap["soft"])}</span>' if ap.get('soft') else ''}</h2>
-      </div>
-      <ol class="plx-steps abx-steps">{steps}</ol>
-    </div>
-  </div>
+  <div class="wrap"><div class="abx-ap">{sec_head(f"{k:02d} / {_esc(cfg.get('label') or '')}", _esc(ap.get('title') or '') + (f' <span class="sh-soft">{_esc(ap["soft"])}</span>' if ap.get('soft') else ''))}
+    {f'<ol class="abx-journey cols-{min(len(ap.get("steps") or []), 4)}">{steps}</ol>' if steps else ''}
+  </div></div>
 </section>""" if steps or ap.get('title') else '',
         'impact': lambda k, cfg: f"""
 <section id="impact" class="plx-sec py-10 lg:py-14">
-  <div class="wrap">{abx_head(k, cfg)}
-    <div class="mt-8 lg:mt-10">{stats}</div>
-  </div>
+  <div class="wrap"><div class="abx-impact on-dark">{abx_head(k, cfg)}
+    <div class="mt-8 lg:mt-12">{stats}</div>
+  </div></div>
 </section>""" if (c.get('stats') or c.get('foundedYear')) else '',
     }
     secs, tabs = abx_build('our-story', c, blocks)
@@ -645,37 +626,48 @@ def about():
 {secs}
 </div>
 ''' + abx_cta(c) + about_more('our-story.html')
-    page('our-story.html', 'Our Story · AFCD Foundation',
+    page('our-story.html', 'AFCD Foundation history: our story since 2007',
          'How young volunteers founded AFCD Foundation in Ait Ourir in 2007, and how we work with communities.', 'about', body, parent=ABOUT)
 
     # ---------------------------------------------------------------- Mission & Vision: one path, from today to tomorrow
     c = about_content('mission-vision')
     vals = c.get('values') or []
-    roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII']
-    vrows = ''.join(f'<li class="abx-val"><span class="abx-val-n">{roman[j] if j < len(roman) else j + 1}</span><span class="min-w-0"><span class="abx-val-t">{_esc(v["title"])}</span><span class="abx-val-d">{_esc(v.get("text") or "")}</span></span></li>' for j, v in enumerate(vals))
+    # photos: the ones chosen in Studio, else the cover photos of live projects (real AFCD photos), each used once
+    covers = [cv[0] for cv in (((p_.get('detail') or {}).get('cover') or []) for p_ in _PROJECT_DATA) if cv]
+    pics, used = {}, set()
+    for slot, key_ in (('overview', 'image'), ('mission', 'missionImage'), ('vision', 'visionImage')):
+        own = c.get(key_)
+        pick = own or next((m for m in covers if m['src'] not in used), None)
+        if pick:
+            used.add(pick['src']); pics[slot] = pick
+    fig = lambda slot, sizes: (f'<figure class="abx-mv-pic">{media_img(pics[slot], "h-full w-full", sizes)}</figure>' if slot in pics else '')
+    check = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10.5 3.2 3L15 6.5"/></svg>'
+    vrows = ''.join(f'<li class="abx-mv-val"><span class="abx-mv-ico">{check}</span><span class="min-w-0"><span class="abx-mv-val-t">{_esc(v["title"])}</span>'
+                    + (f'<span class="abx-mv-val-d">{_esc(v["text"])}</span>' if (v.get('text') or '').strip() else '') + '</span></li>' for v in vals)
     stage_body = {
-        'mission': f'<p class="abx-path-q">{_esc(c.get("mission") or "")}</p>' if c.get('mission') else '',
-        'values': f'<ol class="abx-vals">{vrows}</ol>' if vals else '',
-        'vision': f'<p class="abx-path-q">{_esc(c.get("vision") or "")}</p>' if c.get('vision') else '',
-        'next': f'<a href="strategy.html" class="plx-other abx-next"><span class="plx-other-n">SO</span><span class="min-w-0"><span class="plx-other-t">Strategy &amp; Objectives</span><span class="plx-other-d">{len(OBJECTIVES)} objectives, the people we serve and where we work.</span></span><span class="plx-arr" aria-hidden="true">↗</span></a>',
+        'mission': f'<p class="abx-mv-q">{_esc(c.get("mission") or "")}</p>' if c.get('mission') else '',
+        'values': f'<ul class="abx-mv-vals">{vrows}</ul>' if vals else '',
+        'vision': f'<p class="abx-mv-q">{_esc(c.get("vision") or "")}</p>' if c.get('vision') else '',
+        'next': f'<a href="strategy.html" class="plx-other abx-next"><span class="min-w-0"><span class="plx-other-t">Strategy &amp; Objectives</span><span class="plx-other-d">{len(OBJECTIVES)} objectives, the people we serve and where we work.</span></span><span class="plx-arr" aria-hidden="true">↗</span></a>',
     }
     def stage(sid):
+        pic = fig(sid, '(min-width: 1024px) 40vw, 100vw') if sid in ('mission', 'vision') else ''
         return lambda k, cfg: f"""
-      <li id="{sid}" class="abx-path-i plx-sec">
-        <div class="abx-path-h"><span class="abx-path-n">{k:02d}</span><span class="abx-path-k">{_esc(cfg.get('label') or '')}</span></div>
-        <div class="abx-path-b"><h2 class="abx-path-t">{_esc(cfg.get('title') or '')}</h2>{f'<p class="abx-path-s">{_esc(cfg["desc"])}</p>' if cfg.get('desc') else ''}<div class="abx-path-c">{stage_body[sid]}</div></div>
+      <li id="{sid}" class="abx-mv-i abx-mv-{sid}{' has-pic' if pic else ''} plx-sec">
+        <div class="abx-mv-txt"><p class="abx-mv-k">{_esc(cfg.get('label') or '')}</p><h2 class="abx-mv-t">{_esc(cfg.get('title') or '')}</h2>{f'<p class="abx-mv-s">{_esc(cfg["desc"])}</p>' if cfg.get('desc') else ''}<div class="abx-mv-c">{stage_body[sid]}</div></div>{pic}
       </li>""" if stage_body[sid] else ''
     path, tabs = abx_build('mission-vision', c, {sid: stage(sid) for sid in stage_body})
     ph = about_section('mission-vision', c, 'path')
     ph_title = _esc(ph.get('title') or '') + (f' <span class="sh-soft">{_esc(ph["soft"])}</span>' if ph.get('soft') else '')
     body = page_header([ABOUT, ('Mission &amp; Vision', 'mission-vision.html')], 'About · Mission &amp; Vision', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
 <div class="plx abx"{_rev(c)}>
-{abx_overview('mission-vision.html', 'M·V', _esc(c.get('mission') or ''), [('Mission', '01'), ('Values', f'{len(vals):02d}'), ('Objectives', f'{len(OBJECTIVES):02d}')],
-              [('Read the path <span aria-hidden="true">↓</span>', f'#{tabs[0][0]}' if tabs else '#overview'), ('Our strategy <span aria-hidden="true">↗</span>', 'strategy.html')], '', 'Mission &amp; Vision')}
+{abx_overview('mission-vision.html', 'M·V', _esc(c.get('mission') or ''), [],
+              [('Read the path <span aria-hidden="true">↓</span>', f'#{tabs[0][0]}' if tabs else '#overview'), ('Our strategy <span aria-hidden="true">↗</span>', 'strategy.html')],
+              f'<figure class="plx-photo">{media_img(pics["overview"], "h-full w-full", "(min-width: 1024px) 40vw, 100vw", eager=True)}</figure>' if 'overview' in pics else '', 'Mission &amp; Vision')}
 {abx_tabs(tabs) if tabs else ''}
 <section id="path" class="plx-sec py-14 lg:py-20">
-  <div class="wrap">{sec_head(f'01 / {_esc(ph.get("label") or "")}', ph_title, _esc(ph.get('meta') or ''))}
-    <ol class="abx-path mt-8 lg:mt-12">{path}
+  <div class="wrap">{sec_head(_esc(ph.get("label") or ""), ph_title, _esc(ph.get('meta') or ''))}
+    <ol class="abx-mv mt-8 lg:mt-12">{path}
     </ol>
   </div>
 </section>
@@ -697,7 +689,9 @@ def about():
     groups = ''.join(f'<li>{b}</li>' for b in BENEFICIARIES)
     summary = ''.join(f'<p>{_esc(p)}</p>' for p in c.get('summary') or [])
     regions = c.get('regions') or []
-    reg = ''.join(f'<li class="abx-reg"><span class="abx-reg-n">{j:02d}</span><span class="abx-reg-t">{_esc(r["name"])}</span><span class="abx-reg-d">{_esc(r.get("places") or "")}</span></li>' for j, r in enumerate(regions, 1))
+    pin = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17.5s5.5-4.6 5.5-9a5.5 5.5 0 0 0-11 0c0 4.4 5.5 9 5.5 9Z"/><circle cx="10" cy="8.5" r="2"/></svg>'
+    reg = ''.join(f'<li class="abx-reg2"><span class="abx-reg2-ico">{pin}</span><span class="abx-reg2-t">{_esc(r["name"])}</span>'
+                  + (f'<span class="abx-reg2-d">{_esc(r["places"])}</span>' if (r.get('places') or '').strip() else '') + '</li>' for r in regions)
     def who_block(k, cfg):
         head = abx_head(k, dict(cfg, desc=cfg.get('desc') or c.get('whoIntro') or ''), f'{len(BENEFICIARIES)} groups')
         sub = f'<p class="plx-k">{_esc(cfg["sub"])}</p>' if cfg.get('sub') else ''
@@ -720,7 +714,7 @@ def about():
         return f"""
 <section id="where-we-work" class="plx-sec py-10 lg:py-14">
   <div class="wrap">{abx_head(k, cfg)}
-    <ol class="abx-regs mt-8 lg:mt-10">{reg}</ol>
+    <ul class="abx-regs2 mt-8 lg:mt-10">{reg}</ul>
     {note}
   </div>
 </section>"""
@@ -738,7 +732,7 @@ def about():
     secs, tabs = abx_build('strategy', c, blocks)
     body = page_header([ABOUT, ('Strategy &amp; Objectives', 'strategy.html')], 'About · Strategy', _title(c['hero']), _esc(c['hero'].get('lead') or '')) + f'''
 <div class="plx abx"{_rev(c)}>
-{abx_overview('strategy.html', f'{len(OBJECTIVES):02d}', _esc(c.get('objectivesIntro') or ''), [('Objectives', f'{len(OBJECTIVES):02d}'), ('Pillars', f'{PILLAR_COUNT:02d}'), ('Regions', f'{len(regions):02d}')],
+{abx_overview('strategy.html', 'SO', _esc(c.get('objectivesIntro') or ''), [],
               [('See the objectives <span aria-hidden="true">↓</span>', f'#{tabs[0][0]}' if tabs else '#overview'), ('Who we serve <span aria-hidden="true">↓</span>', '#who-we-serve')], '', 'Strategy &amp; Objectives')}
 {abx_tabs(tabs) if tabs else ''}
 {secs}
@@ -786,7 +780,7 @@ def about():
 {groups_html}
 </div>
 ''' + abx_cta(c) + about_more('team.html')
-    page('team.html', 'Our Team · AFCD Foundation',
+    page('team.html', 'AFCD Foundation team: the people behind our work',
          'Meet the team behind AFCD Foundation’s programmes in Marrakech, Al Haouz and across Morocco.', 'about', body, parent=ABOUT)
 
     # ---------------------------------------------------------------- About hub: overview of the sub-pages, then impact
@@ -890,6 +884,7 @@ PILLAR_APPROACH = {
 PILLAR_SHORT = {'youth-empowerment': 'Youth', 'women-empowerment': 'Women', 'green-thumbs': 'Environment', 'digital-empowerment': 'Digital'}
 PILLAR_BRAND = {'green-thumbs': 'Green Thumbs'}
 PILLAR_IMAGE = {}
+PILLAR_VIDEO = {}   # optional video in a pillar page's overview: {'kind': 'file', src, mime} or {'kind': 'embed', provider, label, embed, watch}
 for _p in STUDIO_PILLARS:   # Studio pillar content (see STUDIO_PILLARS above)
     _k = _p['key']
     PILLAR_INTRO[_k], PILLAR_SHORT[_k], PILLAR_ACTS[_k], PILLAR_GROUPS[_k] = _p['intro'], _p['short'], _p['activities'], _p['groups']
@@ -897,6 +892,7 @@ for _p in STUDIO_PILLARS:   # Studio pillar content (see STUDIO_PILLARS above)
                                steps=[tuple(x) for x in _p['approach']['steps']])
     PILLAR_BRAND[_k] = _p['brand']
     PILLAR_IMAGE[_k] = _p.get('image')
+    PILLAR_VIDEO[_k] = _p.get('video')
 
 
 def pillars():
@@ -921,10 +917,11 @@ def pillars():
                 t_, s_ = title, soft
             return (t_ or '') + (f' <span class="sh-soft">{s_}</span>' if s_ else '')
         extra_acts, extra_groups = sp.get('extraActivities') or [], sp.get('extraGroups') or []
-
+        work_items, audience = sp.get('workItems') or [], sp.get('audience') or []   # edited in Studio: replace the picks above
         # -- overview: flagship programmes (the pillar's highlights) link to their project page when it exists
         def flag(name):
             pr = proj_by_name.get(name); href = pr.get('file') if pr and pr.get('detail') else None
+
             row = f'<span class="plx-flag-t">{_esc(name)}</span>' + (f'<span class="plx-flag-c">{_esc(pr["category"])}</span>' if pr and pr.get('category') else '')
             return f'<li><a href="{href}" class="plx-flag">{row}<span class="plx-arr" aria-hidden="true">↗</span></a></li>' if href else f'<li><span class="plx-flag">{row}</span></li>'
         flags = ''.join(flag(r) for r in rel)
@@ -938,41 +935,77 @@ def pillars():
                     break
         photo_html = (f'<figure class="plx-photo">{media_img(cover, "h-full w-full", "(min-width: 1024px) 40vw, 100vw", eager=True)}'
                       + (f'<figcaption class="plx-cap"><a href="{cover_from[4]}">{cover_from[0]} <span aria-hidden="true">↗</span></a></figcaption>' if cover_from else '') + '</figure>') if cover else ''
-        who = [_esc(BENEFICIARIES[g]) for g in PILLAR_GROUPS[slug]] + list(extra_groups)
-        h3_boxes = ((f'<div class="plx-h3-box"><p class="plx-k">{pg.get("flagshipLabel") or "Flagship programmes"}</p><ul class="plx-flags">{flags}</ul></div>' if flags else '')
-                    + (f'<div class="plx-h3-box"><p class="plx-k">Who we work with</p><ul class="plx-whos">{"".join(f"<li>{w}</li>" for w in who)}</ul></div>' if who else ''))
-        flags_html = ('<div class="plx-side">'
-                      + (f'<p class="plx-k">{pg.get("flagshipLabel") or "Flagship programmes"}</p><ul class="plx-flags">{flags}</ul>' if flags else '')
-                      + (f'<p class="plx-k plx-side-k2">Who we work with</p><ul class="plx-whos">{"".join(f"<li>{w}</li>" for w in who)}</ul>' if who else '')
-                      + '</div>') if (flags or who) else ''
-        side = f'<div class="plx-col">{photo_html}{flags_html}</div>' if (photo_html or flags_html) else ''
-        facts = [('Projects', len(projs)), ('Activities', len(PILLAR_ACTS[slug]))] + ([('Objectives', len(pobj))] if pobj else []) + ([('Stories', len(stories))] if stories else [])
-        facts_html = ''.join(f'<div class="plx-fact"><dd>{v}</dd><dt>{k if v != 1 else k[:-1] if k.endswith("s") else k}</dt></div>' for k, v in facts if v)   # a zero is not shown
+        # a video replaces the still photo; the photo becomes its poster. Nothing from a video platform loads before play.
+        vid = PILLAR_VIDEO.get(slug)
+        if vid and vid.get('kind') in ('file', 'embed'):
+            poster = media_img(cover, 'h-full w-full', '(min-width: 1024px) 40vw, 100vw', eager=True) if cover else ''
+            if vid['kind'] == 'file':
+                vdata, vsrc = f'data-plx-video="file" data-src="{vid["src"]}" data-type="{vid["mime"]}"', ''
+            else:
+                vdata = f'data-plx-video="embed" data-src="{vid["embed"]}" data-provider="{vid["provider"]}"'
+                vsrc = f'<a class="plx-vid-src" href="{vid["watch"]}" target="_blank" rel="noopener">Watch on {vid["label"]} <span aria-hidden="true">↗</span></a>'
+            photo_html = (f'<figure class="plx-photo plx-vid{"" if cover else " no-poster"}" {vdata} data-title="{t}">{poster}'
+                          f'<button type="button" class="plx-play" aria-label="Play the video about {t}"><span class="plx-play-i" aria-hidden="true"></span><span class="plx-play-t">Play video</span></button>{vsrc}</figure>')
+        facts = [('Projects', len(projs)), ('Activities', len(work_items) if work_items else len(PILLAR_ACTS[slug]))] + ([('Objectives', len(pobj))] if pobj else []) + ([('Stories', len(stories))] if stories else [])
+        facts_html = ''.join(f'<div class="plx-fact"><dd>{v}</dd><dt>{k if v != 1 else {"Stories": "Story", "Activities": "Activity"}.get(k, k[:-1] if k.endswith("s") else k)}</dt></div>' for k, v in facts if v)   # a zero is not shown
         brand = f'<span class="plx-chip">Programme brand: {PILLAR_BRAND[slug]}</span>' if PILLAR_BRAND.get(slug) else ''
-        steps_nav = ''.join(f'<a href="{PILLAR_FILE[s2]}" class="plx-pn{" is-on" if s2 == slug else ""}" title="{_esc(t2)}"{" aria-current=" + chr(34) + "page" + chr(34) if s2 == slug else ""}>{n2}</a>' for s2, n2, t2, _d2, _r2 in PILLARS)
+        # pillar names are HTML already ("&amp;", escaped by Studio on export): escaping again showed "&amp;amp;"
+        steps_nav = ''.join(f'<a href="{PILLAR_FILE[s2]}" class="plx-pn{" is-on" if s2 == slug else ""}" title="{t2}"{" aria-current=" + chr(34) + "page" + chr(34) if s2 == slug else ""}>{n2}</a>' for s2, n2, t2, _d2, _r2 in PILLARS)
 
         # -- perspective
         princ = ''.join(f'<li><span class="plx-pr-n">{j:02d}</span>{x}</li>' for j, x in enumerate(ap['principles'], 1))
         # -- objectives (only when published)
-        pobj_html = ''.join(f'<li class="plx-obj"><span class="plx-obj-n">{j:02d}</span><span class="min-w-0"><span class="plx-obj-t">{_esc(o["title"])}</span>' + (f'<span class="plx-obj-d">{_esc(o.get("text") or "")}</span>' if (o.get('text') or '').strip() else '') + '</span></li>' for j, o in enumerate(pobj, 1))
-        # -- how we work: steps, activities, people
-        steps = ''.join(f'<li class="plx-step"><span class="plx-step-n">{j:02d}</span><span class="plx-step-t">{a}</span><span class="plx-step-d">{b}</span></li>' for j, (a, b) in enumerate(ap['steps'], 1))
+        # objectives look like the How we work steps: numbered columns (circle number, title, description)
+        pobj_html = ''.join(f'<li class="plx-step"><span class="plx-step-n">{j:02d}</span><span class="plx-step-t">{_esc(o["title"])}</span>'
+                            + (f'<span class="plx-step-d">{_esc(o.get("text") or "")}</span>' if (o.get('text') or '').strip() else '') + '</li>' for j, o in enumerate(pobj, 1))
+        pobj_cols = len(pobj) if len(pobj) <= 4 else 3   # 1-4 objectives fill one row; 5-6 wrap as rows of 3
+        # -- how we work: activities and people (the numbered steps are no longer shown; Studio keeps them)
         acts = ''.join(f'<li class="plx-act"><span class="plx-act-ico">{ICO(ACT_ICONS[a])}</span><span>{ACTIVITIES[a]}</span></li>' for a in PILLAR_ACTS[slug])
         acts += ''.join(f'<li class="plx-act"><span class="plx-act-ico">{ICO(ACT_ICONS[1])}</span><span>{x}</span></li>' for x in extra_acts)
         groups = ''.join(f'<li>{_esc(BENEFICIARIES[g])}</li>' for g in PILLAR_GROUPS[slug]) + ''.join(f'<li>{x}</li>' for x in extra_groups)
+        if work_items:
+            acts = ''.join(f'<li class="plx-act"><span class="plx-act-ico">{ICO(ACT_ICONS[w["icon"] if 0 <= w["icon"] < len(ACT_ICONS) else 1])}</span><span>{w["text"]}</span></li>' for w in work_items)
+        if audience:
+            # each group: its name, and its short description when Studio has one (older data: names only)
+            def _grp(x):
+                if isinstance(x, str):
+                    return f'<li><span class="plx-who-t">{x}</span></li>'
+                return (f'<li><span class="plx-who-t">{x.get("title", "")}</span>'
+                        + (f'<span class="plx-who-d">{x["text"]}</span>' if (x.get('text') or '').strip() else '') + '</li>')
+            groups = ''.join(_grp(x) for x in audience)
+        # Who we work with: each group behind a check mark
+        CHECK = '<span class="plx-who-ico" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 10.5 3.2 3.2L15 7"/></svg></span>'
+        groups = groups.replace('<li>', f'<li>{CHECK}<span>').replace('</li>', '</span></li>')
+        # the photo between the two lists: the one chosen in Studio, else the cover of another live project (never the overview photo)
+        work_pic = STUDIO_PILLAR_BY_KEY.get(slug, {}).get('workImage')
+        if not work_pic:
+            for pr in projs:
+                c_ = ((proj_by_name.get(pr[0]) or {}).get('detail') or {}).get('cover') or []
+                if c_ and pr[4] and (not cover or c_[0].get('src') != cover.get('src')):
+                    work_pic = c_[0]
+                    break
+        # the square carousel next to the objectives: photos chosen in Studio, else live projects' covers not used above
+        obj_pics = list(STUDIO_PILLAR_BY_KEY.get(slug, {}).get('objectivesImages') or [])
+        if not obj_pics:
+            used = {(cover or {}).get('src'), (work_pic or {}).get('src')}
+            for pr in projs:
+                c_ = ((proj_by_name.get(pr[0]) or {}).get('detail') or {}).get('cover') or []
+                for im in c_[:1]:
+                    if pr[4] and im.get('src') not in used:
+                        obj_pics.append(im); used.add(im.get('src'))
+            obj_pics = obj_pics[:8]
+        def car_html(pics):
+            n = len(pics)
+            slides = ''.join(f'<figure class="plx-car-slide" role="group" aria-roledescription="slide" aria-label="{i} of {n}">{media_img(im, "h-full w-full", "(min-width: 1024px) 36vw, 100vw")}</figure>' for i, im in enumerate(pics, 1))
+            ctrl = ('<div class="plx-car-ctrl"><div class="plx-car-dots">' + ''.join(f'<button type="button" class="plx-car-dot{" is-on" if i == 1 else ""}" aria-label="Show photo {i}"></button>' for i in range(1, n + 1))
+                    + '</div><div class="plx-car-arrows"><button type="button" class="plx-car-btn" data-dir="-1" aria-label="Previous photo"><span aria-hidden="true">←</span></button>'
+                    + '<button type="button" class="plx-car-btn" data-dir="1" aria-label="Next photo"><span aria-hidden="true">→</span></button></div></div>') if n > 1 else ''
+            return f'<div class="plx-car" data-plx-car aria-roledescription="carousel" aria-label="Photos: {t}"><div class="plx-car-track" tabindex="0">{slides}</div>{ctrl}</div>'
+        work_pic_html = f'<figure class="plx-work-pic">{media_img(work_pic, "h-full w-full", "(min-width: 1024px) 28vw, 100vw")}</figure>' if work_pic and acts and groups else ''
 
         # -- projects: real ones only
-        def pcard(pr, j):
-            name, _sl, _pn, cat, href, summ = pr
-            data = proj_by_name.get(name) or {}
-            img = ((data.get('detail') or {}).get('cover') or [None])[0]
-            st = project_status(name)
-            visual = media_img(img, 'h-full w-full', '(min-width: 1024px) 30vw, 100vw') if img else f'<span class="plx-pj-mono" aria-hidden="true">{j:02d}</span>'
-            meta = ''.join(x for x in [status_badge(st, 'is-sm') if st else '', f'<span class="plx-pj-cat">{cat}</span>' if cat else ''])
-            inner = f'''<div class="plx-pj-vis{' has-img' if img else ''}">{visual}</div><div class="plx-pj-b"><div class="plx-pj-meta">{meta}</div><span class="plx-pj-t">{name}</span>{f'<span class="plx-pj-d">{summ}</span>' if summ else ''}<span class="plx-pj-go">{'Explore project' if href else 'Project page coming soon'}{' <span aria-hidden="true">↗</span>' if href else ''}</span></div>'''
-            return f'<li><a href="{href}" class="plx-pj">{inner}</a></li>' if href else f'<li><div class="plx-pj is-static">{inner}</div></li>'
-        proj_html = ''.join(pcard(p, j) for j, p in enumerate(projs, 1))
-        proj_block = (f'<ul class="plx-pjs mt-8 lg:mt-10">{proj_html}</ul>' if projs else
+        proj_html = ''.join(project_card(p) for p in projs)   # the same card as the projects page
+        proj_block = (f'<ul class="pjc-grid mt-8 lg:mt-10">{proj_html}</ul>' if projs else
                       f'<div class="plx-empty mt-8 lg:mt-10"><p class="plx-empty-t">No projects are published under this pillar yet.</p><p class="plx-empty-d">They appear here as soon as AFCD publishes them.</p><a href="projects.html" class="link-arrow mt-4">All projects <span class="arr" aria-hidden="true">↗</span></a></div>')
 
         # -- related: this pillar's stories and events
@@ -984,7 +1017,7 @@ def pillars():
         others = ''.join(f'''<li><a href="{PILLAR_FILE[s2]}" class="plx-other" style="--pc:{PILLAR_TONE.get(s2, '#E7E5E4')}"><span class="plx-other-n">{n2}</span><span class="min-w-0"><span class="plx-other-t">{t2}</span><span class="plx-other-d">{PILLAR_INTRO.get(s2, d2)}</span></span><span class="plx-arr" aria-hidden="true">↗</span></a></li>'''
                          for s2, n2, t2, d2, _r2 in PILLARS if s2 != slug)
 
-        tabs = [('overview', 'Overview'), ('perspective', 'Perspective')] + ([('objectives', 'Objectives')] if pobj else []) + [('how-we-work', 'How we work'), ('projects', 'Projects')] + ([('related', 'Related')] if rel_rows else []) + [('other-pillars', 'Other pillars')]
+        tabs = [('overview', 'Overview'), ('perspective', 'Perspective')] + ([('objectives', 'Objectives')] if pobj else []) + ([('how-we-work', 'How we work')] if acts or groups else []) + [('projects', 'Projects')] + ([('related', 'Related')] if rel_rows else []) + [('other-pillars', 'Other pillars')]
         num = iter(range(1, 20))
         body = page_header([('Our Pillars', 'pillars.html'), (t, PILLAR_FILE[slug])], f'Pillar {n} / {PILLARS_TOTAL}', t, PILLAR_INTRO[slug]) + f'''
 <div class="plx">
@@ -992,7 +1025,7 @@ def pillars():
 <section id="overview" class="plx-sec pt-8 lg:pt-10">
   <div class="wrap">
     <div class="plx-h3" style="--pc:{PILLAR_TONE.get(slug, '#E7E5E4')}">
-      <div class="plx-h3-card{' has-photo' if photo_html else ' has-aside' if (flags or who) else ''}">
+      <div class="plx-h3-card{' has-photo' if photo_html else ''}">
         <div class="plx-h3-text">
           <div class="plx-h3-top">
             <span class="plx-badge"><span class="plx-badge-dot" aria-hidden="true"></span>Pillar {n}<i> / {PILLARS_TOTAL}</i></span>{brand}
@@ -1002,17 +1035,14 @@ def pillars():
           <p class="plx-h3-lead">{d}</p>
           {f'<dl class="plx-h3-facts">{facts_html}</dl>' if facts_html else ''}
           <div class="plx-h3-cta">
-            {'<a href="#projects" class="plx-btn">See projects <span aria-hidden="true">↓</span></a>' if projs else '<a href="#how-we-work" class="plx-btn">How we work <span aria-hidden="true">↓</span></a>'}
-            {'<a href="#how-we-work" class="plx-link">How we work <span aria-hidden="true">↓</span></a>' if projs else '<a href="get-involved.html" class="plx-link">Get involved <span aria-hidden="true">↗</span></a>'}
+            {'<a href="#projects" class="plx-btn">See projects <span aria-hidden="true">↓</span></a>' if projs else ('<a href="#how-we-work" class="plx-btn">How we work <span aria-hidden="true">↓</span></a>' if acts or groups else '')}
+            {('<a href="#how-we-work" class="plx-link">How we work <span aria-hidden="true">↓</span></a>' if acts or groups else '') if projs else '<a href="get-involved.html" class="plx-link">Get involved <span aria-hidden="true">↗</span></a>'}
             {share_bar(PILLAR_FILE[slug], t, 'Share', 'plx-h3-share')}
           </div>
         </div>
-        {photo_html or (f'<div class="plx-h3-aside">{h3_boxes}</div>' if h3_boxes else '')}
+        {photo_html}
       </div>
-      {f"""<div class="plx-h3-strip">
-        {f'<div class="plx-h3-box"><p class="plx-k">{pg.get("flagshipLabel") or "Flagship programmes"}</p><ul class="plx-flags">{flags}</ul></div>' if flags else ''}
-        {f'<div class="plx-h3-box"><p class="plx-k">Who we work with</p><ul class="plx-whos">{"".join(f"<li>{w}</li>" for w in who)}</ul></div>' if who else ''}
-      </div>""" if (photo_html and (flags or who)) else ''}
+
     </div>
   </div>
 </section>
@@ -1039,17 +1069,16 @@ def pillars():
 {f"""
 <section id="objectives" class="plx-sec py-10 lg:py-14">
   <div class="wrap">{sec_head(f'{next(num):02d} / Objectives', head('objectives', 'What this pillar', 'aims to achieve.'), f'{len(pobj)} objective' + ('s' if len(pobj) != 1 else ''), desc=pg.get('objectivesDesc') or 'What AFCD works toward under this pillar.')}
-    <ol class="plx-objs mt-8 lg:mt-10">{pobj_html}</ol>
+    {f'<div class="plx-objx mt-8 lg:mt-10">{car_html(obj_pics)}<ol class="plx-steps plx-objsteps cols-{min(pobj_cols, 2)}">{pobj_html}</ol></div>' if obj_pics else f'<ol class="plx-steps plx-objsteps cols-{pobj_cols} mt-8 lg:mt-10">{pobj_html}</ol>'}
   </div>
 </section>""" if pobj else ''}
 
-<section id="how-we-work" class="plx-sec py-10 lg:py-14">
+{f"""<section id="how-we-work" class="plx-sec py-10 lg:py-14">
   <span id="approach" class="pl-anchor" aria-hidden="true"></span><span id="what-we-do" class="pl-anchor" aria-hidden="true"></span>
-  <div class="wrap">{sec_head(f'{next(num):02d} / How We Work', head('how', 'How this pillar', 'comes to life.'), 'Approach · Activities', desc=pg.get('howDesc') or 'The steps we follow and the activities we run under this pillar.')}
-    <ol class="plx-steps mt-8 lg:mt-10">{steps}</ol>
-    <div class="plx-work mt-10 lg:mt-14">
-      <div><p class="plx-k">What it looks like</p><ul class="plx-acts mt-4">{acts}</ul></div>
-      <div><p class="plx-k">Who we work with</p><ul class="plx-who mt-4">{groups}</ul></div>
+  <div class="wrap">
+    <header class="sh"><div class="sh-top"><span class="sh-num">{next(num):02d}</span><span class="sh-label">How We Work</span><span class="sh-rule" aria-hidden="true"></span></div></header>
+    <div class="plx-work{'' if acts and groups else ' plx-work-1'}{' has-pic' if work_pic_html else ''} mt-8 lg:mt-10">
+      {f'<div><p class="plx-k">What it looks like</p><ul class="plx-acts mt-4">{acts}</ul></div>' if acts else ''}{work_pic_html}{f'<div><p class="plx-k">Who we work with</p><ul class="plx-who is-check mt-4">{groups}</ul></div>' if groups else ''}
     </div>
   </div>
 </section>
@@ -1058,7 +1087,7 @@ def pillars():
   <div class="wrap">{sec_head(f'{next(num):02d} / Projects', head('projects', 'Projects in', f'{PILLAR_SHORT[slug].lower()}.'), ('All projects', f'projects.html?pillar={slug}#by-pillar'), desc=pg.get('projectsDesc') or f'Programmes AFCD runs under the {t} pillar.')}
     {proj_block}
   </div>
-</section>
+</section>""" if acts or groups else ''}
 {f"""
 <section id="related" class="plx-sec py-10 lg:py-14">
   <div class="wrap">{sec_head(f'{next(num):02d} / Related', head('related', 'Stories and events', 'from this pillar.'), ('All stories', 'news.html'))}
@@ -1099,7 +1128,7 @@ def pillars():
 </section>
 ''' + cta_band('Find your place in our work.', 'Volunteer, join a programme when calls open, or partner with us on a pillar.',
                   ('Get Involved', 'get-involved.html'), ('All projects', 'projects.html'))
-    page('pillars.html', 'Our Pillars · AFCD Foundation',
+    page('pillars.html', 'AFCD Foundation pillars: our areas of work',
          (', '.join(t for _s, _n, t, _d, _r in PILLARS[:-1]) + ' and ' if len(PILLARS) > 1 else '') + f'{PILLARS[-1][2]}: the {PILLARS_WORD} pillars of AFCD Foundation’s work.',
          'pillars', body)
 
@@ -1116,19 +1145,45 @@ def status_badge(st, cls=''):
     return f'<span class="pjg-badge is-{st.lower()} {cls}"><span class="pjg-pulse" aria-hidden="true"></span>{st}</span>' if st else ''
 
 
+def project_poster(name, slug, pname):
+    """A project card's picture (square): the project's poster (1:1, shown whole), else its main photo or first cover
+    photo cropped to a square, else a tile in the pillar colour with the project name."""
+    d = (next((y for y in _PROJECT_DATA if y.get('name') == name), None) or {}).get('detail') or {}
+    pic = next((m for m in (d.get('poster'), d.get('hero'), next(iter(d.get('cover') or []), None)) if m and m.get('src') and m.get('srcset')), None)
+    if pic:
+        kind = ' is-poster' if pic is d.get('poster') else ''
+        return f'<div class="pj-card-pic{kind}">{media_img(pic, "h-full w-full", "(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw")}</div>'
+    return (f'<div class="pj-card-pic pj-poster" style="--c:{PILLAR_TONE.get(slug, "#E7E5E4")}">'
+            f'<span class="pj-poster-k">{pname}</span><span class="pj-poster-t">{name}</span></div>')
+
+
+def project_partners(name):
+    """A project's partner names: the partners linked in Studio, else its "Partner" fact."""
+    d = (next((y for y in _PROJECT_DATA if y.get('name') == name), None) or {}).get('detail') or {}
+    names = [p['name'] for p in (d.get('partners') or []) if p.get('name')]
+    return names or [v for k, v in (d.get('facts') or []) if k in ('Partner', 'Partners') and v]
+
+
 def project_card(p, featured=False):
+    """A project card: picture; pillar; name; description; partner; the button to the project page and the status."""
     name, slug, pname, cat, href, summary = p
+    partners = project_partners(name)
+    tone = PILLAR_TONE.get(slug, '#D6D3D1')
+    meta = f'<div class="pjc-meta"><span class="pjc-pillar" title="{pname}"><i style="--c:{tone}" aria-hidden="true"></i><span>{pname}</span></span></div>'
+    desc = f'<p class="pjc-desc">{summary}</p>' if summary else ''
+    partner = (f'<p class="pjc-partner"><span class="pjc-k">{"Partner" if len(partners) == 1 else "Partners"}</span>'
+               f'<span class="pjc-v">{", ".join(partners)}</span></p>') if partners else ''
+    btn = (f'<span class="pjc-btn">Explore project <span class="pjc-arr" aria-hidden="true">↗</span></span>' if href
+           else '<span class="pjc-soon">Project page coming soon</span>')
     inner = f'''
-        {ph(name, 'aspect-[4/3] w-full', '#D4D4D4')}
-        <div class="mt-5 flex flex-wrap items-center gap-2">{status_badge(project_status(name), 'is-sm')}{tag(pname)}<span class="label text-ink-mid">{cat}</span></div>
-        <h3 class="mt-4 text-2xl font-semibold leading-[1.15] tracking-[-0.03em]">{name}</h3>
-'''
-    if summary:
-        inner += f'\n        <p class="mt-2 text-[15px] leading-relaxed text-ink-dark">{summary}</p>'
+        {project_poster(name, slug, pname)}
+        <div class="pjc-body">{meta}
+          <h3 class="pjc-title">{name}</h3>{desc}
+          <div class="pjc-foot">{partner}<div class="pjc-act">{btn}{status_badge(project_status(name), "is-sm")}</div></div>
+        </div>'''
     if href:
-        inner += f'\n        <span class="link-arrow mt-5">Explore project {ARR}</span>'
-        return f'<li data-pillar="{slug}" class="proj-card"><a href="{href}" class="group block">{inner}\n      </a></li>'
-    return f'<li data-pillar="{slug}" class="proj-card">{inner}\n        <span class="mt-5 inline-block text-[13px] text-ink-mid">Project page coming soon</span>\n      </li>'
+        return f'<li data-pillar="{slug}" class="proj-card"><a href="{href}" class="pjc group">{inner}\n      </a></li>'
+    return f'<li data-pillar="{slug}" class="proj-card"><div class="pjc">{inner}\n      </div></li>'
 
 
 def projects():
@@ -1158,7 +1213,7 @@ def projects():
 </section>
 ''' + cta_band('Have an idea for your community?', 'We co-design and fund community initiatives with partners and local residents.',
                ('Partner With Us', 'get-involved.html#partner'), ('Contact us', 'contact.html'))
-    page('projects.html', 'Projects · AFCD Foundation',
+    page('projects.html', 'AFCD Foundation projects across Morocco',
          'AFCD Foundation projects across youth and women’s empowerment, the environment and digital inclusion.',
          'projects', body)
 
@@ -1463,7 +1518,8 @@ def project_details():
   <div class="wrap grid gap-3 md:grid-cols-2">{more}</div>
 </nav>''' if more else ''
 
-        body = page_header([('Projects', 'projects.html'), (d['name'], file)], f'{d["pillar"]} · {d["cat"]}', d['name'], d['lede']) + f"""
+        # the label names the pillar only; project names can be long, so the title is a step smaller than on other pages
+        body = page_header([('Projects', 'projects.html'), (d['name'], file)], d['pillar'], d['name'], d['lede']).replace('class="sh-title sh-xl phd-title"', 'class="sh-title sh-xl phd-title phd-title-md"', 1) + f"""
 <div class="pl-page" style="--pc:{tone}">
 <section id="summary" class="pl-sec pt-8 lg:pt-10" data-studio-rev="{rev}">
   <div class="wrap">
@@ -1487,7 +1543,7 @@ def project_details():
 # ---------------------------------------------------------------- Homepage events list (from EVENTS)
 def home_events():
     """Writes the homepage's upcoming-events list (up to 3, real events only) between the home-events markers."""
-    idx = Path(__file__).parent / 'pages' / 'index.html'
+    idx = OUT / 'index.html'   # the build's own copy of the homepage (src/pages in a live build; a preview's folder otherwise)
     if not idx.exists():
         return
     html = idx.read_text(encoding='utf-8')
@@ -1517,7 +1573,7 @@ def partner_logo(name):
 # ---------------------------------------------------------------- Homepage partner strip (from the Partners module)
 def home_partners():
     """Writes the homepage partner strip's names, logos and counts into src/pages/index.html (assets/main.js draws the strip)."""
-    idx = Path(__file__).parent / 'pages' / 'index.html'
+    idx = OUT / 'index.html'   # the build's own copy of the homepage (src/pages in a live build; a preview's folder otherwise)
     if not idx.exists():
         return
     html = idx.read_text(encoding='utf-8')
@@ -1632,7 +1688,7 @@ def home_pillars():
 # ---------------------------------------------------------------- Homepage project cards (from the project module)
 def home_projects():
     """Writes the featured project cards' data into src/pages/index.html (between the home-projects markers)."""
-    idx = Path(__file__).parent / 'pages' / 'index.html'
+    idx = OUT / 'index.html'   # the build's own copy of the homepage (src/pages in a live build; a preview's folder otherwise)
     if not idx.exists():
         return
     html = idx.read_text(encoding='utf-8')
@@ -1807,7 +1863,7 @@ def news():
 </section>
 ''' + cta_band('Have a story to share?', 'Alumni, volunteers and partners: tell us about the change you’ve seen.',
                ('Contact us', 'contact.html'), ('Get Involved', 'get-involved.html'))
-    page('news.html', 'News & Stories · AFCD Foundation',
+    page('news.html', 'AFCD Foundation news and stories',
          'News, calls for applications and participant stories from AFCD Foundation.', 'news', body)
 
 
@@ -2211,9 +2267,9 @@ def events():
 </section>
 ''' + cta_band('Questions about this event?', 'Our team can help with registration, access or anything else before the day.',
                    ('Contact us', 'contact.html?topic=General+question#message'), ('All events', 'events.html')) + bar
-        page(event_file(e), f"{e.get('seoTitle') or e['title']} · Events · AFCD Foundation", (e.get('seoDescription') or f"{e['kind']} on {e['day']} {e['mon']} {e['year']} in {e['where']}: {e['desc']}")[:160], 'events', dbody, parent=('Events', 'events.html'))
+        page(event_file(e), fit_title(e.get('seoTitle') or e['title'], 'Events'), (e.get('seoDescription') or f"{e['kind']} on {e['day']} {e['mon']} {e['year']} in {e['where']}: {e['desc']}")[:160], 'events', dbody, parent=('Events', 'events.html'))
 
-    page('events.html', 'Events · AFCD Foundation',
+    page('events.html', 'AFCD Foundation events: workshops and trainings',
          'AFCD Foundation events: workshops, trainings, community days and online sessions across Morocco.', 'events', body)
 
 
@@ -2330,7 +2386,7 @@ def partners():
 </div>
 ''' + cta_band(_esc(cl.get('title') or ''), _esc(cl.get('text') or ''),
                ('Partner With Us', 'contact.html?topic=Partnership#message'), ('Our projects', 'projects.html'))
-    page('partners.html', 'Partners · AFCD Foundation',
+    page('partners.html', 'AFCD Foundation partners: international, national and local',
          'The international, national and local organizations that have supported AFCD Foundation’s programmes.', 'partners', body)
 
 
@@ -2437,8 +2493,65 @@ def involved():
 </section>
 ''' + cta_band('Not sure where you fit?', 'Write to us and we’ll find the right way for you to take part.',
                ('Contact us', 'contact.html'), ('About AFCD', 'about.html'))
-    page('get-involved.html', 'Get Involved · AFCD Foundation',
+    page('get-involved.html', 'Volunteer with AFCD Foundation · Get Involved',
          'Volunteer, join a programme, partner with us or join the alumni club at AFCD Foundation.', 'involved', body)
+
+
+# ---------------------------------------------------------------- Careers (About › Careers)
+def careers():
+    """Careers: where AFCD's open roles, internships and calls are published, and the other ways to join the team.
+    No role is listed here by hand: open calls live in AFCD Apply / Opportunities ({{opps_href}}, filled in by build.mjs)."""
+    about_link = ('About Us', 'about.html')
+    ways = [
+        ('Jobs and staff roles', 'When AFCD opens a paid position, it is published as an open call with the role, the profile and how to apply.', '{{opps_href}}', 'See open calls'),
+        ('Internships', 'Students and recent graduates can apply to internship calls, or write to us about an internship in one of our programmes.', 'contact.html?topic=General+question#message', 'Ask about an internship'),
+        ('Volunteering', 'Give time to activities in Ait Ourir and beyond, alongside AFCD’s team and participants.', 'get-involved.html#volunteer', 'Become a volunteer'),
+        ('Programmes', 'Young people and women can join AFCD’s programmes in leadership, environment and digital skills when calls open.', 'get-involved.html#programs', 'Join a programme'),
+    ]
+    tiles = ''.join(f'''
+        <li><a href="{h}" class="gi-tile group">
+          <span class="flex items-center justify-between"><span class="text-[12px] tabular-nums text-ink-mid">{i:02d}</span><span class="gi-arr" aria-hidden="true">↗</span></span>
+          <span class="mt-3 block text-[20px] font-semibold leading-[1.1] tracking-[-0.03em] sm:mt-8 md:text-[24px]">{t}</span>
+          <span class="mt-2 block text-[14px] leading-relaxed text-ink-dark">{d}</span>
+          <span class="mt-4 block text-[13.5px] font-semibold">{a} {ARR}</span>
+        </a></li>''' for i, (t, d, h, a) in enumerate(ways, 1))
+    steps = [('Read the call', 'Each call says what the role involves, who it is for and the deadline.'),
+             ('Apply as it asks', 'Send your application through the call’s form before the deadline.'),
+             ('Hear back', 'Applications are reviewed against the call’s criteria, and shortlisted people are contacted.')]
+    shtml = ''.join(f'<li class="os-step"><span class="os-step-k">{i:02d}</span><span class="os-step-dot" aria-hidden="true"></span><span class="mt-5 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for i, (t, d) in enumerate(steps, 1))
+    body = page_header([about_link, ('Careers', 'careers.html')], 'About · Careers',
+                       'Work with <span class="text-ink-mid">AFCD.</span>',
+                       'Jobs, internships and calls for applications at AFCD Foundation, a Moroccan nonprofit working with young people and women since 2007.') + f'''
+
+<section id="open" class="pt-8 lg:pt-10">
+  <div class="wrap">
+    <a href="{{{{opps_href}}}}" class="gi-calls group">
+      <span class="cta-kicker" style="background:#fff;color:#000"><span class="tb-dot" aria-hidden="true"></span>Open calls</span>
+      <span class="mt-6 block text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[44px]">Every open role <span class="text-white/45">in one place.</span></span>
+      <span class="mt-4 block max-w-[52ch] text-[15.5px] leading-relaxed text-white/65">Jobs, internships and calls for applications are published as open calls, each with its deadline and form.</span>
+      <span class="btn-light btn-cta mt-8 min-h-[48px] px-6 text-[14px]">See open calls {ARR}</span>
+    </a>
+  </div>
+</section>
+
+<section id="ways" class="py-14 lg:py-16">
+  <div class="wrap">{sec_head('01 / Ways to join', 'Join the team <span class="sh-soft">your way.</span>', 'Since 2007', desc='A role, an internship, your time as a volunteer or a place in a programme.')}
+    <ul class="mt-8 grid gap-3 sm:grid-cols-2 lg:mt-10 lg:grid-cols-4">{tiles}
+    </ul>
+  </div>
+</section>
+
+<section id="how" class="border-t border-ink-light py-14 lg:py-16">
+  <div class="wrap">{sec_head('02 / How to apply', 'Three steps <span class="sh-soft">to apply.</span>', 'Open calls')}
+    <ol class="os-steps gi-journey mt-8 lg:mt-10">{shtml}
+    </ol>
+  </div>
+</section>
+''' + cta_band('No open role for you yet?', 'Write to us about the work you would like to do with AFCD, and meet the people behind it.',
+               ('Contact us', 'contact.html#message'), ('Meet the team', 'team.html'))
+    page('careers.html', 'Careers at AFCD Foundation: jobs, internships and calls',
+         'Jobs, internships and calls for applications at AFCD Foundation, and other ways to join the team: volunteering and programmes.',
+         'about', body, parent=about_link)
 
 
 # ---------------------------------------------------------------- Contact
@@ -2594,5 +2707,5 @@ def studio_contact_fields(s):
 
 
 if __name__ == '__main__':
-    about(); pillars(); projects(); project_details(); home_projects(); home_events(); home_partners(); home_pillars(); news(); news_articles(); events(); partners(); involved(); contact()
+    about(); pillars(); projects(); project_details(); home_projects(); home_events(); home_partners(); home_pillars(); news(); news_articles(); events(); partners(); involved(); careers(); contact()
     print('pages written to', OUT)

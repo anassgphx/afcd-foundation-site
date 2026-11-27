@@ -104,7 +104,7 @@ function PhotosView({ node, updateAttributes, deleteNode, editor, selected }: No
       {ed && items.length === 1 && <div className="se-seg" role="group" aria-label="Photo size">{LAYOUTS.map(([k, l, t]) => <button key={k} type="button" className={items[0].layout === k ? 'on' : ''} title={t} aria-pressed={items[0].layout === k} onClick={() => set(0, { layout: k })}>{l}</button>)}
         <button type="button" title="Add a photo beside this one (up to three in a row)" onClick={() => pickPhotos((m) => updateAttributes({ items: [...items, ...m.map((x) => ({ id: x.id, caption: '', layout: 'full' as Layout }))].slice(0, 3) }))}>+ Side by side</button></div>}
       <div className={`se-photo-row n${items.length}`}>
-        {items.map((p, i) => { const m = media[p.id]; const issue = !m ? 'Not in the Media Library' : !m.alt ? 'Needs alt text' : !m.rightsConfirmed ? 'Needs rights confirmed' : '';
+        {items.map((p, i) => { const m = media[p.id]; const issue = !m ? 'Not in the Media Library' : !m.rightsConfirmed ? 'Needs rights confirmed' : '';
           return <figure key={`${p.id}-${i}`} className="se-photo">
             <div className="se-photo-img">{m ? <img src={m.large ?? m.url} alt={m.alt} style={{ objectPosition: `${m.focalX}% ${m.focalY}%` }} /> : <span>Missing photo</span>}
               {issue && <em className="se-issue">{issue}</em>}

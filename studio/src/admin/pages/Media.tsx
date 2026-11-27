@@ -19,7 +19,7 @@ type LibItem = MediaItem & {
 };
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/avif,image/tiff';
-const ready = (m: MediaItem) => !!m.alt && m.rightsConfirmed;
+const ready = (m: MediaItem) => m.rightsConfirmed;   // alt text is recommended, not required
 const mb = (b: number) => b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
 const fmt = (mime: string) => mime.replace('image/', '').replace('jpeg', 'JPEG').toUpperCase();
 /** "IMG_2041-final (1).JPG" → "IMG 2041 final (1)": no extension, separators as spaces. */
@@ -152,7 +152,7 @@ export function MediaLibrary() {
     }
   }, [jobs, me.csrf, load, toast]);
   const doneCount = jobs.filter((j) => j.state === 'done' && !j.replaceOf).length;
-  useEffect(() => { if (jobs.length && jobs.every((j) => j.state === 'done') && doneCount) { toast(`${doneCount} image${doneCount > 1 ? 's' : ''} uploaded. Add alt text, credit and rights before using ${doneCount > 1 ? 'them' : 'it'} on the website.`); } }, [jobs, doneCount, toast]);
+  useEffect(() => { if (jobs.length && jobs.every((j) => j.state === 'done') && doneCount) { toast(`${doneCount} image${doneCount > 1 ? 's' : ''} uploaded. Confirm usage rights before using ${doneCount > 1 ? 'them' : 'it'} on the website.`); } }, [jobs, doneCount, toast]);
 
   // ---- page-wide drop target
   useEffect(() => {
@@ -204,7 +204,7 @@ export function MediaLibrary() {
   return (
     <div className={`ml${open ? ' has-panel' : ''}`}>
       <div className="page-h">
-        <div><h1>Media Library</h1><p>Every image of the website with its alt text, credit, usage rights and where it appears.</p></div>
+        <div><h1>Media library</h1><p>Every image of the website with its alt text, credit, usage rights and where it appears.</p></div>
         {can('media.upload') && <button className="btn btn-primary" onClick={() => fileInput.current?.click()}><Icon n="upload" /> Upload</button>}
         <input ref={fileInput} type="file" accept={ACCEPT} multiple hidden onChange={(e) => { if (e.target.files) enqueue(e.target.files); e.target.value = ''; }} />
         <input ref={replaceInput} type="file" accept={ACCEPT} hidden onChange={(e) => { const f = e.target.files?.[0]; if (f && replaceTarget.current) enqueue([f], replaceTarget.current); e.target.value = ''; }} />
@@ -567,16 +567,15 @@ function Detail({ m, all, onClose, onOpen, onDirty, onSaved, act }: { m: LibItem
     <Compression m={m} ro={ro} onDone={() => onSaved({ id: m.id })} />
 
     {m.issues.length > 0 && <div className="ml-todo"><b>Before this image goes on the website</b><ul>
-      {m.issues.includes('alt') && <li className={f.alt.trim() ? 'done' : ''}>Describe it in the alt text</li>}
       {m.issues.includes('credit') && <li className={f.credit.trim() ? 'done' : ''}>Credit the photographer or source</li>}
       {m.issues.includes('rights') && <li className={f.rightsConfirmed ? 'done' : ''}>Confirm usage rights and consent</li>}
       {m.issues.includes('expired') && <li className={!f.rightsExpiresOn || f.rightsExpiresOn >= today() ? 'done' : ''}>The usage right ended on {fmtDate(m.rightsExpiresOn!)}: renew it or stop using the image</li>}
     </ul></div>}
 
     <div className="ml-fields">
-      <label className="field"><span>Alt text <em className="muted">· {f.alt.length}/250</em></span>
+      <label className="field"><span>Alt text <em className="muted">· optional · {f.alt.length}/250</em></span>
         <textarea className="textarea" rows={3} value={f.alt} maxLength={250} disabled={ro} onChange={(e) => set('alt', e.target.value)} placeholder="Who or what the photo shows, and where if it matters" />
-        <small className={altWarn ? 'ml-hint warn' : 'ml-hint'}>{altWarn || 'What someone who cannot see the photo needs to know. Required before publishing.'}</small></label>
+        <small className={altWarn ? 'ml-hint warn' : 'ml-hint'}>{altWarn || 'Recommended: helps screen readers and image search. Leave empty if you prefer.'}</small></label>
       <label className="field"><span>Caption <em className="muted">· optional, shown under the photo</em></span><input className="input" value={f.caption} maxLength={500} disabled={ro} onChange={(e) => set('caption', e.target.value)} /></label>
       <label className="field"><span>Credit</span><input className="input" value={f.credit} maxLength={200} disabled={ro} onChange={(e) => set('credit', e.target.value)} placeholder="Photographer or source" /></label>
       <label className={`check ml-rights${f.rightsConfirmed ? ' on' : ''}`}><input type="checkbox" checked={f.rightsConfirmed} disabled={ro} onChange={(e) => set('rightsConfirmed', e.target.checked)} />
@@ -662,7 +661,7 @@ function Uploader({ onDone }: { onDone: (m: MediaItem[]) => void }) {
   async function go(files: FileList | File[]) {
     const list = [...files].slice(0, 20); setBusy(list.length); const ok: MediaItem[] = [];
     for (const f of list) { try { ok.push(await upload(f)); } catch (e) { toast(`${f.name}: ${(e as Error).message}`, true); } finally { setBusy((n) => n - 1); } }
-    if (ok.length) { toast(`${ok.length} image${ok.length > 1 ? 's' : ''} uploaded. Add alt text and confirm rights before publishing.`); onDone(ok); }
+    if (ok.length) { toast(`${ok.length} image${ok.length > 1 ? 's' : ''} uploaded. Confirm rights before publishing.`); onDone(ok); }
   }
   return <div className={`drop${over ? ' over' : ''}`} role="button" tabIndex={0}
     onClick={() => input.current?.click()} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') input.current?.click(); }}
@@ -680,7 +679,7 @@ export function MediaPicker({ multiple, onPick, onClose }: { multiple?: boolean;
   const [sel, setSel] = useState<MediaItem[]>([]);
   const toggle = (m: MediaItem) => setSel((s) => multiple ? (s.some((x) => x.id === m.id) ? s.filter((x) => x.id !== m.id) : [...s, m]) : [m]);
   return <Modal title={multiple ? 'Add photos' : 'Choose a photo'} onClose={onClose} footer={<>
-    <span className="muted" style={{ marginRight: 'auto', alignSelf: 'center' }}>{sel.some((m) => !ready(m)) ? 'Some selected images still need alt text or rights confirmation before publishing.' : ''}</span>
+    <span className="muted" style={{ marginRight: 'auto', alignSelf: 'center' }}>{sel.some((m) => !ready(m)) ? 'Some selected images still need rights confirmation before publishing.' : ''}</span>
     <button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={!sel.length} onClick={() => onPick(sel)}>{multiple ? `Add ${sel.length || ''}` : 'Use photo'}</button></>}>
     <div className="modal-b stack">
       <div className="between"><label className="search"><Icon n="search" /><span className="sr-only">Search media</span><input className="input" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} autoFocus /></label></div>

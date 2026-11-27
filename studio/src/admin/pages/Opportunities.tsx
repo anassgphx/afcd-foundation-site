@@ -70,14 +70,14 @@ export function OpportunitiesList() {
       {!rows ? <TableSkeleton /> : <DataTable id="opportunities" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-opportunities" initialSort={{ key: 'deadline', dir: 'asc' }}
         actions={acts.bulk} rowMenu={acts.rowMenu}
         onOpen={(r) => navigate(`/studio/opportunities/${r.id}`)}
-        empty={<EmptyState icon="spark" text="No opportunities match these filters" onClear={st.q || st.type !== 'all' || st.status !== 'all' ? () => { set('q', ''); set('type', 'all'); set('status', 'all'); } : undefined} />} />}
+        empty={<EmptyState icon="spark" text={rows?.length ? 'No opportunities match these filters' : 'No opportunities yet'} sub={rows?.length ? undefined : 'Add a call for applications, a job or a volunteering role.'} action={can('opportunity.create') && !rows?.length ? <button className="btn btn-sm btn-primary" onClick={create}><Icon n="plus" />New opportunity</button> : undefined} onClear={st.q || st.type !== 'all' || st.status !== 'all' ? () => { set('q', ''); set('type', 'all'); set('status', 'all'); } : undefined} />} />}
     </section>
     {acts.dialog}
   </>;
 }
 
-type Form = { title: string; slug: string; type: string; summary: string; body: string; eligibility: string[]; benefits: string[]; location: string; commitment: string; opensOn: string | null; deadline: string | null; applyMethod: 'external' | 'email' | 'contact'; applyUrl: string; applyEmail: string; pillarKey: string | null; projectSlug: string | null; heroMediaId: string | null; seoTitle: string; seoDescription: string };
-const KEYS: (keyof Form)[] = ['title', 'slug', 'type', 'summary', 'body', 'eligibility', 'benefits', 'location', 'commitment', 'opensOn', 'deadline', 'applyMethod', 'applyUrl', 'applyEmail', 'pillarKey', 'projectSlug', 'heroMediaId', 'seoTitle', 'seoDescription'];
+type Form = { title: string; slug: string; type: string; summary: string; body: string; eligibility: string[]; benefits: string[]; location: string; commitment: string; opensOn: string | null; deadline: string | null; applyMethod: 'external' | 'email' | 'contact' | 'studio'; applyUrl: string; applyEmail: string; applyCallId: string | null; pillarKey: string | null; projectSlug: string | null; heroMediaId: string | null; seoTitle: string; seoDescription: string };
+const KEYS: (keyof Form)[] = ['title', 'slug', 'type', 'summary', 'body', 'eligibility', 'benefits', 'location', 'commitment', 'opensOn', 'deadline', 'applyMethod', 'applyUrl', 'applyEmail', 'applyCallId', 'pillarKey', 'projectSlug', 'heroMediaId', 'seoTitle', 'seoDescription'];
 type Loaded = Form & { id: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; media: MediaItem[]; problems: string[];
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] } };
 
@@ -88,6 +88,7 @@ export function OpportunityEditor({ id }: { id: string }) {
   const [hero, setHero] = useState<MediaItem | null>(null);
   const [pillars, setPillars] = useState<{ key: string; name: string }[]>([]);
   const [projects, setProjects] = useState<{ slug: string; name: string }[]>([]);
+  const [calls, setCalls] = useState<{ id: string; reference: string; title: string; status: string }[]>([]);
   const [dirty, setDirty] = useState(false); const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
   const [dialog, setDialog] = useState<null | 'hero' | 'preview' | 'publish' | 'unpublish' | 'changes'>(null);
   const [url, setUrl] = useState(''); const [comment, setComment] = useState(''); const [slugTouched, setSlugTouched] = useState(true);
@@ -96,6 +97,7 @@ export function OpportunityEditor({ id }: { id: string }) {
     const [d, pl, pr] = await Promise.all([api<Loaded>(`/opportunities/${id}`), api('/pillars'), api('/projects')]);
     setO(d); setF(Object.fromEntries(KEYS.map((k) => [k, (d as any)[k]])) as Form); setHero(d.media[0] ?? null);
     setPillars(pl); setProjects(pr.filter((x: any) => x.publishedRevisionId));
+    if (can('apply.read')) api('/apply/calls').then((r) => setCalls(r.filter((x: any) => x.status !== 'archived'))).catch(() => setCalls([]));
     setDirty(false); setSlugTouched(!d.title.startsWith('Untitled') || !(d.slug.startsWith('untitled-') || d.slug.startsWith('opportunity-')));
   }, [id]);
   useEffect(() => { load().catch((err) => toast(err.message, true)); }, [load]);
@@ -109,14 +111,14 @@ export function OpportunityEditor({ id }: { id: string }) {
   function showErr(err: unknown) { setErrs(err instanceof ApiError && err.details?.length ? err.details.map((d) => (d.path ? `${d.path}: ` : '') + d.message) : [err instanceof Error ? err.message : 'Something went wrong.']); }
   async function save(): Promise<boolean> {
     setBusy('save'); setErrs([]);
-    try { await put(`/opportunities/${id}`, f); await load(); toast(live ? 'Draft saved. The live page is unchanged until you publish.' : 'Draft saved'); return true; }
+    try { await put(`/opportunities/${id}`, f); await load(); toast(live ? 'Draft saved. The live page is unchanged until you publish.' : 'Draft saved. Submit it for review when it is ready.'); return true; }
     catch (err) { showErr(err); return false; } finally { setBusy(''); }
   }
   async function act(action: string, extra: Record<string, unknown> = {}) {
     if (dirty && !(await save())) return;
     setBusy(action); setErrs([]);
     try { await post(`/opportunities/${id}/transition`, { action, ...extra }); await load(); setDialog(null); setComment('');
-      toast({ submit: 'Sent for review', approve: 'Approved', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft', archive: 'Archived', restore: 'Restored as a draft' }[action] ?? 'Done'); }
+      toast({ submit: 'Sent for review. Reviewers are notified; it can be published once approved.', approve: 'Approved. It is ready to publish.', request_changes: 'Sent back to the author with your note.', withdraw: 'Back to draft. You can edit it again.', archive: 'Archived', restore: 'Restored as a draft' }[action] ?? 'Done'); }
     catch (err) { setDialog(null); showErr(err); } finally { setBusy(''); }
   }
   async function deliver(kind: 'publish' | 'unpublish') {
@@ -134,6 +136,7 @@ export function OpportunityEditor({ id }: { id: string }) {
   const win = windowText(f);
   const words = f.body.trim().split(/\s+/).filter(Boolean).length;
   const applyIssue = f.applyMethod === 'external' ? (!f.applyUrl ? 'Add the link to your application form.' : !/^https:\/\/\S+\.\S+/.test(f.applyUrl) ? 'Use a full secure address starting with https://' : '')
+    : f.applyMethod === 'studio' ? (!f.applyCallId ? 'Choose the AFCD Apply call.' : '')
     : f.applyMethod === 'email' ? (!f.applyEmail ? 'Add the email address applications go to.' : !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(f.applyEmail) ? 'This does not look like an email address.' : '') : '';
   // timeline: opening → deadline with today, padded so both ends and today fit
   const span = (() => {
@@ -159,7 +162,7 @@ export function OpportunityEditor({ id }: { id: string }) {
         { id: 'basics', label: 'Basics', icon: 'log', done: !!(f.title && f.summary) },
         { id: 'description', label: 'Description', icon: 'layers', done: f.body.trim().split(/\s+/).filter(Boolean).length >= 20 && f.eligibility.length > 0 },
         { id: 'dates', label: 'Dates & place', icon: 'calendar', done: true },
-        { id: 'apply', label: 'How to apply', icon: 'send', done: f.applyMethod === 'contact' || (f.applyMethod === 'external' ? !!f.applyUrl : !!f.applyEmail) },
+        { id: 'apply', label: 'How to apply', icon: 'send', done: f.applyMethod === 'contact' || (f.applyMethod === 'external' ? !!f.applyUrl : f.applyMethod === 'studio' ? !!f.applyCallId : !!f.applyEmail) },
         { id: 'links', label: 'Links & image', icon: 'image', optional: true, done: f.heroMediaId || f.projectSlug || f.pillarKey ? true : undefined },
         { id: 'seo', label: 'Search & address', icon: 'search', optional: true, done: f.seoTitle || f.seoDescription ? true : undefined },
         { id: 'translations', label: 'Translations', icon: 'globe', optional: true },
@@ -207,15 +210,16 @@ export function OpportunityEditor({ id }: { id: string }) {
         </Section>
         <Section id="apply" title="How to apply">
           <Field label="Application method" span={3}><div className="ed-choice">
-            {([['external', 'Online form', 'A link to your application form.'], ['email', 'By email', 'The address is shown on the page.'], ['contact', 'Contact form', 'Through the website, with the right topic.']] as const).map(([v, l, d]) =>
+            {([['external', 'Online form', 'A link to your application form.'], ['email', 'By email', 'The address is shown on the page.'], ['contact', 'Contact form', 'Through the website, with the right topic.'], ...(calls.length || f.applyMethod === 'studio' ? [['studio', 'AFCD Apply', 'A call run in Studio: online form, drafts, review.']] as const : [])] as const).map(([v, l, d]) =>
               <label key={v} className={f.applyMethod === v ? 'on' : ''}><input type="radio" name="apply" checked={f.applyMethod === v} onChange={() => set('applyMethod', v)} /><b>{l}</b><small>{d}</small></label>)}</div></Field>
           {f.applyMethod === 'external' && <Field label="Application link" span={3}><input className="input mono" maxLength={500} placeholder="https://…" value={f.applyUrl} onChange={(x) => set('applyUrl', x.target.value.trim())} aria-label="Application link" /></Field>}
+          {f.applyMethod === 'studio' && <Field label="AFCD Apply call" span={3} hint="The button links to the call’s application page once the call is scheduled and open."><select className="select" value={f.applyCallId ?? ''} onChange={(x) => set('applyCallId', x.target.value || null)} aria-label="AFCD Apply call"><option value="">Choose a call…</option>{calls.map((c) => <option key={c.id} value={c.id}>{c.reference} · {c.title} ({c.status.replace('_', ' ')})</option>)}</select></Field>}
           {f.applyMethod === 'email' && <Field label="Application email" span={3} hint="Shown publicly on the page."><input className="input mono" maxLength={160} placeholder="name@afcdteam.com" value={f.applyEmail} onChange={(x) => set('applyEmail', x.target.value.trim())} aria-label="Application email" /></Field>}
           <div className="op-apply s3">
             <span className="op-cap">On the opportunity page</span>
             <div className="op-apply-row">
-              <span className={`op-cta${applyIssue ? ' off' : ''}`}>{state === 'Closed' ? 'Applications closed' : f.applyMethod === 'external' ? 'Apply online ↗' : f.applyMethod === 'email' ? 'Apply by email ↗' : 'Ask us about it ↗'}</span>
-              <span className="op-dest">{f.applyMethod === 'external' ? (f.applyUrl || 'No link yet') : f.applyMethod === 'email' ? (f.applyEmail || 'No email yet') : 'Opens the contact form with this opportunity as the topic'}</span>
+              <span className={`op-cta${applyIssue ? ' off' : ''}`}>{state === 'Closed' ? 'Applications closed' : f.applyMethod === 'external' || f.applyMethod === 'studio' ? 'Apply online ↗' : f.applyMethod === 'email' ? 'Apply by email ↗' : 'Ask us about it ↗'}</span>
+              <span className="op-dest">{f.applyMethod === 'external' ? (f.applyUrl || 'No link yet') : f.applyMethod === 'studio' ? (calls.find((c) => c.id === f.applyCallId)?.title ?? 'No call chosen yet') : f.applyMethod === 'email' ? (f.applyEmail || 'No email yet') : 'Opens the contact form with this opportunity as the topic'}</span>
               {f.applyMethod === 'external' && /^https:\/\/\S+$/.test(f.applyUrl) && <a className="btn btn-sm" href={f.applyUrl} target="_blank" rel="noopener noreferrer"><Icon n="ext" />Open link</a>}
             </div>
             {applyIssue && <span className="op-warn" role="alert">{applyIssue}</span>}

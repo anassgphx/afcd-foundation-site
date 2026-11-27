@@ -10,6 +10,7 @@ import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
 import { documentOnDisk } from './documents.ts';
+import { altProblem } from '../media/alt.ts';
 
 type Status = typeof publications.$inferSelect['status'];
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -83,7 +84,7 @@ export async function publicationProblems(db: DB, cfg: Config, p: Pick<FullPubli
     const [m] = await db.select().from(media).where(eq(media.id, p.coverMediaId));
     if (!m) out.push('The cover image no longer exists in the media library.');
     else {
-      if (!m.alt) out.push(`Add alt text to “${m.originalName}”.`);
+      { const ap = altProblem(m, `Add alt text to “${m.originalName}”.`); if (ap) out.push(ap); }
       if (!m.rightsConfirmed) out.push(`Confirm usage rights and consent for “${m.originalName}”.`);
     }
   }

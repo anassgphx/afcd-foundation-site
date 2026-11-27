@@ -169,7 +169,7 @@ export function DataTable<T>({ id, rows, total, rowKey, columns, onOpen, actions
           onClick={(e) => { if (!onOpen || (e.target as HTMLElement).closest('a,button,input,label,select')) return; onOpen(r); }}
           onContextMenu={rowMenu ? (e) => { if ((e.target as HTMLElement).closest('a,input')) return; e.preventDefault(); openMenu(r, e.clientX, e.clientY, e.currentTarget); } : undefined}>
           {actions.length > 0 && <td className="dt-check"><input type="checkbox" checked={on} onChange={() => toggle(k)} aria-label="Select row" /></td>}
-          {cols.map((c) => <td key={c.key} style={{ textAlign: c.align }}>{c.render(r)}</td>)}
+          {cols.map((c, ci) => <td key={c.key} style={{ textAlign: c.align }} className={ci === 0 ? 'dt-c0' : undefined} data-label={ci === 0 ? undefined : c.header}>{c.render(r)}</td>)}
           {actsCol ? <td className="dt-acts"><span className="dt-acts-in">
             {quick.map((a) => <button key={a.label} type="button" className="dt-quick" title={a.label} aria-label={a.label} onClick={a.run}><Icon n={a.icon} width={15} height={15} /></button>)}
             <button type="button" className={`dt-dots${menu?.key === k ? ' on' : ''}`} aria-label="Actions" aria-haspopup="menu" aria-expanded={menu?.key === k} title="Actions (or right-click the row)"

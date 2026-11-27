@@ -4,10 +4,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, del, post, put, ApiError } from '../api.ts';
 import { Icon, Link, Modal, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
-import { EditorHeader, Field, ListEditor, Section, SectionNav, WorkflowPanel } from '../Editor.tsx';
+import { EditorHeader, Field, ListEditor, Section, WorkflowPanel } from '../Editor.tsx';
 import { RecordTranslations } from '../RecordTranslations.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
+import { PillarVideoField, type PillarVideo } from '../PillarVideo.tsx';
 import '../pillars.css';
 
 type Row = { id: string; key: string; number: string; name: string; draftName: string; short: string; summary: string; colour: string; draftColour: string; publicFile: string;
@@ -110,36 +111,34 @@ export function PillarsScreen({ id }: { id?: string }) {
   </div>;
 }
 
+const icoSvg = (d: string) => `<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 type Step = { title: string; text: string };
-type Form = { name: string; short: string; summary: string; intro: string; colour: string; brand: string; highlights: string[]; approachTitle: string; approachSoft: string;
-  view: string; principles: string[]; steps: Step[]; objectives: Step[]; activities: number[]; groups: number[]; extraActivities: string[]; extraGroups: string[];
-  page: Record<PageKey, string>; mediaId: string | null; provenance: string };
-type PageKey = 'flagshipLabel' | 'howTitle' | 'howSoft' | 'howDesc' | 'objectivesTitle' | 'objectivesSoft' | 'objectivesDesc' | 'projectsTitle' | 'projectsSoft' | 'projectsDesc' | 'relatedTitle' | 'relatedSoft' | 'ctaTitle' | 'ctaText';
-/** The page's own texts: [key, label, max length, the site's wording when left empty]. Kept in step with src/content.py. */
-const pageTexts = (name: string, short: string): [string, [PageKey, string, number, string, boolean?][]][] => [
-  ['Overview', [['flagshipLabel', 'Flagship programmes label', 40, 'Flagship programmes']]],
-  ['How we work', [['howTitle', 'Heading', 60, 'How this pillar'], ['howSoft', 'Heading, grey part', 60, 'comes to life.'], ['howDesc', 'Description', 200, 'The steps we follow and the activities we run under this pillar.', true]]],
-  ['Objectives', [['objectivesTitle', 'Heading', 60, 'What this pillar'], ['objectivesSoft', 'Heading, grey part', 60, 'aims to achieve.'], ['objectivesDesc', 'Description', 200, 'What AFCD works toward under this pillar.', true]]],
-  ['Projects', [['projectsTitle', 'Heading', 60, 'Projects in'], ['projectsSoft', 'Heading, grey part', 60, `${(short || 'youth').toLowerCase()}.`], ['projectsDesc', 'Description', 200, `Programmes AFCD runs under the ${name || 'pillar’s'} pillar.`, true]]],
-  ['Related', [['relatedTitle', 'Heading', 60, 'Stories and events'], ['relatedSoft', 'Heading, grey part', 60, 'from this pillar.']]],
-  ['Get involved band', [['ctaTitle', 'Heading', 80, 'Find your place in our work.'], ['ctaText', 'Text', 220, 'Volunteer, join a programme when calls open, or partner with us on this pillar.', true]]],
-];
+type WorkItem = { icon: number; text: string };
+type Group = { title: string; text: string };
+type PTab = 'overview' | 'perspective' | 'objectives' | 'work' | 'translations' | 'settings';
+const NEXT: Partial<Record<PTab, [PTab, string]>> = { overview: ['perspective', 'Perspective'], perspective: ['objectives', 'Objectives'], objectives: ['work', 'How we work'], work: ['translations', 'Translations'] };   // Who we work with: name and optional short description
+type Form = { name: string; short: string; summary: string; intro: string; colour: string; brand: string; approachTitle: string; approachSoft: string;
+  view: string; principles: string[]; steps: Step[]; objectives: Step[]; activities: number[]; groups: number[]; extraActivities: string[]; extraGroups: string[]; workItems: WorkItem[]; audience: (Group | string)[];
+  mediaId: string | null; video: PillarVideo; workMediaId: string | null; objectivesMediaIds: string[]; provenance: string };
 type Loaded = { id: string; key: string; number: string; publicFile: string; status: string; publishedRevisionId: string | null; publishedAt: string | null; verifiedAt: string | null; removeRequested: boolean; usage: string[];
   content: Form | null; projects: { id: string; slug: string; name: string; live: boolean; primary: boolean }[]; media: MediaItem[]; problems: string[];
-  lists: { activities: string[]; groups: string[] }; colours: { value: string; label: string }[];
+  lists: { activities: string[]; groups: string[]; icons: string[] }; colours: { value: string; label: string }[];
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] } };
 
 export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => void }) {
   const can = useCan(); const me = useMe(); const toast = useToast();
   const [p, setP] = useState<Loaded | null>(null); const [f, setF] = useState<Form | null>(null);
   const [photo, setPhoto] = useState<MediaItem | null>(null);
+  const [workPhoto, setWorkPhoto] = useState<MediaItem | null>(null);   // the photo between the How we work lists
+  const [objPhotos, setObjPhotos] = useState<MediaItem[]>([]);
+  const [tab, setTab] = useState<PTab>('overview');   // one part of the page at a time, in the website's order          // the square carousel next to the objectives
   const [dirty, setDirty] = useState(false); const [busy, setBusy] = useState(''); const [errs, setErrs] = useState<string[]>([]);
-  const [dialog, setDialog] = useState<null | 'photo' | 'preview' | 'publish' | 'changes' | 'remove' | 'delete'>(null);
+  const [dialog, setDialog] = useState<null | 'photo' | 'workphoto' | 'objphotos' | 'preview' | 'publish' | 'changes' | 'remove' | 'delete'>(null);
   const [url, setUrl] = useState(''); const [comment, setComment] = useState('');
 
   const load = useCallback(async () => {
     const d = await api<Loaded>(`/pillars/${id}`);
-    setP(d); setF(d.content ? structuredClone(d.content) : null); setPhoto(d.media[0] ?? null); setDirty(false); onChanged?.();
+    setP(d); setF(d.content ? structuredClone(d.content) : null); setPhoto(d.media.find((m) => m.id === d.content?.mediaId) ?? null); setWorkPhoto(d.media.find((m) => m.id === d.content?.workMediaId) ?? null); setObjPhotos((d.content?.objectivesMediaIds ?? []).map((id) => d.media.find((m) => m.id === id)).filter(Boolean) as MediaItem[]); setDirty(false); onChanged?.();
   }, [id]);
   useEffect(() => { load().catch((e) => toast(e.message, true)); }, [load]);
   useEffect(() => { const k = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (dirty) save(); } }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); });
@@ -154,14 +153,14 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
   function showErr(e: unknown) { setErrs(e instanceof ApiError && e.details?.length ? e.details.map((d) => (d.path ? `${d.path}: ` : '') + d.message) : [e instanceof Error ? e.message : 'Something went wrong.']); }
   async function save(): Promise<boolean> {
     setBusy('save'); setErrs([]);
-    try { await put(`/pillars/${id}`, f); await load(); toast(live ? 'Draft saved. The live pages are unchanged until you publish.' : 'Draft saved'); return true; }
+    try { await put(`/pillars/${id}`, f); await load(); toast(live ? 'Draft saved. The live pages are unchanged until you publish.' : 'Draft saved. Submit it for review when it is ready.'); return true; }
     catch (e) { showErr(e); return false; } finally { setBusy(''); }
   }
   async function act(action: string, extra: Record<string, unknown> = {}) {
     if (dirty && !(await save())) return;
     setBusy(action); setErrs([]);
     try { await post(`/pillars/${id}/transition`, { action, ...extra }); await load(); setDialog(null); setComment('');
-      toast({ submit: 'Sent for review', approve: 'Approved', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft', request_removal: 'Removal sent for review' }[action] ?? 'Done'); }
+      toast({ submit: 'Sent for review. Reviewers are notified; it can be published once approved.', approve: 'Approved. It is ready to publish.', request_changes: 'Sent back to the author with your note.', withdraw: 'Back to draft. You can edit it again.', request_removal: 'Removal sent for review' }[action] ?? 'Done'); }
     catch (e) { setDialog(null); showErr(e); } finally { setBusy(''); }
   }
   async function publish() {
@@ -184,9 +183,15 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
     setBusy('preview');
     try { const r = await post<{ url: string }>(`/pillars/${id}/preview`); setUrl(r.url); setDialog('preview'); } catch (e) { showErr(e); } finally { setBusy(''); }
   }
-  const toggle = (k: 'activities' | 'groups', i: number, on: boolean) => set(k, on ? [...f[k], i] : f[k].filter((x) => x !== i));
-  const setStep = (i: number, v: Partial<Step>) => set('steps', f.steps.map((s, j) => (j === i ? { ...s, ...v } : s)));
-  const moveStep = (i: number, d: -1 | 1) => { const s = [...f.steps]; [s[i], s[i + d]] = [s[i + d], s[i]]; set('steps', s); };
+  // How we work's two lists. Until edited here they come from the old picks and extras; the first edit saves them as
+  // this pillar's own lists (and clears the picks), so the page shows exactly what is listed here, in this order.
+  const listsOk = p.lists.activities.length > 0 || (!f.activities.length && !f.groups.length);
+  const work: WorkItem[] = f.workItems.length ? f.workItems : [...f.activities.map((i) => ({ icon: i, text: p.lists.activities[i] ?? '' })), ...f.extraActivities.map((text) => ({ icon: 1, text }))];
+  const aud: Group[] = (f.audience.length ? f.audience : [...f.groups.map((i) => p.lists.groups[i] ?? ''), ...f.extraGroups]).map((g) => (typeof g === 'string' ? { title: g, text: '' } : g));
+  const setWork = (v: WorkItem[]) => { setF((x) => ({ ...x!, workItems: v, activities: [], extraActivities: [] })); setDirty(true); };
+  const moveAud = (i: number, d: -1 | 1) => { const a = [...aud]; [a[i], a[i + d]] = [a[i + d], a[i]]; setAud(a); };
+  const setAud = (v: Group[]) => { setF((x) => ({ ...x!, audience: v, groups: [], extraGroups: [] })); setDirty(true); };
+  const moveWork = (i: number, d: -1 | 1) => { const w = [...work]; [w[i], w[i + d]] = [w[i + d], w[i]]; setWork(w); };
   const setObj = (i: number, v: Partial<Step>) => set('objectives', f.objectives.map((o, j) => (j === i ? { ...o, ...v } : o)));
   const moveObj = (i: number, d: -1 | 1) => { const o = [...f.objectives]; [o[i], o[i + d]] = [o[i + d], o[i]]; set('objectives', o); };
   const colourName = p.colours.find((c) => c.value === f.colour)?.label ?? f.colour;
@@ -205,21 +210,24 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
     {p.removeRequested && <div className="notice n-warn"><div><b>Removal from the website {status === 'approved' ? 'approved' : 'requested'}.</b> Publishing takes this pillar off Our Pillars, turns <span className="mono">{p.publicFile}</span> into a redirect to <span className="mono">pillars.html</span> and deletes it from Studio. Withdraw to keep it.</div></div>}
     {!live && status !== 'in_review' && !p.removeRequested && <div className="notice n-info"><div>New pillar: not on the website yet. Its page will be <span className="mono">{p.publicFile}</span>, numbered in the list order.</div></div>}
     {status === 'in_review' && !p.removeRequested && can('pillar.update') && <div className="notice n-info"><div>In review: read-only. Withdraw it to edit.</div></div>}
-    <div className="ed-layout">
-      <SectionNav sections={[
-        { id: 'basics', label: 'Pillar', icon: 'pillars', done: !!f.name },
-        { id: 'text', label: 'Summary and introduction', icon: 'log', done: !!f.summary && !!f.intro },
-        { id: 'objectives', label: 'Objectives', icon: 'check', optional: true, done: f.objectives.length ? true : undefined },
-        { id: 'photo', label: 'Photo', icon: 'image', optional: true, done: f.mediaId ? true : undefined },
-        { id: 'work', label: 'What we do', icon: 'users', optional: true, done: f.activities.length || f.groups.length || f.extraActivities.length || f.extraGroups.length ? true : undefined },
-        { id: 'approach', label: 'Our approach', icon: 'layers', done: !!f.approachTitle && f.steps.length > 0 },
-        { id: 'pagetexts', label: 'Page texts', icon: 'log', optional: true, done: Object.values(f.page).some(Boolean) ? true : undefined },
-        { id: 'projects', label: 'Projects', icon: 'folder', optional: true, done: f.highlights.length || p.projects.length ? true : undefined },
-        { id: 'internal', label: 'Internal', icon: 'lock', optional: true },
-        { id: 'translations', label: 'Translations', icon: 'globe', optional: true },
-      ]} />
+    <div className="ed-layout pl-layout">
       <div className="ed-col">
+      <div className="card pl-tabbar">
+        <div className="tabs" role="tablist" aria-label="Parts of the pillar page">
+          {([
+            ['overview', 'Overview', !!f.name && !!f.summary && !!f.intro],
+            ['perspective', 'Perspective', !!f.approachTitle && !!f.view && f.principles.length > 0],
+            ['objectives', 'Objectives', f.objectives.length ? true : undefined],
+            ['work', 'How we work', work.length || aud.length ? true : undefined],
+            ['translations', 'Translations', undefined],
+            ['settings', 'Settings', undefined],
+          ] as [PTab, string, boolean | undefined][]).map(([k, label, done]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+            {label}{done === false && <span className="pl-tab-todo" title="Needs attention"><span className="sr-only">, needs attention</span></span>}
+          </button>)}
+        </div>
+      </div>
       <fieldset className="ed-main" disabled={!editable}>
+        {tab === 'overview' && <>
         <Section id="basics" title="Pillar" desc="Its name and colour on every page of the website.">
           <Field label="Name" span={2} count={[f.name.length, 60]} hint="Also used on project pages, story tags and the strategy page."><input className="input input-lg" maxLength={60} value={f.name} onChange={(x) => set('name', x.target.value)} aria-label="Name" /></Field>
           <Field label="Short name" count={[f.short.length, 20]} hint={<>One word, as in “Projects in <i>{(f.short || 'youth').toLowerCase()}</i>.”</>}><input className="input" maxLength={20} value={f.short} onChange={(x) => set('short', x.target.value)} aria-label="Short name" /></Field>
@@ -232,13 +240,27 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
             <div className="pl-fixed"><span className="mono">{p.publicFile}</span><span className="muted">·</span><span className="mono">pillars.html#{p.key}</span><span className="muted">· numbered by its place in the list</span>
               {live && <a className="btn btn-sm" href={me.siteUrl + p.publicFile} target="_blank" rel="noopener"><Icon n="ext" />Open</a>}</div></Field>
         </Section>
+        </>}
+        {tab === 'overview' && <>
         <Section id="text" title="Summary and introduction" desc="Plain text. The site’s typography is applied automatically.">
-          <Field label="Summary" span={3} count={[f.summary.length, 320]} hint="On the Our Pillars card, in the pillar page’s coloured overview, and in its search description.">
-            <textarea className="textarea" rows={3} maxLength={320} value={f.summary} onChange={(x) => set('summary', x.target.value)} aria-label="Summary" /></Field>
+          <Field label="Summary" span={3} count={[f.summary.length, 400]} hint="On the Our Pillars card, in the pillar page’s coloured overview, and in its search description.">
+            <textarea className="textarea" rows={4} maxLength={400} value={f.summary} onChange={(x) => set('summary', x.target.value)} aria-label="Summary" /></Field>
           <Field label="Page introduction" span={3} count={[f.intro.length, 200]} hint="The line under the pillar name at the top of its page.">
             <textarea className="textarea" rows={2} maxLength={200} value={f.intro} onChange={(x) => set('intro', x.target.value)} aria-label="Page introduction" /></Field>
         </Section>
+        </>}
+        {tab === 'objectives' && <>
         <Section id="objectives" title="Objectives" desc="Written here for this pillar only and shown on its page in this order. Nothing is taken from AFCD’s strategy page.">
+          <div className="field ed-f s3"><span className="ed-lbl">Photos next to the objectives <span className="muted">(optional, up to 8)</span></span>
+            {objPhotos.length > 0 && <ul className="pl-objpics">{objPhotos.map((m, i) => <li key={m.id}>
+              <img src={m.url} alt={m.alt} />{!m.rightsConfirmed && <span className="pl-objpic-warn" title="Needs confirmed rights before review"><Icon n="alert" width={13} height={13} /></span>}
+              {editable && <span className="pl-objpic-a">
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === 0} aria-label={`Move photo ${i + 1} earlier`} onClick={() => { const a = [...objPhotos]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; setObjPhotos(a); set('objectivesMediaIds', a.map((x) => x.id)); }}>←</button>
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === objPhotos.length - 1} aria-label={`Move photo ${i + 1} later`} onClick={() => { const a = [...objPhotos]; [a[i + 1], a[i]] = [a[i], a[i + 1]]; setObjPhotos(a); set('objectivesMediaIds', a.map((x) => x.id)); }}>→</button>
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" aria-label={`Remove photo ${i + 1}`} onClick={() => { const a = objPhotos.filter((_, j) => j !== i); setObjPhotos(a); set('objectivesMediaIds', a.map((x) => x.id)); }}><Icon n="x" /></button></span>}
+            </li>)}</ul>}
+            {editable && objPhotos.length < 8 && <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setDialog('objphotos')}><Icon n="image" />Add photos</button>}
+            <small>A square carousel beside the objectives, in this order. Without photos here, it shows the cover photos of this pillar’s live projects.</small></div>
           {f.objectives.length === 0 && <p className="muted s3" style={{ margin: 0 }}>No objectives yet. Until you add some, the pillar page says its objectives are being finalised.</p>}
           {f.objectives.length > 0 && <ol className="pl-steps s3">{f.objectives.map((o, i) => <li key={i}>
             <span className="pl-step-n">{String(i + 1).padStart(2, '0')}</span>
@@ -252,7 +274,9 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
           {f.objectives.length < 6 ? <button type="button" className="btn btn-sm s3" style={{ justifySelf: 'start' }} onClick={() => set('objectives', [...f.objectives, { title: '', text: '' }])}><Icon n="plus" />Add an objective</button>
             : <p className="muted s3" style={{ margin: 0, fontSize: 12.5 }}>6 objectives is the maximum.</p>}
         </Section>
-        <Section id="photo" title="Photo" desc="The big picture in the pillar page’s overview. Without one, the page shows the cover photo of this pillar’s first live project that has one. Alt text and usage rights are checked before review.">
+        </>}
+        {tab === 'overview' && <>
+        <Section id="photo" title="Photo and video" desc="The big picture in the pillar page’s overview. Without one, the page shows the cover photo of this pillar’s first live project that has one. Add a video to play in its place: the photo becomes its poster. Alt text and usage rights are checked before review.">
           <div className="ed-media s3">
             {f.mediaId && photo ? <div className="ed-media-img pl-photo"><img src={photo.url} alt={photo.alt} /><button type="button" className="btn btn-sm" onClick={() => set('mediaId', null)}><Icon n="x" />Remove</button></div>
               : <button type="button" className="ed-drop" onClick={() => setDialog('photo')}><Icon n="image" /><b>Choose a photo</b><small>From the media library.</small></button>}
@@ -262,56 +286,84 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
               <span className="pl-photo-actions"><button type="button" className="btn btn-sm" onClick={() => setDialog('photo')}><Icon n="image" />Change</button><Link className="btn btn-sm" to="/studio/media">Edit in media library</Link></span>
             </div>}
           </div>
+          <div className="s3"><span className="ed-lbl">Video <span className="muted">(optional)</span></span>
+            <PillarVideoField value={f.video ?? null} onChange={(v) => set('video', v)} disabled={!editable} hasPhoto={!!f.mediaId} /></div>
         </Section>
-        <Section id="work" title="What we do" desc="Pick from AFCD’s shared lists (the same wording on every page), then add anything only this pillar does. Numbered in the order they appear.">
-          {p.lists.activities.length === 0 && <p className="muted s3" style={{ margin: 0 }}>The site’s lists could not be read.</p>}
-          {p.lists.activities.length > 0 && <Field label="Activities" span={3}><div className="pl-picks">{p.lists.activities.map((a, i) => { const at = f.activities.indexOf(i); return <label key={i} className={at >= 0 ? 'on' : ''}><input type="checkbox" checked={at >= 0} onChange={(e) => toggle('activities', i, e.target.checked)} /><span className="pl-pick-n">{at >= 0 ? String(at + 1).padStart(2, '0') : ''}</span><span>{a}</span></label>; })}</div></Field>}
-          {p.lists.groups.length > 0 && <Field label="Who we work with" span={3}><div className="pl-picks">{p.lists.groups.map((g, i) => { const at = f.groups.indexOf(i); return <label key={i} className={at >= 0 ? 'on' : ''}><input type="checkbox" checked={at >= 0} onChange={(e) => toggle('groups', i, e.target.checked)} /><span className="pl-pick-n">{at >= 0 ? String(at + 1).padStart(2, '0') : ''}</span><span>{g}</span></label>; })}</div></Field>}
-                  <Field label="Other activities" span={3} hint="Only for this pillar. Shown after the ones picked above. Up to 6."><ListEditor value={f.extraActivities} onChange={(v) => set('extraActivities', v)} label="Other activities" max={6} placeholder="e.g. Youth climate hackathons" disabled={!editable} /></Field>
-          <Field label="Other participant groups" span={3} hint="Only for this pillar. Up to 6."><ListEditor value={f.extraGroups} onChange={(v) => set('extraGroups', v)} label="Other participant groups" max={6} placeholder="e.g. University students" disabled={!editable} /></Field>
+        </>}
+        {tab === 'work' && <>
+        <Section id="work" title="How we work: activities and people" desc="The two lists in the pillar page’s How we work section. Add, edit, remove and reorder them here; the page shows them exactly in this order.">
+          {!listsOk && <p className="muted s3" style={{ margin: 0 }}>The site’s lists could not be read, so these lists can’t be edited right now.</p>}
+          {listsOk && <>
+          <div className="s3"><span className="ed-lbl">What it looks like <span className="muted">({work.length}/10)</span></span>
+            {work.length === 0 && <p className="muted" style={{ margin: '4px 0 8px' }}>No cards. The page shows only “Who we work with”.</p>}
+            {work.length > 0 && <ol className="pl-steps pl-work">{work.map((w, i) => <li key={i}>
+              <span className="pl-work-ico" aria-hidden="true" dangerouslySetInnerHTML={{ __html: icoSvg(p.lists.icons[w.icon] ?? p.lists.icons[1] ?? '') }} />
+              <div className="pl-step-f">
+                <textarea className="textarea" rows={2} maxLength={160} value={w.text} placeholder="What this pillar does (required)" onChange={(x) => setWork(work.map((y, j) => (j === i ? { ...y, text: x.target.value } : y)))} aria-label={`Card ${i + 1} text`} aria-invalid={!w.text.trim()} />
+                {p.lists.icons.length > 0 && <div className="pl-icons" role="radiogroup" aria-label={`Card ${i + 1} icon`}>{p.lists.icons.map((d, k) =>
+                  <button key={k} type="button" role="radio" aria-checked={w.icon === k} aria-label={`Icon ${k + 1}`} className={w.icon === k ? 'on' : ''} onClick={() => setWork(work.map((y, j) => (j === i ? { ...y, icon: k } : y)))} dangerouslySetInnerHTML={{ __html: icoSvg(d) }} />)}</div>}
+              </div>
+              <span className="pl-step-a">
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === 0} onClick={() => moveWork(i, -1)} aria-label={`Move card ${i + 1} up`}>↑</button>
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === work.length - 1} onClick={() => moveWork(i, 1)} aria-label={`Move card ${i + 1} down`}>↓</button>
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" onClick={() => setWork(work.filter((_, j) => j !== i))} aria-label={`Remove card ${i + 1}`}><Icon n="x" /></button></span>
+            </li>)}</ol>}
+            {work.length < 10 ? <button type="button" className="btn btn-sm" onClick={() => setWork([...work, { icon: 1, text: '' }])}><Icon n="plus" />Add a card</button>
+              : <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>10 cards is the maximum.</p>}
+          </div>
+          <div className="field ed-f s3"><span className="ed-lbl">Who we work with</span>
+            {aud.length > 0 && <ol className="pl-steps pl-aud">{aud.map((g, i) => <li key={i}>
+              <span className="pl-step-n">{String(i + 1).padStart(2, '0')}</span>
+              <div className="pl-step-f">
+                <input className="input" maxLength={100} value={g.title} placeholder="Group name (required)" disabled={!editable} onChange={(x) => setAud(aud.map((y, j) => (j === i ? { ...y, title: x.target.value } : y)))} aria-label={`Group ${i + 1} name`} />
+                <textarea className="textarea" rows={2} maxLength={160} value={g.text} placeholder="Short description (optional, up to 160 characters)" disabled={!editable} onChange={(x) => setAud(aud.map((y, j) => (j === i ? { ...y, text: x.target.value } : y)))} aria-label={`Group ${i + 1} description`} />
+              </div>
+              {editable && <span className="pl-step-a">
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === 0} onClick={() => moveAud(i, -1)} aria-label={`Move group ${i + 1} up`}>↑</button>
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === aud.length - 1} onClick={() => moveAud(i, 1)} aria-label={`Move group ${i + 1} down`}>↓</button>
+                <button type="button" className="btn btn-ghost icon-btn btn-sm" onClick={() => setAud(aud.filter((_, j) => j !== i))} aria-label={`Remove group ${i + 1}`}><Icon n="x" /></button></span>}
+            </li>)}</ol>}
+            {editable && (aud.length < 10 ? <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setAud([...aud, { title: '', text: '' }])}><Icon n="plus" />Add a group</button>
+              : <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>10 groups is the maximum.</p>)}
+            <small>In the order shown. The description appears under the name on the page; leave it empty to show the name only. Remove every group to hide the column.</small></div>
+          </>}
+          <div className="field ed-f s3"><span className="ed-lbl">Photo between the two lists <span className="muted">(optional)</span></span>
+            <div className="ed-media">
+              {f.workMediaId && workPhoto ? <div className="ed-media-img pl-photo"><img src={workPhoto.url} alt={workPhoto.alt} />{editable && <button type="button" className="btn btn-sm" onClick={() => { set('workMediaId', null); setWorkPhoto(null); }}><Icon n="x" />Remove</button>}</div>
+                : <button type="button" className="ed-drop" disabled={!editable} onClick={() => setDialog('workphoto')}><Icon n="image" /><b>Choose a photo</b><small>Shown between What it looks like and Who we work with. Use a different picture from the overview photo.</small></button>}
+              {f.workMediaId && workPhoto && <div className="pl-photo-meta">
+                <span className={workPhoto.alt ? 'ok' : 'warn'}><Icon n={workPhoto.alt ? 'check' : 'alert'} width={14} height={14} />{workPhoto.alt ? `Alt text: “${workPhoto.alt}”` : 'No alt text yet'}</span>
+                <span className={workPhoto.rightsConfirmed ? 'ok' : 'warn'}><Icon n={workPhoto.rightsConfirmed ? 'check' : 'alert'} width={14} height={14} />{workPhoto.rightsConfirmed ? 'Usage rights confirmed' : 'Usage rights not confirmed'}</span>
+                {editable && <span className="pl-photo-actions"><button type="button" className="btn btn-sm" onClick={() => setDialog('workphoto')}><Icon n="image" />Change</button></span>}
+              </div>}
+            </div>
+            <small>Without one, the page uses the cover photo of another of this pillar’s live projects, never the overview photo.</small></div>
         </Section>
-        <Section id="approach" title="Our approach" desc="The dark band in the middle of the pillar page.">
+        </>}
+        {tab === 'perspective' && <>
+        <Section id="approach" title="Our approach" desc="The Our Perspective part of the pillar page: its heading, the text beside it and the guiding principles.">
           <Field label="Heading" span={2} hint="Written in black."><input className="input" maxLength={60} value={f.approachTitle} onChange={(x) => set('approachTitle', x.target.value)} aria-label="Heading" /></Field>
           <Field label="Heading, second part" hint="Optional, written in grey."><input className="input" maxLength={60} value={f.approachSoft} onChange={(x) => set('approachSoft', x.target.value)} aria-label="Heading, second part" /></Field>
           <p className="pl-title-prev s3" aria-label="Heading preview">{f.approachTitle} <span>{f.approachSoft}</span></p>
           <Field label="Our perspective" span={3} count={[f.view.length, 500]}><textarea className="textarea" rows={3} maxLength={500} value={f.view} onChange={(x) => set('view', x.target.value)} aria-label="Our perspective" /></Field>
           <Field label="Guiding principles" span={3} hint="Up to 6 short phrases."><ListEditor value={f.principles} onChange={(v) => set('principles', v)} label="Guiding principles" max={6} placeholder="e.g. Youth-led" disabled={!editable} /></Field>
-          <div className="field ed-f s3"><span className="ed-lbl">Steps</span>
-            <ol className="pl-steps">{f.steps.map((s, i) => <li key={i}>
-              <span className="pl-step-n">{String(i + 1).padStart(2, '0')}</span>
-              <div className="pl-step-f"><input className="input" maxLength={40} value={s.title} placeholder="Step title" onChange={(x) => setStep(i, { title: x.target.value })} aria-label={`Step ${i + 1} title`} />
-                <textarea className="textarea" rows={2} maxLength={200} value={s.text} placeholder="What happens in this step" onChange={(x) => setStep(i, { text: x.target.value })} aria-label={`Step ${i + 1} text`} /></div>
-              <span className="pl-step-a">
-                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === 0} onClick={() => moveStep(i, -1)} aria-label={`Move step ${i + 1} up`}>↑</button>
-                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={i === f.steps.length - 1} onClick={() => moveStep(i, 1)} aria-label={`Move step ${i + 1} down`}>↓</button>
-                <button type="button" className="btn btn-ghost icon-btn btn-sm" disabled={f.steps.length === 1} onClick={() => set('steps', f.steps.filter((_, j) => j !== i))} aria-label={`Remove step ${i + 1}`}><Icon n="x" /></button></span>
-            </li>)}</ol>
-            {f.steps.length < 6 && <button type="button" className="btn btn-sm" onClick={() => set('steps', [...f.steps, { title: '', text: '' }])}><Icon n="plus" />Add a step</button>}
-          </div>
         </Section>
-        <Section id="pagetexts" title="Page texts" desc="Headings and texts of the pillar page. Leave a field empty to keep the site’s wording, shown in grey.">
-          {pageTexts(f.name, f.short).map(([group, fields]) => <div key={group} className="field ed-f s3 pl-pt"><span className="ed-lbl">{group}</span>
-            <div className="pl-pt-grid">{fields.map(([k, label, max, def, long]) => <label key={k} className={`field${long ? ' pl-pt-long' : ''}`}><span>{label}</span>
-              {long ? <textarea className="textarea" rows={2} maxLength={max} value={f.page[k]} placeholder={def} onChange={(x) => set('page', { ...f.page, [k]: x.target.value })} />
-                : <input className="input" maxLength={max} value={f.page[k]} placeholder={def} onChange={(x) => set('page', { ...f.page, [k]: x.target.value })} />}</label>)}</div></div>)}
-        </Section>
-        <Section id="projects" title="Projects" desc="What the website lists for this pillar.">
-          <Field label="Programmes on the Our Pillars card" span={3} hint="Names shown as tags on this pillar’s card. Up to 8."><ListEditor value={f.highlights} onChange={(v) => set('highlights', v)} label="Programmes on the Our Pillars card" max={8} placeholder="Programme name" disabled={!editable} /></Field>
-          <div className="field ed-f s3"><span className="ed-lbl">Linked projects</span>
-            {p.projects.length === 0 ? <p className="muted" style={{ margin: 0 }}>No project is linked to this pillar yet.</p>
-              : <ul className="pl-projects">{p.projects.map((x) => <li key={x.id}><Link to={`/studio/projects/${x.id}`}>{x.name}</Link>{x.primary && <span className="pill">Main pillar</span>}{!x.live && <span className="pill">Not live</span>}</li>)}</ul>}
-            <small>The pillar page lists the live projects linked here. A project chooses its pillars in its own record.</small></div>
-        </Section>
+        </>}
+        {tab === 'settings' && <>
         <Section id="internal" title="Internal" desc="Not shown on the website.">
           <Field label="Source" span={3} hint="Where this content comes from."><input className="input" maxLength={300} value={f.provenance} onChange={(x) => set('provenance', x.target.value)} aria-label="Source" /></Field>
         </Section>
+        </>}
       </fieldset>
+      {NEXT[tab] && <div className="pl-next"><button type="button" className="btn" onClick={() => { setTab(NEXT[tab]![0]); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Next: {NEXT[tab]![1]}<Icon n="chev" /></button></div>}
+      {tab === 'translations' && <>
       <Section id="translations" title="Translations" desc="French and Arabic of this pillar’s pages. Reviewed and published on the Translations screen.">
         <RecordTranslations noun="pillar" dirty={status !== 'published'} files={[p.publicFile, 'pillars.html']} fields={[{ label: 'Name', value: f.name }, { label: 'Summary', value: f.summary }, { label: 'Page introduction', value: f.intro },
-          ...f.objectives.flatMap((o) => [{ label: 'Objective', value: o.title }, { label: 'Objective explanation', value: o.text }]), { label: 'Approach heading', value: f.approachTitle }, { label: 'Our perspective', value: f.view }, ...f.principles.map((x) => ({ label: 'Guiding principle', value: x })), ...f.steps.flatMap((s) => [{ label: 'Step title', value: s.title }, { label: 'Step text', value: s.text }]),
-          ...f.extraActivities.map((x) => ({ label: 'Activity', value: x })), ...f.extraGroups.map((x) => ({ label: 'Participant group', value: x })),
-          ...pageTexts(f.name, f.short).flatMap(([, fs]) => fs.filter(([k]) => f.page[k]).map(([k, label]) => ({ label: `Page text: ${label}`, value: f.page[k] })))]} />
+          ...f.objectives.flatMap((o) => [{ label: 'Objective', value: o.title }, { label: 'Objective explanation', value: o.text }]), { label: 'Approach heading', value: f.approachTitle }, { label: 'Our perspective', value: f.view }, ...f.principles.map((x) => ({ label: 'Guiding principle', value: x })),
+          ...work.map((x) => ({ label: 'Activity', value: x.text })), ...aud.flatMap((x) => [{ label: 'Who we work with', value: x.title }, { label: 'Who we work with: description', value: x.text }]),
+          ]} />
       </Section>
+      </>}
       </div>
       <WorkflowPanel status={status} live={live} problems={p.problems}
         facts={[['Website', live ? `Live${status !== 'published' ? ' · newer draft' : ''}` : 'Not on the website'], ['Colour', colourName], ...(p.publishedAt ? [['Published', fmtDate(p.publishedAt)] as [string, string]] : []), ...(p.verifiedAt ? [['Last approved', fmtDate(p.verifiedAt)] as [string, string]] : [])]}>
@@ -329,6 +381,8 @@ export function PillarEditor({ id, onChanged }: { id: string; onChanged?: () => 
       </WorkflowPanel>
     </div>
 
+    {dialog === 'objphotos' && <MediaPicker multiple onClose={() => setDialog(null)} onPick={(m) => { const a = [...objPhotos, ...m.filter((x) => !objPhotos.some((y) => y.id === x.id))].slice(0, 8); setObjPhotos(a); set('objectivesMediaIds', a.map((x) => x.id)); setDialog(null); }} />}
+    {dialog === 'workphoto' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { if (m[0]) { setWorkPhoto(m[0]); set('workMediaId', m[0].id); } setDialog(null); }} />}
     {dialog === 'photo' && <MediaPicker onClose={() => setDialog(null)} onPick={(m) => { if (m[0]) { setPhoto(m[0]); set('mediaId', m[0].id); } setDialog(null); }} />}
     {dialog === 'preview' && <Modal wide title={`Preview · ${p.publicFile} with this draft`} onClose={() => setDialog(null)}><div className="preview-wrap"><iframe title="Pillar preview" src={url} style={{ width: Math.min(1280, window.innerWidth - 80) }} /></div></Modal>}
     {dialog === 'changes' && <Modal size="sm" title="Request changes" onClose={() => setDialog(null)} footer={<><button className="btn" onClick={() => setDialog(null)}>Cancel</button><button className="btn btn-primary" disabled={!comment.trim()} onClick={() => act('request_changes', { comment })}>Send to author</button></>}><div className="modal-b"><textarea className="textarea" autoFocus aria-label="What needs to change" value={comment} onChange={(e) => setComment(e.target.value)} /></div></Modal>}

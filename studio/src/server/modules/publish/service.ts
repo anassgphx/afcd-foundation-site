@@ -1,5 +1,6 @@
 // Delivery to the public website. Exports published revisions as JSON, copies approved image derivatives, runs the existing
 // generator (src/content.py) and build (build.mjs + Tailwind), then VERIFIES the output before the database records success.
+import { confirmPublic } from './public-check.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, renameSync, statSync } from 'node:fs';
@@ -33,6 +34,7 @@ import type { EventSnapshot } from '../events/service.ts';
 import { partnerEntries } from '../partners/render.ts';
 import { pillars, pillarRevisions } from '../../db/schema.ts';
 import { pillarEntries } from '../pillars/render.ts';
+import { VIDEO_FILE, videosDir } from '../pillars/video.ts';
 import type { PillarSnapshot } from '../pillars/service.ts';
 import type { PartnerSnapshot } from '../partners/service.ts';
 import { aboutPages, aboutPageRevisions, objectives } from '../../db/schema.ts';
@@ -51,6 +53,7 @@ import { buildSchemaFile, KEY as SCHEMA_KEY, settingsSchema, type LiveForSchema,
 import * as TR from '../translations/service.ts';
 import * as MENU from '../menus/service.ts';
 import * as SET from '../settings/service.ts';
+import { applyPagesStale, writeApplyPages } from '../apply/publish.ts';
 
 const run = promisify(execFile);
 const MEDIA_FILE = /^[0-9a-f]{24}-\d+\.webp$/;
@@ -211,7 +214,22 @@ export class Publisher {
     mkdirSync(resolve(file, '..'), { recursive: true });
     const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
     writeFileSync(tmp, JSON.stringify({ version: 1, source: 'AFCD Studio', generatedAt: new Date().toISOString(), pillars: list }, null, 2) + '\n'); renameSync(tmp, file);
-    return live.map((x) => x.snap.mediaId).filter(Boolean) as string[];
+    this.copyVideos(live.flatMap((x) => (x.snap.video?.kind === 'file' ? [x.snap.video.file] : [])));
+    return live.flatMap((x) => [x.snap.mediaId, x.snap.workMediaId ?? null, ...(x.snap.objectivesMediaIds ?? [])]).filter(Boolean) as string[];
+  }
+
+  /** Uploaded pillar videos go to assets/media/video/; videos no live pillar uses any more are removed there. */
+  private copyVideos(files: string[]) {
+    const dest = resolve(this.cfg.siteRoot, 'assets/media/video');
+    const keep = new Set(files.filter((f) => VIDEO_FILE.test(f)));
+    if (keep.size) mkdirSync(dest, { recursive: true });
+    for (const f of keep) {
+      const src = resolve(videosDir(this.cfg), f);
+      if (!existsSync(src)) throw new Error(`Missing video file ${f}. Upload the video again.`);
+      const out = resolve(dest, f);
+      if (!existsSync(out) || statSync(out).size !== statSync(src).size) copyFileSync(src, out);
+    }
+    if (existsSync(dest)) for (const f of readdirSync(dest)) if (VIDEO_FILE.test(f) && !keep.has(f)) rmSync(resolve(dest, f));
   }
 
   get aboutFile() { return resolve(this.cfg.siteRoot, 'src/data/about.json'); }
@@ -412,6 +430,8 @@ export class Publisher {
     // the language copies (fr/, ar/) are removed with the English page: build.mjs only writes pages, it never deletes them
     const pub = await this.writePublications(resolve(this.cfg.siteRoot, 'src/pages'), [this.cfg.siteRoot, ...TR.LANGS.map((l) => resolve(this.cfg.siteRoot, l))], await this.livePublications(o.publication), o.project);
     this.copyDocuments(pub.docs, resolve(this.cfg.siteRoot, PUBLIC_DOC_DIR), true);
+    // AFCD Apply call pages (modules/apply/publish.ts); like publications, removed pages also leave fr/ and ar/
+    const applyMedia = await writeApplyPages(this.db, this.cfg, resolve(this.cfg.siteRoot, 'src/pages'), [this.cfg.siteRoot, ...TR.LANGS.map((l) => resolve(this.cfg.siteRoot, l))]);
     const newsMedia = await this.writeNews(this.newsFile, resolve(this.cfg.siteRoot, 'src/pages'), await this.liveArticles(o.article), o.project);
     const live = await this.livePages(o.page);
     const ctx = await buildCtx(this.db, live.map((x) => x.snap.doc), { projectOverride: o.project, pending });
@@ -422,7 +442,7 @@ export class Publisher {
       const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`;
       writeFileSync(tmp, pageSource(snap, ctx, id)); renameSync(tmp, file);
     }
-    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...aboutMedia, ...eventMedia, ...oppMedia, ...pub.mediaIds, ...seoMedia, ...homeMedia, ...settingsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
+    await this.copyMedia([...entries.flatMap((e) => e.media ?? []), ...live.flatMap((x) => docMediaIds(x.snap.doc)), ...newsMedia, ...partnerMedia, ...pillarMedia, ...aboutMedia, ...eventMedia, ...oppMedia, ...applyMedia, ...pub.mediaIds, ...seoMedia, ...homeMedia, ...settingsMedia], resolve(this.cfg.siteRoot, 'assets/media'), true);
     return { entries, live };
   }
 
@@ -574,6 +594,7 @@ export class Publisher {
       await audit(this.db, actor, `${kind}_failed`, { type: kind.includes('settings') ? 'settings' : kind.includes('about') ? 'about_page' : kind.includes('redirect') ? 'redirect' : kind.includes('partner') ? 'partner' : kind.includes('pillar') ? 'pillar' : kind.includes('event') ? 'event' : kind.includes('opportunity') ? 'opportunity' : kind.includes('publication') ? 'publication' : kind.includes('seo') ? 'seo' : kind.includes('home') ? 'page_content' : 'page', id: entityId ?? undefined }, `${failLabel}: ${msg}`, { jobId: job.id });
       throw new AppError(409, `${failLabel}, the live site was left as it was. ${msg}`);
     }
+    void confirmPublic(this.db, this.cfg, job.id, actor);   // in the background: is the public copy serving this build?
     return { job, log };
   }
 
@@ -1166,6 +1187,16 @@ export class Publisher {
     if (!stale) return false;
     await this.locked(async () => { const log: string[] = []; await this.rebuildFromDb(log); });
     await audit(this.db, null, 'opportunity.refresh', { type: 'opportunity' }, 'Rebuilt opportunities because one has opened or closed');
+    return true;
+  }
+
+  // ---------------------------------------------------------------- AFCD Apply
+  /** Rebuilds the site when an application page is missing, out of date or should be gone (calls open, close, are
+   *  extended or paused, or get a new form version). Called after those changes and every minute; cheap when nothing changed. */
+  async refreshApplyPages(now = new Date()) {
+    if (!(await applyPagesStale(this.db, this.cfg, now))) return false;
+    await this.locked(async () => { const log: string[] = []; await this.rebuildFromDb(log); });
+    await audit(this.db, null, 'apply.pages_refresh', { type: 'apply_call' }, 'Rebuilt the website: an application page changed');
     return true;
   }
 

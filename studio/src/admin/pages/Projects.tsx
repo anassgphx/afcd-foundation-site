@@ -33,7 +33,7 @@ const toQuery = (f: F) => { const u = new URLSearchParams(); for (const k of KEY
 const COL: Record<string, K> = { name: 'cat', pillar: 'pillar', status: 'st', page: 'web' };
 
 const SORTS: [string, string][] = [['', 'Listing order'], ['name:asc', 'Name A–Z'], ['name:desc', 'Name Z–A'], ['updated:asc', 'Recently updated'], ['updated:desc', 'Least recently updated'], ['status:asc', 'Status (needs action first)']];
-const PHOTOS: Record<string, string> = { has: 'Has photos', none: 'No photos', issues: 'Missing alt text or rights' };
+const PHOTOS: Record<string, string> = { has: 'Has photos', none: 'No photos', issues: 'Missing confirmed rights' };
 /** The years a project mentions ("2019–2021", "Since 2023"), as a range; null when it names none. */
 const yearsOf = (s: string) => { const y = (s.match(/\b(19|20)\d{2}\b/g) ?? []).map(Number); return y.length ? [Math.min(...y), Math.max(...y)] as const : null; };
 
@@ -82,7 +82,7 @@ export function ProjectsList() {
         <span className={`dt-thumb pjl-thumb${r.logoThumb ? ' is-logo' : ''}`}>{r.logoThumb ? <img src={r.logoThumb} alt="" loading="lazy" /> : r.thumb ? <img src={r.thumb} alt="" loading="lazy" /> : <Icon n="folder" />}</span>
         <span className="min-w-0"><Link className="title" to={`/studio/projects/${r.id}`}>{r.name}</Link>{projectStatus(r.years) && <span className={`pjl-st is-${projectStatus(r.years)!.toLowerCase()}`}><i />{projectStatus(r.years)}</span>}
           <span className="sub">{[r.category, r.location, r.years].filter(Boolean).join(' · ') || '—'}
-            {r.photoIssues > 0 && <> · <span className="lt-photo" title="Photos missing alt text or confirmed rights"><Icon n="alert" />{r.photoIssues} photo{r.photoIssues === 1 ? '' : 's'} to complete</span></>}</span></span></div> },
+            {r.photoIssues > 0 && <> · <span className="lt-photo" title="Photos missing confirmed rights"><Icon n="alert" />{r.photoIssues} photo{r.photoIssues === 1 ? '' : 's'} to complete</span></>}</span></span></div> },
     { key: 'pillar', header: 'Pillars', sort: (r) => r.pillars[0]?.name ?? 'zzz', csv: (r) => r.pillars.map((p) => p.name).join('; '), hideBelow: 900,
       filter: { type: 'set', title: 'Pillars', get: (r) => r.pillars.map((p) => p.key), options: opts.pillars.map((p) => ({ value: p.key, label: p.name, colour: p.colour })) },
       render: (r) => <div className="pills">{r.pillars.map((p) => <span key={p.key} className="pill" title={p.isPrimary ? 'Primary pillar' : 'Also linked'}><span className="dot" style={{ ['--c' as string]: p.colour }} />{p.name}{p.isPrimary && r.pillars.length > 1 ? ' ·' : ''}</span>)}</div> },
@@ -158,36 +158,39 @@ export function ProjectsList() {
       <section className="card">
         <div className="card-h dt-toolbar">
           <FilterTabs value={f.status} onChange={(v) => set('status', v)} tabs={TABS.map(([k, l]) => [k, l, base.filter((r) => inTab(k, r)).length])} />
-          <div className="dt-tools">
-            <button type="button" className={`btn btn-sm lt-btn${panel ? ' on' : ''}`} aria-expanded={panel} aria-controls="pj-filters" onClick={() => setPanel((p) => !p)} title="More filters: place, years, photos, editor"><Icon n="settings" />More filters{panelCount > 0 && <em>{panelCount}</em>}</button>
-            <select className="select lt-sort" value={f.sort} onChange={(e) => set('sort', e.target.value)} aria-label="Sort by">{SORTS.map(([v, l]) => <option key={v} value={v}>Sort: {l}</option>)}</select>
-            <label className="search"><Icon n="search" /><span className="sr-only">Search projects</span><input className="input" placeholder="Search name, category, place" value={f.q} onChange={(e) => set('q', e.target.value)} />{f.q && <button type="button" className="dt-clear" onClick={() => set('q', '')} aria-label="Clear search">×</button>}</label>
+          {/* one row: status tabs, search, and a single "Filter & sort" button; views, sort and the extra filters live in its panel */}
+          <div className="dt-tools pjl-tools">
+            <label className="search"><Icon n="search" /><span className="sr-only">Search projects</span><input className="input" placeholder="Search projects" value={f.q} onChange={(e) => set('q', e.target.value)} />{f.q && <button type="button" className="dt-clear" onClick={() => set('q', '')} aria-label="Clear search">×</button>}</label>
+            <button type="button" className={`btn btn-sm lt-btn${panel ? ' on' : ''}`} aria-expanded={panel} aria-controls="pj-filters" onClick={() => setPanel((p) => !p)}>
+              <Icon n="settings" />Filter & sort{panelCount + (mineOnly ? 1 : 0) + (f.sort ? 1 : 0) > 0 && <em>{panelCount + (mineOnly ? 1 : 0) + (f.sort ? 1 : 0)}</em>}</button>
           </div>
         </div>
 
-        <div className="lt-views" role="group" aria-label="Saved views">
-          <span>Views</span>
-          <button type="button" className={`lt-view${mineOnly && f.status === 'draft' ? ' on' : ''}`} onClick={() => { const on = mineOnly && f.status === 'draft'; setFilters({ ...DEFAULTS, status: on ? 'all' : 'draft' }); setMineOnly(!on); }}>My drafts</button>
-          {builtIn.map((v) => { const on = !mineOnly && current === toQuery({ ...DEFAULTS, ...v.apply }); return <button key={v.name} type="button" className={`lt-view${on ? ' on' : ''}`} onClick={() => applyView(on ? {} : v.apply)}>{v.name}</button>; })}
-          {views.map((v) => <span key={v.name} className={`lt-view${!mineOnly && current === v.query ? ' on' : ''}`} role="button" tabIndex={0}
-            onClick={() => { setMineOnly(false); setFilters({ ...DEFAULTS, ...Object.fromEntries(new URLSearchParams(v.query)) as Partial<F> }); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLElement).click(); }}>{v.name}
-            <button type="button" className="x" aria-label={`Remove the view ${v.name}`} onClick={(e) => { e.stopPropagation(); const n = views.filter((x) => x.name !== v.name); setViews(n); saveViews(n); }}>×</button></span>)}
-          {current && !views.some((v) => v.query === current) && <button type="button" className="lt-view add" onClick={() => {
-            const name = prompt('Name this view (kept in this browser):', '')?.trim().slice(0, 40); if (!name) return;
-            const n = [...views.filter((v) => v.name !== name), { name, query: current }]; setViews(n); saveViews(n); toast(`Saved the view “${name}”`);
-          }}><Icon n="plus" width={12} height={12} />Save this view</button>}
-        </div>
-
-        {panel && <div className="lt-panel" id="pj-filters">
+        {panel && <div className="lt-panel pjl-panel" id="pj-filters" onKeyDown={(e) => { if (e.key === 'Escape') setPanel(false); }}>
+          <div className="pjl-group" role="group" aria-labelledby="pjl-views">
+            <b id="pjl-views">Quick views</b>
+            <div className="pjl-chips">
+              <button type="button" className={`lt-view${mineOnly && f.status === 'draft' ? ' on' : ''}`} aria-pressed={mineOnly && f.status === 'draft'} onClick={() => { const on = mineOnly && f.status === 'draft'; setFilters({ ...DEFAULTS, status: on ? 'all' : 'draft' }); setMineOnly(!on); }}>My drafts</button>
+              {builtIn.map((v) => { const on = !mineOnly && current === toQuery({ ...DEFAULTS, ...v.apply }); return <button key={v.name} type="button" className={`lt-view${on ? ' on' : ''}`} aria-pressed={on} onClick={() => applyView(on ? {} : v.apply)}>{v.name}</button>; })}
+              {views.map((v) => <span key={v.name} className={`lt-view${!mineOnly && current === v.query ? ' on' : ''}`} role="button" tabIndex={0}
+                onClick={() => { setMineOnly(false); setFilters({ ...DEFAULTS, ...Object.fromEntries(new URLSearchParams(v.query)) as Partial<F> }); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLElement).click(); }}>{v.name}
+                <button type="button" className="x" aria-label={`Remove the view ${v.name}`} onClick={(e) => { e.stopPropagation(); const n = views.filter((x) => x.name !== v.name); setViews(n); saveViews(n); }}>×</button></span>)}
+              {current && !views.some((v) => v.query === current) && <button type="button" className="lt-view add" onClick={() => {
+                const name = prompt('Name this view (kept in this browser):', '')?.trim().slice(0, 40); if (!name) return;
+                const n = [...views.filter((v) => v.name !== name), { name, query: current }]; setViews(n); saveViews(n); toast(`Saved the view “${name}”`);
+              }}><Icon n="plus" width={12} height={12} />Save this view</button>}
+            </div>
+          </div>
+          <label className="lt-f"><b>Sort by</b><select className="select" value={f.sort} onChange={(e) => set('sort', e.target.value)}>{SORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
           <label className="lt-f"><b>Location</b><select className="select" value={f.loc} onChange={(e) => set('loc', e.target.value)}><option value="">Anywhere</option>{opts.locs.map((c) => <option key={c}>{c}</option>)}</select></label>
           <div className="lt-f"><b>Years</b><div className="lt-range">
             <input className="input" type="number" inputMode="numeric" min={1990} max={2100} placeholder="From" aria-label="From year" value={f.yfrom} onChange={(e) => set('yfrom', e.target.value.slice(0, 4))} /><span>–</span>
             <input className="input" type="number" inputMode="numeric" min={1990} max={2100} placeholder="To" aria-label="To year" value={f.yto} onChange={(e) => set('yto', e.target.value.slice(0, 4))} /></div></div>
           <label className="lt-f"><b>Photos</b><select className="select" value={f.photos} onChange={(e) => set('photos', e.target.value)}><option value="">Any</option>{Object.entries(PHOTOS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
           <label className="lt-f"><b>Updated by</b><select className="select" value={f.by} onChange={(e) => set('by', e.target.value)}><option value="">Anyone</option>{opts.by.map((c) => <option key={c}>{c}</option>)}</select></label>
-          <div className="lt-panel-f"><span className="muted">Category, pillars, status, website and update date filter from the column headers (the funnel icons).</span>
-            <span style={{ display: 'flex', gap: 8 }}>{panelCount > 0 && <button type="button" className="btn btn-sm btn-ghost" onClick={() => setFilters((s) => ({ ...s, loc: '', yfrom: '', yto: '', photos: '', by: '' }))}>Clear these</button>}<button type="button" className="btn btn-sm" onClick={() => setPanel(false)}>Done</button></span></div>
+          <div className="lt-panel-f"><span className="muted">Category, pillars, status and website also filter from the column headers.</span>
+            <span style={{ display: 'flex', gap: 8 }}>{(panelCount > 0 || mineOnly || f.sort) && <button type="button" className="btn btn-sm btn-ghost" onClick={() => { setFilters((s) => ({ ...s, sort: '', loc: '', yfrom: '', yto: '', photos: '', by: '' })); setMineOnly(false); }}>Reset</button>}<button type="button" className="btn btn-sm btn-primary" onClick={() => setPanel(false)}>Done</button></span></div>
         </div>}
 
         {chips.length > 0 && <div className="lt-chips" aria-label="Active filters">

@@ -114,7 +114,7 @@ export function Builder({ id }: { id: string }) {
     setBusy('save'); setErrors([]);
     try {
       const r = await put<{ problems: { message: string }[] }>(`/pages/${id}`, { ...settings, doc });
-      await load(); toast(live ? 'Draft saved. The live page is unchanged until you publish.' : 'Draft saved');
+      await load(); toast(live ? 'Draft saved. The live page is unchanged until you publish.' : 'Draft saved. Submit it for review when it is ready.');
       if (r.problems?.length) setErrors(r.problems.map((p) => p.message));
       return true;
     } catch (e) { showErr(e); return false; } finally { setBusy(''); }
@@ -125,7 +125,7 @@ export function Builder({ id }: { id: string }) {
   async function act(action: string, c = '') {
     if (dirty && !(await save())) return;
     setBusy(action);
-    try { await post(`/pages/${id}/transition`, { action, comment: c }); await load(); setDialog(null); setComment(''); toast({ submit: 'Sent for review', approve: 'Approved. Ready to publish.', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft', archive: 'Archived', restore: 'Restored as a draft' }[action] ?? 'Done'); }
+    try { await post(`/pages/${id}/transition`, { action, comment: c }); await load(); setDialog(null); setComment(''); toast({ submit: 'Sent for review. Reviewers are notified; it can be published once approved.', approve: 'Approved. Ready to publish.', request_changes: 'Sent back to the author with your note.', withdraw: 'Back to draft. You can edit it again.', archive: 'Archived', restore: 'Restored as a draft' }[action] ?? 'Done'); }
     catch (e) { setDialog(null); showErr(e); } finally { setBusy(''); }
   }
   async function deliver(kind: 'publish' | 'unpublish') {
@@ -287,7 +287,7 @@ export function FieldEditor({ f, value, onChange, links }: { f: Field; value: an
     case 'toggle': return <label className="check"><input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} /><span>{f.label}</span></label>;
     case 'pillar': return <Labeled label={f.label} hint={f.hint}><select className="select" value={value ?? ''} onChange={(e) => onChange(e.target.value)} {...common}><option value="">Choose a pillar</option>{pillars.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}</select></Labeled>;
     case 'projects': return <Labeled label={f.label} hint={f.hint}><div className="b-checks">{projects.filter((p) => p.publishedRevisionId).map((p) => <label key={p.slug} className="check"><input type="checkbox" checked={(value ?? []).includes(p.slug)} onChange={(e) => onChange(e.target.checked ? [...(value ?? []), p.slug] : (value ?? []).filter((s: string) => s !== p.slug))} /><span>{p.name}</span></label>)}</div></Labeled>;
-    case 'media': return <Labeled label={f.label} hint={mediaInfo && (!mediaInfo.alt || !mediaInfo.rightsConfirmed) ? 'This image still needs alt text or rights confirmation (Media Library).' : f.hint}>
+    case 'media': return <Labeled label={f.label} hint={mediaInfo && !mediaInfo.rightsConfirmed ? 'This image still needs rights confirmation (Media Library).' : f.hint}>
       {value && mediaInfo ? <div className="thumb" style={{ width: '100%' }}><img src={mediaInfo.url} alt={mediaInfo.alt} /><button type="button" aria-label="Remove image" onClick={() => onChange(null)}>×</button></div> : <div className="muted">No image: a grey placeholder is shown.</div>}
       <button type="button" className="btn btn-sm" style={{ justifySelf: 'start' }} onClick={() => setPicker(true)}><Icon n="image" />{value ? 'Change image' : 'Choose image'}</button>
       {picker && <MediaPicker onClose={() => setPicker(false)} onPick={(m) => { onChange(m[0]?.id ?? null); setMediaInfo(m[0] ?? null); setPicker(false); }} />}

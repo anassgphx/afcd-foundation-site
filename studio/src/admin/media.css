@@ -74,7 +74,7 @@
 .ml-keys kbd { min-width: 18px; padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: #fff; font: 600 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-2); text-align: center; }
 @media (max-width: 760px) { .ml-keys { display: none; } }
 
-.ml-sk { cursor: default; } .ml-sk:hover { box-shadow: none; border-color: var(--line); } .ml-sk .ml-thumb.skeleton { height: auto; border-radius: 0; } .ml-sk .ml-meta { gap: 6px; }
+.ml-sk { cursor: default; } .ml-sk:hover { box-shadow: none; border-color: var(--line); } .ml-sk .ml-thumb.skeleton { height: auto; border-radius: 0; background: linear-gradient(90deg, var(--canvas) 0%, var(--surface) 50%, var(--canvas) 100%); background-size: 200% 100%; animation: sk 1.2s linear infinite; }   /* loading: a soft shimmer, not the transparency checkerboard of real images */ .ml-sk .ml-meta { gap: 6px; }
 .ml-empty { display: grid; justify-items: center; gap: 6px; padding: 48px 20px; text-align: center; }
 .ml-empty-i { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 6px; border-radius: 14px; background: var(--canvas); color: var(--muted); }
 .ml-empty b { font-size: 15px; } .ml-empty p { margin: 0 0 8px; max-width: 440px; font-size: 13px; color: var(--muted); }
@@ -210,3 +210,4 @@
 .ml-levels { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; } .ml-levels button { width: auto; padding: 0 8px; font-size: 12.5px; white-space: nowrap; }
 .ml-compress small { font-size: 12px; }
 .ml-bulk-f .select { height: 30px; background: #fff; color: var(--ink); }
+

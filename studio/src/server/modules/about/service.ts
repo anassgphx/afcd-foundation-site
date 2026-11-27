@@ -20,6 +20,7 @@ import { aboutPages, aboutPageRevisions, media, objectivePillars, objectives, pi
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
+import { altProblem } from '../media/alt.ts';
 
 export const ABOUT_KEYS = ['our-story', 'mission-vision', 'strategy', 'team', 'partners'] as const;
 export type AboutKey = (typeof ABOUT_KEYS)[number];
@@ -69,7 +70,7 @@ export const SCHEMAS = {
     mediaId,
     closing, ...layout,
   }).strict(),
-  'mission-vision': z.object({ hero, mission: opt(600), vision: opt(600), values: z.array(item(40, 320)).max(8).default([]), closing, ...layout }).strict(),
+  'mission-vision': z.object({ hero, mission: opt(600), vision: opt(600), values: z.array(item(40, 320)).max(8).default([]), mediaId, missionMediaId: mediaId, visionMediaId: mediaId, closing, ...layout }).strict(),
   strategy: z.object({
     hero, objectivesIntro: opt(420),
     objectives: z.array(z.object({ ref: z.string().regex(/^SO-\d{2}$/), title: opt(180), text: opt(600) }).strict()).max(20).default([]),
@@ -103,6 +104,7 @@ export function contentMediaIds(key: AboutKey, c: Record<string, unknown>): stri
   const out: (string | null | undefined)[] = [];
   if (key === 'our-story') { out.push(c.mediaId as string | null, (c.statement as { mediaId?: string | null } | undefined)?.mediaId); }
   if (key === 'team') for (const p of (c.people as { mediaId: string | null }[]) ?? []) out.push(p.mediaId);
+  if (key === 'mission-vision') out.push(c.mediaId as string | null, c.missionMediaId as string | null, c.visionMediaId as string | null);
   return [...new Set(out.filter(Boolean) as string[])];
 }
 
@@ -180,7 +182,7 @@ export async function aboutProblems(db: DB, p: FullAbout): Promise<string[]> {
     const [m] = await db.select().from(media).where(eq(media.id, id));
     if (!m) out.push('A photo no longer exists in the media library.');
     else {
-      if (!m.alt) out.push(`Add alt text to the photo “${m.originalName}” in the media library.`);
+      { const ap = altProblem(m, `Add alt text to the photo “${m.originalName}” in the media library.`); if (ap) out.push(ap); }
       if (!m.rightsConfirmed) out.push(`Confirm AFCD may use the photo “${m.originalName}” (usage rights and consent of the people shown).`);
     }
   }
@@ -326,6 +328,7 @@ export async function contentFromSite(db: DB, key: AboutKey, site: Record<string
   const s = structuredClone(site) as Record<string, any>;
   if (key === 'our-story') { s.mediaId = null; s.statement = { mediaId: null, ...(s.statement ?? {}) }; }
   if (key === 'team') s.people = (s.people ?? []).map((p: any) => ({ mediaId: null, ...p }));
+  if (key === 'mission-vision') Object.assign(s, { mediaId: null, missionMediaId: null, visionMediaId: null });
   if (key === 'strategy') {
     const objs = await db.select().from(objectives).orderBy(asc(objectives.sort));
     const lit = new Map(((s.objectives ?? []) as { ref: string; title: string; text: string }[]).map((o) => [o.ref, o]));

@@ -142,7 +142,7 @@ export async function overrideProblems(db: DB, o: typeof seoOverrides.$inferSele
   if (o.imageMediaId) {
     const [m] = await db.select().from(media).where(eq(media.id, o.imageMediaId));
     if (!m) out.push('The image no longer exists in the media library.');
-    else { if (!m.alt) out.push(`Add alt text to “${m.originalName}”.`); if (!m.rightsConfirmed) out.push(`Confirm usage rights and consent for “${m.originalName}”.`); }
+    else { if (!m.rightsConfirmed) out.push(`Confirm usage rights and consent for “${m.originalName}”.`); }
   }
   return out;
 }

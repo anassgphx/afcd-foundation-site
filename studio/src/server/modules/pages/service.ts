@@ -69,7 +69,6 @@ export async function pageProblems(db: DB, p: typeof pages.$inferSelect) {
     const rows = await db.select().from(media).where(inArray(media.id, ids));
     if (rows.length !== ids.length) out.push('An image used on this page no longer exists.');
     for (const m of rows) {
-      if (!m.alt) out.push(`Add alt text to “${m.originalName}”.`);
       if (!m.rightsConfirmed) out.push(`Confirm usage rights and consent for “${m.originalName}”.`);
     }
   }

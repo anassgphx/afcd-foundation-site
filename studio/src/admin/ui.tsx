@@ -26,10 +26,14 @@ export function ToastHost({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Toast[]>([]);
   const push = useCallback((text: string, bad = false) => {
     const id = Date.now() + Math.random();
-    setItems((x) => [...x, { id, text, bad }]);
-    setTimeout(() => setItems((x) => x.filter((t) => t.id !== id)), bad ? 7000 : 3500);
+    setItems((x) => [...x.slice(-2), { id, text, bad }]);   // at most 3 on screen
+    // long enough to read: about 60 ms a character, never under 3.5 s (7 s for errors)
+    setTimeout(() => setItems((x) => x.filter((t) => t.id !== id)), Math.max(bad ? 7000 : 3500, text.length * 60));
   }, []);
-  return <ToastCtx.Provider value={push}>{children}<div className="toasts" role="status" aria-live="polite">{items.map((t) => <div key={t.id} className={`toast${t.bad ? ' bad' : ''}`}>{t.text}</div>)}</div></ToastCtx.Provider>;
+  const close = (id: number) => setItems((x) => x.filter((t) => t.id !== id));
+  return <ToastCtx.Provider value={push}>{children}<div className="toasts" role="status" aria-live="polite">{items.map((t) =>
+    <div key={t.id} className={`toast${t.bad ? ' bad' : ''}`} role={t.bad ? 'alert' : undefined}><span>{t.text}</span>
+      <button type="button" className="toast-x" onClick={() => close(t.id)} aria-label="Dismiss"><Icon n="x" width={14} height={14} /></button></div>)}</div></ToastCtx.Provider>;
 }
 
 // ---------------------------------------------------------------- Modal

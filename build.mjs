@@ -12,6 +12,7 @@ import { renderPage, closeIndex } from './lib/page-fields.mjs';
 import { activeLangs, decorateEnglish, buildLanguages } from './lib/i18n.mjs';
 import { renderMenus } from './lib/menu.mjs';
 import { loadSiteSettings, applyHead, applyPage, applyOrg } from './lib/site-settings.mjs';
+import { pillarStems, prettifyHtml, prettifyAbsolute } from './lib/urls.mjs';
 import { execSync } from 'node:child_process';
 
 const SRC = 'src';
@@ -45,7 +46,9 @@ function withPillarProjects(html) {
   const pillars = [...(JSON.parse(readFileSync(pf, 'utf8')).pillars ?? [])].sort((a, b) => String(a.number).localeCompare(String(b.number)));
   const projects = JSON.parse(readFileSync(jf, 'utf8')).projects ?? [];
   if (!pillars.length) return html;
-  const e = (s) => escapeAttr(escapeText(String(s ?? '')));
+  // Studio writes these files already HTML-escaped ("Youth Empowerment &amp; Civic Engagement"), so existing entities are
+  // kept as they are (escapeAttr), and only a stray <, >, & or " is escaped. escapeText would turn &amp; into &amp;amp;.
+  const e = (s) => escapeAttr(String(s ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
   const colour = (c) => (/^#[0-9a-f]{3,8}$/i.test(c ?? '') ? c : '#E5E5E5');
   const listOf = (key) => `projects.html?pillar=${encodeURIComponent(key)}#proj-grid`;
   const safeFile = (f) => (/^[a-z0-9-]+\.html$/.test(f ?? '') ? f : null);
@@ -275,7 +278,7 @@ for (const file of pages) {
     markActive(header, meta.active).replace(/\{\{opps_href\}\}/g, OPPS_HREF).replace('{{pubs_link}}', PUBS_LINK).trimEnd(),
     '',
     `<main id="main" data-page="${meta.active}">`,
-    renderPage(body.trim(), FIELDS[file]),
+    renderPage(body.trim(), FIELDS[file]).replace(/\{\{opps_href\}\}/g, OPPS_HREF),
     '</main>',
     '',
     markActive(footer, meta.active).trimEnd(),
@@ -294,10 +297,26 @@ if (LANGS.length) {
   sitemap.push(...r.sitemap);
 }
 
+// Category/page addresses (lib/urls.mjs: /projects/x, /pillars/x, /about/team, no ".html"): production builds of the site
+// root only. Every page, in every language, gets root-relative links and pretty absolute URLs; previews keep file links.
+if (PRODUCTION && OUT_DIR === '.') {
+  const pillars = pillarStems('.');
+  for (const dir of ['', ...LANGS]) {
+    for (const f of readdirSync(join(OUT_DIR, dir)).filter((x) => /^[a-z0-9][a-z0-9-]*\.html$/.test(x))) {
+      const p = join(OUT_DIR, dir, f);
+      writeFileSync(p, prettifyHtml(readFileSync(p, 'utf8'), { file: f, lang: dir, site: SITE, pillars }));
+    }
+  }
+  for (let i = 0; i < sitemap.length; i++) sitemap[i] = prettifyAbsolute(sitemap[i], SITE, pillars);
+}
 // Sitemap: indexable canonical pages only, absolute production URLs.
 writeFileSync(join(OUT_DIR, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemap.join('\n')}\n</urlset>\n`);
 // robots.txt: open on production, closed on preview builds. (Not access control: private systems need auth.)
+// The build stamp: a hash of the English pages and the sitemap, exactly as written. Studio reads it here and on the public
+// site after each publish, so "Published" is only confirmed once visitors get these very files (see studio publish/public-check.ts).
+const BUILD_STAMP = createHash('sha1').update([...readdirSync(OUT_DIR).filter((f) => /\.html$/.test(f)).sort(), 'sitemap.xml']
+  .map((f) => `${f}\n${readFileSync(join(OUT_DIR, f))}`).join('\n')).digest('hex').slice(0, 16);
 writeFileSync(join(OUT_DIR, 'robots.txt'), PRODUCTION
-  ? `User-agent: *\nAllow: /\n\nSitemap: ${SITE}sitemap.xml\n`
+  ? `User-agent: *\nAllow: /\n\nSitemap: ${SITE}sitemap.xml\n\n# studio-build: ${BUILD_STAMP}\n`
   : `# Preview build: not for indexing. Production builds use: npm run build:production\nUser-agent: *\nDisallow: /\n`);
 console.log(`sitemap.xml (${sitemap.length} urls), robots.txt [${PRODUCTION ? 'production' : 'preview'}]`);

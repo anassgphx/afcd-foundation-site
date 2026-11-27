@@ -22,7 +22,16 @@ export type CheckGroup = 'basic' | 'advanced' | 'content' | 'performance';
 export type BuildAudit = { kind: 'build'; at: string; site: string; production: boolean; pages: PageScan[]; redirects?: { file: string; to: string }[]; findings: Finding[]; scores: Record<Category | 'overall', number>; counts: Record<Severity, number> };
 
 import { DEFAULT_SITE } from './site.ts';
+import { fileFromPath, pillarStems, prettyPath } from '../../../../../lib/urls.mjs';
 const pageUrlFor = (site: string) => (f: string) => site + (f === 'index.html' ? '' : f);
+/** A link or sitemap path → the built file it points at ("/projects/x" → "project-x.html", "/fr/about" → "fr/about.html",
+ *  "about.html" → itself, "/assets/a.pdf" → "assets/a.pdf"). Production builds use category/page addresses (lib/urls.mjs). */
+export function linkTarget(href: string) {
+  const path = href.split(/[?#]/)[0];
+  if (!path.startsWith('/')) return path;
+  const hit = fileFromPath(path);
+  return hit && !/\.[a-z0-9]+$/i.test(path.replace(/\.html$/, '')) ? (hit.lang ? `${hit.lang}/${hit.file}` : hit.file) : path.replace(/^\/+/, '');
+}
 const ENT: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'", nbsp: ' ' };
 const decode = (s: string) => s.replace(/&(#\d+|#x[0-9a-f]+|[a-z]+\d*);/gi, (m, e: string) => (e[0] === '#' ? String.fromCodePoint(e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : ENT[e.toLowerCase()] ?? m));
 const attr = (tag: string, n: string) => tag.match(new RegExp(`\\s${n}="([^"]*)"`, 'i'))?.[1] ?? null;
@@ -65,6 +74,8 @@ const R: Record<string, Omit<Finding, 'file' | 'evidence'>> = {
 };
 R['link.via-redirect'] = { code: 'link.via-redirect', severity: 'low', category: 'linking', kind: 'standard', title: 'Links to a redirected address', why: 'Visitors and search engines take an extra hop through the redirect page before reaching the content.', fix: 'Point the link straight at the new page.' };
 export const RULES = R;
+/** HTML helpers shared with the on-page checklist (onpage.ts). */
+export { decode, attr, meta, text as htmlText };
 const STUB_MARK = '<!-- studio-redirect -->';   // redirect pages written by Studio (see redirects.ts)
 export const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 const GENERIC_TITLE = /^(home|page|untitled|new page|title|test|index|welcome|default)$/i;
@@ -80,7 +91,7 @@ function scanPage(root: string, file: string, pageUrl: (f: string) => string) {
   for (const m of html.matchAll(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)) {
     try { const j = JSON.parse(m[1]); for (const x of Array.isArray(j) ? j : [j]) schema.types.push(String(x?.['@type'] ?? 'Unknown')); } catch (e) { schema.errors.push((e as Error).message.slice(0, 120)); }
   }
-  const links = [...main.matchAll(/<a\b[^>]*\shref="([^"]+)"/gi)].map((m) => m[1]).filter((h) => !/^(https?:|mailto:|tel:|#|javascript:|\/\/)/i.test(h) && h !== '').map((h) => decode(h).split(/[?#]/)[0]).filter(Boolean);
+  const links = [...main.matchAll(/<a\b[^>]*\shref="([^"]+)"/gi)].map((m) => m[1]).filter((h) => !/^(https?:|mailto:|tel:|#|javascript:|\/\/)/i.test(h) && h !== '').map((h) => linkTarget(decode(h))).filter(Boolean);
   const imgs = [...main.matchAll(/<img\b[^>]*>/gi)].map((m) => m[0]);
   return {
     html, head, main,
@@ -104,15 +115,19 @@ export function runBuildAudit(root: string, now = new Date(), site = DEFAULT_SIT
     redirectsOut.push({ file: f, to: decode(h.match(/http-equiv="refresh" content="0; url=([^"]+)"/i)?.[1] ?? '') }); return false; });
   const redirected = new Map(redirectsOut.map((r) => [r.file, r.to]));
   const robotsTxt = existsSync(resolve(root, 'robots.txt')) ? readFileSync(resolve(root, 'robots.txt'), 'utf8') : '';
-  const production = !/Disallow:\s*\/\s*$/m.test(robotsTxt);
+  // a preview build blocks every crawler; blocking a single bot (an AI crawler, say) is still a production build
+  const production = robotsAccess(robotsTxt, ['*'])['*'];
   const sitemapXml = existsSync(resolve(root, 'sitemap.xml')) ? readFileSync(resolve(root, 'sitemap.xml'), 'utf8') : '';
-  const sitemap = new Set([...sitemapXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => { const u = m[1].replace(/^https?:\/\/[^/]+\//, ''); return u === '' ? 'index.html' : u; }));
+  const sitemap = new Set([...sitemapXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => { const u = m[1].replace(/^https?:\/\/[^/]+\//, ''); return u === '' ? 'index.html' : linkTarget(`/${u}`); }));
   const scanned = files.map((f) => scanPage(root, f, pageUrl));
+  // a production build names its pages by category/page address: that is then the page's own URL
+  const pillars = pillarStems(root);
+  for (const { scan } of scanned) { const pretty = site + prettyPath(scan.file, pillars).slice(1); if (scan.canonical === pretty) scan.url = pretty; }
   const byFile = new Map(scanned.map((s) => [s.scan.file, s.scan]));
   for (const s of scanned) { s.scan.inSitemap = sitemap.has(s.scan.file); for (const t of s.scan.linksOut) { const target = byFile.get(t); if (target && t !== s.scan.file && !target.inbound.includes(s.scan.file)) target.inbound.push(s.scan.file); } }
   // links in the shared header and footer count too: pages reachable from navigation are not orphans
   const nav = (() => { const first = scanned[0]?.html ?? ''; const chrome = (first.match(/<header[\s\S]*?<\/header>/i)?.[0] ?? '') + (first.match(/<footer[\s\S]*?<\/footer>/i)?.[0] ?? '');
-    return new Set([...chrome.matchAll(/\shref="([^"#?]+\.html)/gi)].map((m) => m[1])); })();
+    return new Set([...chrome.matchAll(/\shref="([^"#?]+)/gi)].map((m) => linkTarget(m[1])).filter((h) => /\.html$/.test(h))); })();
 
   const findings: Finding[] = [];
   const add = (code: string, file: string, evidence: string[] = [], over: Partial<Finding> = {}) => findings.push({ ...R[code], ...over, file, evidence });
@@ -164,7 +179,8 @@ export function runBuildAudit(root: string, now = new Date(), site = DEFAULT_SIT
     if (/^news-/.test(p.file) && !p.schema.types.some((t) => /Article|BlogPosting|NewsArticle/.test(t))) add('schema.article-suggest', p.file);
     if (!is404 && p.file !== 'index.html' && !p.inbound.length && !nav.has(p.file)) add('link.orphan', p.file, ['No links from other pages or the menu']);
   }
-  for (const f of sitemap) if (!byFile.has(f)) add('tech.sitemap-ghost', 'sitemap.xml', [`Listed: ${f}`]);
+  // other languages' pages (fr/, ar/) are files in their folders, not pages of this audit
+  for (const f of sitemap) if (!byFile.has(f) && !existsSync(resolve(root, f))) add('tech.sitemap-ghost', 'sitemap.xml', [`Listed: ${f}`]);
   // duplicates across pages
   for (const [field, code] of [['title', 'meta.title-dup'], ['description', 'meta.desc-dup']] as const) {
     const seen = new Map<string, string[]>();
@@ -224,4 +240,23 @@ export function pageChecklist(p: PageScan, found: Finding[], production = true):
     const status = hits.map((f) => STATUS_OF[f.severity]).sort((x, y) => WORST.indexOf(x) - WORST.indexOf(y))[0];
     return { id: c.id, group: c.group, label: c.label, status, detail: hits.map((f) => f.evidence[0] ? `${f.title}: ${f.evidence[0]}` : f.title).join(' · '), codes: hits.map((f) => f.code) };
   });
+}
+
+/** robots.txt: which of these crawlers may fetch the site root ('*' asks about crawlers without their own group).
+ *  The most specific user-agent group applies; within it the longest matching rule wins, Allow on a tie. */
+export function robotsAccess(txt: string, agents: string[]) {
+  const groups: { ua: string[]; rules: { allow: boolean; path: string }[] }[] = [];
+  let cur: typeof groups[number] | null = null; let lastUa = false;
+  for (const raw of txt.split(/\r?\n/)) {
+    const line = raw.replace(/#.*/, '').trim(); const m = line.match(/^([a-z-]+)\s*:\s*(.*)$/i); if (!m) continue;
+    const k = m[1].toLowerCase(), v = m[2].trim();
+    if (k === 'user-agent') { if (!lastUa || !cur) { cur = { ua: [], rules: [] }; groups.push(cur); } cur.ua.push(v.toLowerCase()); lastUa = true; continue; }
+    lastUa = false;
+    if (cur && (k === 'allow' || k === 'disallow')) cur.rules.push({ allow: k === 'allow' || v === '', path: v || '/' });
+  }
+  return Object.fromEntries(agents.map((a) => {
+    const g = (a !== '*' && groups.find((x) => x.ua.some((u) => u !== '*' && a.toLowerCase().includes(u)))) || groups.find((x) => x.ua.includes('*'));
+    const r = (g?.rules ?? []).filter((x) => '/'.startsWith(x.path)).sort((x, y) => y.path.length - x.path.length || Number(y.allow) - Number(x.allow))[0];
+    return [a, !r || r.allow];
+  })) as Record<string, boolean>;
 }

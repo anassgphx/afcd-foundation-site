@@ -13,6 +13,7 @@ import type { Role } from '../../rbac.ts';
 import { readFields, type FieldDef } from './fields.ts';
 import { currentLayout, layoutBlocks, validateLayout, type LayoutEntry } from './layout.ts';
 import { docMediaIds } from '../pages/render.ts';
+import { altProblem } from '../media/alt.ts';
 
 export const HOME = 'index.html';
 /** Hand-written pages whose marked text is edited in Studio. Only the homepage also has a section layout. */
@@ -40,9 +41,16 @@ const storyImage = z.union([
 ]);
 const storySchema = z.object({ quote: plain(300, 1), name: plain(80, 1), role: plain(120), caption: plain(80), image: storyImage.optional(), sample: z.boolean().optional() }).strict();
 /** Every Media Library photo a set of values uses: image fields ({ mediaId }) and story photos. */
+/** The Media Library id a value points at, or null (no photo, a cleared photo { mediaId: null }, or anything not an id). */
+export const mediaIdOf = (v: unknown): string | null => {
+  const id = v && typeof v === 'object' && 'mediaId' in v ? (v as { mediaId: unknown }).mediaId : null;
+  return typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : null;
+};
 export const valueMediaIds = (values: Record<string, unknown>) => Object.values(values).flatMap((v) =>
-  v && typeof v === 'object' && 'mediaId' in v ? [(v as { mediaId: string }).mediaId]
-  : Array.isArray(v) ? v.flatMap((s) => (s && typeof s === 'object' && s.image && typeof s.image === 'object' && 'mediaId' in s.image ? [String(s.image.mediaId)] : [])) : []);
+  Array.isArray(v) ? v.flatMap((s) => { const id = s && typeof s === 'object' ? mediaIdOf(s.image) : null; return id ? [id] : []; })
+  : (() => { const id = mediaIdOf(v); return id ? [id] : []; })());
+/** Longest plain text a homepage field takes (headings, labels and numbers have their own, shorter limits). */
+export const TEXT_MAX = 800;
 const schemaFor = (f: FieldDef): z.ZodTypeAny => {
   const isNumber = f.key.endsWith('.value');
   const head = headPart(f.key);
@@ -57,7 +65,7 @@ const schemaFor = (f: FieldDef): z.ZodTypeAny => {
     case 'image': return z.object({ mediaId: z.string().uuid() }).strict();
     case 'stories': return z.array(storySchema).min(1, 'Keep at least one story.').max(STORIES_MAX, `Use at most ${STORIES_MAX} stories.`);
     case 'rich': return plain(700, 1);
-    default: return isNumber ? plain(24, 1) : plain(f.key.endsWith('quote') ? 300 : 240, 1);
+    default: return isNumber ? plain(24, 1) : plain(TEXT_MAX, 1);
   }
 };
 
@@ -94,8 +102,8 @@ export async function contentIssues(db: DB, cfg: Config, values: Record<string, 
   const usedBy = new Map<string, { section: string | null; field: string | null; item?: number }[]>();
   const use = (id: string, w: { section: string | null; field: string | null; item?: number }) => usedBy.set(id, [...(usedBy.get(id) ?? []), w]);
   for (const [k, v] of Object.entries(values)) {
-    if (v && typeof v === 'object' && 'mediaId' in v) use(String((v as { mediaId: string }).mediaId), { section: sectionOf(k), field: k });
-    else if (Array.isArray(v)) v.forEach((s, i) => { if (s && typeof s === 'object' && s.image && typeof s.image === 'object' && 'mediaId' in s.image) use(String(s.image.mediaId), { section: sectionOf(k), field: k, item: i }); });
+    if (Array.isArray(v)) v.forEach((s, i) => { const id = s && typeof s === 'object' ? mediaIdOf(s.image) : null; if (id) use(id, { section: sectionOf(k), field: k, item: i }); });
+    else { const id = mediaIdOf(v); if (id) use(id, { section: sectionOf(k), field: k }); }
   }
   if (Array.isArray(layout) && page.layout) {
     try {
@@ -125,7 +133,7 @@ export async function contentIssues(db: DB, cfg: Config, values: Record<string, 
       const m = rows.find((r) => r.id === id); const at = usedBy.get(id)!;
       const each = (message: string) => at.forEach((w) => out.push({ message, ...w }));
       if (!m) each('A chosen photo no longer exists in the media library.');
-      else { if (!m.alt) each(`Add alt text to “${m.originalName}”.`); if (!m.rightsConfirmed) each(`Confirm usage rights and consent for “${m.originalName}”.`); }
+      else { { const ap = altProblem(m, `Add alt text to “${m.originalName}”.`); if (ap) each(ap); } if (!m.rightsConfirmed) each(`Confirm usage rights and consent for “${m.originalName}”.`); }
     }
   }
   const changedLayout = page.layout && Array.isArray(layout) && JSON.stringify(currentLayout(cfg.siteRoot, file, layout)) !== JSON.stringify(currentLayout(cfg.siteRoot, file, null));

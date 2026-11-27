@@ -60,7 +60,7 @@ describe('stories with photos in the text', () => {
     const { body: a } = await ed.post('/news', base);
     const got = (await ed.get(`/news/${a.id}`)).body;
     expect(got.media.map((m: { id: string }) => m.id)).toContain(img.id);
-    expect(got.problems.join(' ')).toMatch(/alt text to “test-inline\.png”/);
+    expect(got.problems.join(' ')).toMatch(/rights and consent for “test-inline\.png”/);
 
     await ed.raw('PATCH', `/media/${img.id}`, { alt: 'Test image', rightsConfirmed: true });
     expect((await ed.get(`/news/${a.id}`)).body.problems).toEqual([]);

@@ -10,7 +10,10 @@
   color-scheme: light;
 }
 html { scroll-behavior: smooth; scroll-padding-top: var(--header-h); }
-body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: var(--white); color: var(--deep); font-feature-settings: "ss01", "cv11"; -webkit-font-smoothing: antialiased; }
+/* Inter loads without blocking the page, so text first shows in a fallback font. Sized to Inter's metrics (Arial adjusted, the
+   values next/font uses), the swap keeps line breaks, and the hero text no longer jumps when Inter arrives (layout shift). */
+@font-face { font-family: "Inter Fallback"; src: local("Arial"), local("ArialMT"); ascent-override: 90.44%; descent-override: 22.52%; line-gap-override: 0%; size-adjust: 107.12%; }
+body { font-family: Inter, "Inter Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: var(--white); color: var(--deep); font-feature-settings: "ss01", "cv11"; -webkit-font-smoothing: antialiased; }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 60; background: var(--black); }
 
 @layer components {
@@ -278,6 +281,13 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .nav-cta-ico { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9999px; background: #fff; color: #000; font-size: 14px; transition: transform .3s ease; }
 .nav-cta:hover .nav-cta-ico { transform: rotate(45deg); }
 #site-header.is-scrolled .mainbar:not(.mainbar-dark) { background: rgba(255,255,255,.82); -webkit-backdrop-filter: saturate(1.4) blur(16px); backdrop-filter: saturate(1.4) blur(16px); }
+/* An open menu panel is clipped (clip-path) inside the blurred bar of the moved-up header; Chrome then paints the panel as an
+   empty white box. While a menu is open the bar is solid, without the blur, so the panel's links always show. */
+body.mega-open #site-header.is-scrolled .mainbar:not(.mainbar-dark) { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+body.mega-open #site-header.is-scrolled .mainbar-dark { background: #080808; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* Mission and vision cards: a long statement (data-long, set by lib/page-fields.mjs) steps down in size so it stays readable */
+#purpose [data-long="1"] { font-size: 20px; } #purpose [data-long="2"] { font-size: 18px; line-height: 1.3; } #purpose [data-long="3"] { font-size: 16px; line-height: 1.4; }
+@media (min-width: 768px) { #purpose [data-long="1"] { font-size: 23px; } #purpose [data-long="2"] { font-size: 20px; } #purpose [data-long="3"] { font-size: 18px; } }
 
 /* Mega menu panels */
 .mm-intro { display: flex; flex-direction: column; padding: 20px; border-radius: 18px; background: #F6F6F6; }
@@ -333,6 +343,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 [dir="rtl"] .hxb::after { background: linear-gradient(270deg, rgba(0,0,0,.72) 0%, rgba(0,0,0,.35) 50%, rgba(0,0,0,.1) 100%), linear-gradient(180deg, rgba(0,0,0,.35) 0%, transparent 30%, rgba(0,0,0,.78) 100%); }
 .hx-slide { position: absolute; inset: 0; opacity: 0; transition: opacity .9s ease; }
 .hx-slide.is-on { opacity: 1; }
+/* the other slides stay out of the layout until the page has loaded, so their (lazy) photos do not compete with the first
+   slide's photo, the page's largest paint; assets/main.js adds .hx-ready on load or on the first slide change */
+#hero:not(.hx-ready) .hx-slide:not(.is-on) { display: none; }
 .hx-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scale(1.02); }
 .hx-slide.is-on .hx-img { animation: hxZoom 9s ease-out forwards; }
 @keyframes hxZoom { from { transform: scale(1.02); } to { transform: scale(1.1); } }
@@ -766,7 +779,7 @@ body.show-notes .note { display: block; }
 }
 
 /* RTL font fallback for Arabic preview */
-[dir="rtl"] body { font-family: Inter, "Noto Sans Arabic", "Geeza Pro", Tahoma, sans-serif; }
+[dir="rtl"] body { font-family: Inter, "Inter Fallback", "Noto Sans Arabic", "Geeza Pro", Tahoma, sans-serif; }
 
 /* Inner page header: full-width band with brand glow, breadcrumb pill, title + lead, "on this page" card */
 .phd { position: relative; overflow: hidden; isolation: isolate; background: #FCFCFC; }
@@ -1516,6 +1529,9 @@ button[type="submit"][aria-busy="true"] { opacity: .6; cursor: progress; }
 .ax-mosaic { position: relative; display: grid; grid-template-columns: 1.15fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px; height: clamp(360px, 42vw, 560px); }
 .ax-tile { position: relative; margin: 0; overflow: hidden; border-radius: 24px; will-change: transform; }
 .ax-tile img { width: 100%; height: 100%; object-fit: cover; transition: transform 1.2s cubic-bezier(.2,.7,.2,1); }
+/* The third tile: a placeholder until a photo is chosen in Studio (about.image3); a chosen photo covers it and its caption. */
+.ax-t3 > img { position: absolute; inset: 0; }
+.ax-t3 > img[src] ~ .ph-cap { display: none; }
 .ax-tile:hover img { transform: scale(1.05); }
 .ax-t1 { grid-row: 1 / 3; }
 .ax-t3 .ph-cap { color: rgba(255,255,255,.7); }
@@ -2645,28 +2661,32 @@ a.abx-chip:hover { background: #000; color: #fff; border-color: #000; }
 }
 .plx-side-k2 { margin-top: 28px; }
 .plx-whos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-.plx-whos li { display: inline-flex; align-items: center; min-height: 32px; padding: 6px 12px; border-radius: 9999px; background: color-mix(in srgb, var(--pc, #E7E5E4) 18%, #fff); border: 1px solid color-mix(in srgb, var(--pc, #E7E5E4) 40%, #fff); font-size: 13px; font-weight: 500; line-height: 1.3; }
+.plx-whos li { display: inline-flex; align-items: center; min-height: 32px; padding: 6px 12px; border-radius: 9999px; background: #F5F5F4; border: 1px solid #EDEDEB; color: #292524; font-size: 13px; font-weight: 500; line-height: 1.3; }
 
-/* ---------- Pillar overview v4 (.plx-h3): one composed card (text + photo, same height), then an even strip ---------- */
+/* ---------- Pillar overview v4 (.plx-h3): one composed card (text + photo, same height), then an even strip.
+   White and black like the rest of the site; the pillar colour (--pc) is only an accent: top bar, badge dot, bullets. ---------- */
 .plx-h3 { display: grid; gap: 12px; }
-.plx-h3-card { display: grid; gap: 0; overflow: hidden; border-radius: 32px; background: color-mix(in srgb, var(--pc) 15%, #fff); border: 1px solid color-mix(in srgb, var(--pc) 42%, #fff); }
+.plx-h3-card { position: relative; display: grid; gap: 0; overflow: hidden; border-radius: 32px; background: #fff; border: 1px solid #ECECEA; box-shadow: 0 1px 2px rgba(0,0,0,.03), 0 24px 48px -32px rgba(0,0,0,.18); }
+.plx-h3-card::before { content: ""; position: absolute; z-index: 2; left: 0; right: 0; top: 0; height: 4px; background: var(--pc); }
 @media (min-width: 1024px) { .plx-h3-card.has-photo { grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr); } }
 .plx-h3-text { display: flex; flex-direction: column; padding: 28px; min-width: 0; }
 @media (min-width: 768px) { .plx-h3-text { padding: 44px 48px; } }
 .plx-h3-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
-.plx-h3-top .plx-chip { border-color: color-mix(in srgb, var(--pc) 70%, #fff); color: #44403C; background: rgba(255,255,255,.65); height: 32px; }
-.plx-h3 .plx-pns { margin-left: auto; background: rgba(255,255,255,.75); }
+.plx-h3-top .plx-chip { border-color: #E7E5E4; color: #44403C; background: #fff; height: 32px; }
+.plx-h3 .plx-badge { background: #F5F5F4; box-shadow: none; }
+.plx-h3 .plx-badge-dot { box-shadow: 0 0 0 3px #fff; }
+.plx-h3 .plx-pns { margin-left: auto; background: #F5F5F4; }
 .plx-h3 .plx-pn { color: #78716C; }
-.plx-h3 .plx-pn:hover { color: #000; background: #fff; }
+.plx-h3 .plx-pn:hover { color: #000; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
 .plx-h3 .plx-pn.is-on { background: #000; color: #fff; }
 .plx-h3 .plx-mission-k { margin-top: 44px; }
-.plx-h3-lead { margin-top: 12px; max-width: 32ch; font-size: 24px; font-weight: 600; line-height: 1.25; letter-spacing: -.025em; color: #0A0A0A; text-wrap: balance; }
-@media (min-width: 768px) { .plx-h3-lead { font-size: 30px; } }
-.plx-h3-facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 28px 0 0; }
-.plx-h3-facts .plx-fact { flex: 0 0 auto; display: flex; align-items: baseline; gap: 7px; padding: 9px 15px; border: 0; border-radius: 14px; background: #fff; }
-.plx-h3-facts .plx-fact + .plx-fact { padding-left: 15px; border-left: 0; }
-.plx-h3-facts .plx-fact dd { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.03em; }
-.plx-h3-facts .plx-fact dt { font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; color: #57534E; }
+.plx-h3-lead { margin-top: 14px; max-width: 30ch; font-size: 23px; font-weight: 600; line-height: 1.28; letter-spacing: -.025em; color: #0A0A0A; text-wrap: pretty; }
+@media (min-width: 768px) { .plx-h3-lead { font-size: 28px; } }
+.plx-h3-facts { display: flex; flex-wrap: wrap; gap: 0; margin: 32px 0 0; padding-top: 20px; border-top: 1px solid #EFEEEC; }
+.plx-h3-facts .plx-fact { flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; padding: 0 28px 0 0; border: 0; border-radius: 0; background: none; }
+.plx-h3-facts .plx-fact + .plx-fact { padding-left: 28px; border-left: 1px solid #EFEEEC; }
+.plx-h3-facts .plx-fact dd { order: 0; margin: 0; font-size: 34px; line-height: 1; font-weight: 700; letter-spacing: -.04em; font-variant-numeric: tabular-nums; color: #0A0A0A; }
+.plx-h3-facts .plx-fact dt { order: 1; font-size: 12.5px; font-weight: 500; letter-spacing: 0; text-transform: none; color: #78716C; }
 .plx-h3-cta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; margin-top: auto; padding-top: 32px; }
 .plx-h3 .plx-btn { background: #000; color: #fff; }
 .plx-h3 .plx-btn:hover { background: #262626; }
@@ -2674,10 +2694,10 @@ a.abx-chip:hover { background: #000; color: #fff; border-color: #000; }
 .plx-h3 .plx-link:hover { color: #000; text-decoration: underline; text-underline-offset: 4px; }
 .plx-h3-share { margin-left: auto; gap: 8px; }
 .plx-h3-share .shr-k { display: none; }
-.plx-h3-share .shr-b { width: 36px; height: 36px; color: #000; border-color: color-mix(in srgb, var(--pc) 55%, #fff); background: rgba(255,255,255,.7); }
+.plx-h3-share .shr-b { width: 36px; height: 36px; color: #292524; border-color: #E7E5E4; background: #fff; }
 .plx-h3-share .shr-b:hover { background: #000; color: #fff; border-color: #000; }
 .plx-h3-card .plx-photo { position: relative; margin: 0; min-height: 260px; border-radius: 0; background: #E7E5E4; }
-@media (min-width: 1024px) { .plx-h3-card .plx-photo { min-height: 100%; } }
+@media (min-width: 1024px) { .plx-h3-card .plx-photo { min-height: calc(100% - 24px); margin: 12px 12px 12px 0; border-radius: 22px; } }
 .plx-h3-card .plx-photo img { filter: none; position: absolute; inset: 0; }
 .plx-h3-card .plx-cap { left: 16px; bottom: 16px; }
 @media (max-width: 1023px) { .plx-h3-card .plx-photo { aspect-ratio: 16 / 10; min-height: 0; } }
@@ -2685,6 +2705,7 @@ a.abx-chip:hover { background: #000; color: #fff; border-color: #000; }
 .plx-h3-strip { display: grid; gap: 12px; }
 @media (min-width: 900px) { .plx-h3-strip { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); } }
 .plx-h3-box { padding: 26px 28px; border-radius: 26px; background: #fff; border: 1px solid #ECECEA; min-width: 0; }
+.plx-h3-box .plx-k { color: #57534E; }
 .plx-h3-box .plx-flags { margin-top: 10px; }
 .plx-h3-box .plx-flag { padding: 13px 0; }
 .plx-h3-box .plx-flag::before { content: ""; flex-shrink: 0; width: 8px; height: 8px; border-radius: 9999px; background: var(--pc); }
@@ -2701,4 +2722,466 @@ a.abx-chip:hover { background: #000; color: #fff; border-color: #000; }
 @media (min-width: 1024px) { .plx-h3-card.has-aside { grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr); } }
 .plx-h3-aside { display: grid; gap: 10px; align-content: start; padding: 0 16px 16px; }
 @media (min-width: 1024px) { .plx-h3-aside { padding: 16px 16px 16px 0; align-content: stretch; } }
-.plx-h3-aside .plx-h3-box { border-color: color-mix(in srgb, var(--pc) 35%, #fff); }
+.plx-h3-aside .plx-h3-box { border-color: #ECECEA; background: #FAFAF9; }
+@media (max-width: 767px) {
+  .plx-h3-facts { margin-top: 24px; padding-top: 16px; }
+  .plx-h3-facts .plx-fact { padding-right: 20px; }
+  .plx-h3-facts .plx-fact + .plx-fact { padding-left: 20px; }
+  .plx-h3-facts .plx-fact dd { font-size: 28px; }
+}
+/* ---------- Pillar overview: compact. Less height: tighter spacing, a wider text column (fewer lines), smaller
+   stats, a shorter photo, slimmer boxes underneath. ---------- */
+.plx-h3-text { padding: 24px; }
+@media (min-width: 768px) { .plx-h3-text { padding: 28px 32px 28px; } }
+@media (min-width: 1024px) {
+  .plx-h3-card.has-photo, .plx-h3-card.has-aside { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); }
+  .plx-h3-card .plx-photo { margin: 10px 10px 10px 0; min-height: calc(100% - 20px); border-radius: 20px; }
+}
+.plx-h3 .plx-mission-k { margin-top: 22px; }
+.plx-h3-lead { margin-top: 8px; max-width: 40ch; font-size: 20px; line-height: 1.32; letter-spacing: -.02em; }
+@media (min-width: 768px) { .plx-h3-lead { font-size: 23px; } }
+.plx-h3-facts { margin-top: 20px; padding-top: 14px; }
+.plx-h3-facts .plx-fact { flex-direction: row; align-items: baseline; gap: 6px; padding-right: 18px; }
+.plx-h3-facts .plx-fact + .plx-fact { padding-left: 18px; }
+.plx-h3-facts .plx-fact dd { font-size: 22px; }
+.plx-h3-facts .plx-fact dt { font-size: 13px; }
+.plx-h3-cta { padding-top: 18px; gap: 10px 18px; }
+.plx-h3 .plx-btn { min-height: 42px; padding: 0 20px; }
+.plx-h3-share .shr-b { width: 32px; height: 32px; }
+.plx-h3-card .plx-cap { left: 12px; bottom: 12px; }
+.plx-h3-box { padding: 18px 22px; border-radius: 22px; }
+.plx-h3-box .plx-flags { margin-top: 6px; }
+.plx-h3-box .plx-flag { padding: 9px 0; }
+.plx-h3-box .plx-flag-t { font-size: 15.5px; }
+.plx-h3-box .plx-whos { margin-top: 10px; }
+.plx-h3-box .plx-whos li { min-height: 28px; padding: 4px 11px; font-size: 12.5px; }
+.plx-h3 { gap: 10px; }
+@media (max-width: 1023px) { .plx-h3-card .plx-photo { aspect-ratio: 16 / 8; } }
+@media (max-width: 767px) {
+  .plx-h3 .plx-mission-k { margin-top: 18px; }
+  .plx-h3-facts { margin-top: 16px; padding-top: 12px; }
+  .plx-h3-facts .plx-fact dd { font-size: 20px; }
+  .plx-h3-facts .plx-fact { padding-right: 14px; }
+  .plx-h3-facts .plx-fact + .plx-fact { padding-left: 14px; }
+  .plx-h3-share { width: auto; margin-left: 0; }
+  .plx-h3-box { padding: 16px 18px; }
+}
+/* the page header already says "Pillar 01 / 04": the card keeps only the pillar switcher */
+.plx-h3 .plx-badge { display: none; }
+.plx-h3 .plx-pns { margin-left: 0; }
+
+/* ---------- Pillar overview video: the photo is the poster; the player loads only when the visitor presses play ---------- */
+.plx-vid { isolation: isolate; }
+.plx-vid.no-poster { background: radial-gradient(120% 120% at 30% 20%, #292524, #0A0A0A); }
+.plx-vid::after { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,.45)); pointer-events: none; }
+.plx-vid.is-playing::after { display: none; }
+.plx-play { position: absolute; z-index: 2; left: 50%; top: 50%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 12px; height: 56px; padding: 0 22px 0 8px; border: 0; border-radius: 9999px; background: rgba(255,255,255,.94); color: #0A0A0A; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 10px 30px -10px rgba(0,0,0,.5); transition: transform .2s ease, background-color .2s ease; }
+.plx-play:hover { transform: translate(-50%, -50%) scale(1.04); background: #fff; }
+.plx-play:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.plx-play-i { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 9999px; background: #0A0A0A; }
+.plx-play-i::before { content: ""; margin-left: 3px; border-style: solid; border-width: 7px 0 7px 11px; border-color: transparent transparent transparent #fff; }
+.plx-vid-src { position: absolute; z-index: 2; right: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 9999px; background: rgba(0,0,0,.55); color: #fff; font-size: 12px; font-weight: 500; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.plx-vid-src:hover { background: rgba(0,0,0,.75); }
+.plx-vid.is-playing { background: #000; }
+.plx-vid.is-playing > :not(iframe):not(video) { display: none; }
+.plx-vid iframe, .plx-vid video { position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%; border: 0; background: #000; object-fit: contain; }
+@media (prefers-reduced-motion: reduce) { .plx-play { transition: none; } }
+/* narrow screens: one-word play button, a 16:9 video, stats as equal columns, programme names before their category */
+.plx-play { white-space: nowrap; }
+@media (max-width: 1023px) { .plx-h3-card .plx-vid { aspect-ratio: 16 / 9; } }
+@media (max-width: 767px) {
+  .plx-play { height: 48px; padding: 0 16px 0 6px; gap: 10px; font-size: 13px; }
+  .plx-play-i { width: 36px; height: 36px; }
+  .plx-vid-src { right: 10px; bottom: 10px; height: 28px; font-size: 11.5px; }
+  .plx-h3-facts { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .plx-h3-facts .plx-fact { flex-direction: column; align-items: flex-start; gap: 2px; padding-right: 10px; }
+  .plx-h3-facts .plx-fact + .plx-fact { padding-left: 12px; }
+}
+@media (max-width: 520px) {
+  .plx-play-t { display: none; }
+  .plx-play { padding: 0 6px; height: 52px; }
+  .plx-play-i { width: 40px; height: 40px; }
+  .plx-h3-box .plx-flag-c { display: none; }
+}
+@media (max-width: 400px) { .plx-h3-facts .plx-fact dt { font-size: 11.5px; } .plx-h3-facts .plx-fact + .plx-fact { padding-left: 10px; } }
+/* How we work with only one of its two lists: that list takes the full width */
+.plx-work.plx-work-1 { grid-template-columns: minmax(0, 1fr) !important; }
+@media (min-width: 1024px) { .plx-work.plx-work-1 .plx-acts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Objectives = the How we work columns; spacing and dividers follow the reading direction (Arabic is right-to-left) */
+.plx-step { padding: 24px 0 28px; padding-inline-end: 24px; }
+@media (min-width: 1024px) {
+  .plx-step + .plx-step { padding-left: 0; border-left: 0; padding-inline-start: 24px; border-inline-start: 1px solid #ECECEA; }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .plx-objsteps .plx-step:nth-child(2n) { padding-inline-start: 24px; border-inline-start: 1px solid #ECECEA; }
+}
+@media (min-width: 1024px) {
+  .plx-objsteps.cols-1 { grid-template-columns: minmax(0, 1fr); }
+  .plx-objsteps.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .plx-objsteps.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .plx-objsteps.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* a new row starts without a divider, and rows after the first get a hairline on top */
+  .plx-objsteps.cols-3 .plx-step:nth-child(3n + 1) { padding-inline-start: 0; border-inline-start: 0; }
+  .plx-objsteps.cols-3 .plx-step:nth-child(n + 4) { border-top: 1px solid #ECECEA; }
+}
+/* plain: no pillar colour in the overview, white surfaces and hairline borders only */
+.plx-h3-card::before { display: none; }
+.plx-h3-card { box-shadow: none; border-color: #E7E5E4; }
+.plx-h3-box .plx-flag::before, .plx-hero.is-pillar .plx-flag::before { background: #A8A29E; }
+/* ---------- Pillar objectives: calm bordered cards (no black rule, no black circles); 1 column on phones, 2 on
+   tablets, up to 4 on desktop. Scoped to .plx-objsteps so How we work keeps its own look. ---------- */
+.plx-steps.plx-objsteps { gap: 12px; border-top: 0; }
+@media (min-width: 640px) { .plx-steps.plx-objsteps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 640px) { .plx-steps.plx-objsteps.cols-1 { grid-template-columns: minmax(0, 1fr); } }
+.plx-objsteps .plx-step, .plx-objsteps .plx-step + .plx-step,
+.plx-objsteps .plx-step:nth-child(n) { display: flex; flex-direction: column; padding: 22px 24px 26px; border: 1px solid #E7E5E4; border-radius: 22px;
+  background: #fff; transition: border-color .2s ease; }
+.plx-objsteps .plx-step:hover { border-color: #D6D3D1; }
+.plx-objsteps .plx-step-n { width: auto; height: 26px; padding: 0 10px; align-self: flex-start; border: 1px solid #E7E5E4; border-radius: 9999px;
+  background: #FAFAF9; color: #57534E; font-size: 11.5px; font-weight: 600; letter-spacing: .04em; }
+.plx-objsteps .plx-step-t { margin-top: 18px; font-size: 19px; line-height: 1.3; letter-spacing: -.02em; text-wrap: balance; }
+.plx-objsteps .plx-step-d { margin-top: 8px; font-size: 14.5px; line-height: 1.6; color: #57534E; }
+@media (min-width: 1024px) { .plx-steps.plx-objsteps.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }   /* 3 or 5-6 objectives; 2 and 4 stay in pairs */
+@media (prefers-reduced-motion: reduce) { .plx-objsteps .plx-step { transition: none; } }
+
+/* pillar overview: the mission (pillar summary, up to 400 characters) reads as body text, not a second headline */
+.plx-h3-lead { max-width: 62ch; font-size: 16px; font-weight: 500; line-height: 1.55; letter-spacing: -.005em; color: #1C1917; text-wrap: pretty; }
+@media (min-width: 768px) { .plx-h3-lead { font-size: 18px; } }
+@media (min-width: 1280px) { .plx-h3-lead { font-size: 19px; } }
+/* ---------- Guiding principles (pillar perspective): small bordered cards side by side, not tall rules ---------- */
+.plx-prs { margin-top: 12px; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.plx-prs li, .plx-prs li:last-child { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px 16px 16px;
+  border: 1px solid #E7E5E4; border-radius: 16px; background: #fff; font-size: 15px; font-weight: 600; line-height: 1.3; letter-spacing: -.01em; color: #1C1917; }
+.plx-prs .plx-pr-n { display: inline-grid; place-items: center; height: 22px; padding: 0 8px; border: 1px solid #E7E5E4; border-radius: 9999px;
+  background: #FAFAF9; color: #78716C; font-size: 11px; letter-spacing: .04em; }
+@media (max-width: 479px) {
+  .plx-prs { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .plx-prs li, .plx-prs li:last-child { flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px; }
+}
+
+/* ---------- Pillar How we work: a photo between the two lists; Who we work with as a check-mark list ---------- */
+.plx-work-pic { position: relative; margin: 0; min-height: 260px; overflow: hidden; border-radius: 24px; border: 1px solid #E7E5E4; background: #F4F4F3; }
+.plx-work-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+@media (max-width: 1023px) { .plx-work-pic { min-height: 0; aspect-ratio: 16 / 10; } }
+@media (min-width: 1024px) {
+  .plx-work.has-pic { grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr) minmax(0, 1fr); gap: 28px; align-items: stretch; }
+  .plx-work.has-pic .plx-acts { grid-template-columns: minmax(0, 1fr); }
+  .plx-work.has-pic .plx-work-pic { margin-top: 30px; }
+}
+.plx-who.is-check li, .plx-who.is-check li:last-child { display: flex; align-items: center; gap: 16px; padding: 16px 0; border-top: 1px solid #E7E5E4; border-bottom: 0;
+  font-size: 16px; font-weight: 600; line-height: 1.4; letter-spacing: -.01em; color: #0A0A0A; }
+.plx-who.is-check li:first-child { border-top: 0; padding-top: 4px; }
+.plx-who-ico { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 9999px; background: #0C0A09; color: #fff; }
+.plx-who-ico svg { width: 18px; height: 18px; }
+@media (max-width: 767px) { .plx-who.is-check li { gap: 12px; padding: 13px 0; font-size: 15px; } .plx-who-ico { width: 34px; height: 34px; } .plx-who-ico svg { width: 15px; height: 15px; } }
+
+/* Who we work with: the group name in the site's card-title style, an optional short description under it */
+.plx-who.is-check li > span:last-child { display: grid; gap: 3px; min-width: 0; }
+.plx-who.is-check li:has(.plx-who-d) { align-items: flex-start; }
+.plx-who.is-check li:has(.plx-who-d) .plx-who-ico { margin-top: 2px; }
+.plx-who-t { font-size: 16px; font-weight: 600; line-height: 1.35; letter-spacing: -.015em; color: #0A0A0A; }
+.plx-who-d { font-size: 14px; font-weight: 400; line-height: 1.55; letter-spacing: 0; color: #57534E; }
+@media (max-width: 767px) { .plx-who-t { font-size: 15px; } .plx-who-d { font-size: 13.5px; } }
+/* Who we work with: the same cards as What it looks like (bordered card, grey icon square, text) */
+.plx-who.is-check { gap: 8px; }
+.plx-who.is-check li, .plx-who.is-check li:last-child, .plx-who.is-check li:first-child { align-items: flex-start; gap: 14px; padding: 18px; border: 1px solid #ECECEA; border-radius: 20px;
+  background: #fff; transition: border-color .2s ease; }
+.plx-who.is-check li:hover { border-color: #A8A29E; }
+.plx-who.is-check .plx-who-ico, .plx-who.is-check li:has(.plx-who-d) .plx-who-ico { width: 38px; height: 38px; margin-top: 0; border-radius: 12px; background: #F4F4F3; color: #0A0A0A; }
+.plx-who.is-check .plx-who-ico svg { width: 18px; height: 18px; }
+.plx-who.is-check li > span:last-child { align-self: center; }
+.plx-who.is-check li:has(.plx-who-d) > span:last-child { align-self: flex-start; }
+.plx-who-t { font-size: 15px; font-weight: 600; line-height: 1.45; }
+.plx-who-d { font-size: 14px; }
+@media (max-width: 767px) { .plx-who.is-check li { padding: 16px; } }
+@media (prefers-reduced-motion: reduce) { .plx-who.is-check li { transition: none; } }
+
+/* ---------- Pillar objectives with a square photo carousel (photos left, cards right; carousel first on phones) ---------- */
+.plx-objx { display: grid; gap: 12px; }
+@media (min-width: 1024px) { .plx-objx { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 16px; align-items: stretch; } .plx-objx .plx-steps.plx-objsteps { grid-auto-rows: 1fr; } }
+@media (min-width: 640px) { .plx-objx .plx-steps.plx-objsteps:not(.cols-1) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.plx-car { position: relative; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 22px; border: 1px solid #E7E5E4; background: #F4F4F3; }
+.plx-car-track { display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; overscroll-behavior-x: contain; }
+.plx-car-track::-webkit-scrollbar { display: none; }
+.plx-car-track:focus-visible { outline: 2px solid #000; outline-offset: -4px; }
+.plx-car-slide { position: relative; flex: 0 0 100%; height: 100%; margin: 0; scroll-snap-align: start; }
+.plx-car-slide img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.plx-car-ctrl { position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; pointer-events: none; }
+.plx-car-dots { display: flex; gap: 6px; padding: 7px 9px; border-radius: 9999px; background: rgba(0,0,0,.35); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); pointer-events: auto; }
+.plx-car-dot { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 9999px; background: rgba(255,255,255,.55); cursor: pointer; transition: width .25s ease, background-color .25s ease; }
+.plx-car-dot.is-on { width: 20px; background: #fff; }
+.plx-car-arrows { display: flex; gap: 6px; pointer-events: auto; }
+.plx-car-btn { display: grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 9999px; background: rgba(255,255,255,.94); color: #0A0A0A; font-size: 15px; cursor: pointer; transition: background-color .2s ease, transform .2s ease; }
+.plx-car-btn:hover { background: #fff; transform: scale(1.05); }
+.plx-car-btn:focus-visible, .plx-car-dot:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .plx-car-track { scroll-behavior: auto; } .plx-car-dot, .plx-car-btn { transition: none; } }
+
+/* pillar pages show photos in their own colours (About pages keep their monochrome look) */
+.plx:not(.abx) .plx-photo img, .plx:not(.abx) .plx-pj-vis img, .plx:not(.abx) a.plx-pj:hover .plx-pj-vis img { filter: none; }
+/* Pillar perspective text reads as a description, not a pull quote: body size, softer colour, a thin grey line */
+.plx:not(.abx) .plx-pv-quote { max-width: 60ch; padding-left: 0; padding-inline-start: 18px; border-left: 0; border-inline-start: 2px solid #E7E5E4;
+  font-size: 16px; font-weight: 400; line-height: 1.7; letter-spacing: 0; color: #44403C; }
+@media (min-width: 768px) { .plx:not(.abx) .plx-pv-quote { font-size: 17px; } }
+@media (min-width: 1280px) { .plx:not(.abx) .plx-pv-quote { font-size: 18px; } }
+
+/* Project pages: a smaller title than other page headers (project names are often long) */
+.phd-title.sh-title.phd-title-md { font-size: clamp(30px, 3.4vw, 52px); line-height: 1.06; letter-spacing: -.035em; text-wrap: balance; }
+
+/* ---------- About pages overview (.abx .plx-hero): light and bordered like the pillar overview; the year in solid ink,
+   a readable lead, the key facts as small tiles, and the side panel in the same white card. ---------- */
+.abx .plx-hero { gap: 12px; align-items: stretch; }
+.abx .plx-hero-main { background: #fff; color: #0A0A0A; border: 1px solid #E7E5E4; border-radius: 28px; padding: 28px; }
+@media (min-width: 768px) { .abx .plx-hero-main { padding: 40px 44px; } }
+.abx .plx-hero-top { align-items: center; }
+.abx .abx-big { display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border-radius: 9999px; background: #0A0A0A; color: #fff; -webkit-text-stroke: 0;
+  font-size: 15px; font-weight: 600; line-height: 1; letter-spacing: .02em; }
+.abx .plx-pns { background: #F4F4F3; }
+.abx .plx-pn { color: #78716C; }
+.abx .plx-pn:hover { color: #000; background: #fff; }
+.abx .plx-pn.is-on { background: #000; color: #fff; }
+.abx .abx-lead { margin-top: 28px; max-width: 46ch; font-size: 20px; font-weight: 500; line-height: 1.5; letter-spacing: -.01em; color: #1C1917; text-wrap: pretty; }
+@media (min-width: 1024px) { .abx .abx-lead { font-size: 22px; } }
+.abx .plx-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 28px; border-top: 0; }
+.abx .plx-fact, .abx .plx-fact + .plx-fact { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid #ECECEA; border-radius: 16px; background: #FAFAF9; }
+.abx .plx-fact dt { order: 1; font-size: 12.5px; font-weight: 500; letter-spacing: 0; text-transform: none; color: #78716C; }
+.abx .plx-fact dd { order: 0; margin: 0; font-size: 20px; font-weight: 700; line-height: 1.2; letter-spacing: -.02em; color: #0A0A0A; }
+.abx .plx-cta { margin-top: 28px; }
+.abx .plx-btn { background: #000; color: #fff; }
+.abx .plx-btn:hover { background: #262626; }
+.abx .plx-link { color: #1C1917; }
+.abx .plx-link:hover { color: #000; text-decoration: underline; text-underline-offset: 4px; }
+.abx .plx-share { margin-top: auto; padding-top: 20px; border-top-color: #ECECEA; }
+.abx .plx-cta + .plx-share { margin-top: 28px; }
+.abx .plx-share .shr-k { color: #78716C; }
+.abx .plx-share .shr-b { color: #000; border-color: #E7E5E4; background: #fff; }
+.abx .plx-share .shr-b:hover { background: #000; color: #fff; border-color: #000; }
+.abx .plx-side { background: #fff; border-color: #E7E5E4; border-radius: 28px; }
+@media (max-width: 639px) {
+  .abx .plx-hero-main { padding: 22px; border-radius: 24px; }
+  .abx .plx-hero-top { flex-direction: row; flex-wrap: wrap; }
+  .abx .plx-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .abx .abx-lead { font-size: 18px; }
+  .abx .plx-side { border-radius: 24px; }
+}
+
+/* ---------- Our Story · President's statement (#statement.abx-stx): one soft-grey card. The heading stays in view on
+   the left while the statement reads on the right: an opening quotation mark, the first paragraph as a lead, then
+   the attribution under a thin rule. ---------- */
+.abx-stx .plx-pv { gap: 32px; padding: 28px; border-radius: 32px; background: #F5F5F5; }
+@media (min-width: 768px) { .abx-stx .plx-pv { padding: 48px; } }
+@media (min-width: 1024px) { .abx-stx .plx-pv { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 72px; padding: 64px; align-items: start; }
+  .abx-stx .plx-pv > div:first-child { position: sticky; top: 140px; } }
+.abx-stx .sh-num { background: #000; color: #fff; }
+.abx-stx .plx-k { margin-top: 32px; font-size: 12px; letter-spacing: .16em; color: #737373; }
+.abx-stx .abx-st-title { margin-top: 12px; font-size: clamp(30px, 3.2vw, 44px); line-height: 1.06; letter-spacing: -.04em; text-wrap: balance; }
+.abx-stx .abx-st-title::after { content: ""; display: block; width: 48px; height: 2px; margin-top: 28px; background: #000; }
+.abx-stx .abx-st-pic { width: 100%; max-width: 320px; margin-top: 32px; border-radius: 22px; }
+.abx-stx .abx-st-pic img { filter: none; }
+.abx-stx .abx-st { position: relative; padding-top: 64px; }
+.abx-stx .abx-st::before { content: "“"; position: absolute; top: -8px; left: -4px; font-size: 120px; font-weight: 700; line-height: 1; color: #000; }
+.abx-stx .abx-st-q { display: grid; gap: 20px; max-width: 62ch; padding: 0; border: 0; padding-inline-start: 0; border-inline-start: 0;
+  font-size: 17px; font-weight: 400; line-height: 1.75; letter-spacing: 0; color: #404040; }
+.abx-stx .abx-st-q p:first-child { font-size: clamp(19px, 1.6vw, 22px); font-weight: 500; line-height: 1.55; letter-spacing: -.01em; color: #000; }
+.abx-stx .abx-sig { margin-top: 36px; padding: 20px 0 0; padding-inline-start: 0; border-top: 1px solid #D4D4D4; }
+.abx-stx .abx-sig-n { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.abx-stx .abx-sig-r { margin-top: 4px; font-size: 14px; color: #737373; }
+@media (max-width: 639px) {
+  .abx-stx .plx-pv { padding: 22px; border-radius: 24px; }
+  .abx-stx .abx-st { padding-top: 52px; }
+  .abx-stx .abx-st::before { font-size: 96px; }
+  .abx-stx .abx-st-q { font-size: 16px; }
+}
+
+/* ---------- Our Story · journey (ol.abx-tl): a horizontal timeline. One line runs across, a dot on it for each
+   milestone and its card below. Four fit side by side on desktop; more, and on phones, the row scrolls sideways
+   (snapping to each card). Follows the reading direction, so Arabic runs right to left. ---------- */
+ol.abx-tl { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(78%, 1fr); gap: 0; margin-inline: -20px; padding: 6px 20px 18px; border-top: 0;
+  overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 20px; scrollbar-width: thin; overscroll-behavior-x: contain; }
+@media (min-width: 640px) { ol.abx-tl { grid-auto-columns: minmax(44%, 1fr); } }
+@media (min-width: 1024px) { ol.abx-tl { grid-auto-columns: minmax(250px, 1fr); margin-inline: 0; padding-inline: 0; scroll-padding-inline: 0; } }
+ol.abx-tl::before { display: none; }
+ol.abx-tl .abx-tl-i { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 22px; padding: 0; padding-inline-end: 16px; border: 0; scroll-snap-align: start; }
+/* the line: one segment per milestone, from its dot to the next one (none after the last) */
+ol.abx-tl .abx-tl-i::before { content: ""; display: block; position: absolute; top: 9px; bottom: auto; inset-inline-start: 0; inset-inline-end: 0; width: auto; height: 2px; background: #000; }
+ol.abx-tl .abx-tl-i:last-child::before { inset-inline-end: auto; width: 24px; }
+ol.abx-tl .abx-tl-dot { position: relative; z-index: 1; justify-self: auto; width: 20px; height: 20px; margin: 0; border: 3px solid #000; border-radius: 9999px; background: #fff; box-shadow: 0 0 0 5px #fff; }
+ol.abx-tl .abx-tl-i:first-child .abx-tl-dot { background: #000; }
+ol.abx-tl .abx-tl-i:hover .abx-tl-dot { background: #000; }
+ol.abx-tl .abx-tl-card { flex: 1; width: 100%; padding: 22px 22px 24px; border: 1px solid #ECECEA; border-radius: 22px; background: #fff; text-align: start;
+  transition: border-color .3s ease, transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .3s ease; }
+ol.abx-tl .abx-tl-i:hover .abx-tl-card { border-color: #000; transform: translateY(-2px); box-shadow: 0 12px 28px -18px rgba(0,0,0,.35); }
+ol.abx-tl .abx-tl-when { display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 9999px; background: #000; color: #fff;
+  font-size: 13px; font-weight: 600; letter-spacing: .02em; line-height: 1; }
+ol.abx-tl .abx-tl-b { display: block; margin-top: 16px; }
+ol.abx-tl .abx-tl-t { font-size: 20px; }
+ol.abx-tl .abx-tl-d { margin-top: 8px; max-width: none; font-size: 15px; color: #57534E; }
+@media (prefers-reduced-motion: reduce) { ol.abx-tl .abx-tl-card { transition: none; } ol.abx-tl .abx-tl-i:hover .abx-tl-card { transform: none; } }
+
+/* ---------- Our Story · What makes us different (#different): the principles as a 3 × 2 grid of bordered cards — a large
+   number, a short rule, the title and its text; the card turns black on hover. Two per row on tablets, one on phones. ---------- */
+#different .plx-objs { gap: 12px; border-top: 0; }
+@media (min-width: 640px) { #different .plx-objs { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; } }
+@media (min-width: 1024px) { #different .plx-objs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+#different .plx-obj { flex-direction: column; gap: 0; padding: 28px 28px 30px; border: 1px solid #E7E5E4; border-radius: 22px; background: #fff;
+  transition: background-color .3s ease, border-color .3s ease, color .3s ease, transform .35s cubic-bezier(.2,.7,.2,1); }
+#different .plx-obj-n { width: auto; font-size: 44px; font-weight: 700; line-height: 1; letter-spacing: -.05em; color: #000; transition: color .3s ease; }
+#different .plx-obj-n::after { content: ""; display: block; width: 32px; height: 2px; margin-top: 22px; background: currentColor; }
+#different .plx-obj-t { margin-top: 22px; font-size: 20px; line-height: 1.25; letter-spacing: -.025em; text-wrap: balance; }
+#different .plx-obj-d { margin-top: 10px; font-size: 15px; line-height: 1.65; color: #57534E; transition: color .3s ease; }
+#different .plx-obj:hover { background: #0A0A0A; border-color: #0A0A0A; color: #fff; transform: translateY(-3px); }
+#different .plx-obj:hover .plx-obj-n { color: #fff; }
+#different .plx-obj:hover .plx-obj-d { color: #D4D4D4; }
+@media (max-width: 639px) { #different .plx-obj { padding: 22px; } #different .plx-obj-n { font-size: 36px; } }
+@media (prefers-reduced-motion: reduce) { #different .plx-obj { transition: none; } #different .plx-obj:hover { transform: none; } }
+
+/* Our Story · Our approach: the steps as one journey on a soft band, joined by a thin line (logical sides for RTL) */
+.abx-ap { padding: 28px 20px 32px; border-radius: 28px; background: #F7F7F6; border: 1px solid #EFEFED; }
+@media (min-width: 1024px) { .abx-ap { padding: 48px 56px 56px; } }
+.abx-ap .sh-title { grid-column: 1 / -1; max-width: 24ch; font-size: clamp(30px, 3.6vw, 44px); }
+.abx-journey { display: grid; gap: 28px; margin: 36px 0 0; padding: 0; list-style: none; }
+.abx-journey li { position: relative; display: grid; gap: 6px; padding-inline-start: 60px; }
+.abx-j-n { position: absolute; top: -6px; inset-inline-start: 0; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 9999px; background: #000; color: #fff; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; z-index: 1; }
+.abx-journey li:not(:last-child)::after { content: ""; position: absolute; top: 40px; bottom: -28px; inset-inline-start: 20px; width: 1px; background: #D6D3D1; }
+.abx-j-t { font-size: 19px; font-weight: 600; line-height: 1.25; letter-spacing: -.02em; }
+.abx-j-d { max-width: 42ch; font-size: 15px; line-height: 1.6; color: #57534E; }
+@media (min-width: 1024px) {
+  .abx-journey { gap: 40px; margin-top: 48px; }
+  .abx-journey.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .abx-journey.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .abx-journey.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .abx-journey li { padding-inline-start: 0; padding-top: 60px; }
+  .abx-j-n { top: 0; }
+  .abx-journey li:not(:last-child)::after { top: 20px; bottom: auto; inset-inline-start: 52px; inset-inline-end: -28px; width: auto; height: 1px; }
+}
+
+/* Our Story · Our impact: a dark band, big white numbers, short sentence-case labels, no icons */
+.abx-impact { padding: 28px 20px 8px; border-radius: 28px; color: #fff;
+  background: radial-gradient(900px 260px at 15% 0%, rgba(255,255,255,.09), transparent 70%), linear-gradient(180deg, #1E1E1E 0%, #0C0C0C 55%, #000 100%); }
+@media (min-width: 1024px) { .abx-impact { padding: 48px 56px 24px; } }
+.abx-impact .sh-title, .abx-impact .sh-label { color: #fff; }
+.abx-impact .sh-soft { color: rgba(255,255,255,.5); }
+.abx-impact .sh-desc, .abx-impact .sh-meta { color: rgba(255,255,255,.65); }
+.abx-impact .sh-rule { background: rgba(255,255,255,.18); }
+.abx-impact .abx-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; border-top: 1px solid rgba(255,255,255,.22); }
+.abx-impact .abx-stat { display: flex !important; flex-direction: column; align-items: flex-start; gap: 10px !important; padding: 22px 0 24px !important; border: 0 !important; border-bottom: 1px solid rgba(255,255,255,.1) !important; }
+.abx-impact .abx-stat-ico { display: none; }
+.abx-impact .abx-stat { min-width: 0; }
+.abx-impact .abx-stat:nth-last-child(-n + 2) { border-bottom: 0 !important; }
+.abx-impact .abx-stat dd { color: #fff; font-size: clamp(28px, 9vw, 44px); font-weight: 500; letter-spacing: -.04em; }
+.abx-impact .abx-stat dt { max-width: 24ch; font-size: 14px; font-weight: 400; line-height: 1.45; letter-spacing: 0; text-transform: none; color: rgba(255,255,255,.7); }
+@media (min-width: 1024px) {
+  .abx-impact .abx-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: 0; }
+  .abx-impact .abx-stat { padding: 32px 28px 36px !important; border-bottom: 0 !important; }
+  .abx-impact .abx-stat:first-child { padding-inline-start: 0 !important; }
+  .abx-impact .abx-stat + .abx-stat { border-inline-start: 1px solid rgba(255,255,255,.14) !important; }
+  .abx-impact .abx-stat dd { font-size: 64px; }
+}
+
+/* Mission & Vision: each stage a calm card (label, heading at section size, statement at reading size), mission and
+   vision beside a photo (the vision's on the other side), values as a grid of small cards with a check; no numbers. */
+.abx-mv { display: grid; gap: 16px; margin-bottom: 0; padding: 0; list-style: none; }
+.abx-mv-i { display: grid; gap: 24px; padding: 24px 20px; border: 1px solid #ECECEA; border-radius: 28px; background: #fff; }
+.abx-mv-values { background: #F7F7F6; border-color: #EFEFED; }
+.abx-mv-next { padding: 0; border: 0; background: transparent; }
+.abx-mv-next .abx-mv-k, .abx-mv-next .abx-mv-t, .abx-mv-next .abx-mv-s { display: none; }
+.abx-mv-next .abx-mv-c { margin-top: 0; }
+.abx-mv-k { display: inline-flex; align-items: center; height: 26px; padding: 0 11px; border-radius: 9999px; background: #000; color: #fff; font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+.abx-mv-t { margin-top: 14px; font-size: 26px; font-weight: 600; line-height: 1.15; letter-spacing: -.03em; }
+.abx-mv-s { margin-top: 6px; font-size: 15px; color: #78716C; }
+.abx-mv-c { margin-top: 18px; }
+.abx-mv-q { max-width: 54ch; font-size: 18px; line-height: 1.6; color: #292524; text-wrap: pretty; }
+.abx-mv-pic { margin: 0; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 20px; background: #F4F4F3; }
+.abx-mv-vals { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.abx-mv-val { display: flex; gap: 14px; padding: 18px; border: 1px solid #ECECEA; border-radius: 18px; background: #fff; }
+.abx-mv-ico { display: grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 9999px; background: #000; color: #fff; }
+.abx-mv-ico svg { width: 15px; height: 15px; }
+.abx-mv-val-t { display: block; font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
+.abx-mv-val-d { display: block; margin-top: 4px; font-size: 14.5px; line-height: 1.55; color: #57534E; }
+@media (min-width: 768px) { .abx-mv-vals { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) {
+  .abx-mv { gap: 20px; }
+  .abx-mv-i { padding: 40px 44px; }
+  .abx-mv-i.has-pic { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 48px; padding: 20px 20px 20px 44px; padding-inline: 44px 20px; }
+  .abx-mv-vision.has-pic { padding-inline: 20px 44px; }
+  .abx-mv-vision.has-pic .abx-mv-pic { order: -1; }
+  .abx-mv-t { font-size: 30px; }
+  .abx-mv-q { font-size: 19px; }
+  .abx-mv-pic { aspect-ratio: 5 / 4; }
+}
+
+/* Strategy · Where we work: the regions as cards with a pin (no numbers); the coverage note below runs full width */
+.abx-regs2 { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+@media (min-width: 640px) { .abx-regs2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .abx-regs2 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; } }
+.abx-reg2 { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 22px; border: 1px solid #ECECEA; border-radius: 22px; background: #fff;
+  transition: border-color .3s ease, transform .35s cubic-bezier(.2,.7,.2,1); }
+.abx-reg2:hover { border-color: #000; transform: translateY(-2px); }
+.abx-reg2-ico { display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 10px; border-radius: 12px; background: #000; color: #fff; }
+.abx-reg2-ico svg { width: 20px; height: 20px; }
+.abx-reg2-t { font-size: 19px; font-weight: 600; line-height: 1.25; letter-spacing: -.02em; }
+.abx-reg2-d { font-size: 14.5px; line-height: 1.55; color: #57534E; }
+.abx-regs2 + .abx-note { max-width: none; padding: 26px 28px; }
+@media (min-width: 1024px) { .abx-regs2 + .abx-note { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; padding: 32px 36px; } .abx-regs2 + .abx-note > p { margin-top: 0; } }
+@media (prefers-reduced-motion: reduce) { .abx-reg2, .abx-reg2:hover { transition: none; transform: none; } }
+
+/* Partners page directory: a clean grid. Each card is a same-size tile that holds only the logo (smaller, with room
+   around it, in colour), then the name and the partnership facts sit under the tile, outside the box. */
+.pr-grid { gap: 32px 20px; }
+@media (max-width: 639px) { .pr-grid { gap: 24px 12px; } }
+.pr-grid .pr-card { padding: 0; gap: 0; border: 0; border-radius: 0; background: none; box-shadow: none; transform: none; }
+.pr-grid .pr-card:hover { transform: none; box-shadow: none; }
+.pr-grid .pr-stage { position: relative; height: auto; aspect-ratio: 3 / 2; padding: 0; border-radius: 20px; background: #FAFAF9; border: 1px solid #EEECE9;
+  transition: background-color .3s ease, border-color .3s ease, box-shadow .35s ease, transform .35s cubic-bezier(.2,.7,.2,1); }
+.pr-grid .pr-card:hover .pr-stage { background: #fff; border-color: #D6D3D1; transform: translateY(-3px); box-shadow: 0 22px 40px -28px rgba(0,0,0,.28); }
+.pr-grid .pr-stage .pr-logo { position: absolute; inset: 18% 16%; width: auto; height: auto !important; display: flex; align-items: center; justify-content: center !important; padding: 0 !important; }
+.pr-grid .pr-stage .pr-logo.is-square { inset: 14% 22%; }
+.pr-grid .pr-stage .pr-logo.has-img .pr-logo-img { width: 100% !important; height: 100% !important; max-width: 100% !important; max-height: 100%; object-fit: contain !important; object-position: center !important; filter: none !important; mix-blend-mode: multiply; }
+.pr-grid .pr-stage .pr-logo:not(.has-img) span { width: 64px; height: 64px; font-size: 17px; background: #fff; }
+.pr-grid .pr-body { padding: 14px 4px 0; }
+.pr-grid .pr-body .pr-scope { font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: #78716C; }
+.pr-grid .pr-body .pr-scope svg { width: 13px; height: 13px; }
+.pr-grid .pr-name { margin-top: 6px; font-size: 16.5px; line-height: 1.3; }
+.pr-grid .pr-meta { margin-top: 8px; }
+.pr-grid .pr-web { margin-top: 10px; padding-top: 0; }
+@media (max-width: 639px) { .pr-grid .pr-stage { border-radius: 16px; } .pr-grid .pr-stage .pr-logo { inset: 14% 10%; } .pr-grid .pr-stage .pr-logo.is-square { inset: 12% 22%; } .pr-grid .pr-name { font-size: 15px; } .pr-grid .pr-body { padding-top: 12px; } }
+
+/* Project cards (projects page): the project's photo, or a poster tile in its pillar colour when it has none. */
+.pj-card-pic { position: relative; overflow: hidden; aspect-ratio: 1 / 1; border-radius: 1rem; background: #EEECE9; }
+.pj-card-pic.is-poster img { object-fit: contain; object-position: center; background: #fff; }
+.pj-card-pic img { display: block; transition: transform .8s cubic-bezier(.2,.7,.2,1); }
+.group:hover .pj-card-pic img { transform: scale(1.04); }
+.pj-poster { display: flex; flex-direction: column; justify-content: space-between; padding: 22px 24px 24px; background: var(--c); }
+.pj-poster::after { content: ""; position: absolute; right: -18%; bottom: -30%; width: 70%; aspect-ratio: 1; border-radius: 9999px; background: rgba(255,255,255,.28); }
+.pj-poster-k { position: relative; z-index: 1; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: rgba(0,0,0,.6); }
+.pj-poster-t { position: relative; z-index: 1; max-width: 85%; font-size: clamp(24px, 2.4vw, 34px); font-weight: 600; line-height: 1.05; letter-spacing: -.03em; color: #0A0A0A; }
+
+/* Project cards: one even column per card; pillar and status, name, description, partner, then the button at the bottom. */
+.proj-card { display: flex; }
+.proj-card[hidden] { display: none; }
+.pjc { display: flex; flex-direction: column; width: 100%; color: inherit; }
+.pjc-body { display: flex; flex: 1; flex-direction: column; padding: 22px 4px 0; }
+.pjc-meta { display: flex; min-width: 0; }
+.pjc-pillar { display: inline-flex; align-items: center; gap: 9px; min-width: 0; max-width: 100%; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #44403C; }
+.pjc-pillar i { flex: none; width: 10px; height: 10px; border-radius: 9999px; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+.pjc-pillar > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pjc-act { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; }
+.pjc-act .pjg-badge { flex: none; height: 30px; padding: 0 12px 0 10px; font-size: 12px; }
+.pjc-title { margin-top: 16px; font-size: 24px; font-weight: 600; line-height: 1.15; letter-spacing: -.03em; color: #0A0A0A; }
+.pjc-desc { margin-top: 10px; font-size: 15px; line-height: 1.6; color: #57534E; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.pjc-foot { margin-top: auto; padding-top: 22px; }
+.pjc-partner { display: flex; align-items: baseline; gap: 10px; padding: 14px 0; border-top: 1px solid #E7E5E4; font-size: 14px; line-height: 1.4; }
+.pjc-k { flex: none; font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: #A8A29E; }
+.pjc-v { font-weight: 500; color: #1C1917; }
+.pjc-btn { display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 8px 0 20px; border-radius: 9999px; background: #0A0A0A; color: #fff; font-size: 14px; font-weight: 600; transition: background .25s ease; }
+.pjc-arr { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9999px; background: #fff; color: #0A0A0A; font-size: 13px; transition: transform .3s cubic-bezier(.2,.7,.2,1); }
+.pjc:hover .pjc-btn { background: #292524; }
+.pjc:hover .pjc-arr { transform: rotate(45deg); }
+.pjc:hover .pjc-title { text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 4px; }
+.pjc-soon { display: inline-block; font-size: 13px; color: #78716C; }
+.pjc:focus-visible { outline: 2px solid #0A0A0A; outline-offset: 6px; border-radius: 1rem; }
+@media (max-width: 639px) { .pjc-title { font-size: 21px; } .pjc-body { padding-top: 18px; } }
+
+/* Pillar pages: their projects in the same cards and grid as the projects page. */
+.pjc-grid { display: grid; gap: 48px 24px; }
+@media (min-width: 640px) { .pjc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .pjc-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

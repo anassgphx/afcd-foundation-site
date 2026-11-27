@@ -2,6 +2,7 @@
 import React, { StrictMode, Suspense, lazy, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import './studio.css';
+import './design-system.css';
 import { api, post, setCsrf, ApiError } from './api.ts';
 import { Icon, Link, MeCtx, ToastHost, initials, navigate, useCan, useMe, usePath, type Me } from './ui.tsx';
 import { Dashboard, Loading } from './pages/Dashboard.tsx';
@@ -17,6 +18,8 @@ const SCREENS = {
   translations: () => import('./pages/Translations.tsx'), menus: () => import('./pages/Menus.tsx'), home: () => import('./pages/Home.tsx'), media: () => import('./pages/Media.tsx'),
   admin: () => import('./pages/Admin.tsx'), approvals: () => import('./pages/Approvals.tsx'),
   open: () => import('./pages/OpenPage.tsx'), settings: () => import('./pages/Settings.tsx'),
+  applyOverview: () => import('./apply/Overview.tsx'), applyCalls: () => import('./apply/Calls.tsx'), applyForms: () => import('./apply/Forms.tsx'), applySubmissions: () => import('./apply/Submissions.tsx'), applyEvaluation: () => import('./apply/Evaluation.tsx'), applyComms: () => import('./apply/Communications.tsx'),
+  applyWorkspace: () => import('./apply/Workspace.tsx'), applyApplicants: () => import('./apply/Applicants.tsx'),
 };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const screen = <K extends keyof typeof SCREENS>(k: K, name: string) => lazy(() => SCREENS[k]().then((m) => ({ default: (m as any)[name] as React.ComponentType<any> })));
@@ -28,6 +31,10 @@ const OpportunityEditor = screen('opportunities', 'OpportunityEditor'), InboxPag
 const TranslationsPage = screen('translations', 'TranslationsPage'), MenusPage = screen('menus', 'MenusPage'), HomeEditor = screen('home', 'HomeEditor');
 const MediaLibrary = screen('media', 'MediaLibrary'), Publishing = screen('admin', 'Publishing'), ActivityLog = screen('admin', 'ActivityLog'), Users = screen('admin', 'Users');
 const ApprovalsPage = screen('approvals', 'ApprovalsPage');
+const ApplyOverview = screen('applyOverview', 'ApplyOverview'), CallsList = screen('applyCalls', 'CallsList'), CallWorkspace = screen('applyWorkspace', 'CallWorkspace');
+const TemplatesPage = screen('applyForms', 'TemplatesPage'), TemplateBuilder = screen('applyForms', 'TemplateBuilder'), SubmissionDetail = screen('applySubmissions', 'SubmissionDetail');
+const ApplicantsPage = screen('applyApplicants', 'ApplicantsPage'), MyReviewsPage = screen('applyEvaluation', 'MyReviewsPage'), ReviewScreen = screen('applyEvaluation', 'ReviewScreen');
+const MessagesPage = screen('applyComms', 'MessagesPage');
 const PublicationsList = screen('publications', 'PublicationsList'), PublicationEditor = screen('publications', 'PublicationEditor');
 const OpenPage = screen('open', 'OpenPage');
 const SettingsPage = screen('settings', 'SettingsPage');
@@ -157,6 +164,45 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   );
 }
 
+// AFCD Apply: Overview, Calls (each call a workspace with tabs), Applicants (one pipeline), My reviews, Messages.
+// Addresses of the earlier pages lead to where their content lives now.
+const UUID = '([0-9a-f-]{36})';
+function applyRoute(path: string): { title: string; el: React.ReactElement; full?: boolean } | null {
+  const m = (re: string) => path.match(new RegExp(`^/studio/apply/${re}/?$`));
+  const q = location.search;
+  let x;
+  if ((x = m(`calls/templates/${UUID}`))) return { title: 'Template', el: <TemplateBuilder key={x[1]} id={x[1]} />, full: true };
+  if (m('calls/templates')) return { title: 'Form templates', el: <TemplatesPage /> };
+  if ((x = m(`calls/${UUID}/form`))) return { title: 'Application form', el: <CallWorkspace key={`${x[1]}:form`} id={x[1]} tab="form" />, full: true };
+  if ((x = m(`calls/${UUID}/(details|applicants|reviews|emails)`))) return { title: 'Call', el: <CallWorkspace key={`${x[1]}:${x[2]}`} id={x[1]} tab={x[2] as 'details'} /> };
+  if ((x = m(`calls/${UUID}`))) return { title: 'Call', el: <CallWorkspace key={`${x[1]}:overview`} id={x[1]} tab="overview" /> };
+  if (m('calls')) return { title: 'Calls', el: <CallsList /> };
+  if ((x = m(`applicants/${UUID}`))) return { title: 'Application', el: <SubmissionDetail key={x[1]} id={x[1]} /> };
+  if (m('applicants')) return { title: 'Applicants', el: <ApplicantsPage /> };
+  if ((x = m(`reviews/${UUID}`))) return { title: 'Review', el: <ReviewScreen key={x[1]} id={x[1]} /> };
+  if (m('reviews')) return { title: 'My reviews', el: <MyReviewsPage /> };
+  if (m('messages')) return { title: 'Messages', el: <MessagesPage /> };
+  // earlier addresses
+  const call = new URLSearchParams(q).get('call');
+  const old: [RegExp, (r: RegExpMatchArray) => string][] = [
+    [/^\/studio\/apply\/submissions\/([0-9a-f-]{36})$/, (r) => `/studio/apply/applicants/${r[1]}`],
+    [/^\/studio\/apply\/submissions\/?$/, () => (call ? `/studio/apply/calls/${call}/applicants` : '/studio/apply/applicants')],
+    [/^\/studio\/apply\/evaluation\/?$/, () => (call ? `/studio/apply/calls/${call}/reviews` : '/studio/apply/reviews')],
+    [/^\/studio\/apply\/shortlists\/?$/, () => (call ? `/studio/apply/calls/${call}/applicants?stage=shortlist` : '/studio/apply/applicants')],
+    [/^\/studio\/apply\/decisions\/?$/, () => (call ? `/studio/apply/calls/${call}/applicants?stage=decision` : '/studio/apply/applicants')],
+    [/^\/studio\/apply\/communications\/?$/, () => '/studio/apply/messages'],
+    [/^\/studio\/apply\/forms\/?$/, () => '/studio/apply/calls'],
+    [/^\/studio\/apply\/templates\/([0-9a-f-]{36})$/, (r) => `/studio/apply/calls/templates/${r[1]}`],
+    [/^\/studio\/apply\/templates\/?$/, () => '/studio/apply/calls/templates'],
+  ];
+  for (const [re, to] of old) { const r = path.match(re); if (r) return { title: 'Applications', el: <Moved to={to(r)} /> }; }
+  return null;
+}
+function Moved({ to }: { to: string }) {
+  useEffect(() => { history.replaceState(null, '', to); window.dispatchEvent(new Event('studio:nav')); }, [to]);
+  return <Loading />;
+}
+
 function route(path: string): { title: string; el: React.ReactElement; full?: boolean } {
   if (path.startsWith('/studio/open')) return { title: 'Opening the editor', el: <OpenPage key={location.search} /> };
   if (path.startsWith('/studio/home')) return { title: 'Homepage', el: <HomeEditor key="home" />, full: true };
@@ -165,6 +211,8 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   if (path.startsWith('/studio/translations')) return { title: 'Translations', el: <TranslationsPage /> };
   if (path.startsWith('/studio/menus')) return { title: 'Menus', el: <MenusPage /> };
   if (path.startsWith('/studio/inbox') || path.startsWith('/studio/forms')) return { title: 'Inbox', el: <InboxPage /> };
+  if (path.startsWith('/studio/apply/')) { const r = applyRoute(path); if (r) return r; }
+  if (/^\/studio\/apply\/?$/.test(path)) return { title: 'Applications', el: <ApplyOverview /> };
   const op = path.match(/^\/studio\/opportunities\/([0-9a-f-]{36})$/);
   if (op) return { title: 'Opportunity', el: <OpportunityEditor key={op[1]} id={op[1]} /> };
   if (path.startsWith('/studio/opportunities')) return { title: 'Opportunities', el: <OpportunitiesList /> };
@@ -186,18 +234,18 @@ function route(path: string): { title: string; el: React.ReactElement; full?: bo
   if (path.startsWith('/studio/partners')) return { title: 'Partners', el: <PartnersList /> };
   const nw = path.match(/^\/studio\/news\/([0-9a-f-]{36})$/);
   if (nw) return { title: 'Story', el: <ArticleEditor key={nw[1]} id={nw[1]} />, full: true };
-  if (path.startsWith('/studio/news')) return { title: 'News & Stories', el: <NewsList /> };
+  if (path.startsWith('/studio/news')) return { title: 'News & stories', el: <NewsList /> };
   const pg = path.match(/^\/studio\/pages\/([0-9a-f-]{36})$/);
   if (pg) return { title: 'Page builder', el: <Builder key={pg[1]} id={pg[1]} />, full: true };
   if (path.startsWith('/studio/pages')) return { title: 'Pages', el: <PagesList /> };
   const m = path.match(/^\/studio\/projects\/([0-9a-f-]{36}|new)$/);
   if (m) return { title: m[1] === 'new' ? 'New project' : 'Edit project', el: <ProjectEditor key={m[1]} id={m[1]} /> };
   if (path.startsWith('/studio/projects')) return { title: 'Projects', el: <ProjectsList /> };
-  if (path.startsWith('/studio/media')) return { title: 'Media Library', el: <MediaLibrary /> };
-  if (path.startsWith('/studio/approvals')) return { title: 'Approval Queue', el: <ApprovalsPage /> };
+  if (path.startsWith('/studio/media')) return { title: 'Media library', el: <MediaLibrary /> };
+  if (path.startsWith('/studio/approvals')) return { title: 'Approval queue', el: <ApprovalsPage /> };
   if (path.startsWith('/studio/publishing')) return { title: 'Publishing', el: <Publishing /> };
-  if (path.startsWith('/studio/activity')) return { title: 'Activity Log', el: <ActivityLog /> };
-  if (path.startsWith('/studio/users')) return { title: 'Users & Roles', el: <Users /> };
+  if (path.startsWith('/studio/activity')) return { title: 'Activity log', el: <ActivityLog /> };
+  if (path.startsWith('/studio/users')) return { title: 'Users & roles', el: <Users /> };
   if (path.startsWith('/studio/settings')) return { title: 'Settings', el: <SettingsPage /> };
   if (path !== '/studio/' && path !== '/studio') { setTimeout(() => navigate('/studio/')); }
   return { title: 'Dashboard', el: <Dashboard /> };

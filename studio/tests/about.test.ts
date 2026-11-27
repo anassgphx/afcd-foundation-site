@@ -119,7 +119,7 @@ describe('about pages', () => {
     expect((await c.admin.get('/about/strategy')).body.status).toBe('approved');
   });
 
-  it('team: people need a name and role, never a legal-representative label or a private email; portraits need alt text and rights', async () => {
+  it('team: people need a name and role, never a legal-representative label or a private email; portraits need confirmed rights (alt text optional)', async () => {
     await importAbout(h.db, h.cfg, null, SITE);
     const { body: t } = await c.ed.get('/about/team');
     const fd = new FormData(); fd.append('file', new File([await pngBytes()], 'portrait.png', { type: 'image/png' }));
@@ -132,7 +132,7 @@ describe('about pages', () => {
     expect(blocked.status).toBe(422);
     const msg = JSON.stringify(blocked.body.details);
     expect(msg).toMatch(/legal representative is not shown/); expect(msg).toMatch(/Person 2: add a name/); expect(msg).toMatch(/someone@example.com is not public/);
-    expect(msg).toMatch(/alt text/); expect(msg).toMatch(/Confirm AFCD may use/);
+    expect(msg).not.toMatch(/alt text/); expect(msg).toMatch(/Confirm AFCD may use/);
     await h.app.request(`/studio/api/media/${img.id}`, { method: 'PATCH', headers: { Cookie: c.ed.cookie, Origin: ORIGIN, 'X-CSRF-Token': c.ed.csrf, 'Content-Type': 'application/json' }, body: JSON.stringify({ alt: 'Portrait of a test person', rightsConfirmed: true }) });
     expect((await c.ed.put('/about/team', { content: { ...t.content, people: [person, { ...person, name: 'Second Test (fake)', bio: 'Write to contact@afcdteam.com' }] } })).status).toBe(200);
     await approve(c, 'team');
@@ -140,6 +140,24 @@ describe('about pages', () => {
     const team = json('src/data/about.json').pages.team;
     expect(team.people[0]).toMatchObject({ name: 'Test Person (fake)', group: 'executive', image: { alt: 'Portrait of a test person', src: expect.stringMatching(/^assets\/media\//) } });
     expect(existsSync(join(h.siteRoot, team.people[0].image.src))).toBe(true);
+  });
+
+  it('mission & vision: optional photos beside the overview, mission and vision, checked and exported', async () => {
+    await importAbout(h.db, h.cfg, null, SITE);
+    const { body: mv } = await c.ed.get('/about/mission-vision');
+    expect(mv.content).toMatchObject({ mediaId: null, missionMediaId: null, visionMediaId: null });
+    expect((await c.ed.put('/about/mission-vision', { content: { ...mv.content, missionMediaId: 'not-a-photo' } })).status).toBe(422);
+    const fd = new FormData(); fd.append('file', new File([await pngBytes()], 'mission.png', { type: 'image/png' }));
+    const img = await (await h.app.request('/studio/api/media', { method: 'POST', body: fd, headers: { Cookie: c.ed.cookie, Origin: ORIGIN, 'X-CSRF-Token': c.ed.csrf } })).json();
+    expect((await c.ed.put('/about/mission-vision', { content: { ...mv.content, missionMediaId: img.id } })).status).toBe(200);
+    const blocked = await c.ed.post('/about/mission-vision/transition', { action: 'submit' });
+    expect(blocked.status).toBe(422); expect(JSON.stringify(blocked.body.details)).toMatch(/Confirm AFCD may use/);
+    await h.app.request(`/studio/api/media/${img.id}`, { method: 'PATCH', headers: { Cookie: c.ed.cookie, Origin: ORIGIN, 'X-CSRF-Token': c.ed.csrf, 'Content-Type': 'application/json' }, body: JSON.stringify({ alt: 'Test photo (fake)', rightsConfirmed: true }) });
+    await approve(c, 'mission-vision');
+    expect((await c.admin.post('/about/mission-vision/publish')).status).toBe(200);
+    const page = json('src/data/about.json').pages['mission-vision'];
+    expect(page.missionImage).toMatchObject({ alt: 'Test photo (fake)', src: expect.stringMatching(/^assets\/media\//) });
+    expect(page.image).toBeNull(); expect(page.visionImage).toBeNull();
   });
 
   it('saves section settings: visibility, order and headings, validated', async () => {
@@ -189,7 +207,9 @@ describe('about pages in the real generator (src/content.py)', () => {
     const html = readFileSync(join(dir, 'index.html'), 'utf8');
     const box = html.slice(html.indexOf('id="pillar-explorer"'), html.indexOf('<!-- ============ 6.'));
     expect(box).toContain('<span class="pl-title">Women &amp; Girls (test)</span>');
-    expect(box).toContain('Test summary.'); expect(box).toContain('<li>Test programme (fake)</li>');
+    expect(box).toContain('Test summary.');
+    // programme tags are not edited in Studio: the website keeps its own, whatever pillars.json says
+    expect(box).not.toContain('Test programme (fake)'); expect(box).toContain('<li>META Skills for Women Empowerment</li>');
     expect(box).toMatch(/pl-panel pl-tone-3" data-i="1"/);                                 // the colour chosen in Studio (green)
     expect(box).toContain(`01 / ${String(pillars.length).padStart(2, '0')}`);
     expect((box.match(/class="pl-panel /g) ?? []).length).toBe(pillars.length);

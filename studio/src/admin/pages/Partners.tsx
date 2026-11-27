@@ -67,7 +67,7 @@ export function PartnersList() {
       {!rows ? <TableSkeleton /> : <DataTable id="partners" rows={shown} total={base.filter((r) => r.status !== 'archived').length} rowKey={(r) => r.id} columns={columns} csvName="afcd-partners"
         actions={acts.bulk} rowMenu={acts.rowMenu}
         onOpen={(r) => navigate(`/studio/partners/${r.id}`)}
-        empty={<EmptyState icon="partner" text="No partners match these filters" onClear={st.q || st.status !== 'all' ? () => { set('q', ''); set('status', 'all'); } : undefined} />} />}
+        empty={<EmptyState icon="partner" text={rows?.length ? 'No partners match these filters' : 'No partners yet'} action={can('partner.create') && !rows?.length ? <button className="btn btn-sm btn-primary" onClick={() => { setName(''); setErr(''); setAdding(true); }}><Icon n="plus" />Add partner</button> : undefined} onClear={st.q || st.status !== 'all' ? () => { set('q', ''); set('status', 'all'); } : undefined} />} />}
     </section>
     {adding && <Modal size="sm" title="Add a partner" onClose={() => setAdding(false)} footer={<><button className="btn" onClick={() => setAdding(false)}>Cancel</button><button className="btn btn-primary" disabled={name.trim().length < 2} onClick={create}>Add</button></>}>
       <div className="modal-b stack">
@@ -129,14 +129,14 @@ export function PartnerEditor({ id }: { id: string }) {
   }
   async function save(): Promise<boolean> {
     setBusy('save'); setErrs([]);
-    try { await put(`/partners/${id}`, f); await load(); toast(live ? 'Draft saved. The live listing is unchanged until you publish.' : 'Draft saved'); return true; }
+    try { await put(`/partners/${id}`, f); await load(); toast(live ? 'Draft saved. The live listing is unchanged until you publish.' : 'Draft saved. Submit it for review when it is ready.'); return true; }
     catch (e) { showErr(e); return false; } finally { setBusy(''); }
   }
   async function act(action: string, extra: Record<string, unknown> = {}) {
     if (dirty && !(await save())) return;
     setBusy(action); setErrs([]);
     try { await post(`/partners/${id}/transition`, { action, ...extra }); await load(); setDialog(null); setComment('');
-      toast({ submit: 'Sent for review', approve: 'Approved', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft', archive: 'Archived', restore: 'Restored as a draft' }[action] ?? 'Done'); }
+      toast({ submit: 'Sent for review. Reviewers are notified; it can be published once approved.', approve: 'Approved. It is ready to publish.', request_changes: 'Sent back to the author with your note.', withdraw: 'Back to draft. You can edit it again.', archive: 'Archived', restore: 'Restored as a draft' }[action] ?? 'Done'); }
     catch (e) { setDialog(null); showErr(e); } finally { setBusy(''); }
   }
   async function deliver(kind: 'publish' | 'unpublish') {
@@ -206,7 +206,7 @@ export function PartnerEditor({ id }: { id: string }) {
             <div className="pt-logo-info">
               <b>{logoShape === 'is-square' ? 'Square logo' : logoShape === 'is-mid' ? 'Medium logo' : 'Wide logo'}</b>
               <small>{logo.width}×{logo.height} px · the website sizes it by its shape so every logo looks equally weighted.</small>
-              {(!logo.alt || !logo.rightsConfirmed) && <small className="pt-hint-warn">{!logo.alt ? 'Add alt text (usually the organisation name)' : 'Confirm AFCD may use it (permission from the partner)'} in the Media Library before review.</small>}
+              {!logo.rightsConfirmed && <small className="pt-hint-warn">Confirm AFCD may use it (permission from the partner) in the Media Library before review.</small>}
               <div className="pt-logo-actions">
                 <button type="button" className="btn btn-sm" disabled={!!busy || !can('media.update')} onClick={() => trimLogo()} title="Crop away empty transparent or white margins"><Icon n="image" />{busy === 'trim' ? 'Trimming…' : 'Trim empty margins'}</button>
                 {(logo as MediaItem & { crop?: unknown }).crop ? <button type="button" className="btn btn-sm btn-ghost" disabled={!!busy || !can('media.update')} onClick={() => trimLogo(true)}>Undo trim</button> : null}

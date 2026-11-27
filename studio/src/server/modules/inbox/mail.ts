@@ -12,10 +12,12 @@ import nodemailer from 'nodemailer';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
-import { formSubmissions, submissionEvents } from '../../db/schema.ts';
+import { formSubmissions, submissionEvents, users } from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import { decrypt, encrypt, keyFrom } from '../google/crypto.ts';
+import { compose } from '../settings/email-layout.ts';
+import { senderVars } from '../settings/templates.ts';
 
 type Me = NonNullable<Actor>;
 export type Security = 'starttls' | 'tls' | 'none';
@@ -81,7 +83,7 @@ export function passwordState(cfg: Config): 'none' | 'readable' | 'unreadable' {
 }
 
 // ---------------------------------------------------------------- Transport
-export type SendInput = { from: string; to: string; replyTo?: string; subject: string; text: string; inReplyTo?: string };
+export type SendInput = { from: string; to: string; replyTo?: string; subject: string; text: string; html?: string; inReplyTo?: string };
 export type Sender = (s: Stored & { password: string }, m: SendInput) => Promise<{ messageId: string; response?: string }>;
 const smtpSender: Sender = async (s, m) => {
   const t = nodemailer.createTransport({
@@ -112,7 +114,8 @@ export async function deliver(cfg: Config, m: Omit<SendInput, 'from' | 'replyTo'
 }
 
 export async function sendTest(db: DB, cfg: Config, me: Me) {
-  const r = await deliver(cfg, { to: me.email, subject: 'AFCD Studio: test email', text: `This is a test email from AFCD Studio's Inbox.\n\nIf you can read it, replies to website messages can be sent from Studio.\n\nSent by ${me.email} at ${new Date().toISOString()}.` });
+  const msg = await compose(db, { subject: 'AFCD Studio: test email', heading: 'Email sending works', body: `This is a test email from AFCD Studio's Inbox.\n\nIf you can read it, replies to website messages can be sent from Studio, in this design.\n\nSent by ${me.email} at ${new Date().toISOString()}.` });
+  const r = await deliver(cfg, { to: me.email, subject: 'AFCD Studio: test email', ...msg });
   await audit(db, me, 'inbox.mail_test', { type: 'mail' }, 'Sent a test email to themselves');
   return { ok: true, to: me.email, messageId: r.messageId };
 }
@@ -121,6 +124,11 @@ const replySchema = z.object({
   subject: z.string().trim().min(1, 'Add a subject.').max(200).transform((v) => v.replace(/[\r\n]+/g, ' ')),
   body: z.string().trim().min(1, 'Write your reply.').max(20_000),
   markReplied: z.boolean().optional().default(true),
+  // optional parts of a template, shown by the branded layout (Settings → Email templates)
+  heading: z.string().trim().max(120).optional(),
+  preheader: z.string().trim().max(150).optional(),
+  button: z.object({ label: z.string().trim().min(1).max(40), url: z.string().trim().max(500).regex(/^(https:\/\/|mailto:)[^\s"'<>]+$/i, 'The button link must be https:// or mailto:.') }).strict().nullable().optional(),
+  details: z.object({ title: z.string().trim().max(60).optional(), rows: z.array(z.object({ label: z.string().trim().max(40), value: z.string().trim().max(160) }).strict()).max(8) }).strict().nullable().optional(),
 }).strict();
 const HOURLY_LIMIT = 60;
 
@@ -136,7 +144,10 @@ export async function sendReply(db: DB, cfg: Config, me: Me, id: string, raw: un
   const [{ n }] = await db.select({ n: count() }).from(submissionEvents).where(and(eq(submissionEvents.actorId, me.id), eq(submissionEvents.kind, 'email_sent'), gte(submissionEvents.createdAt, new Date(Date.now() - 3600_000))));
   if (n >= HOURLY_LIMIT) throw new AppError(429, `You’ve sent ${HOURLY_LIMIT} replies in the last hour. Wait a little before sending more.`);
 
-  const sent = await deliver(cfg, { to: m.email, subject: r.data.subject, text: r.data.body });
+  const [u] = await db.select({ name: users.name }).from(users).where(eq(users.id, me.id));
+  const msg = await compose(db, { subject: r.data.subject, body: r.data.body, heading: r.data.heading, preheader: r.data.preheader, button: r.data.button ?? null, details: r.data.details ?? null },
+    await senderVars(db, { name: u?.name ?? '' }));
+  const sent = await deliver(cfg, { to: m.email, subject: r.data.subject, ...msg });
   await db.insert(submissionEvents).values({ submissionId: id, actorId: me.id, kind: 'email_sent', body: r.data.body, meta: { subject: r.data.subject, to: m.email, from: sent.from, messageId: sent.messageId } });
   const now = new Date();
   if (r.data.markReplied && m.status !== 'replied' && m.status !== 'closed') {

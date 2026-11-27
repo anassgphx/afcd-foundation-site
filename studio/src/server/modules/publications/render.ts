@@ -21,6 +21,11 @@ const ARR = '<span class="arr" aria-hidden="true">↗</span>';
 const HOME_ICO = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.2 8 2.8l5.5 4.4V13a.8.8 0 0 1-.8.8H9.6V10H6.4v3.8H3.3a.8.8 0 0 1-.8-.8V7.2Z"/></svg>';
 const DOC_ICO = '<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>';
 const line = (v: string) => v.replace(/[\r\n<>]+/g, ' ').trim();
+/** '<title> · Publications · AFCD Foundation', shortened step by step (section, then site name) to stay within the 70
+ *  characters search results show without cutting; the publication's own title is never cut. */
+export function fitTitle(t: string, section = 'Publications') {
+  return [`${t} · ${section} · AFCD Foundation`, `${t} · AFCD Foundation`].find((x) => x.length <= 70) ?? t;
+}
 const ident = (v: string) => v.toLowerCase().replace(/[^a-z0-9-]/g, '');
 const byDate = (a: LivePub, b: LivePub) => (b.snap.publishedOn ?? '').localeCompare(a.snap.publishedOn ?? '') || a.snap.title.localeCompare(b.snap.title);
 
@@ -55,17 +60,27 @@ function header(crumbs: [string, string][], label: string, title: string, lead: 
 }
 
 /** Page-local styles (the site stylesheet stays untouched; text in a style element is never sent for translation). */
-const CSS = `.pub-grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
-.pub-card{position:relative;display:flex;flex-direction:column;height:100%;border:1px solid #ECECEC;border-radius:24px;overflow:hidden;background:#fff;transition:border-color .2s ease,box-shadow .2s ease}
-.pub-card:hover,.pub-card:focus-within{border-color:#000;box-shadow:0 10px 30px -18px rgba(0,0,0,.35)}
-.pub-card h3 a::after{content:"";position:absolute;inset:0;border-radius:24px}
-.pub-card h3 a:focus-visible{outline:none}.pub-card:has(h3 a:focus-visible){outline:2px solid #000;outline-offset:3px}
-.pub-cover{position:relative;aspect-ratio:4/3;background:#F6F6F6;display:flex;align-items:center;justify-content:center;color:#8A8A8A}
+const CSS = `.pub-grid{display:grid;gap:44px 24px;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr))}
+.pub-card{position:relative;display:flex;flex-direction:column;height:100%}
+.pub-card h3 a::after{content:"";position:absolute;inset:0;border-radius:20px}
+.pub-card h3 a:focus-visible{outline:none}.pub-card:has(h3 a:focus-visible){outline:2px solid #000;outline-offset:6px;border-radius:20px}
+.pub-cover{position:relative;aspect-ratio:1/1;overflow:hidden;border-radius:20px;background:#F5F5F4;display:flex;align-items:center;justify-content:center;color:#8A8A8A;transition:transform .35s cubic-bezier(.2,.7,.2,1),box-shadow .35s ease}
 .pub-cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.pub-body{display:flex;flex:1;flex-direction:column;gap:10px;padding:18px 20px 20px}
-.pub-body h3{font-size:18px;font-weight:600;line-height:1.3;letter-spacing:-.02em}
-.pub-body .pub-sum{font-size:14px;line-height:1.6;color:var(--dark,#3F3F3F)}
-.pub-meta{margin-top:auto;padding-top:6px;font-size:12.5px;color:var(--mid,#6F6F6F)}
+.pub-cover::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);pointer-events:none}
+.pub-card:hover .pub-cover{transform:translateY(-4px);box-shadow:0 24px 40px -28px rgba(0,0,0,.45)}
+.pub-body{display:flex;flex:1;flex-direction:column;padding:20px 4px 0}
+.pub-kind{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#44403C}
+.pub-kind i{width:8px;height:8px;border-radius:9999px;background:#0A0A0A}
+.pub-kind time{font-weight:500;letter-spacing:.04em;text-transform:none;color:#78716C}
+.pub-body h3{margin-top:12px;font-size:21px;font-weight:600;line-height:1.2;letter-spacing:-.03em;color:#0A0A0A}
+.pub-card:hover h3{text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:4px}
+.pub-body .pub-sum{margin-top:10px;font-size:15px;line-height:1.6;color:#57534E;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.pub-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-top:auto;padding-top:22px}
+.pub-foot::before{content:"";flex-basis:100%;height:1px;margin-bottom:4px;background:#E7E5E4}
+.pub-meta{font-size:13px;font-weight:500;color:#57534E}
+.pub-btn{display:inline-flex;align-items:center;gap:10px;height:42px;padding:0 7px 0 18px;border-radius:9999px;background:#0A0A0A;color:#fff;font-size:13.5px;font-weight:600}
+.pub-btn span{display:grid;place-items:center;width:28px;height:28px;border-radius:9999px;background:#fff;color:#0A0A0A;font-size:12px;transition:transform .3s cubic-bezier(.2,.7,.2,1)}
+.pub-card:hover .pub-btn span{transform:rotate(45deg)}
 .pub-filters{display:flex;flex-wrap:wrap;gap:18px 32px;border:0;margin:0;padding:0}
 .pub-filters fieldset{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border:0;margin:0;padding:0;min-width:0}
 .pub-filters legend{float:left;margin-right:6px;font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--mid,#6F6F6F)}
@@ -73,7 +88,8 @@ const CSS = `.pub-grid{display:grid;gap:20px;grid-template-columns:repeat(auto-f
 .pub-filters input:checked+.pub-chip{background:#000;border-color:#000;color:#fff}
 .pub-filters input:focus-visible+.pub-chip{outline:2px solid #000;outline-offset:2px}
 .pub-none{display:none}
-.pub-dl-cover{aspect-ratio:3/4;width:100%;border-radius:20px;object-fit:cover;background:#F6F6F6}`;
+.pub-split3{display:grid;gap:40px}@media(min-width:1024px){.pub-split3{grid-template-columns:minmax(0,4fr) minmax(0,5fr) minmax(0,3fr);gap:40px}.pub-stick{position:sticky;top:8rem}}@media(min-width:1280px){.pub-split3{gap:48px}}
+.pub-dl-cover{display:block;width:100%;height:auto;border-radius:24px;background:#F6F6F6;box-shadow:0 1px 2px rgba(8,8,8,.06),0 12px 32px -12px rgba(8,8,8,.18)}`;
 
 const meta = (s: PublicationSnapshot, d: DocumentRow | null) => [d ? `PDF · ${sizeLabel(d.bytes)}` : s.externalUrl ? 'Online' : '', LANG_LABEL[s.language] ?? ''].filter(Boolean).join(' · ');
 
@@ -84,10 +100,10 @@ function card(p: LivePub, ctx: Ctx) {
         <article class="pub-card">
           <div class="pub-cover">${cover ? `<img src="${esc(cover.src)}" srcset="${esc(cover.srcset)}" sizes="(min-width:1024px) 30vw, (min-width:640px) 45vw, 100vw" width="${cover.w}" height="${cover.h}" alt="" loading="lazy" decoding="async" style="object-position:${cover.fx}% ${cover.fy}%">` : DOC_ICO}</div>
           <div class="pub-body">
-            <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">${TYPE_LABEL[s.type]}</span>${s.publishedOn ? `<time class="text-[13px] text-ink-mid" datetime="${s.publishedOn}">${dateLabel(s.publishedOn)}</time>` : ''}</div>
+            <p class="pub-kind"><i aria-hidden="true"></i>${TYPE_LABEL[s.type]}${s.publishedOn ? `<time datetime="${s.publishedOn}">${dateLabel(s.publishedOn)}</time>` : ''}</p>
             <h3><a href="${publicationFile(s.slug)}">${esc(s.title)}</a></h3>
             ${s.summary ? `<p class="pub-sum">${esc(s.summary)}</p>` : ''}
-            <p class="pub-meta">${meta(s, ctx.doc(s.documentId))}</p>
+            <div class="pub-foot"><p class="pub-meta">${meta(s, ctx.doc(s.documentId))}</p><span class="pub-btn" aria-hidden="true">Read &amp; download <span>↗</span></span></div>
           </div>
         </article>
       </li>`;
@@ -135,7 +151,7 @@ ${filterCss(items, showTypes ? types : [], showPillars ? pkeys : [])}</style>
     <p class="pub-none mt-8 rounded-[24px] border border-dashed border-ink-light p-6 text-[15px] text-ink-dark" role="status">No publications match these filters.</p>
   </div>
 </section>`;
-  return `---\ntitle: Publications · AFCD Foundation\ndescription: Reports, studies, policy briefs and guides published by AFCD Foundation, to read and download.\nactive: none\n---\n<span id="top"></span>\n<div data-studio-publications="${live.map((p) => p.id).sort().join(',')}">\n${body}\n</div>\n`;
+  return `---\ntitle: AFCD Foundation publications: reports and resources\ndescription: Reports, studies, policy briefs and guides published by AFCD Foundation, to read and download.\nactive: none\n---\n<span id="top"></span>\n<div data-studio-publications="${live.map((p) => p.id).sort().join(',')}">\n${body}\n</div>\n`;
 }
 
 export function detailSource(p: LivePub, ctx: Ctx) {
@@ -158,8 +174,9 @@ export function detailSource(p: LivePub, ctx: Ctx) {
     : `<a href="${esc(s.externalUrl)}" target="_blank" rel="noopener" class="btn-dark btn-cta mt-5 min-h-[50px] w-full justify-center px-6">Read online ${ARR}</a>`) : '';
   const abstract = s.abstract.trim() ? `<h2 class="text-[24px] font-semibold tracking-[-0.03em] md:text-[28px]">About this publication</h2>
       <div class="mt-5 space-y-5 text-[17px] leading-[1.8] text-ink-dark">${articleBody(s.abstract)}</div>` : '';
-  const aside = `<div class="rounded-[28px] border border-ink-light p-6 lg:sticky lg:top-32">
-      ${cover ? `<img src="${esc(cover.src)}" srcset="${esc(cover.srcset)}" sizes="(min-width:1024px) 30vw, 100vw" width="${cover.w}" height="${cover.h}" alt="${esc(cover.alt)}" loading="eager" decoding="async" class="pub-dl-cover mb-6" style="object-position:${cover.fx}% ${cover.fy}%">` : ''}
+  // the cover is shown whole (not cropped), beside the text; the details card no longer repeats it
+  const coverImg = cover ? `<img src="${esc(cover.src)}" srcset="${esc(cover.srcset)}" sizes="(min-width:1024px) 38vw, 100vw" width="${cover.w}" height="${cover.h}" alt="${esc(cover.alt)}" loading="eager" decoding="async" class="pub-dl-cover">` : '';
+  const aside = `<div class="rounded-[28px] border border-ink-light p-6">
       <div class="flex flex-wrap items-center gap-2"><span class="ev-kind">${TYPE_LABEL[s.type]}</span>${pls.map((x) => `<span class="ev-pillar"><span class="pj-dot" style="--c:${esc(x.colour)}"></span>${esc(x.name)}</span>`).join('')}</div>
       <dl class="evd-facts mt-5">${facts.map(([a, b]) => `<div class="evd-fact"><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl>
       ${download}${online}
@@ -169,13 +186,23 @@ export function detailSource(p: LivePub, ctx: Ctx) {
   const body = header([['Publications', 'publications.html'], [esc(short), publicationFile(s.slug)]], `${TYPE_LABEL[s.type]}${year}`, esc(s.title), esc(s.summary)) + `
 <section class="py-12 lg:py-16">
   <style>${CSS}</style>
-  <div class="wrap grid gap-10 lg:grid-cols-12 lg:gap-16">
-    ${abstract ? `<div class="lg:col-span-8">${abstract}</div>
-    <aside class="lg:col-span-4">${aside}</aside>` : `<aside class="lg:col-span-5">${aside}</aside>`}
-  </div>
+  ${coverImg && abstract
+    // split in three: the cover, the text, the details card (stacked on small screens)
+    ? `<div class="wrap pub-split3">
+    <div><div class="pub-stick">${coverImg}</div></div>
+    <div>${abstract}</div>
+    <aside><div class="pub-stick">${aside}</div></aside>
+  </div>`
+    : `<div class="wrap grid gap-10 lg:grid-cols-12 lg:gap-16">
+    ${coverImg
+      ? `<div class="lg:col-span-5"><div class="lg:sticky lg:top-32">${coverImg}</div></div>
+    <aside class="lg:col-span-4">${aside}</aside>`
+      : abstract ? `<div class="lg:col-span-8">${abstract}</div>
+    <aside class="lg:col-span-4"><div class="lg:sticky lg:top-32">${aside}</div></aside>` : `<aside class="lg:col-span-5">${aside}</aside>`}
+  </div>`}
 </section>
 <section class="border-t border-ink-light py-10"><div class="wrap flex flex-wrap gap-x-6 gap-y-3"><a href="publications.html" class="link-arrow">All publications ${ARR}</a>${projects[0] ? `<a href="${esc(projects[0].file!)}" class="link-arrow">${esc(projects[0].name)} ${ARR}</a>` : ''}</div></section>`;
-  return `---\ntitle: ${line(s.seoTitle || s.title)} · Publications · AFCD Foundation\ndescription: ${line(s.seoDescription || s.summary || s.title)}\nactive: none\nparent: Publications|publications.html\n---\n<span id="top"></span>\n<article data-studio-publication-rev="${p.id}">\n${body}\n</article>\n`;
+  return `---\ntitle: ${fitTitle(line(s.seoTitle || s.title))}\ndescription: ${line(s.seoDescription || s.summary || s.title)}\nactive: none\nparent: Publications|publications.html\n---\n<span id="top"></span>\n<article data-studio-publication-rev="${p.id}">\n${body}\n</article>\n`;
 }
 
 /** Public files each live publication needs: cover image ids and PDF rows. */

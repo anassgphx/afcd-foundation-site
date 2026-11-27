@@ -11,6 +11,7 @@ import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import { can, type Role } from '../../rbac.ts';
 import * as MAIL from '../inbox/mail.ts';
+import { compose } from './email-layout.ts';
 import { addRevision, changedKeys } from './service.ts';
 
 type Me = NonNullable<Actor>;
@@ -78,6 +79,18 @@ function body(cfg: Config, total: number, topics: { topic: string; n: number }[]
     'For privacy, this email does not include names, addresses or message text.',
     'You get this because an administrator chose you in Studio → Settings → Notifications.'].join('\n');
 }
+/** The notice in the email layout: counts per topic as a details card and an "Open the Inbox" button (https only). */
+function notice(db: DB, cfg: Config, subject: string, total: number, topics: { topic: string; n: number }[], intro = '') {
+  const inbox = `${cfg.origin}/studio/inbox`;
+  const https = /^https:\/\//.test(inbox);
+  return compose(db, {
+    subject, heading: `${total} new website message${total === 1 ? '' : 's'}`, preheader: topics.map((t) => `${t.topic || 'No topic'}: ${t.n}`).join(' · '),
+    body: [intro, https ? '' : `Open the Inbox: ${inbox}`, 'For privacy, this email does not include names, addresses or message text.'].filter(Boolean).join('\n\n'),
+    details: { title: 'By topic', rows: topics.map((t) => ({ label: t.topic || 'No topic', value: String(t.n) })) },
+    button: https ? { label: 'Open the Inbox', url: inbox } : null,
+    signature: 'You get this because an administrator chose you in Studio → Settings → Notifications.',
+  });
+}
 
 /** Sends one notice if there are new non-spam contact messages since the last one and the interval has passed. */
 export async function flush(db: DB, cfg: Config, now = new Date()) {
@@ -94,7 +107,8 @@ export async function flush(db: DB, cfg: Config, now = new Date()) {
   if (!to.length) return { sent: false as const, reason: 'no recipients' };
   const errors: string[] = [];
   for (const u of to) {
-    try { await MAIL.deliver(cfg, { to: u.email, subject: `AFCD Studio: ${total} new website message${total === 1 ? '' : 's'}`, text: body(cfg, total, topics) }); }
+    const subject = `AFCD Studio: ${total} new website message${total === 1 ? '' : 's'}`;
+    try { const msg = await notice(db, cfg, subject, total, topics); await MAIL.deliver(cfg, { to: u.email, subject, ...msg, text: body(cfg, total, topics) }); }
     catch (e) { errors.push((e as Error).message.slice(0, 200)); }
   }
   await setKey(db, STATE, { lastSentAt: now.toISOString(), lastCount: total, lastError: errors[0] ?? null }, null);
@@ -119,7 +133,9 @@ export const cancelPending = () => { if (timer) clearTimeout(timer); timer = nul
 export async function sendTest(db: DB, cfg: Config, me: Me) {
   if (!MAIL.mailSettings(cfg).ready) throw new AppError(409, 'Set up email sending first (Email & SMTP).');
   try {
-    const r = await MAIL.deliver(cfg, { to: me.email, subject: 'AFCD Studio: test notification', text: `This is a test of Studio’s new-message notice. A real notice looks like this:\n\n${body(cfg, 2, [{ topic: 'Volunteering', n: 1 }, { topic: 'Partnership', n: 1 }])}` });
+    const sample = [{ topic: 'Volunteering', n: 1 }, { topic: 'Partnership', n: 1 }];
+    const msg = await notice(db, cfg, 'AFCD Studio: test notification', 2, sample, 'This is a test of Studio’s new-message notice, with made-up counts.');
+    const r = await MAIL.deliver(cfg, { to: me.email, subject: 'AFCD Studio: test notification', ...msg, text: `This is a test of Studio’s new-message notice. A real notice looks like this:\n\n${body(cfg, 2, sample)}` });
     await audit(db, me, 'settings.notification_test', { type: 'settings', id: 'notifications' }, 'Sent a test notification to themselves');
     return { ok: true, to: me.email, response: (r.response ?? '').slice(0, 300) };
   } catch (e) { return { ok: false, to: me.email, message: (e as Error).message.slice(0, 300) }; }

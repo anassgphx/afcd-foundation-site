@@ -18,7 +18,18 @@ import * as SCH from '../seo/schema.ts';
 import * as OPS from './ops.ts';
 import * as DNS from './dns.ts';
 import * as T from './templates.ts';
+import * as L from './email-layout.ts';
 import * as N from './notify.ts';
+
+
+let logoCache: { root: string; uri: string } | null = null;
+/** The site's logo as a data: URI for the email preview (read once). Real emails link to the logo on the website. */
+function previewLogo(siteRoot: string) {
+  if (logoCache?.root === siteRoot) return logoCache.uri;
+  let uri = '';
+  try { uri = `data:image/png;base64,${readFileSync(resolve(siteRoot, 'assets/brand/afcd-logo.png')).toString('base64')}`; } catch { /* no logo file: alt text shows */ }
+  logoCache = { root: siteRoot, uri }; return uri;
+}
 
 /** History categories that only administrators may see (they describe the email server and who gets notices). */
 const ADMIN_HISTORY = ['email', 'notifications'];
@@ -125,12 +136,28 @@ export function registerSettingsRoutes(api: Hono<Env>) {
   api.get('/settings/templates', async (c) => {
     const u = c.var.user; if (!u) throw new AppError(404, 'Not found.');
     if (!can(u.role, 'settings.read') && !can(u.role, 'forms.manage')) requirePerm(c, 'settings.read');
-    return c.json({ templates: await T.list(c.var.db), variables: T.VARIABLES, canEdit: can(u.role, 'settings.update') });
+    return c.json({ templates: await T.list(c.var.db), design: await T.design(c.var.db), variables: T.VARIABLES, canEdit: can(u.role, 'settings.update') });
   });
   api.put('/settings/templates', perm('settings.update'), async (c) => c.json(await T.save(c.var.db, me(c), await c.req.json())));
   api.post('/settings/templates/preview', perm('settings.read'), async (c) => {
-    const b = await c.req.json().catch(() => ({})) as { subject?: unknown; body?: unknown };
-    return c.json(T.preview({ subject: String(b.subject ?? '').slice(0, 200), body: String(b.body ?? '').slice(0, 5000) }));
+    // the template and design as they are in the editor (unsaved), filled with example values and rendered in the layout
+    const b = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    const str = (v: unknown, max: number) => String(v ?? '').slice(0, max);
+    const btn = b.button as { label?: unknown; url?: unknown } | null | undefined;
+    const det = b.details as { title?: unknown; rows?: unknown } | null | undefined;
+    const t = {
+      subject: str(b.subject, 200), body: str(b.body, 5000), heading: str(b.heading, 120), preheader: str(b.preheader, 150),
+      button: btn && (btn.label || btn.url) ? { label: str(btn.label, 40), url: str(btn.url, 500) } : null,
+      details: det ? { title: str(det.title, 60), rows: (Array.isArray(det.rows) ? det.rows : []).slice(0, 8).map((r: { label?: unknown; value?: unknown }) => ({ label: str(r?.label, 40), value: str(r?.value, 160) })) } : null,
+    };
+    const p = T.preview(t);
+    const dd = (b.design ?? {}) as Partial<T.Design>;
+    const d: T.Design = { ...(await T.design(c.var.db)), ...Object.fromEntries(Object.entries(dd).filter(([k, v]) => k in T.DESIGN_DEFAULTS && typeof v === typeof T.DESIGN_DEFAULTS[k as keyof T.Design]).map(([k, v]) => [k, typeof v === 'string' ? v.slice(0, 300) : v])) };
+    const ex = T.exampleVars();
+    // the preview is a sandboxed frame under Studio's CSP, which allows data: images only: embed the same logo inline
+    const brand = { ...(await L.brand(c.var.db)), logoUrl: previewLogo(c.var.cfg.siteRoot) };
+    const rendered = L.renderEmail({ ...p, body: p.body || ' ', signature: T.fillVars(d.signature, ex) }, brand, { ...d, footerNote: T.fillVars(d.footerNote, ex) });
+    return c.json({ ...p, html: rendered.html, text: rendered.text });
   });
   api.post('/inbox/messages/:id/template/:tid', perm('forms.manage'), async (c) => c.json(await T.renderFor(c.var.db, { ...me(c), name: c.var.user!.name }, c.req.param('tid'), c.req.param('id'))));
 

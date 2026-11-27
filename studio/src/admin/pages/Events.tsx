@@ -55,7 +55,7 @@ export function EventsList() {
         initialSort={{ key: 'date', dir: st.status === 'upcoming' ? 'asc' : 'desc' }}
         actions={acts.bulk} rowMenu={acts.rowMenu}
         onOpen={(r) => navigate(`/studio/events/${r.id}`)}
-        empty={<EmptyState icon="calendar" text={st.status === 'upcoming' ? 'No upcoming events' : 'No events match these filters'} onClear={st.q ? () => set('q', '') : undefined} />} />}
+        empty={<EmptyState icon="calendar" text={st.status === 'upcoming' ? 'No upcoming events' : 'No events match these filters'} sub={st.status === 'upcoming' && !st.q ? 'Add the next workshop, training or community day. Past events are under Past.' : undefined} action={st.status === 'upcoming' && !st.q && can('event.create') ? <button className="btn btn-sm btn-primary" onClick={create}><Icon n="plus" />New event</button> : undefined} onClear={st.q ? () => set('q', '') : undefined} />} />}
     </section>
     {acts.dialog}
   </>;
@@ -96,14 +96,14 @@ export function EventEditor({ id }: { id: string }) {
   function showErr(err: unknown) { setErrs(err instanceof ApiError && err.details?.length ? err.details.map((d) => (d.path ? `${d.path}: ` : '') + d.message) : [err instanceof Error ? err.message : 'Something went wrong.']); }
   async function save(): Promise<boolean> {
     setBusy('save'); setErrs([]);
-    try { await put(`/events/${id}`, f); await load(); toast(live ? 'Draft saved. The live event is unchanged until you publish.' : 'Draft saved'); return true; }
+    try { await put(`/events/${id}`, f); await load(); toast(live ? 'Draft saved. The live event is unchanged until you publish.' : 'Draft saved. Submit it for review when it is ready.'); return true; }
     catch (err) { showErr(err); return false; } finally { setBusy(''); }
   }
   async function act(action: string, extra: Record<string, unknown> = {}) {
     if (dirty && !(await save())) return;
     setBusy(action); setErrs([]);
     try { await post(`/events/${id}/transition`, { action, ...extra }); await load(); setDialog(null); setComment('');
-      toast({ submit: 'Sent for review', approve: 'Approved', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft', archive: 'Archived', restore: 'Restored as a draft' }[action] ?? 'Done'); }
+      toast({ submit: 'Sent for review. Reviewers are notified; it can be published once approved.', approve: 'Approved. It is ready to publish.', request_changes: 'Sent back to the author with your note.', withdraw: 'Back to draft. You can edit it again.', archive: 'Archived', restore: 'Restored as a draft' }[action] ?? 'Done'); }
     catch (err) { setDialog(null); showErr(err); } finally { setBusy(''); }
   }
   async function deliver(kind: 'publish' | 'unpublish') {
@@ -168,7 +168,7 @@ export function EventEditor({ id }: { id: string }) {
         <Section id="media" title="Poster" desc="Square images work best. Without one, a neutral placeholder is shown.">
           <div className="ed-media s3">
             {f.posterMediaId && poster ? <div className="ed-media-img"><img src={poster.url} alt={poster.alt} /><button type="button" className="btn btn-sm" onClick={() => set('posterMediaId', null)}><Icon n="x" />Remove</button></div>
-              : <button type="button" className="ed-drop" onClick={() => setDialog('poster')}><Icon n="image" /><b>Choose a poster</b><small>From the media library. It needs alt text and confirmed rights before review.</small></button>}
+              : <button type="button" className="ed-drop" onClick={() => setDialog('poster')}><Icon n="image" /><b>Choose a poster</b><small>From the media library. It needs confirmed rights before review.</small></button>}
             {f.posterMediaId && <button type="button" className="btn btn-sm" onClick={() => setDialog('poster')}><Icon n="image" />Change poster</button>}
           </div>
         </Section>

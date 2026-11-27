@@ -9,6 +9,8 @@ import { sessions, users, loginAttempts } from '../db/schema.ts';
 export const SESSION_COOKIE = 'studio_session';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;          // 12 h, sliding
 const REFRESH_WHEN_LEFT_MS = 6 * 60 * 60 * 1000;
+// Sliding sessions are capped: after 7 days from sign-in, a stolen or forgotten cookie stops working even if it is used daily.
+export const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 // OWASP-recommended Argon2id parameters (19 MiB, 2 iterations).
 const ARGON = { memoryCost: 19456, timeCost: 2, parallelism: 1 };
@@ -44,8 +46,10 @@ export async function validateSession(db: DB, raw: string | undefined) {
     .where(and(eq(sessions.id, id), gt(sessions.expiresAt, new Date())));
   const row = rows[0];
   if (!row || !row.u.active) return null;
+  if (Date.now() - row.s.createdAt.getTime() > SESSION_MAX_AGE_MS) { await db.delete(sessions).where(eq(sessions.id, id)); return null; }
   if (row.s.expiresAt.getTime() - Date.now() < REFRESH_WHEN_LEFT_MS) {
-    await db.update(sessions).set({ expiresAt: new Date(Date.now() + SESSION_TTL_MS) }).where(eq(sessions.id, id));
+    const cap = row.s.createdAt.getTime() + SESSION_MAX_AGE_MS;
+    await db.update(sessions).set({ expiresAt: new Date(Math.min(Date.now() + SESSION_TTL_MS, cap)) }).where(eq(sessions.id, id));
   }
   return { sessionId: id, csrf: row.s.csrfToken, user: row.u };
 }

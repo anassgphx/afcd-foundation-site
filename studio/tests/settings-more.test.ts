@@ -55,7 +55,7 @@ describe('email templates', () => {
     const [m] = await h.db.select().from(formSubmissions);
     expect((await u.seo.post(`/inbox/messages/${m.id}/template/${tpl.id}`)).status).toBe(403);   // composer needs forms.manage
     const r = await u.admin.post(`/inbox/messages/${m.id}/template/${tpl.id}`);
-    expect(r.body).toEqual({ subject: 'Re: Volunteering', body: 'Dear Fake,\nThanks from AFCD Foundation.\nadmin' });
+    expect(r.body).toEqual({ subject: 'Re: Volunteering', body: 'Dear Fake,\nThanks from AFCD Foundation.\nadmin', heading: '', preheader: '', button: null, details: null });
     const pv = await u.rev.post('/settings/templates/preview', { subject: '{{topic}}', body: '{{nope}}' });
     expect(pv.body).toMatchObject({ subject: 'Volunteering', unknown: ['nope'] });
   });

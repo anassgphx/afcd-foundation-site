@@ -64,9 +64,40 @@ afcdfoundation.com {
 	}
 	root * /srv/afcd-website
 	encode zstd gzip
+	# Category/page addresses (lib/urls.mjs): /projects/x, /pillars/x, /about/team, no ".html", also under /fr and /ar.
+	# 1. Old addresses (project-x.html, team.html, …, with or without .html) move permanently (301) to the new ones.
+	map {path} {afcd_new} {
+		~^/(fr/|ar/)?project-([a-z0-9-]+)(?:\.html)?$ "/${1}projects/${2}"
+		~^/(fr/|ar/)?news-([a-z0-9-]+)(?:\.html)?$ "/${1}news/${2}"
+		~^/(fr/|ar/)?event-([a-z0-9-]+)(?:\.html)?$ "/${1}events/${2}"
+		~^/(fr/|ar/)?publication-([a-z0-9-]+)(?:\.html)?$ "/${1}publications/${2}"
+		~^/(fr/|ar/)?opportunity-([a-z0-9-]+)(?:\.html)?$ "/${1}opportunities/${2}"
+		~^/(fr/|ar/)?apply-([a-z0-9-]+)(?:\.html)?$ "/${1}apply/${2}"
+		~^/(fr/|ar/)?(our-story|mission-vision|strategy|team)(?:\.html)?$ "/${1}about/${2}"
+		~^/(fr/|ar/)?(youth-empowerment|womens-empowerment|environment-climate|digital-inclusion)(?:\.html)?$ "/${1}pillars/${2}"
+		~^/(fr/|ar/)?index\.html$ "/${1}"
+		~^/(fr/|ar/)?((?:projects|news|events|publications|opportunities|about|pillars|partners|contact|get-involved)(?:/[a-z0-9-]+)?)/$ "/${1}${2}"
+		~^/(.+)\.html$ "/${1}"
+		default ""
+	}
+	@afcd_old expression {afcd_new} != ""
+	redir @afcd_old {afcd_new}{?query} 301
+	# 2. New addresses are served from the page files, which keep their names on disk.
+	map {path} {afcd_file} {
+		~^/(fr/|ar/)?projects/([a-z0-9-]+)$ "/${1}project-${2}.html"
+		~^/(fr/|ar/)?news/([a-z0-9-]+)$ "/${1}news-${2}.html"
+		~^/(fr/|ar/)?events/([a-z0-9-]+)$ "/${1}event-${2}.html"
+		~^/(fr/|ar/)?publications/([a-z0-9-]+)$ "/${1}publication-${2}.html"
+		~^/(fr/|ar/)?opportunities/([a-z0-9-]+)$ "/${1}opportunity-${2}.html"
+		~^/(fr/|ar/)?apply/([a-z0-9-]+)$ "/${1}apply-${2}.html"
+		~^/(fr/|ar/)?(?:about|pillars)/([a-z0-9-]+)$ "/${1}${2}.html"
+		default ""
+	}
+	@afcd_page expression {afcd_file} != ""
+	rewrite @afcd_page {afcd_file}
 	try_files {path} {path}.html {path}/index.html
 	file_server
-	@html path *.html / /fr/ /ar/
+	@html not path /assets/*
 	header @html Cache-Control "no-cache"
 	@assets path /assets/*
 	header @assets Cache-Control "public, max-age=31536000, immutable"

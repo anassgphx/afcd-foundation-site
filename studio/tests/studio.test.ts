@@ -99,10 +99,10 @@ describe('create → review → approve → publish → edit → rollback', () =
     const { status, body: p } = await ed.post('/projects', projectInput({ heroMediaId: img.id }));
     expect(status).toBe(201);
 
-    // Not ready: image has no alt text / rights yet
+    // Not ready: image rights not confirmed yet (alt text is optional)
     const blocked = await ed.post(`/projects/${p.id}/transition`, { action: 'submit' });
     expect(blocked.status).toBe(422);
-    expect(JSON.stringify(blocked.body.details)).toMatch(/alt text/);
+    expect(JSON.stringify(blocked.body.details)).not.toMatch(/alt text/);
     await h.app.request(`/studio/api/media/${img.id}`, { method: 'PATCH', headers: { Cookie: ed.cookie, Origin: ORIGIN, 'X-CSRF-Token': ed.csrf, 'Content-Type': 'application/json' }, body: JSON.stringify({ alt: 'Pupils planting trees', rightsConfirmed: true }) });
 
     expect((await ed.post(`/projects/${p.id}/transition`, { action: 'submit' })).body.status).toBe('in_review');

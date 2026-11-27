@@ -28,7 +28,7 @@ describe('project cover and poster', () => {
     expect(d4.cover.map((c) => c.id)).toEqual(ids.slice(0, 4));   // the poster takes the fifth place
     expect(d4.poster).toMatchObject({ id: poster });
     expect(s4.media).toContain(poster);
-    expect(P.publishProblems(full).join(' ')).toMatch(/alt text to “test-poster\.png”/);
+    expect(P.publishProblems(full).join(' ')).toMatch(/rights and consent for “test-poster\.png”/);
 
     const lib = (await ed.get('/media/library')).body.items.find((m: { id: string }) => m.id === poster);
     expect(lib.usedOn).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'Project', where: 'Poster' })]));

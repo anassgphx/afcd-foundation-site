@@ -8,7 +8,7 @@
 // other modules read, and change only when a pillar is published. A new pillar is offered to projects, stories and
 // events only once it is live. Removing a live pillar is reviewed too: its page becomes a redirect to pillars.html.
 import { execFileSync } from 'node:child_process';
-import { and, asc, desc, eq, isNotNull, isNull, max, or } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, max, or, inArray } from 'drizzle-orm';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
@@ -18,6 +18,8 @@ import { articlePillars, articles, events, media, objectivePillars, objectives, 
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
+import { altProblem } from '../media/alt.ts';
+import { videoSchema } from './video.ts';
 
 type Status = typeof pillars.$inferSelect['status'];
 const plain = (max: number) => z.string().trim().max(max).refine((v) => !/[<>]/.test(v), 'Use plain text without < or >.');
@@ -31,26 +33,19 @@ export const COLOURS = [
 ] as const;
 const COLOUR_VALUES = COLOURS.map((c) => c.value) as [string, ...string[]];
 
-/** Page texts an editor may change, with their maximum length. Empty means the default wording below. */
-export const PAGE_FIELDS = [
-  ['flagshipLabel', 40], ['howTitle', 60], ['howSoft', 60], ['howDesc', 200], ['objectivesTitle', 60], ['objectivesSoft', 60], ['objectivesDesc', 200],
-  ['projectsTitle', 60], ['projectsSoft', 60], ['projectsDesc', 200], ['relatedTitle', 60], ['relatedSoft', 60], ['ctaTitle', 80], ['ctaText', 220],
-] as const;
-export type PageKey = (typeof PAGE_FIELDS)[number][0];
-export const EMPTY_PAGE = Object.fromEntries(PAGE_FIELDS.map(([k]) => [k, ''])) as Record<PageKey, string>;
 
 export const pillarSchema = z.object({
   name: need(60, 'Add the pillar name.'),
   short: plain(20).default(''),
-  summary: plain(320).default(''),
+  summary: plain(400).default(''),
   intro: plain(200).default(''),
   colour: z.enum(COLOUR_VALUES, { message: 'Choose one of the four site colours.' }),
   brand: plain(40).default(''),
-  highlights: z.array(need(80, 'Remove empty programme names.')).max(8).default([]),
   approachTitle: plain(60).default(''),
   approachSoft: plain(60).default(''),
   view: plain(500).default(''),
   principles: z.array(need(40, 'Remove empty principles.')).max(6).default([]),
+  // no longer shown on the page or edited in Studio; kept so saved steps are not lost
   steps: z.array(z.object({ title: plain(40), text: plain(200) }).strict()).max(6).default([]),
   // this pillar's own objectives (AFCD-wide SO-01…SO-06 stay separate); entered by AFCD, never imported or invented
   objectives: z.array(z.object({ title: plain(140), text: plain(400).default('') }).strict()).max(6, 'Up to 6 objectives.').default([]),
@@ -59,9 +54,18 @@ export const pillarSchema = z.object({
   // free-text items shown after the ones picked from the shared lists (for work only this pillar does)
   extraActivities: z.array(need(160, 'Remove empty activities.')).max(6).default([]),
   extraGroups: z.array(need(100, 'Remove empty participant groups.')).max(6).default([]),
-  // the page's own headings and texts; empty = the site's default wording (see PAGE_DEFAULTS)
-  page: z.object(Object.fromEntries(PAGE_FIELDS.map(([k, n]) => [k, plain(n).default('')])) as Record<PageKey, z.ZodDefault<ReturnType<typeof plain>>>).strict().prefault({}),
+  // the edited lists for How we work; once saved they replace the picks and extras above (empty = those are used)
+  workItems: z.array(z.object({ icon: z.number().int().min(0).max(30), text: need(160, 'Remove empty cards.') }).strict()).max(10, 'Up to 10 cards.').default([]),
+  // Who we work with: each group's name and an optional short description (older drafts saved names only)
+  audience: z.array(z.preprocess((v) => (typeof v === 'string' ? { title: v, text: '' } : v),
+    z.object({ title: need(100, 'Give every group a name, or remove the empty one.'), text: plain(160).default('') }).strict())).max(10, 'Up to 10 groups.').default([]),
   mediaId: z.string().uuid().nullable().default(null),
+  // optional video in the overview (a platform link or an uploaded file); the photo above is its poster
+  video: videoSchema,
+  // optional photo between the two How we work columns (a different picture from the overview photo)
+  workMediaId: z.string().uuid().nullable().default(null),
+  // photos of the square carousel next to the objectives, in order
+  objectivesMediaIds: z.array(z.string().uuid()).max(8, 'Up to 8 objectives photos.').refine((a) => new Set(a).size === a.length, 'Each photo once.').default([]),
   provenance: plain(300).default(''),
 }).strict();
 export type PillarInput = z.infer<typeof pillarSchema>;
@@ -77,13 +81,13 @@ function parse(raw: unknown): PillarInput {
 
 // ---------------------------------------------------------------- the site's shared lists (activities, participant groups)
 /** Shared lists written in src/content.py. Pillars pick from them by position; the texts themselves stay in one place. */
-export type SiteLists = { activities: string[]; groups: string[] };
+export type SiteLists = { activities: string[]; groups: string[]; icons: string[] };
 let listsCache: { root: string; lists: SiteLists } | null = null;
 export function siteLists(cfg: Config): SiteLists {
   if (listsCache?.root === cfg.siteRoot) return listsCache.lists;
-  let lists: SiteLists = { activities: [], groups: [] };
+  let lists: SiteLists = { activities: [], groups: [], icons: [] };
   try {
-    const py = `import sys, json; sys.path.insert(0, 'src'); import content as c\nprint(json.dumps(dict(activities=c.ACTIVITIES, groups=c.BENEFICIARIES)))`;
+    const py = `import sys, json; sys.path.insert(0, 'src'); import content as c\nprint(json.dumps(dict(activities=c.ACTIVITIES, groups=c.BENEFICIARIES, icons=c.ACT_ICONS)))`;
     lists = JSON.parse(execFileSync('python3', ['-I', '-c', py], { cwd: cfg.siteRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
   } catch { /* site without the generator (tests): no lists to offer */ }
   listsCache = { root: cfg.siteRoot, lists };
@@ -93,6 +97,7 @@ export function siteLists(cfg: Config): SiteLists {
 function checkLists(input: PillarInput, lists: SiteLists) {
   if (lists.activities.length && input.activities.some((i) => i >= lists.activities.length)) throw new AppError(422, 'Unknown activity.');
   if (lists.groups.length && input.groups.some((i) => i >= lists.groups.length)) throw new AppError(422, 'Unknown participant group.');
+  if (lists.icons.length && (input.workItems ?? []).some((w) => w.icon >= lists.icons.length)) throw new AppError(422, 'Unknown icon.');
 }
 
 // ---------------------------------------------------------------- loading
@@ -110,9 +115,11 @@ async function linkedProjects(db: DB, id: string) {
 export async function loadPillar(db: DB, id: string): Promise<FullPillar> {
   const [p] = await db.select().from(pillars).where(eq(pillars.id, id));
   if (!p) throw new AppError(404, 'Pillar not found.');
-  const d = p.draft as unknown as PillarInput | null;
+  // older drafts may still carry the removed page texts and programme list: they are dropped here
+  const { highlights: _h, page: _pg, ...d } = (p.draft ?? {}) as unknown as PillarInput & { highlights?: unknown; page?: unknown };
+  const hasDraft = !!p.draft;
   // drafts from before objectives, custom items or page texts existed have none
-  const content = d ? { ...d, objectives: d.objectives ?? [], extraActivities: d.extraActivities ?? [], extraGroups: d.extraGroups ?? [], page: { ...EMPTY_PAGE, ...(d.page ?? {}) }, mediaId: p.mediaId, provenance: p.provenance } : null;
+  const content = hasDraft ? { ...d, objectives: d.objectives ?? [], extraActivities: d.extraActivities ?? [], extraGroups: d.extraGroups ?? [], workItems: d.workItems ?? [], audience: d.audience ?? [], video: d.video ?? null, workMediaId: d.workMediaId ?? null, objectivesMediaIds: d.objectivesMediaIds ?? [], mediaId: p.mediaId, provenance: p.provenance } : null;
   return { ...p, content, projects: await linkedProjects(db, id), usage: await pillarUsage(db, id) };
 }
 
@@ -133,14 +140,13 @@ export async function pillarProblems(db: DB, p: FullPillar) {
   if (!c.approachTitle) out.push('Add the “Our approach” heading.');
   if (!c.view) out.push('Add the “Our perspective” text.');
   if (!c.principles.length) out.push('Add at least one guiding principle.');
-  if (!c.steps.length) out.push('Add at least one approach step.');
-  if (c.steps.some((s) => !s.title || !s.text)) out.push('Give every approach step a title and a text.');
   if ((c.objectives ?? []).some((o) => !o.title)) out.push('Give every objective a title, or remove the empty one.');
-  if (p.mediaId) {
-    const [m] = await db.select().from(media).where(eq(media.id, p.mediaId));
-    if (!m) out.push('The photo no longer exists in the media library.');
+  for (const [mid, what] of [[p.mediaId, 'photo'], [(c as { workMediaId?: string | null }).workMediaId ?? null, 'How we work photo'], ...((c as { objectivesMediaIds?: string[] }).objectivesMediaIds ?? []).map((x) => [x, 'objectives photo'] as const)] as const) {
+    if (!mid) continue;
+    const [m] = await db.select().from(media).where(eq(media.id, mid));
+    if (!m) out.push(`The ${what} no longer exists in the media library.`);
     else {
-      if (!m.alt) out.push(`Add alt text to the photo “${m.originalName}” in the media library.`);
+      { const ap = altProblem(m, `Add alt text to the photo “${m.originalName}” in the media library.`); if (ap) out.push(ap); }
       if (!m.rightsConfirmed) out.push(`Confirm AFCD may use the photo “${m.originalName}” (usage rights and consent of the people shown).`);
     }
   }
@@ -160,6 +166,8 @@ export async function updatePillar(db: DB, cfg: Config, actor: NonNullable<Actor
     if (!cur.draft) throw new AppError(409, 'Import the current pillar content before editing.');
     if (!EDITABLE.includes(cur.status)) throw new AppError(409, 'This pillar is in review. Withdraw it before editing.');
     if (input.mediaId && !(await t.select({ id: media.id }).from(media).where(eq(media.id, input.mediaId))).length) throw new AppError(422, 'The photo no longer exists in the media library.');
+    if (input.workMediaId && !(await t.select({ id: media.id }).from(media).where(eq(media.id, input.workMediaId))).length) throw new AppError(422, 'The How we work photo no longer exists in the media library.');
+    if (input.objectivesMediaIds.length && (await t.select({ id: media.id }).from(media).where(inArray(media.id, input.objectivesMediaIds))).length !== input.objectivesMediaIds.length) throw new AppError(422, 'An objectives photo no longer exists in the media library.');
     const { provenance, mediaId, ...content } = input;
     const [p] = await t.update(pillars).set({ draft: content as unknown as Record<string, unknown>, mediaId, provenance, status: 'draft', approvedRevisionId: null, removeRequested: false, updatedBy: actor.id, updatedAt: new Date() })
       .where(eq(pillars.id, id)).returning();
@@ -266,8 +274,8 @@ export async function createPillar(db: DB, cfg: Config, actor: NonNullable<Actor
     const used = new Set(all.map((x) => x.colour));
     const colour = COLOURS.find((c) => !used.has(c.value))?.value ?? COLOURS[all.length % COLOURS.length].value;
     const sort = Math.max(-1, ...all.map((x) => x.sort)) + 1;
-    const draft: Omit<PillarInput, 'provenance' | 'mediaId'> = { name, short: name.split(/\s+/)[0].slice(0, 20), summary: '', intro: '', colour, brand: '', highlights: [],
-      approachTitle: '', approachSoft: '', view: '', principles: [], steps: [], objectives: [], activities: [], groups: [], extraActivities: [], extraGroups: [], page: { ...EMPTY_PAGE } };
+    const draft: Omit<PillarInput, 'provenance' | 'mediaId'> = { name, short: name.split(/\s+/)[0].slice(0, 20), summary: '', intro: '', colour, brand: '',
+      approachTitle: '', approachSoft: '', view: '', principles: [], steps: [], objectives: [], activities: [], groups: [], extraActivities: [], extraGroups: [], workItems: [], audience: [], video: null, workMediaId: null, objectivesMediaIds: [] };
     const [p] = await t.insert(pillars).values({ key, number: String(all.length + 1).padStart(2, '0'), name, description: '', colour, publicFile: file, sort,
       draft: draft as unknown as Record<string, unknown>, provenance: 'Added in Studio', status: 'draft', updatedBy: actor.id }).returning();
     await audit(tx, actor, 'pillar.create', { type: 'pillar', id: p.id }, `Added pillar “${name}” (${file})`);
@@ -353,7 +361,7 @@ export function contentFromSite(s: SitePillar): PillarInput {
   const [approachTitle, approachSoft] = splitTitle(s.approach.title);
   return parse({
     name: unescape(s.name), short: unescape(s.short), summary: unescape(s.summary), intro: unescape(s.intro), colour: s.colour, brand: unescape(s.brand),
-    highlights: s.highlights.map(unescape), approachTitle, approachSoft, view: unescape(s.approach.view), principles: s.approach.principles.map(unescape),
+    approachTitle, approachSoft, view: unescape(s.approach.view), principles: s.approach.principles.map(unescape),
     steps: s.approach.steps.map(([title, text]) => ({ title: unescape(title), text: unescape(text) })), objectives: [], activities: s.activities, groups: s.groups,
     mediaId: null, provenance: 'Imported from the current pillar pages (src/content.py)',
   });

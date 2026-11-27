@@ -5,11 +5,14 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Badge, Icon, Link, LiveBadge } from './ui.tsx';
 import './editor.css';
 
+const SAVE_KEY = typeof navigator !== 'undefined' && /Mac|iP(hone|ad)/.test(navigator.platform) ? '⌘S' : 'Ctrl+S';
+
 export type SectionDef = { id: string; label: string; icon: string; done?: boolean; optional?: boolean };
 
 export function EditorHeader({ back, title, file, status, live, extra, dirty, actions }: {
   back: { to: string; label: string }; title: string; file?: string; status: string | null; live: boolean; extra?: ReactNode; dirty: boolean; actions: ReactNode;
 }) {
+  // ⌘S itself is handled by each editor; the header only shows the shortcut next to "Unsaved changes"
   return <div className="ed-head">
     <div className="min-w-0">
       <Link to={back.to} className="ed-back"><Icon n="chev" width={14} height={14} style={{ transform: 'rotate(180deg)' }} />{back.label}</Link>
@@ -17,7 +20,7 @@ export function EditorHeader({ back, title, file, status, live, extra, dirty, ac
       <div className="ed-meta">
         {live && status !== 'published' && <LiveBadge />}{status ? <Badge s={status} /> : null}{extra}
         {file && <span className="ed-file"><Icon n="globe" width={12} height={12} />{file}</span>}
-        <span className={`ed-save${dirty ? ' dirty' : ''}`} role="status">{dirty ? 'Unsaved changes' : 'All changes saved'}</span>
+        <span className={`ed-save${dirty ? ' dirty' : ''}`} role="status">{dirty ? <>Unsaved changes<kbd className="ed-kbd" title="Save">{SAVE_KEY}</kbd></> : 'All changes saved'}</span>
       </div>
     </div>
     <div className="ed-actions">{actions}</div>
@@ -65,6 +68,16 @@ export function Field({ label, hint, children, span, count }: { label: string; h
 }
 
 const STEPS = [['draft', 'Draft'], ['in_review', 'In review'], ['approved', 'Approved'], ['published', 'Live']] as const;
+/** One plain sentence: what the editor does now, so nobody has to work out the workflow from the step dots. */
+export function nextStep(status: string, live: boolean, problems: number): string {
+  if (status === 'archived') return 'Restore it as a draft to work on it again.';
+  if (status === 'published') return 'It is on the website. Edit it any time: changes become a new draft and go live after review.';
+  if (status === 'approved') return 'Publish it. The website is rebuilt and the page is checked before it counts as live.';
+  if (status === 'in_review') return 'Waiting for a reviewer. You are notified when it is approved or sent back.';
+  if (problems > 0) return `Finish the ${problems === 1 ? 'item' : `${problems} items`} below, save, then submit it for review.`;
+  return live ? 'Submit the new draft for review. The live version stays as it is until the draft is published.'
+    : 'Save, then submit it for review. A reviewer approves it before it can be published.';
+}
 /** Publishing panel: where the record stands in the workflow, what is still missing, and the available actions. */
 export function WorkflowPanel({ status, live, problems, children, facts }: { status: string; live: boolean; problems: string[]; children: ReactNode; facts?: [string, ReactNode][] }) {
   const at = status === 'changes_requested' ? 0 : Math.max(0, STEPS.findIndex(([k]) => k === status));
@@ -72,6 +85,7 @@ export function WorkflowPanel({ status, live, problems, children, facts }: { sta
     <ol className="ed-steps" aria-label="Workflow">
       {STEPS.map(([k, l], i) => <li key={k} className={`${i < at || (live && k === 'published') ? 'done' : ''}${i === at && status !== 'archived' ? ' now' : ''}`}><span className="ed-step-dot">{i < at || (live && k === 'published') ? '✓' : i + 1}</span><span>{l}</span></li>)}
     </ol>
+    <p className="ed-next"><b>Next step</b>{nextStep(status, live, problems.length)}</p>
     {status === 'changes_requested' && <div className="notice n-warn"><div>A reviewer asked for changes. Update the record, then submit again.</div></div>}
     {status === 'archived' && <div className="notice n-info"><div>Archived. Restore it to edit.</div></div>}
     {facts && <dl className="kv">{facts.map(([k, v]) => <Fragment key={k}><dt>{k}</dt><dd>{v}</dd></Fragment>)}</dl>}

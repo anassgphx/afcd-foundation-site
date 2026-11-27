@@ -278,7 +278,9 @@
 
   /* ---------- Header: hide the top bar once the page scrolls ---------- */
   var header = $('#site-header'), ticking = false;
-  function onScroll() { header.classList.toggle('is-scrolled', window.scrollY > 120); ticking = false; }
+  // two thresholds: condensing the header shortens the page and the browser shifts the scroll by that much, so one
+  // threshold made it flip back and forth near 120px (the menu jittered). Condense past 140px, expand below 60px.
+  function onScroll() { var y = window.scrollY, on = header.classList.contains('is-scrolled'); if (!on && y > 140) header.classList.add('is-scrolled'); else if (on && y < 60) header.classList.remove('is-scrolled'); ticking = false; }
   window.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
   onScroll();
 
@@ -311,11 +313,14 @@
   drawer.setAttribute('tabindex', '-1');
   // the current page: highlighted in the menu, and its group opened
   (function () {
-    var here = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    // full paths, so /about/team and /team.html (a preview build) both match their menu link
+    var norm = function (p) { p = (p || '/').split('#')[0].split('?')[0].toLowerCase().replace(/\.html$/, '').replace(/\/index$/, '/'); return p.length > 1 ? p.replace(/\/$/, '') : '/'; };
+    var here = norm(location.pathname);
     $$('nav[aria-label="Mobile"] > *', drawer).forEach(function (el, i) { el.style.setProperty('--i', i); });
     $$('a.m-link', drawer).forEach(function (a) {
-      var href = (a.getAttribute('href') || '').split('#')[0].split('?')[0].toLowerCase();
-      if (!href || href !== here) return;
+      var raw = a.getAttribute('href'); if (!raw || raw.charAt(0) === '#') return;
+      var href; try { href = norm(new URL(raw, location.href).pathname); } catch (e) { return; }
+      if (href !== here) return;
       a.classList.add('is-current'); a.setAttribute('aria-current', 'page');
       var panel = a.closest('.m-panel'); if (panel) { var acc = panel.previousElementSibling; if (acc) acc.classList.add('is-current'); }
     });
@@ -365,7 +370,10 @@
     var cur = 0, DUR = 7000, done = 0, t0 = performance.now(), userPaused = reduce, hover = false;
     var rtl = function () { return doc.dir === 'rtl' ? -1 : 1; };
     function running() { return !userPaused && !hover; }
+    function ready() { root.classList.add('hx-ready'); }   // see #hero:not(.hx-ready) in input.css
+    if (document.readyState === 'complete') ready(); else window.addEventListener('load', ready, { once: true });
     function go(i) {
+      ready();
       cur = (i + slides.length) % slides.length; done = 0; t0 = performance.now();
       slides.forEach(function (s, k) { var on = k === cur; s.classList.toggle('is-on', on); if (on) s.removeAttribute('aria-hidden'); else s.setAttribute('aria-hidden', 'true'); });
       copies.forEach(function (c, k) { c.classList.toggle('is-on', k === cur); c.hidden = k !== cur; });
@@ -644,7 +652,7 @@
       if (typeof p === 'string') p = { name: p, logo: '' };
       var shape = /^is-(square|mid|wide)$/.test(p.shape || '') ? ' ' + p.shape : '';
       var initials = p.name.replace(/[()]/g, '').split(/\s+/).filter(function (w) { return /^[A-Za-zÀ-ÿ]/.test(w) && !/^(of|in|for|the|and)$/i.test(w); }).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase();
-      var logo = /^assets\/media\/[\w.-]+$/.test(p.logo) ? '<span class="pt-logo has-img' + shape + '"><img src="' + esc(p.logo) + '" alt="' + esc(p.alt || p.name) + '" loading="lazy" decoding="async"></span>'
+      var logo = /^(?:\.\.\/|\/)?assets\/media\/[\w.-]+$/.test(p.logo) ? '<span class="pt-logo has-img' + shape + '"><img src="' + esc(p.logo) + '" alt="' + esc(p.alt || p.name) + '" loading="lazy" decoding="async"></span>'
         : '<span class="pt-logo is-initials" aria-hidden="true"><span>' + esc(initials) + '</span></span>';   /* no logo yet: the initials */
       return '<li class="pt-tile">' + logo + '<span class="pt-name">' + esc(p.name) + '</span><span class="pt-tag">' + esc(label(group)) + '</span></li>';
     }
@@ -688,7 +696,9 @@
        Studio editor for that page (Studio still asks to sign in). The x hides it until "Staff login" is used again. */
     var staff = false; try { staff = localStorage.getItem('afcd.staff') === '1'; } catch (e) { /* storage off */ }
     if (!staff) return;
-    var file = location.pathname.split('/').pop() || 'index.html';
+    // the page's file: named in the page (category/page addresses have no .html), else the last part of the address
+    var fm = document.querySelector('meta[name="afcd-file"]');
+    var file = (fm && fm.getAttribute('content')) || location.pathname.split('/').pop() || 'index.html';
     if (!/^[a-z0-9-]+\.html$/i.test(file)) return;
     var box = document.createElement('div');
     box.className = 'studio-edit';
@@ -993,4 +1003,41 @@
     if (search) search.addEventListener('input', apply);
   })();
 
+})();
+
+// Pillar overview video: the poster photo shows until the visitor presses play; only then does the platform player
+// (or the uploaded file) load, so the page stays fast and nothing is fetched from video platforms in advance.
+(function () {
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('.plx-play');
+    if (!btn) return;
+    var fig = btn.closest('[data-plx-video]');
+    if (!fig || fig.classList.contains('is-playing')) return;
+    var kind = fig.getAttribute('data-plx-video'), src = fig.getAttribute('data-src') || '', el;
+    if (kind === 'file') {
+      el = document.createElement('video');
+      el.controls = true; el.autoplay = true; el.playsInline = true; el.preload = 'auto';
+      var so = document.createElement('source'); so.src = src; so.type = fig.getAttribute('data-type') || 'video/mp4'; el.appendChild(so);
+    } else if (/^https:\/\/(www\.youtube-nocookie\.com|player\.vimeo\.com|www\.dailymotion\.com|www\.facebook\.com|www\.instagram\.com|www\.tiktok\.com)\//.test(src)) {
+      el = document.createElement('iframe');
+      el.src = src; el.title = (fig.getAttribute('data-title') || 'Video') + ' video';
+      el.setAttribute('allow', 'autoplay; encrypted-media; fullscreen; picture-in-picture'); el.setAttribute('allowfullscreen', '');
+      el.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+    } else return;
+    fig.classList.add('is-playing'); fig.appendChild(el);
+    if (el.focus) el.focus();
+  });
+})();
+
+// Pillar objectives carousel: one square photo at a time; swipe, arrows, dots or the keyboard (the track scrolls)
+(function () {
+  document.querySelectorAll('[data-plx-car]').forEach(function (car) {
+    var track = car.querySelector('.plx-car-track'), dots = car.querySelectorAll('.plx-car-dot');
+    if (!track) return;
+    var go = function (i) { var n = track.children.length; i = (i + n) % n; track.scrollTo({ left: i * track.clientWidth }); };
+    var cur = function () { return Math.round(track.scrollLeft / Math.max(1, track.clientWidth)); };
+    car.querySelectorAll('.plx-car-btn').forEach(function (b) { b.addEventListener('click', function () { go(cur() + Number(b.getAttribute('data-dir'))); }); });
+    dots.forEach(function (d, i) { d.addEventListener('click', function () { go(i); }); });
+    var t; track.addEventListener('scroll', function () { clearTimeout(t); t = setTimeout(function () { var c = cur(); dots.forEach(function (d, i) { d.classList.toggle('is-on', i === c); if (i === c) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current'); }); }, 60); }, { passive: true });
+  });
 })();

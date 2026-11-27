@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import { makeApp, addUser, client, ORIGIN } from './helpers.ts';
 import { auditLog, projectRevisions, projects, publications } from '../src/server/db/schema.ts';
 import { documentsDir, pdfProblem } from '../src/server/modules/publications/documents.ts';
+import { fitTitle } from '../src/server/modules/publications/render.ts';
 
 let h: Awaited<ReturnType<typeof makeApp>>;
 afterEach(async () => { await h?.close(); });
@@ -27,6 +28,17 @@ const pub = (over: Record<string, unknown> = {}) => ({
   title: 'FAKE TEST Report on <nothing> & more'.replace('<nothing>', 'nothing'), slug: 'fake-test-report', type: 'report', summary: 'A fake document used only by the automated tests.',
   abstract: 'This is a **fake** abstract.\n\nIt exists only in the test suite.', publishedOn: '2026-06-30', authors: ['Test Author One'], organisation: '', language: 'en',
   pillarKeys: ['green-thumbs'], projectSlugs: [], coverMediaId: null, documentId: null, externalUrl: '', seoTitle: '', seoDescription: '', ...over,
+});
+
+describe('publication page titles', () => {
+  it('stay within the 70 characters search results show, dropping the section and then the site name, never cutting the title', () => {
+    expect(fitTitle('Youth climate report 2026')).toBe('Youth climate report 2026 · Publications · AFCD Foundation');
+    const mid = 'Youth participation in local climate governance';   // 47 characters: no room for the section
+    expect(fitTitle(mid)).toBe(`${mid} · AFCD Foundation`);
+    const long = 'Youth participation in local climate governance in the Oriental region of Morocco';
+    expect(fitTitle(long)).toBe(long);
+    for (const t of ['a', mid, long]) expect(fitTitle(t).length <= 70 || fitTitle(t) === t).toBe(true);
+  });
 });
 
 describe('PDF checks', () => {

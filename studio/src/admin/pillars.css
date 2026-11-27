@@ -34,6 +34,12 @@
 .pl-step-n { padding-top: 8px; color: var(--muted); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .pl-step-f { display: grid; gap: 6px; }
 .pl-step-a { display: flex; gap: 2px; }
+.pl-work-ico { display: grid; place-items: center; width: 28px; height: 28px; margin-top: 4px; border-radius: 8px; background: var(--canvas); color: var(--ink); }
+.pl-icons { display: flex; flex-wrap: wrap; gap: 4px; }
+.pl-icons button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--muted); cursor: pointer; }
+.pl-icons button:hover { color: var(--ink); border-color: var(--ink); }
+.pl-icons button.on { color: #fff; background: var(--ink); border-color: var(--ink); }
+.pl-icons button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 .pl-projects { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
 .pl-projects li { display: inline-flex; align-items: center; gap: 6px; }
@@ -100,3 +106,26 @@ a.pl-item:hover { background: var(--canvas); }
 .pl-pt-long { grid-column: 1 / -1; }
 .pl-pt-grid .input::placeholder, .pl-pt-grid .textarea::placeholder { color: var(--faint); }
 @media (max-width: 640px) { .pl-pt-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* objectives photos (square carousel on the pillar page) */
+.pl-objpics { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.pl-objpics li { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 10px; border: 1px solid var(--line); background: var(--sunken); }
+.pl-objpics img { width: 100%; height: 100%; object-fit: cover; }
+.pl-objpic-warn { position: absolute; top: 6px; left: 6px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #fff; color: var(--warn); }
+.pl-objpic-a { position: absolute; left: 4px; right: 4px; bottom: 4px; display: flex; justify-content: space-between; padding: 2px; border-radius: 8px; background: rgba(255,255,255,.92); }
+.pl-objpic-a .btn { width: 26px; height: 26px; }
+
+/* pillar editor: one part of the page at a time (tabs in the left column, in the website's order) */
+.pl-tabs-nav a { cursor: pointer; }
+.pl-next { display: flex; justify-content: flex-end; margin-top: 4px; }
+.pl-next .btn svg { width: 14px; height: 14px; margin-right: -3px; }
+
+/* pillar editor tabs: a top tab bar like the project editor (the left nav column is not used) */
+.pl-layout { grid-template-columns: minmax(0, 1fr) 300px; }
+@media (max-width: 980px) { .pl-layout { grid-template-columns: minmax(0, 1fr); } }
+.pl-tabbar { overflow: hidden; }
+.pl-tabbar .tabs { padding: 0 8px; border-bottom: 0; }
+.pl-tabbar .tabs button { display: inline-flex; align-items: center; gap: 6px; height: 48px; font-size: 14px; }
+.pl-tabbar .tabs button:hover { color: var(--ink); }
+.pl-tabbar .tabs button.on::after { left: 12px; right: 12px; }
+.pl-tab-todo { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #EAB308; }

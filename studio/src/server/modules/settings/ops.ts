@@ -13,6 +13,7 @@ import { ROLES, ROLE_LABELS, ROLE_PERMISSIONS } from '../../rbac.ts';
 import * as TR from '../translations/service.ts';
 import * as GSC from '../google/gsc.ts';
 import { loadRows } from './service.ts';
+import { placeholderAlt } from '../media/alt.ts';
 
 type Me = NonNullable<Actor>;
 const DAY = 86400_000;
@@ -50,7 +51,7 @@ export async function mediaFacts(db: DB, cfg: Config) {
   const soon = new Date(Date.now() + 30 * DAY).toISOString().slice(0, 10), today = new Date().toISOString().slice(0, 10);
   const [all, noAlt, noRights, expiring, expired, bytes] = await Promise.all([
     db.select({ n: count() }).from(media).then(n),
-    db.select({ n: count() }).from(media).where(eq(media.alt, '')).then(n),
+    db.select({ alt: media.alt, originalName: media.originalName }).from(media).then((r) => r.filter((m) => !m.alt.trim() || placeholderAlt(m.alt, m.originalName)).length),
     db.select({ n: count() }).from(media).where(eq(media.rightsConfirmed, false)).then(n),
     db.select({ n: count() }).from(media).where(and(isNotNull(media.rightsExpiresOn), gte(media.rightsExpiresOn, today), lte(media.rightsExpiresOn, soon))).then(n),
     db.select({ n: count() }).from(media).where(and(isNotNull(media.rightsExpiresOn), sql`${media.rightsExpiresOn} < ${today}`)).then(n),

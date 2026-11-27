@@ -21,6 +21,7 @@ import * as G from './modules/pages/service.ts';
 import * as N from './modules/news/service.ts';
 import * as PT from './modules/partners/service.ts';
 import { trimIfUncropped } from './modules/media/trim.ts';
+import { publicState } from './modules/publish/public-check.ts';
 import * as EV from './modules/events/service.ts';
 import * as OP from './modules/opportunities/service.ts';
 import * as FM from './modules/forms/service.ts';
@@ -36,8 +37,12 @@ import { registerReviewRoutes } from './modules/review/routes.ts';
 import { registerMediaLibraryRoutes } from './modules/media/routes.ts';
 import { registerInboxRoutes } from './modules/inbox/routes.ts';
 import { registerSettingsRoutes } from './modules/settings/routes.ts';
+import { registerOnPageRoutes } from './modules/seo/onpage-routes.ts';
 import { registerPublicationRoutes } from './modules/publications/routes.ts';
+import { registerApplyEvaluationRoutes, registerApplyFormRoutes, registerApplyMessageRoutes, registerApplyRoutes } from './modules/apply/routes.ts';
+import { registerApplyPublicRoutes } from './modules/apply/public.ts';
 import { projectManageRoutes } from './modules/projects/manage.ts';
+import { pillarVideoRoutes } from './modules/pillars/video.ts';
 import { contentDeleteRoutes } from './modules/content/delete.ts';
 import { documentsDir } from './modules/publications/documents.ts';
 import * as NOTIFY from './modules/settings/notify.ts';
@@ -94,6 +99,8 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     if (key === 'contact') NOTIFY.afterReceive(db, cfg);   // Settings → Notifications (no-op when off)
     return c.json(received);
   });
+  // AFCD Apply applicant API (/apply/v1): outside /studio, no staff session or cookie (modules/apply/public.ts)
+  registerApplyPublicRoutes(app, db, cfg);
   app.use('/studio/*', loadSession);
   app.use('/studio/api/*', csrfGuard);
 
@@ -155,7 +162,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     const [{ live }] = await db.select({ live: count() }).from(t.projects).where(sql`${t.projects.publishedRevisionId} is not null`);
     const [{ pendingEdits }] = await db.select({ pendingEdits: count() }).from(t.projects).where(and(sql`${t.projects.publishedRevisionId} is not null`, sql`${t.projects.status} <> 'published'`));
     const [{ mediaTotal }] = await db.select({ mediaTotal: count() }).from(t.media);
-    const [{ mediaNeedsRights }] = await db.select({ mediaNeedsRights: count() }).from(t.media).where(sql`not ${t.media.rightsConfirmed} or ${t.media.alt} = ''`);
+    const [{ mediaNeedsRights }] = await db.select({ mediaNeedsRights: count() }).from(t.media).where(sql`not ${t.media.rightsConfirmed}`);
     const recent = await db.select({ id: t.projects.id, name: t.projects.name, status: t.projects.status, updatedAt: t.projects.updatedAt, live: sql<boolean>`${t.projects.publishedRevisionId} is not null` })
       .from(t.projects).orderBy(desc(t.projects.updatedAt)).limit(6);
     const queue = await db.select({ id: t.projects.id, name: t.projects.name, status: t.projects.status, updatedAt: t.projects.updatedAt })
@@ -215,6 +222,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     return c.json({ ok: true });
   });
   projectManageRoutes(api, db, actor);   // duplicate (project.create) and delete (project.archive): modules/projects/manage.ts
+  pillarVideoRoutes(api, db, cfg, actor);   // pillar video upload and Studio playback: modules/pillars/video.ts
   contentDeleteRoutes(api, db, actor);   // delete drafts/archived stories, events, opportunities, partners, publications: modules/content/delete.ts
 
   // ---------------------------------------------------------------- Media
@@ -329,7 +337,8 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   api.delete('/pillars/:id{[0-9a-f-]{36}}', perm('pillar.update'), async (c) => c.json(await PL.deleteDraftPillar(db, actor(c), c.req.param('id'))));
   api.get('/pillars/:id{[0-9a-f-]{36}}', perm('pillar.read'), async (c) => {
     const p = await PL.loadPillar(db, c.req.param('id'));
-    const mediaRows = p.mediaId ? await db.select().from(t.media).where(eq(t.media.id, p.mediaId)) : [];
+    const mids = [p.mediaId, p.content?.workMediaId ?? null, ...(p.content?.objectivesMediaIds ?? [])].filter(Boolean) as string[];   // overview, How we work and objectives photos
+    const mediaRows = mids.length ? await db.select().from(t.media).where(inArray(t.media.id, mids)) : [];
     return c.json({ ...p, draft: undefined, media: mediaRows.map(withUrl), problems: await PL.pillarProblems(db, p), history: await PL.pillarHistory(db, p.id), lists: PL.siteLists(cfg), colours: PL.COLOURS });
   });
   api.put('/pillars/:id{[0-9a-f-]{36}}', perm('pillar.update'), async (c) => c.json(await PL.updatePillar(db, cfg, actor(c), c.req.param('id'), await c.req.json())));
@@ -426,10 +435,15 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
 
   // ---------------------------------------------------------------- Publications (reports, studies…) and their PDF files
   registerPublicationRoutes(api);   // modules/publications
+  registerApplyRoutes(api);   // modules/apply (AFCD Apply)
+  registerApplyFormRoutes(api);
+  registerApplyEvaluationRoutes(api);
+  registerApplyMessageRoutes(api);
 
   // ---------------------------------------------------------------- Inbox: website messages and newsletter list (personal data, forms.read / forms.manage)
   registerInboxRoutes(api);   // modules/inbox
   registerSettingsRoutes(api);   // Settings Center (modules/settings)
+  registerOnPageRoutes(api);     // SEO on-page checklist (modules/seo/onpage)
 
   // ---------------------------------------------------------------- SEO studio
   api.get('/seo/audit', perm('seo.read'), async (c) => c.json({ last: await SEO.lastAudit(db), history: await SEO.auditHistory(db) }));
@@ -564,7 +578,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
 
   // ---------------------------------------------------------------- Top bar: search and notifications (permission-filtered)
   api.get('/search', async (c) => { const u = requireUser(c); return c.json(await WS.search(db, u.role, c.req.query('q') ?? '')); });
-  api.get('/overview', perm('dashboard.read'), async (c) => c.json(await dashboardOverview(db, requireUser(c))));
+  api.get('/overview', perm('dashboard.read'), async (c) => c.json(await dashboardOverview(db, requireUser(c), cfg)));
   api.get('/notifications', async (c) => { const u = requireUser(c); return c.json(await WS.notifications(db, u)); });
 
   // ---------------------------------------------------------------- Homepage and contact page editing (marked text, review, publishing)
@@ -609,6 +623,8 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
 
   // ---------------------------------------------------------------- Publishing jobs, audit, users
   api.get('/publish-jobs', perm('dashboard.read'), async (c) => c.json(await publisher.recentJobs(30)));
+  // whether visitors get the build Studio made (the public copy is synced separately): see modules/publish/public-check.ts
+  api.get('/publish-jobs/public', perm('dashboard.read'), async (c) => c.json(await publicState(cfg)));
   api.get('/audit', perm('audit.read'), async (c) => {
     const limit = Math.min(200, Number(c.req.query('limit') || 100));
     return c.json(await db.select().from(t.auditLog).orderBy(desc(t.auditLog.at)).limit(limit));

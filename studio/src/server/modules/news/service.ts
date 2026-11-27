@@ -7,6 +7,7 @@ import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import type { Role } from '../../rbac.ts';
 import { bodyMediaIds, bodyText, type ArticleSnapshot } from './render.ts';
+import { altProblem } from '../media/alt.ts';
 export { bodyMediaIds };
 
 type Status = typeof articles.$inferSelect['status'];
@@ -67,7 +68,7 @@ export async function articleProblems(db: DB, a: FullArticle) {
   const ids = [...new Set([a.heroMediaId, ...a.galleryMediaIds, ...bodyMediaIds(a.body)].filter(Boolean) as string[])];
   if (ids.length) {
     for (const m of await db.select().from(media).where(inArray(media.id, ids))) {
-      if (!m.alt) out.push(`Add alt text to “${m.originalName}”.`);
+      { const ap = altProblem(m, `Add alt text to “${m.originalName}”.`); if (ap) out.push(ap); }
       if (!m.rightsConfirmed) out.push(`Confirm usage rights and consent for “${m.originalName}”.`);
     }
   }

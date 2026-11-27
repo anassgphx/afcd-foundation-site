@@ -7,6 +7,7 @@ import { media } from '../../db/schema.ts';
 import { publicRef } from '../media/service.ts';
 import { esc } from '../pages/blocks.ts';
 import type { PillarSnapshot } from './service.ts';
+import { videoOut } from './video.ts';
 
 /** The approach heading as the generator writes it: the second part in the softer colour. */
 export const approachTitleHtml = (s: Pick<PillarSnapshot, 'approachTitle' | 'approachSoft'>) =>
@@ -14,7 +15,7 @@ export const approachTitleHtml = (s: Pick<PillarSnapshot, 'approachTitle' | 'app
 
 /** `sort` is the pillar's place in the list; numbers (01, 02, …) follow it, so they always run 1..n on the website. */
 export async function pillarEntries(db: DB, live: { id: string; snap: PillarSnapshot; sort: number }[]) {
-  const ids = [...new Set(live.map((x) => x.snap.mediaId).filter(Boolean) as string[])];
+  const ids = [...new Set(live.flatMap((x) => [x.snap.mediaId, x.snap.workMediaId ?? null, ...(x.snap.objectivesMediaIds ?? [])]).filter(Boolean) as string[])];
   const rows = ids.length ? await db.select().from(media).where(inArray(media.id, ids)) : [];
   const image = (id: string | null) => {
     const m = id ? rows.find((r) => r.id === id) : undefined;
@@ -27,14 +28,13 @@ export async function pillarEntries(db: DB, live: { id: string; snap: PillarSnap
     .map(({ id, snap: s }, i) => ({
       key: s.key, number: String(i + 1).padStart(2, '0'), file: s.publicFile, revision: id,
       name: esc(s.name), short: esc(s.short), summary: esc(s.summary), intro: esc(s.intro), colour: s.colour, brand: esc(s.brand),
-      highlights: s.highlights.map(esc),
       approach: { title: approachTitleHtml(s), view: esc(s.view), principles: s.principles.map(esc), steps: s.steps.map((x) => [esc(x.title), esc(x.text)]) },
       // objectives go out as plain text: content.py escapes them itself (empty titles are skipped there too)
       objectives: (s.objectives ?? []).filter((o) => o.title).map((o) => ({ title: o.title, text: o.text ?? '' })),
-      activities: s.activities, groups: s.groups, image: image(s.mediaId),
-      // custom items and page texts (escaped like every other string); empty page texts keep the site's wording
+      activities: s.activities, groups: s.groups, image: image(s.mediaId), workImage: image(s.workMediaId ?? null), objectivesImages: (s.objectivesMediaIds ?? []).map(image).filter(Boolean), video: videoOut(s.video, esc),
+      // custom items (escaped like every other string)
       extraActivities: (s.extraActivities ?? []).map(esc), extraGroups: (s.extraGroups ?? []).map(esc),
-      page: Object.fromEntries(Object.entries(s.page ?? {}).filter(([, v]) => v).map(([k, v]) => [k, esc(v)])),
+      workItems: (s.workItems ?? []).map((w) => ({ icon: w.icon, text: esc(w.text) })), audience: (s.audience ?? []).map((a) => (typeof a === 'string' ? { title: esc(a), text: '' } : { title: esc(a.title), text: esc(a.text ?? '') })),
     }));
 }
 export type PillarEntry = Awaited<ReturnType<typeof pillarEntries>>[number];

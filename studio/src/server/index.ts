@@ -6,6 +6,9 @@ import { createApp } from './app.ts';
 import { purgeExpired } from './modules/forms/service.ts';
 import * as GSC from './modules/google/gsc.ts';
 import { enqueue } from './modules/jobs/service.ts';
+import { runCallSchedule } from './modules/apply/calls.ts';
+import { purgeExpiredDrafts } from './modules/apply/applicant.ts';
+import { processQueue } from './modules/apply/messages.ts';
 
 const cfg = loadConfig();
 const { db } = await openDb(cfg);
@@ -16,6 +19,13 @@ const { app, publisher, runJobs } = createApp(db, cfg);
 const tick = async () => {
   try { for (const r of await publisher.runScheduled()) console.log(`[scheduler] ${r.ok ? 'published' : 'FAILED'} ${r.id}${r.error ? `: ${r.error}` : ''}`); }
   catch (e) { console.error('[scheduler]', e); }
+  // AFCD Apply: calls open and close on server time
+  try { for (const r of await runCallSchedule(db)) console.log(`[scheduler] call ${r.reference} ${r.to}`); }
+  catch (e) { console.error('[scheduler] apply calls', e); }
+  try { if (await publisher.refreshApplyPages()) console.log('[scheduler] application pages rebuilt'); }
+  catch (e) { console.error('[scheduler] application pages', e); }
+  try { const n = await purgeExpiredDrafts(db, cfg); if (n) console.log(`[scheduler] deleted ${n} expired application draft(s)`); }
+  catch (e) { console.error('[scheduler] application drafts', e); }
   // Events move from "upcoming" to "past" when their last day ends (Morocco time): rebuild then. At most every 15 minutes.
   if (Date.now() - lastEventCheck > 15 * 60_000) {
     lastEventCheck = Date.now();
@@ -39,6 +49,8 @@ const jobsTick = async () => {
     const c = await GSC.connection(db);
     if (c?.status === 'connected' && c.property && (await GSC.settings(db)).autoSync && (!c.lastSyncAt || Date.now() - c.lastSyncAt.getTime() > 20 * 3600_000)) await enqueue(db, 'gsc_sync');
     for (let i = 0; i < 5; i++) { const j = await runJobs(); if (!j) break; console.log(`[jobs] ${j.kind} ${j.status}${j.error ? `: ${j.error}` : ''}`); }
+    // AFCD Apply outbox: a few emails every 10 seconds, with retries (modules/apply/messages.ts)
+    const m = await processQueue(db, cfg); if (m.sent || m.failed) console.log(`[apply] emails sent ${m.sent}, failed ${m.failed}`);
   } catch (e) { console.error('[jobs]', e); } finally { jobsBusy = false; }
 };
 setInterval(jobsTick, 10_000).unref();

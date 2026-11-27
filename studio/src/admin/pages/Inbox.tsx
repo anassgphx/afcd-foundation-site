@@ -3,6 +3,7 @@
 // is for forms.read; changing anything needs forms.manage. Studio sends no email: "Reply by email" opens a mail app.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import '../inbox.css';
+import '../email-templates.css';
 import { api, del, patch, post, put } from '../api.ts';
 import { Icon, Link, Modal, ago, fmtDate, initials, useCan, useMe, useToast } from '../ui.tsx';
 import { DataTable, EmptyState, ListToolbar, useUrlState, type Column } from '../DataTable.tsx';
@@ -397,6 +398,7 @@ function describe(e: Ev) {
 }
 
 // ================================================================ Reply composer (sends through the saved SMTP server)
+type Extra = { heading?: string; preheader?: string; button: { label: string; url: string } | null; details: { title?: string; rows: { label: string; value: string }[] } | null };
 function Composer({ m, mail, template, onCancel, onSent }: { m: Msg; mail: MailInfo; template?: string; onCancel: () => void; onSent: (markedReplied: boolean) => Promise<void> }) {
   const toast = useToast();
   const draftKey = `studio.reply.${m.id}`;
@@ -416,18 +418,26 @@ function Composer({ m, mail, template, onCancel, onSent }: { m: Msg; mail: MailI
   useEffect(() => { if (template) applyTemplate(template, true); }, [template]);
   async function applyTemplate(id: string, quiet = false) {
     if (!id || (!quiet && dirty && !confirm('Replace your text with this template?'))) return;
-    try { const r = await post<{ subject: string; body: string }>(`/inbox/messages/${m.id}/template/${id}`); setD({ subject: r.subject, body: `${r.body}\n\n---\nOn ${fmtDate(m.createdAt)}, ${m.name} wrote:\n${m.message.slice(0, 4000).split('\n').map((l) => `> ${l}`).join('\n')}` }); bodyRef.current?.focus(); }
+    try { const r = await post<{ subject: string; body: string } & Extra>(`/inbox/messages/${m.id}/template/${id}`);
+      // the template's layout parts (heading, button, details card) travel with the reply; the text stays editable
+      const x: Extra = { heading: r.heading || undefined, preheader: r.preheader || undefined, button: r.button ?? null, details: r.details ?? null };
+      setExtra(x.heading || x.button || x.details ? x : null);
+      setD({ subject: r.subject, body: `${r.body}\n\n---\nOn ${fmtDate(m.createdAt)}, ${m.name} wrote:\n${m.message.slice(0, 4000).split('\n').map((l) => `> ${l}`).join('\n')}` }); bodyRef.current?.focus(); }
     catch (e) { toast((e as Error).message, true); }
   }
+  const [extra, setExtra] = useState<Extra | null>(null);
   async function send() {
     setErr(''); setBusy(true);
-    try { await post(`/inbox/messages/${m.id}/send`, { subject: d.subject, body: d.body, markReplied: mark }); clear(); await onSent(mark); }
+    try { await post(`/inbox/messages/${m.id}/send`, { subject: d.subject, body: d.body, markReplied: mark, ...(extra ?? {}) }); clear(); await onSent(mark); }
     catch (e) { setErr((e as Error).message); toast((e as Error).message, true); } finally { setBusy(false); }
   }
   return <form className="ix-compose" aria-label="Reply" onSubmit={(e) => { e.preventDefault(); if (!busy) send(); }}>
     <div className="ix-compose-row"><span>From</span><b>{mail.fromName ? `${mail.fromName} <${mail.fromEmail}>` : mail.fromEmail}</b></div>
     <div className="ix-compose-row"><span>To</span><b>{m.name} &lt;{m.email}&gt;</b></div>
     {tpls.length > 0 && <label className="ix-compose-row"><span>Template</span><select className="select" value="" onChange={(e) => applyTemplate(e.target.value)} aria-label="Use a reply template"><option value="">Use a template…</option>{tpls.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>}
+    {extra && <div className="ix-compose-row ix-extra"><span>Includes</span><span className="ix-extra-l">
+      {extra.heading && <i>Heading: “{extra.heading}”</i>}{extra.button && <i>Button: {extra.button.label}</i>}{extra.details && <i>Details card{extra.details.title ? `: ${extra.details.title}` : ''}</i>}
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setExtra(null)}>Send text only</button></span></div>}
     <label className="ix-compose-row"><span>Subject</span><input className="input" value={d.subject} maxLength={200} onChange={(e) => setD({ ...d, subject: e.target.value })} required /></label>
     <textarea ref={bodyRef} className="textarea ix-compose-body" value={d.body} maxLength={20000} onChange={(e) => setD({ ...d, body: e.target.value })} aria-label="Reply text" required
       onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); if (!busy) send(); } if (e.key === 'Escape' && !dirty) onCancel(); }} />
@@ -439,7 +449,7 @@ function Composer({ m, mail, template, onCancel, onSent }: { m: Msg; mail: MailI
         <button className="btn btn-primary" disabled={busy || !d.subject.trim() || !d.body.trim()}><Icon n="send" />{busy ? 'Sending…' : 'Send'}</button>
       </span>
     </div>
-    <small className="muted">⌘/Ctrl + Enter to send. Plain text. The reply and its text are kept in this message’s history.</small>
+    <small className="muted">⌘/Ctrl + Enter to send. Sent in the email design from Settings → Email templates. The reply and its text are kept in this message’s history.</small>
   </form>;
 }
 

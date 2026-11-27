@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, post, put, ApiError } from '../api.ts';
 import { useSite } from '../site.ts';
-import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, useCan, useMe, useToast } from '../ui.tsx';
+import { Badge, Icon, Link, LiveBadge, Modal, ago, fmtDate, navigate, useCan, useMe, useToast } from '../ui.tsx';
 import { MediaPicker, type MediaItem } from './Media.tsx';
 import { Loading } from './Dashboard.tsx';
 import { DataTable, EmptyState, FilterTabs, ListToolbar, type Column } from '../DataTable.tsx';
 import { Integrations, MasterOverview, SearchConsoleView } from './SeoPro.tsx';
-import { PageChecklist, type Check } from './SeoChecklist.tsx';
+import { OnPageList, OnPagePage } from './SeoOnPage.tsx';
 
 type Owner = { kind: string; id?: string; label: string };
 const EDIT: Record<string, (o: Owner) => string | null> = {
@@ -20,33 +20,35 @@ export const tone = (n: number) => (n >= 90 ? '#16a34a' : n >= 70 ? '#ca8a04' : 
 export function SeoPage() {
   const path = location.pathname;
   const file = path.match(/^\/studio\/seo\/pages\/([a-z0-9-]+\.html)$/)?.[1];
+  const onpage = path.match(/^\/studio\/seo\/onpage\/([a-z0-9-]+\.html)$/)?.[1];
+  if (onpage) return <SeoHome key="onpage" tab="onpage" page={onpage} />;
   if (file) return <SeoEditor key={file} file={file} />;
   const tab = (path.match(/^\/studio\/seo\/([a-z-]+)/)?.[1] ?? 'overview') as Tab;
   return <SeoHome tab={TABS.some((t) => t[0] === tab) ? tab : 'overview'} />;
 }
 
 // ---------------------------------------------------------------- SEO Intelligence workspace
-type Tab = 'overview' | 'audit' | 'issues' | 'indexability' | 'links' | 'schema' | 'redirects' | 'pages' | 'search-console' | 'integrations';
+type Tab = 'overview' | 'audit' | 'onpage' | 'issues' | 'indexability' | 'links' | 'schema' | 'redirects' | 'pages' | 'search-console' | 'integrations';
 // workspaces grouped by job: diagnose (Studio's checks), measure (Google), optimize (what Studio publishes), settings
 const GROUPS: [string, [Tab, string][]][] = [
   ['', [['overview', 'Overview']]],
-  ['Diagnose', [['audit', 'Site audit'], ['issues', 'Issues'], ['indexability', 'Indexability'], ['links', 'Internal links']]],
+  ['Diagnose', [['audit', 'Site audit'], ['onpage', 'On-page'], ['issues', 'Issues'], ['indexability', 'Indexability'], ['links', 'Links']]],
   ['Optimize', [['schema', 'Structured data'], ['redirects', 'Redirects'], ['pages', 'Page settings']]],
   ['Google', [['search-console', 'Search Console'], ['integrations', 'Integrations']]],
 ];
 const TABS: [Tab, string][] = GROUPS.flatMap(([, t]) => t);
-const NO_AUDIT: Tab[] = ['search-console', 'integrations', 'redirects'];
+const NO_AUDIT: Tab[] = ['search-console', 'integrations', 'redirects', 'onpage'];
 export type Sev = 'critical' | 'high' | 'medium' | 'low' | 'info';
 type Rule = { code: string; severity: Sev; category: string; kind: 'standard' | 'heuristic'; title: string; why: string; fix: string };
 export type Issue = { id: string; code: string; file: string; severity: Sev; category: string; evidence: string[]; status: 'open' | 'reviewed' | 'resolved'; firstSeen: string; lastSeen: string; resolvedAt: string | null; note: string; reviewer: string | null; rule: Rule | null; owner: Owner };
-export type AuditPage = { file: string; url: string; title: string; description: string; words: number; inSitemap: boolean; robots: string; canonical: string; canonicalOk: boolean; lang: string; inbound: number; inboundFrom: string[]; linksOut: number; schema: string[]; schemaErrors: string[]; h1: string; owner: Owner; score: number; checks?: Check[] };
+export type AuditPage = { file: string; url: string; title: string; description: string; words: number; inSitemap: boolean; robots: string; canonical: string; canonicalOk: boolean; lang: string; inbound: number; inboundFrom: string[]; linksOut: number; schema: string[]; schemaErrors: string[]; h1: string; owner: Owner; score: number; checks?: { id: string; status: string }[] };
 export type AuditV2 = { id: string; kind?: string; at: string; production?: boolean; score: number; scores?: Record<string, number>; counts?: Record<Sev, number>; pages: AuditPage[]; redirects?: { file: string; to: string }[] };
 export const SEV: Record<Sev, { label: string; c: string }> = { critical: { label: 'Critical', c: '#b91c1c' }, high: { label: 'High', c: '#dc2626' }, medium: { label: 'Medium', c: '#d97706' }, low: { label: 'Low', c: '#2563eb' }, info: { label: 'Info', c: '#78716c' } };
 const CATS: [string, string][] = [['technical', 'Technical health'], ['metadata', 'Metadata'], ['content', 'Content checklist'], ['structured', 'Structured data'], ['linking', 'Internal linking'], ['performance', 'Performance (build)']];
 export const editorFor = (o: Owner, file: string) => (o.kind === 'template' ? `/studio/seo/pages/${file}` : EDIT[o.kind]?.(o) ?? null);
 export const SevBadge = ({ s }: { s: Sev }) => <span className="sev" style={{ ['--c' as string]: SEV[s].c }}>{SEV[s].label}</span>;
 
-function SeoHome({ tab }: { tab: Tab }) {
+function SeoHome({ tab, page }: { tab: Tab; page?: string }) {
   const toast = useToast(); const can = useCan();
   const [data, setData] = useState<{ last: AuditV2 | null; history: { at: string; score: number; scores: Record<string, number> | null; counts: Record<string, number> }[] } | null>(null);
   const [issues, setIssues] = useState<Issue[] | null>(null);
@@ -64,7 +66,8 @@ function SeoHome({ tab }: { tab: Tab }) {
     <nav ref={nav} className="seo-tabs sp-nav" aria-label="SEO sections">{GROUPS.map(([g, tabs]) => <div key={g || 'top'} className="sp-navg">{g && <span>{g}</span>}
       {tabs.map(([k, l]) => <Link key={k} to={k === 'overview' ? '/studio/seo' : `/studio/seo/${k}`} className={tab === k ? 'on' : ''} aria-current={tab === k ? 'page' : undefined}>{l}</Link>)}</div>)}</nav>
     {a && !NO_AUDIT.includes(tab) && tab !== 'overview' && <div className="seo-kind"><span className="seo-kind-tag">Build audit</span><span>{ago(a.at)} · {v2 && !a.production ? 'preview build, noindex on purpose' : 'production build'} · Studio’s checks, not Google’s view</span></div>}
-    {tab === 'redirects' ? <Redirects />
+    {tab === 'onpage' ? (page ? <OnPagePage key={page} file={page} /> : <OnPageList />)
+      : tab === 'redirects' ? <Redirects />
       : tab === 'search-console' ? <SearchConsoleView />
       : tab === 'integrations' ? <Integrations />
       : !data || !issues ? <Loading /> : !a ? <section className="card"><div className="dt-empty"><Icon n="search" /><b>No audit yet</b><small>Run a build audit to check every page.</small></div></section>
@@ -83,10 +86,6 @@ export const SEV_ORDER: Sev[] = ['critical', 'high', 'medium', 'low', 'info'];
 
 function SiteAudit({ a, issues }: { a: AuditV2; issues: Issue[] }) {
   const [f, setF] = useState('issues'); const [q, setQ] = useState('');
-  // the page whose checklist is open (?page=… keeps it linkable)
-  const [sel, setSel] = useState<string | null>(() => new URLSearchParams(location.search).get('page'));
-  const pick = (file: string | null) => { setSel(file); history.replaceState(null, '', file ? `/studio/seo/audit?page=${file}` : '/studio/seo/audit'); };
-  const selPage = sel ? a.pages.find((p) => p.file === sel) ?? null : null;
   const open = issues.filter((i) => i.status !== 'resolved');
   const per = (file: string) => open.filter((i) => i.file === file && i.severity !== 'info');
   const rows = a.pages.filter((p) => (f === 'all' || (f === 'issues' ? per(p.file).length > 0 : f === 'passed' ? per(p.file).length === 0 : per(p.file).some((i) => i.severity === f))) && (!q || `${p.title} ${p.file}`.toLowerCase().includes(q.toLowerCase())));
@@ -101,8 +100,7 @@ function SiteAudit({ a, issues }: { a: AuditV2; issues: Issue[] }) {
     <ListToolbar tabs={[['issues', 'With issues', a.pages.filter((p) => per(p.file).length).length], ['critical', 'Critical', a.pages.filter((p) => per(p.file).some((i) => i.severity === 'critical')).length], ['high', 'High', a.pages.filter((p) => per(p.file).some((i) => i.severity === 'high')).length], ['passed', 'Passed', a.pages.filter((p) => !per(p.file).length).length], ['all', 'All', a.pages.length]]}
       value={f} onChange={setF} q={q} setQ={setQ} placeholder="Search pages" />
     <DataTable id="seo-audit" rows={rows} total={a.pages.length} rowKey={(p) => p.file} columns={cols} csvName="afcd-seo-audit" initialSort={{ key: 'score', dir: 'asc' }}
-      onOpen={(p) => pick(p.file)} empty={<EmptyState icon="check" text="No pages here" />} />
-    {selPage && <PageChecklist page={selPage} onClose={() => pick(null)} />}
+      onOpen={(p) => navigate(`/studio/seo/onpage/${p.file}`)} empty={<EmptyState icon="check" text="No pages here" />} />
   </section>;
 }
 
@@ -410,12 +408,12 @@ function SeoEditor({ file }: { file: string }) {
   const editable = can('seo.update') && status !== 'in_review';
   const set = <K extends keyof Form>(k: K, v: Form[K]) => { setF((x) => ({ ...x, [k]: v })); setDirty(true); };
   const showErr = (e: unknown) => setErrs(e instanceof ApiError && e.details?.length ? e.details.map((x) => (x.path ? `${x.path}: ` : '') + x.message) : [e instanceof Error ? e.message : 'Something went wrong.']);
-  async function save(): Promise<boolean> { setBusy('save'); setErrs([]); try { await put(`/seo/pages/${file}`, f); await load(); toast(live ? 'Draft saved. The live page is unchanged until you publish.' : 'Draft saved'); return true; } catch (e) { showErr(e); return false; } finally { setBusy(''); } }
+  async function save(): Promise<boolean> { setBusy('save'); setErrs([]); try { await put(`/seo/pages/${file}`, f); await load(); toast(live ? 'Draft saved. The live page is unchanged until you publish.' : 'Draft saved. Submit it for review when it is ready.'); return true; } catch (e) { showErr(e); return false; } finally { setBusy(''); } }
   async function act(action: string, extra: Record<string, unknown> = {}) {
     if (dirty && !(await save())) return;
     const id = (await api<Detail>(`/seo/pages/${file}`)).override?.id; if (!id) return;
     setBusy(action); setErrs([]);
-    try { await post(`/seo/overrides/${id}/transition`, { action, ...extra }); await load(); setDialog(null); setComment(''); toast({ submit: 'Sent for review', approve: 'Approved', request_changes: 'Changes requested', withdraw: 'Withdrawn to draft' }[action] ?? 'Done'); }
+    try { await post(`/seo/overrides/${id}/transition`, { action, ...extra }); await load(); setDialog(null); setComment(''); toast({ submit: 'Sent for review. Reviewers are notified; it can be published once approved.', approve: 'Approved. It is ready to publish.', request_changes: 'Sent back to the author with your note.', withdraw: 'Back to draft. You can edit it again.' }[action] ?? 'Done'); }
     catch (e) { setDialog(null); showErr(e); } finally { setBusy(''); }
   }
   async function deliver(kind: 'publish' | 'unpublish') {

@@ -77,3 +77,9 @@
 .mr-kpis .ap-kpi.on { border-color: var(--ink); }
 .mr-t td { padding-top: 10px; padding-bottom: 10px; }
 .mr-go { width: 1%; white-space: nowrap; }
+
+/* Applicants table */
+.ac-total { font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
+.ac-n { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.ac-n.zero { color: var(--faint); }
+.ac-n.strong { display: inline-block; min-width: 24px; padding: 1px 8px; border-radius: 999px; background: var(--ink); color: var(--accent-ink); font-weight: 600; font-size: var(--fs-sm); text-align: center; }

@@ -45,6 +45,7 @@ export function registerApplyRoutes(api: Hono<Env>) {
 
   // ---------------------------------------------------------------- Applications (personal data)
   api.get('/apply/submissions', perm('apply.submission.read'), async (c) => c.json(await S.listSubmissions(c.var.db, c.req.query())));
+  api.get('/apply/submissions/by-call', perm('apply.submission.read'), async (c) => c.json(await S.countsByCall(c.var.db)));
   api.get('/apply/submissions/counts', perm('apply.read'), async (c) => c.json(await S.submissionCounts(c.var.db, c.req.query('call') || undefined)));
   api.get('/apply/submissions/:id', perm('apply.submission.read'), async (c) => c.json(await S.getSubmission(c.var.db, c.req.param('id'))));
   api.get('/apply/submissions/:id/files/:file', perm('apply.submission.read'), async (c) => {

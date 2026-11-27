@@ -30,7 +30,7 @@ export function ApplyOverview() {
     ['Open calls', k.open, 'open', k.paused ? `${k.paused} paused` : 'Accepting applications'],
     ['Applications received', a.total, '/studio/apply/applicants', a.status.submitted ? `${a.status.submitted} not yet looked at` : 'All submitted'],
     ['Drafts in progress', a.drafts, '', 'Started, not submitted yet'],
-    ['Needs eligibility review', a.eligibility.needs_review ?? 0, '/studio/apply/applicants?eligibility=needs_review', 'Flagged by the form’s rules'],
+    ['Needs eligibility review', a.eligibility.needs_review ?? 0, '/studio/apply/applicants', 'Flagged by the form’s rules'],
     ...(d.outbox ? [['Email errors', d.outbox.failed, '/studio/apply/messages', d.outbox.ready ? `${d.outbox.queued} waiting to send` : 'Email sending is not set up'] as [string, number, string, string]] : []),
     ['Closing this week', k.closingThisWeek, 'open', 'Open calls with a deadline in 7 days'],
     ['Scheduled', k.scheduled, 'scheduled', 'Approved, opening on their date'],

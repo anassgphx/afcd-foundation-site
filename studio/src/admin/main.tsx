@@ -186,10 +186,10 @@ function applyRoute(path: string): { title: string; el: React.ReactElement; full
   const call = new URLSearchParams(q).get('call');
   const old: [RegExp, (r: RegExpMatchArray) => string][] = [
     [/^\/studio\/apply\/submissions\/([0-9a-f-]{36})$/, (r) => `/studio/apply/applicants/${r[1]}`],
-    [/^\/studio\/apply\/submissions\/?$/, () => `/studio/apply/applicants${q}`],
+    [/^\/studio\/apply\/submissions\/?$/, () => (call ? `/studio/apply/calls/${call}/applicants` : '/studio/apply/applicants')],
     [/^\/studio\/apply\/evaluation\/?$/, () => (call ? `/studio/apply/calls/${call}/reviews` : '/studio/apply/reviews')],
-    [/^\/studio\/apply\/shortlists\/?$/, () => `/studio/apply/applicants?stage=shortlist${call ? `&call=${call}` : ''}`],
-    [/^\/studio\/apply\/decisions\/?$/, () => `/studio/apply/applicants?stage=decision${call ? `&call=${call}` : ''}`],
+    [/^\/studio\/apply\/shortlists\/?$/, () => (call ? `/studio/apply/calls/${call}/applicants?stage=shortlist` : '/studio/apply/applicants')],
+    [/^\/studio\/apply\/decisions\/?$/, () => (call ? `/studio/apply/calls/${call}/applicants?stage=decision` : '/studio/apply/applicants')],
     [/^\/studio\/apply\/communications\/?$/, () => '/studio/apply/messages'],
     [/^\/studio\/apply\/forms\/?$/, () => '/studio/apply/calls'],
     [/^\/studio\/apply\/templates\/([0-9a-f-]{36})$/, (r) => `/studio/apply/calls/templates/${r[1]}`],

@@ -1,10 +1,11 @@
-// AFCD Apply → Applicants: every application as one pipeline (New → Eligibility → In review → Shortlist → Decision).
-// Each stage shows the actions that fit it: the table with status changes, ranking by score, or decisions to approve.
-// The same screen is a call's Applicants tab, with the call fixed. Counts come from the server only.
+// AFCD Apply → Applicants: a table of calls with how many people applied to each. A call's Applicants tab holds the
+// pipeline (New → Eligibility → In review → Shortlist → Decision), where each stage shows the actions that fit it.
+// Counts come from the server only.
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.ts';
-import { Link, useCan } from '../ui.tsx';
-import { useUrlState } from '../DataTable.tsx';
+import { Link, navigate, useCan, useToast } from '../ui.tsx';
+import { DataTable, EmptyState, ListToolbar, TableSkeleton, useUrlState, type Column } from '../DataTable.tsx';
+import { CallBadge, inZone } from './shared.tsx';
 import { ELIG, SubmissionsTable } from './Submissions.tsx';
 import { ShortlistStage, DecisionStage } from './Selection.tsx';
 import './submissions.css';
@@ -21,14 +22,48 @@ export const STAGES: { key: string; label: string; statuses: string[]; hint: str
 type Counts = { status: Record<string, number>; total: number; drafts: number };
 export const stageCount = (c: Counts | null, statuses: string[]) => (!c ? null : statuses.length ? statuses.reduce((n, s) => n + (c.status[s] ?? 0), 0) : c.total);
 
+type CallRow = { id: string; reference: string; title: string; status: string; closesAt: string | null; timeZone: string; projectName: string | null; pillarName: string | null };
+type ByCall = Record<string, Counts>;
+const sum = (c: Counts | undefined, st: string[]) => (c ? st.reduce((n, s) => n + (c.status[s] ?? 0), 0) : 0);
+const TABS: [string, string, (r: CallRow) => boolean][] = [
+  ['all', 'All', () => true], ['open', 'Open', (r) => r.status === 'open' || r.status === 'paused'], ['closed', 'Closed', (r) => ['closed', 'under_evaluation', 'completed'].includes(r.status)],
+];
+
+/** Applicants: one row per call with how many people applied and where they are. A row opens that call's applicants. */
 export function ApplicantsPage() {
-  const [st, set] = useUrlState({ call: '', stage: 'all', q: '', eligibility: '' });
-  const [calls, setCalls] = useState<{ id: string; reference: string; title: string; status: string }[]>([]);
-  useEffect(() => { api('/apply/calls').then((r) => setCalls(r.filter((x: { status: string }) => !['draft', 'in_review', 'changes_requested', 'approved'].includes(x.status)))).catch(() => {}); }, []);
+  const toast = useToast();
+  const [rows, setRows] = useState<CallRow[] | null>(null); const [by, setBy] = useState<ByCall>({});
+  const [st, set] = useUrlState({ status: 'all', q: '' });
+  useEffect(() => {
+    Promise.all([api<CallRow[]>('/apply/calls'), api<ByCall>('/apply/submissions/by-call')])
+      // calls that can receive applications, and any call that already has some
+      .then(([calls, counts]) => { setBy(counts); setRows(calls.filter((c) => counts[c.id] || ['scheduled', 'open', 'paused', 'closed', 'under_evaluation', 'completed'].includes(c.status))); })
+      .catch((e) => { setRows([]); toast((e as Error).message, true); });
+  }, []);
+  const base = (rows ?? []).filter((r) => !st.q || `${r.title} ${r.reference} ${r.projectName ?? ''}`.toLowerCase().includes(st.q.toLowerCase()));
+  const tab = TABS.some((t) => t[0] === st.status) ? st.status : 'all';
+  const shown = base.filter(TABS.find((t) => t[0] === tab)![2]);
+  const num = (n: number, strong = false) => <span className={`ac-n${n ? '' : ' zero'}${strong && n ? ' strong' : ''}`}>{n}</span>;
+  const columns: Column<CallRow>[] = [
+    { key: 'call', header: 'Call', sort: (r) => r.title, render: (r) => <div className="dt-main"><span className="min-w-0"><Link className="title" to={`/studio/apply/calls/${r.id}/applicants`}>{r.title}</Link>
+      <span className="sub"><span className="mono">{r.reference}</span>{r.projectName ? ` · ${r.projectName}` : r.pillarName ? ` · ${r.pillarName}` : ''}</span></span></div> },
+    { key: 'status', header: 'Status', hideBelow: 700, sort: (r) => r.status, render: (r) => <CallBadge s={r.status} /> },
+    { key: 'deadline', header: 'Deadline', hideBelow: 1000, sort: (r) => r.closesAt ?? '9999', render: (r) => <span className="sub ap-nowrap">{r.closesAt ? inZone(r.closesAt, r.timeZone, false) : '—'}</span> },
+    { key: 'total', header: 'Applicants', align: 'right', sort: (r) => -(by[r.id]?.total ?? 0), render: (r) => <b className="ac-total">{by[r.id]?.total ?? 0}</b> },
+    { key: 'new', header: 'New', align: 'right', sort: (r) => -sum(by[r.id], ['submitted']), render: (r) => num(sum(by[r.id], ['submitted']), true) },
+    { key: 'review', header: 'In review', align: 'right', hideBelow: 800, sort: (r) => -sum(by[r.id], ['eligibility_review', 'under_evaluation', 'shortlisted', 'interview']), render: (r) => num(sum(by[r.id], ['eligibility_review', 'under_evaluation', 'shortlisted', 'interview'])) },
+    { key: 'selected', header: 'Selected', align: 'right', hideBelow: 900, sort: (r) => -sum(by[r.id], ['selected']), render: (r) => num(sum(by[r.id], ['selected'])) },
+    { key: 'drafts', header: 'Drafts', align: 'right', hideBelow: 1100, sort: (r) => -(by[r.id]?.drafts ?? 0), render: (r) => num(by[r.id]?.drafts ?? 0) },
+  ];
   return <>
-    <div className="page-h"><div><h1>Applicants</h1><p>Every application, from the moment it arrives to its result. This is personal data: open only what you need.</p></div>
-      <select className="select pl-call" value={st.call} onChange={(e) => set('call', e.target.value)} aria-label="Call"><option value="">All calls</option>{calls.map((c) => <option key={c.id} value={c.id}>{c.reference} · {c.title}</option>)}</select></div>
-    <Pipeline call={st.call} stage={st.stage} setStage={(v) => set('stage', v)} q={st.q} setQ={(v) => set('q', v)} eligibility={st.eligibility} setEligibility={(v) => set('eligibility', v)} />
+    <div className="page-h"><div><h1>Applicants</h1><p>How many people applied to each call. Open a call to see its applicants.</p></div></div>
+    <section className="card">
+      <ListToolbar tabs={TABS.map(([k, l, f]) => [k, l, base.filter(f).length])} value={tab} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search calls or projects" />
+      {!rows ? <TableSkeleton /> : <DataTable id="apply-applicants" rows={shown} total={base.length} rowKey={(r) => r.id} columns={columns} initialSort={{ key: 'total', dir: 'asc' }}
+        onOpen={(r) => navigate(`/studio/apply/calls/${r.id}/applicants`)}
+        empty={<EmptyState icon="users" text={rows.length ? 'No calls match' : 'No applications yet'} sub={rows.length ? undefined : 'Calls appear here once they are scheduled or open.'}
+          onClear={st.q || tab !== 'all' ? () => { set('q', ''); set('status', 'all'); } : undefined} />} />}
+    </section>
   </>;
 }
 

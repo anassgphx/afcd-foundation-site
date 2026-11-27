@@ -80,6 +80,17 @@ export async function submissionCounts(db: DB, callId?: string) {
   return { status: Object.fromEntries(byStatus.map((r) => [r.k, r.n])), eligibility: Object.fromEntries(byElig.map((r) => [r.k, r.n])), drafts, total: byStatus.reduce((s, r) => s + r.n, 0) };
 }
 
+/** Applications per call and status, and drafts in progress per call: the Applicants table. Counts only, no personal data. */
+export async function countsByCall(db: DB) {
+  const rows = await db.select({ call: applySubmissions.callId, k: applySubmissions.status, n: count() }).from(applySubmissions).groupBy(applySubmissions.callId, applySubmissions.status);
+  const drafts = await db.select({ call: applyDrafts.callId, n: count() }).from(applyDrafts).where(eq(applyDrafts.status, 'active')).groupBy(applyDrafts.callId);
+  const out: Record<string, { status: Record<string, number>; total: number; drafts: number }> = {};
+  const of = (id: string) => (out[id] ??= { status: {}, total: 0, drafts: 0 });
+  for (const r of rows) { const o = of(r.call); o.status[r.k] = r.n; o.total += r.n; }
+  for (const r of drafts) of(r.call).drafts = r.n;
+  return out;
+}
+
 // ---------------------------------------------------------------- One application
 async function load(db: DB, id: string) {
   if (!uuid.safeParse(id).success) throw new AppError(404, 'Application not found.');

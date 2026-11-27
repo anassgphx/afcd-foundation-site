@@ -38,6 +38,20 @@ export const sessions = pgTable('sessions', {
   userAgent: text('user_agent'),
 }, (t) => [index('sessions_user_idx').on(t.userId)]);
 
+// "Forgot password" and links sent by an administrator. Only the SHA-256 of a link's token is stored; a row without a
+// token records a request for an unknown or inactive address, so requests can be rate-limited without revealing accounts.
+export const passwordResets = pgTable('password_resets', {
+  id: id(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  email: text('email').notNull(),
+  tokenHash: text('token_hash'),
+  kind: text('kind').notNull().default('forgot'),          // forgot | admin
+  ip: text('ip'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex('password_resets_token_uq').on(t.tokenHash), index('password_resets_email_time_idx').on(t.email, t.createdAt), index('password_resets_ip_time_idx').on(t.ip, t.createdAt)]);
+
 export const loginAttempts = pgTable('login_attempts', {
   id: id(),
   email: text('email').notNull(),

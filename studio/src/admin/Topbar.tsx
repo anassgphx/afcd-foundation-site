@@ -5,9 +5,11 @@ import { createPortal } from 'react-dom';
 import { api } from './api.ts';
 import { Icon, Link, ago, initials, navigate, useCan, useMe } from './ui.tsx';
 import './account-menu.css';
+import './account.css';
 import './topbar.css';
 import { NavIcon } from './navIcons.tsx';
 import { NAV_SHORTCUTS } from './Sidebar.tsx';
+import { ChangeMyPassword } from './pages/Users.tsx';
 
 export type NavLink = { to: string; label: string; icon: string; perm: string; group: string };
 type Hit = { kind: string; id: string; title: string; sub: string; href: string; status: string };
@@ -133,7 +135,7 @@ const typing = (t: EventTarget | null) => { const el = t as HTMLElement | null; 
 
 export function UserMenu({ onLogout }: { onLogout: () => void }) {
   const me = useMe(); const can = useCan();
-  const [open, setOpen] = useState(false); const [keys, setKeys] = useState(false);
+  const [open, setOpen] = useState(false); const [keys, setKeys] = useState(false); const [pwd, setPwd] = useState(false);
   // phones get a bottom sheet; it lives on <body> because the top bar's backdrop blur would trap a fixed element
   const [sheet, setSheet] = useState(() => typeof matchMedia !== 'undefined' && matchMedia('(max-width: 640px)').matches);
   useEffect(() => { const mq = matchMedia('(max-width: 640px)'); const f = () => setSheet(mq.matches); mq.addEventListener('change', f); return () => mq.removeEventListener('change', f); }, []);
@@ -167,6 +169,9 @@ export function UserMenu({ onLogout }: { onLogout: () => void }) {
   const to = (path: string) => () => { close(false); navigate(path); };
   const mod = isMac ? '⌘' : 'Ctrl';
   const groups: { label: string; items: MenuItem[] }[] = [
+    { label: 'Your account', items: [
+      { key: 'password', label: 'Change password', icon: 'lock', run: () => { close(false); setPwd(true); } },
+    ] },
     { label: 'Workspace', items: [
       can('users.read') && { key: 'users', label: 'Users & roles', icon: 'users', run: to('/studio/users') },
       can('audit.read') && { key: 'activity', label: 'Activity log', icon: 'log', run: to('/studio/activity') },
@@ -175,7 +180,6 @@ export function UserMenu({ onLogout }: { onLogout: () => void }) {
     { label: 'Help', items: [
       { key: 'search', label: 'Search Studio', icon: 'search', hint: <kbd>{mod} K</kbd>, run: () => { close(false); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true })); } },
       { key: 'keys', label: 'Keyboard shortcuts', icon: 'dash', hint: <kbd>?</kbd>, run: () => { close(false); setKeys(true); } },
-      ...(me.siteUrl ? [{ key: 'site', label: 'View the website', icon: 'globe', hint: <Icon n="ext" className="am-ext" aria-hidden="true" />, href: me.siteUrl, run: () => close(false) }] : []),
     ] },
   ].filter((g) => g.items.length);
 
@@ -197,10 +201,15 @@ export function UserMenu({ onLogout }: { onLogout: () => void }) {
             : <button key={it.key} role="menuitem" tabIndex={-1} className="am-item" onClick={it.run}><Icon n={it.icon} /><span>{it.label}</span>{it.hint && <span className="am-hint" aria-hidden="true">{it.hint}</span>}</button>)}
         </div>)}
         <div className="am-sep" role="separator" />
-        <button role="menuitem" tabIndex={-1} className="am-item am-danger" onClick={() => { close(false); onLogout(); }}><Icon n="logout" /><span>Sign out</span></button>
+        {/* the public website opens in a new tab, so it stands apart from Studio's own pages */}
+        <div className="am-foot">
+          {me.siteUrl && <a role="menuitem" tabIndex={-1} className="am-site" href={me.siteUrl} target="_blank" rel="noopener" onClick={() => close(false)}><Icon n="globe" /><span><b>View the website</b><small>{me.siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}</small></span><Icon n="ext" className="am-ext" aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span></a>}
+          <button role="menuitem" tabIndex={-1} className="am-item am-danger" onClick={() => { close(false); onLogout(); }}><Icon n="logout" /><span>Sign out</span></button>
+        </div>
       </div>
     </>)}
     {keys && <ShortcutsDialog onClose={() => { setKeys(false); trigger.current?.focus(); }} />}
+    {pwd && <ChangeMyPassword onClose={() => { setPwd(false); trigger.current?.focus(); }} />}
   </div>;
 }
 

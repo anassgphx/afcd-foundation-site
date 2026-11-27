@@ -51,6 +51,19 @@ export const ROLE_LABELS: Record<Role, string> = {
   application_reviewer: 'Application Reviewer',
 };
 
+/** One sentence per role, in plain words, for Users & roles. The permissions below are what the server enforces. */
+export const ROLE_DESCRIPTIONS: Record<Role, string> = {
+  super_admin: 'Everything, including people’s accounts, roles and passwords.',
+  website_admin: 'Everything in Studio except managing people’s accounts.',
+  content_editor: 'Creates and edits content (projects, stories, pages, events, partners and more) and uploads media. Cannot approve or publish.',
+  content_reviewer: 'Reviews and approves content and calls for applications before they go live.',
+  media_manager: 'Uploads, edits and removes images and files in the media library.',
+  seo_manager: 'Works on search: page titles, descriptions, redirects and SEO settings.',
+  read_only: 'Can look around Studio without changing anything.',
+  application_manager: 'Runs calls for applications: forms, applicants, reviews, decisions and emails to applicants.',
+  application_reviewer: 'Scores only the applications assigned to them.',
+};
+
 const READ: Permission[] = ['dashboard.read', 'project.read', 'media.read', 'page.read', 'news.read', 'partner.read', 'pillar.read', 'about.read', 'event.read', 'opportunity.read', 'publication.read', 'seo.read', 'translation.read'];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {

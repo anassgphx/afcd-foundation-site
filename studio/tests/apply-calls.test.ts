@@ -232,7 +232,8 @@ describe('migrations 0028 and 0027 rollback', () => {
     await pg.exec(`insert into apply_calls (reference, slug, title) values ('AFCD-2099-001', 'fake-call', 'Fake call')`);
     await pg.exec(`insert into apply_forms (call_id, definition) select id, '{}'::jsonb from apply_calls`);
     await pg.exec(`insert into opportunities (slug, title, apply_method) values ('fake-opp', 'Fake', 'studio')`);
-    await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0032_apply_messages_down.sql'), 'utf8'));   // newer first
+    await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0033_password_resets_down.sql'), 'utf8'));   // newer first
+    await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0032_apply_messages_down.sql'), 'utf8'));
     await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0031_apply_evaluation_down.sql'), 'utf8'));
     await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0030_apply_submissions_down.sql'), 'utf8'));
     expect((await pg.query(`select to_regclass('apply_submissions') as t`)).rows[0]).toEqual({ t: null });

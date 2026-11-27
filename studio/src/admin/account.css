@@ -1,0 +1,46 @@
+/* Accounts: sign-in screen extras (forgot password, new password) and the "Change password" dialog. */
+.auth-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.auth-link { justify-self: center; border: 0; background: none; padding: 2px 0; font: inherit; font-size: 13px; font-weight: 500; color: var(--ink-2); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
+.auth-link:hover { color: #000; text-decoration-color: currentColor; }
+.auth-link:focus-visible { outline: none; box-shadow: var(--focus); border-radius: 4px; }
+.auth-btn-ghost { background: #fff; color: #000; border: 1px solid var(--line-strong); }
+.auth-btn-ghost:hover:not(:disabled) { background: var(--canvas); }
+.auth-ok { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; background: var(--ok-bg); color: var(--ok); }
+.auth-ok svg { width: 24px; height: 24px; }
+.auth-sub b { color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+.auth-strength { min-height: 1em; font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.auth-strength.s-too-short { color: var(--bad); }
+.auth-strength.s-good { color: var(--warn); }
+.auth-strength.s-strong { color: var(--ok); }
+
+/* Change password and the user dialogs */
+.pw-field { position: relative; }
+.pw-field .input { padding-right: 44px; }
+.pw-eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; }
+.pw-eye:hover { background: var(--hover); color: var(--ink); }
+.pw-gen { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pw-note { font-size: var(--fs-sm); color: var(--muted); }
+.um-head { display: flex; align-items: center; gap: 12px; padding: 4px 0 8px; }
+.um-head .avatar { width: 40px; height: 40px; font-size: 14px; }
+.um-head b { display: block; }
+.um-head small { color: var(--muted); }
+.um-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 0 -20px 4px; padding: 0 20px; }
+.um-tabs button { height: 38px; padding: 0 10px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; font: inherit; font-size: var(--fs-md); color: var(--muted); cursor: pointer; }
+.um-tabs button.on { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+.role-desc { font-size: var(--fs-sm); color: var(--muted); line-height: 1.5; }
+.role-pick { display: grid; gap: 6px; }
+.role-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer; }
+.role-opt:hover { border-color: var(--line-strong); }
+.role-opt:has(input:checked) { border-color: var(--ink); background: var(--hover); }
+.role-opt input { margin-top: 3px; accent-color: var(--ink); }
+.role-opt b { display: block; font-size: var(--fs-md); }
+.role-count { font-size: var(--fs-xs); color: var(--muted); background: var(--selected); border-radius: 999px; padding: 1px 8px; margin-left: 6px; font-weight: 500; }
+
+/* account menu footer: the website stands apart (it opens in a new tab), then Sign out */
+.am-foot { display: flex; flex-direction: column; gap: 4px; }
+.am-site { display: flex; align-items: center; gap: 12px; margin: 2px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--sunken); color: var(--ink); text-decoration: none; }
+.am-site:hover, .am-site:focus-visible { background: var(--hover); border-color: var(--line-strong); outline: none; }
+.am-site > svg:first-child { width: 20px; height: 20px; flex: none; }
+.am-site > span:not(.sr-only) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.am-site b { font-size: var(--fs-md); font-weight: 600; }
+.am-site small { font-size: var(--fs-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

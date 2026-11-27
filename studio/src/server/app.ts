@@ -13,8 +13,9 @@ import type { Config } from './config.ts';
 import * as t from './db/schema.ts';
 import { AppError, clientIp, csrfGuard, loadSession, perm, requirePerm, requireUser, securityHeaders, type Env } from './http.ts';
 import { SESSION_COOKIE, createSession, deleteSession, hashPassword, recordAttempt, tooManyAttempts, validatePasswordStrength, verifyPassword, isLocalOrigin } from './auth/session.ts';
-import { ROLE_LABELS, ROLE_PERMISSIONS, ROLES, type Role } from './rbac.ts';
+import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLE_PERMISSIONS, ROLES, type Role } from './rbac.ts';
 import { audit } from './audit.ts';
+import * as ACC from './modules/account/service.ts';
 import * as P from './modules/projects/service.ts';
 import * as M from './modules/media/service.ts';
 import * as G from './modules/pages/service.ts';
@@ -148,8 +149,14 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     return c.json({ ok: true });
   });
 
-  // Public, non-sensitive settings for the sign-in screen.
-  api.get('/public-config', (c) => c.json({ siteUrl: cfg.publicSiteUrl }));
+  // Forgot password (public): the same answer whether or not the address has an account. See modules/account/service.ts.
+  api.post('/auth/forgot', async (c) => c.json(await ACC.requestReset(db, cfg, await c.req.json().catch(() => ({})), clientIp(c))));
+  api.post('/auth/reset/check', async (c) => { const b = await c.req.json().catch(() => ({})); return c.json(await ACC.checkToken(db, typeof b?.token === 'string' ? b.token : '')); });
+  api.post('/auth/reset', async (c) => c.json(await ACC.completeReset(db, await c.req.json().catch(() => ({})), clientIp(c))));
+  api.post('/me/password', async (c) => { requireUser(c); return c.json(await ACC.changeOwn(db, actor(c), c.var.sessionId ?? null, await c.req.json().catch(() => ({})))); });
+
+  // Public, non-sensitive settings for the sign-in screen (passwordReset: whether "Forgot password" can email a link).
+  api.get('/public-config', (c) => c.json({ siteUrl: cfg.publicSiteUrl, passwordReset: ACC.mailReady(cfg) }));
 
   api.get('/me', (c) => {
     const u = requireUser(c);
@@ -631,28 +638,35 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   });
   api.get('/users', perm('users.read'), async (c) => {
     const rows = await db.select({ id: t.users.id, email: t.users.email, name: t.users.name, role: t.users.role, active: t.users.active, lastLoginAt: t.users.lastLoginAt }).from(t.users).orderBy(asc(t.users.name));
-    return c.json({ users: rows, roles: ROLES.map((r) => ({ id: r, label: ROLE_LABELS[r], permissions: ROLE_PERMISSIONS[r] })) });
+    return c.json({ users: rows, roles: ROLES.map((r) => ({ id: r, label: ROLE_LABELS[r], description: ROLE_DESCRIPTIONS[r], permissions: ROLE_PERMISSIONS[r] })), mailReady: ACC.mailReady(cfg) });
   });
   api.post('/users', perm('users.manage'), async (c) => {
-    const body = z.object({ email: z.string().trim().toLowerCase().email(), name: z.string().trim().min(2).max(120), role: z.enum(ROLES), password: z.string() }).safeParse(await c.req.json());
+    // either a temporary password to share, or sendLink: they get an email to choose their own (needs email set up)
+    const body = z.object({ email: z.string().trim().toLowerCase().email(), name: z.string().trim().min(2).max(120), role: z.enum(ROLES), password: z.string().max(256).optional(), sendLink: z.boolean().optional() }).safeParse(await c.req.json());
     if (!body.success) throw new AppError(422, 'Some fields need attention.', body.error.issues);
-    const weak = validatePasswordStrength(body.data.password);
-    if (weak) throw new AppError(422, weak);
-    const [u] = await db.insert(t.users).values({ ...body.data, passwordHash: await hashPassword(body.data.password) }).onConflictDoNothing().returning({ id: t.users.id });
+    const { sendLink, password, ...data } = body.data;
+    if (sendLink && !ACC.mailReady(cfg)) throw new AppError(409, 'Email sending isn’t set up yet (Settings → Email). Give them a temporary password instead.');
+    if (!sendLink) { const weak = validatePasswordStrength(password ?? ''); if (weak) throw new AppError(422, weak); }
+    const [u] = await db.insert(t.users).values({ ...data, passwordHash: await hashPassword(sendLink ? randomBytes(32).toString('base64url') : password!) }).onConflictDoNothing().returning({ id: t.users.id });
     if (!u) throw new AppError(409, 'A user with this email already exists.');
-    await audit(db, actor(c), 'users.create', { type: 'user', id: u.id }, `${body.data.email} as ${body.data.role}`);
-    return c.json(u, 201);
+    await audit(db, actor(c), 'users.create', { type: 'user', id: u.id }, `${data.email} as ${data.role}`);
+    if (sendLink) await ACC.adminSendLink(db, cfg, actor(c), u.id);
+    return c.json({ ...u, linkSent: !!sendLink }, 201);
   });
   api.patch('/users/:id', perm('users.manage'), async (c) => {
-    const body = z.object({ role: z.enum(ROLES).optional(), active: z.boolean().optional() }).strict().safeParse(await c.req.json());
-    if (!body.success) throw new AppError(422, 'Some fields need attention.');
-    if (c.req.param('id') === c.var.user!.id) throw new AppError(409, 'You cannot change your own role or access.');
+    const body = z.object({ role: z.enum(ROLES).optional(), active: z.boolean().optional(), name: z.string().trim().min(2).max(120).optional(), email: z.string().trim().toLowerCase().email().max(200).optional() }).strict().safeParse(await c.req.json());
+    if (!body.success) throw new AppError(422, 'Some fields need attention.', body.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })));
+    if (c.req.param('id') === c.var.user!.id && (body.data.role !== undefined || body.data.active !== undefined)) throw new AppError(409, 'You cannot change your own role or access.');
+    if (!z.string().uuid().safeParse(c.req.param('id')).success) throw new AppError(404, 'User not found.');
+    if (body.data.email) { const [taken] = await db.select({ id: t.users.id }).from(t.users).where(eq(t.users.email, body.data.email)); if (taken && taken.id !== c.req.param('id')) throw new AppError(409, 'Another user already has this email.'); }
     const [u] = await db.update(t.users).set({ ...body.data, updatedAt: new Date() }).where(eq(t.users.id, c.req.param('id'))).returning({ id: t.users.id, email: t.users.email });
     if (!u) throw new AppError(404, 'User not found.');
     if (body.data.active === false) await db.delete(t.sessions).where(eq(t.sessions.userId, u.id));
     await audit(db, actor(c), 'users.update', { type: 'user', id: u.id }, u.email, body.data);
     return c.json({ ok: true });
   });
+  api.post('/users/:id/password', perm('users.manage'), async (c) => c.json(await ACC.adminSetPassword(db, actor(c), c.req.param('id'), await c.req.json().catch(() => ({})))));
+  api.post('/users/:id/password-link', perm('users.manage'), async (c) => c.json(await ACC.adminSendLink(db, cfg, actor(c), c.req.param('id'))));
 
   app.route('/studio/api', api);
   app.all('/studio/api/*', (c) => c.json({ error: 'Not found.' }, 404));

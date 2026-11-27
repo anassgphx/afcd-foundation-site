@@ -1,4 +1,4 @@
-// Approval queue, publishing history, activity log and users.
+// Publishing history and activity log; Users & roles is in Users.tsx.
 import { Fragment, useEffect, useState, type FormEvent } from 'react';
 import { api, patch, post } from '../api.ts';
 import { Badge, Icon, Link, Modal, ago, fmtDate, useCan, useMe, useToast } from '../ui.tsx';
@@ -48,66 +48,5 @@ export function ActivityLog() {
   </>;
 }
 
-export function Users() {
-  const me = useMe(); const can = useCan(); const toast = useToast();
-  const [d, setD] = useState<{ users: UserRow[]; roles: { id: string; label: string; permissions: string[] }[] } | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [st, set] = useUrlState({ status: 'active', role: 'all', q: '' });
-  const load = () => api('/users').then(setD);
-  useEffect(() => { load(); }, []);
-  async function change(id: string, body: Record<string, unknown>) { try { await patch(`/users/${id}`, body); toast('User updated'); load(); } catch (e) { toast((e as Error).message, true); } }
-  const roleLabel = (r: string) => d?.roles.find((x) => x.id === r)?.label ?? r;
-  const is = (k: string, u: UserRow) => (k === 'active' ? u.active : k === 'inactive' ? !u.active : true);
-  const base = (d?.users ?? []).filter((u) => (st.role === 'all' || u.role === st.role) && (!st.q || `${u.name} ${u.email}`.toLowerCase().includes(st.q.toLowerCase())));
-  const shown = base.filter((u) => is(st.status, u));
-  const tabs: [string, string, number][] = [['active', 'Active'], ['inactive', 'Inactive'], ['all', 'All']].map(([k, l]) => [k, l, base.filter((u) => is(k, u)).length]);
-  const manage = (u: UserRow) => can('users.manage') && u.id !== me.user.id;
-  const columns: Column<UserRow>[] = [
-    { key: 'name', header: 'Name', sort: (u) => u.name, csv: (u) => u.name, render: (u) => <div className="dt-main"><span className="avatar">{u.name.split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase()}</span><span className="min-w-0"><b>{u.name}{u.id === me.user.id ? ' (you)' : ''}</b><span className="sub">{u.email}</span></span></div> },
-    { key: 'role', header: 'Role', sort: (u) => roleLabel(u.role), csv: (u) => roleLabel(u.role), render: (u) => manage(u) && d ? <select className="select" style={{ width: 'auto', height: 32 }} value={u.role} onChange={(e) => change(u.id, { role: e.target.value })} aria-label={`Role of ${u.name}`}>{d.roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select> : <span className="pill">{roleLabel(u.role)}</span> },
-    { key: 'last', header: 'Last sign-in', sort: (u) => (u.lastLoginAt ? -new Date(u.lastLoginAt).getTime() : 0), csv: (u) => u.lastLoginAt ?? 'never', hideBelow: 800, render: (u) => <span className="sub">{u.lastLoginAt ? ago(u.lastLoginAt) : 'Never'}</span> },
-    { key: 'access', header: 'Access', sort: (u) => (u.active ? 0 : 1), csv: (u) => (u.active ? 'active' : 'inactive'), align: 'right',
-      render: (u) => manage(u) ? <button className="btn btn-sm" onClick={() => change(u.id, { active: !u.active })}>{u.active ? 'Deactivate' : 'Reactivate'}</button> : <span className="dt-state"><span className="dot" style={{ ['--c' as string]: u.active ? '#16a34a' : '#a8a29e' }} />{u.active ? 'Active' : 'Inactive'}</span> },
-  ];
-  return <>
-    <div className="page-h"><div><h1>Users & roles</h1><p>Who can edit, review and publish. Permissions are enforced by the server.</p></div>{can('users.manage') && <button className="btn btn-primary" onClick={() => setAdding(true)}><Icon n="plus" />Add user</button>}</div>
-    <div className="grid">
-      <section className="card">
-        <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search name or email">
-          <select className="select" value={st.role} onChange={(e) => set('role', e.target.value)} aria-label="Role"><option value="all">All roles</option>{d?.roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select>
-        </ListToolbar>
-        {!d ? <Loading /> : <DataTable id="users" rows={shown} total={d.users.length} rowKey={(u) => u.id} columns={columns} csvName="afcd-studio-users" initialSort={{ key: 'name', dir: 'asc' }}
-          empty={<EmptyState icon="users" text="No users match these filters" onClear={() => { set('q', ''); set('role', 'all'); set('status', 'all'); }} />} />}
-      </section>
-      {d && <section className="card"><div className="card-h"><h2>What each role can do</h2><span className="muted">Open a role to see its permissions by area</span></div>
-        <div className="role-list">{d.roles.map((r) => { const g = groupPerms(r.permissions); return <details key={r.id} className="role-row">
-          <summary><b>{r.label}</b><span className="muted">{g.length} area{g.length === 1 ? '' : 's'}</span></summary>
-          <dl className="role-perms">{g.map(([area, acts]) => <Fragment key={area}><dt>{area}</dt><dd>{acts.join(', ')}</dd></Fragment>)}</dl>
-        </details>; })}</div></section>}
-    </div>
-    {adding && d && <AddUser roles={d.roles} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />}
-  </>;
-}
-// Permission keys (project.publish…) grouped by area, in plain words, for the role overview
-const AREA: Record<string, string> = { project: 'Projects', page: 'Pages', news: 'News & stories', partner: 'Partners', pillar: 'Pillars', about: 'Site pages', event: 'Events',
-  opportunity: 'Opportunities', publication: 'Publications', forms: 'Inbox', seo: 'SEO', translation: 'Translations', media: 'Media library', users: 'Users', settings: 'Settings',
-  site: 'Website', audit: 'Activity log', menu: 'Menus', home: 'Homepage' };
-function groupPerms(perms: string[]): [string, string[]][] {
-  const m = new Map<string, string[]>();
-  for (const p of perms) { const [a, ...rest] = p.split('.'); const k = AREA[a] ?? a.charAt(0).toUpperCase() + a.slice(1); m.set(k, [...(m.get(k) ?? []), rest.join(' ').replace(/_/g, ' ') || 'all']); }
-  return [...m];
-}
-type UserRow = { id: string; email: string; name: string; role: string; active: boolean; lastLoginAt: string | null };
-
-function AddUser({ roles, onClose, onDone }: { roles: { id: string; label: string }[]; onClose: () => void; onDone: () => void }) {
-  const toast = useToast();
-  const [f, setF] = useState({ name: '', email: '', role: 'content_editor', password: '' }); const [err, setErr] = useState('');
-  async function submit(e: FormEvent) { e.preventDefault(); setErr(''); try { await post('/users', f); toast('User added. Share the password with them securely.'); onDone(); } catch (x) { setErr((x as Error).message); } }
-  return <Modal size="sm" title="Add user" onClose={onClose}><form onSubmit={submit}><div className="modal-b stack">
-    <label className="field"><span>Name</span><input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></label>
-    <label className="field"><span>Email</span><input className="input" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required /></label>
-    <label className="field"><span>Role</span><select className="select" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>{roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select></label>
-    <label className="field"><span>Temporary password</span><input className="input" type="password" autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} minLength={12} required /><small className="muted">At least 12 characters.</small></label>
-    {err && <div className="notice n-bad">{err}</div>}
-  </div><div className="modal-f"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary">Add user</button></div></form></Modal>;
-}
+// Users & roles lives in its own file (accounts, roles, passwords).
+export { Users } from './Users.tsx';

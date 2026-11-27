@@ -1,4 +1,5 @@
 // AFCD Studio admin app: session gate, shell (sidebar + top bar) and routes.
+import { ForgotForm, ResetForm, resetToken } from './AuthForms.tsx';
 import React, { StrictMode, Suspense, lazy, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import './studio.css';
@@ -51,7 +52,8 @@ function App() {
   const load = () => api<Me>('/me').then((m) => { setCsrf(m.csrf, m.user.id); setMe(m); }).catch(() => setMe(null));
   useEffect(() => { load(); }, []);
   if (me === undefined) return <div className="login"><div className="skeleton" style={{ width: 160 }} /></div>;
-  if (me === null) return <Login onDone={load} />;
+  // a password link opens the sign-in screen's "choose a new password" step, even in a browser that is signed in
+  if (me === null || resetToken()) return <Login onDone={load} />;
   return <MeCtx.Provider value={me}><ToastHost><Shell onLogout={() => { post('/auth/logout').finally(() => setMe(null)); }} /></ToastHost></MeCtx.Provider>;
 }
 
@@ -61,7 +63,9 @@ function Login({ onDone }: { onDone: () => void }) {
   const [err, setErr] = useState(''); const [fieldErr, setFieldErr] = useState<{ email?: string; password?: string }>({});
   const [busy, setBusy] = useState(false);
   const [siteUrl, setSiteUrl] = useState('');
-  useEffect(() => { api<{ siteUrl: string }>('/public-config').then((c) => setSiteUrl(c.siteUrl)).catch(() => {}); }, []);
+  const [mode, setMode] = useState<'signin' | 'forgot' | 'reset'>(() => (resetToken() ? 'reset' : 'signin'));
+  const [canReset, setCanReset] = useState(false);
+  useEffect(() => { api<{ siteUrl: string; passwordReset?: boolean }>('/public-config').then((c) => { setSiteUrl(c.siteUrl); setCanReset(!!c.passwordReset); }).catch(() => {}); }, []);
   async function submit(e: FormEvent) {
     e.preventDefault(); setErr('');
     const fe: typeof fieldErr = {};
@@ -98,6 +102,7 @@ function Login({ onDone }: { onDone: () => void }) {
       </section>
 
       <section className="auth-panel">
+        {mode === 'forgot' ? <ForgotForm available={canReset} onBack={() => setMode('signin')} /> : mode === 'reset' ? <ResetForm token={resetToken()} onDone={() => setMode('signin')} /> :
         <form className="auth-form" onSubmit={submit} noValidate aria-describedby={err ? 'auth-err' : undefined}>
           <h2>Sign in</h2>
           <p className="auth-sub">Use your AFCD Portal account.</p>
@@ -109,7 +114,7 @@ function Login({ onDone }: { onDone: () => void }) {
             {fieldErr.email && <small id="err-email" className="auth-err-t">{fieldErr.email}</small>}
           </label>
           <label className="auth-field">
-            <span>Password</span>
+            <span className="auth-label-row">Password<button type="button" className="auth-link" onClick={() => setMode('forgot')}>Forgot password?</button></span>
             <span className={`auth-in${fieldErr.password ? ' bad' : ''}`}><Icon n="lock" />
               <input type={show ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(e) => { setPassword(e.target.value); setFieldErr((f) => ({ ...f, password: undefined })); }}
                 aria-invalid={!!fieldErr.password} aria-describedby={fieldErr.password ? 'err-pw' : undefined} required />
@@ -120,7 +125,7 @@ function Login({ onDone }: { onDone: () => void }) {
           <button className="auth-btn" disabled={busy}>{busy ? <><span className="auth-spin" aria-hidden="true" />Signing in…</> : <>Sign in<span className="auth-btn-arr" aria-hidden="true">→</span></>}</button>
           <p className="auth-note">Access is for AFCD staff. Ask an administrator for an account.</p>
           {siteUrl && <a className="auth-back" href={siteUrl}>← Back to website</a>}
-        </form>
+        </form>}
       </section>
     </main>
   );

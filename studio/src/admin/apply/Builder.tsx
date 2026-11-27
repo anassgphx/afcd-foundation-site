@@ -1,5 +1,6 @@
-// AFCD Apply form builder. Two views of the same form: Simple (one column of cards, edited in place; the default)
-// and Advanced. Advanced, left: pages, questions and rules (drag to reorder, or use the arrow buttons / Alt+↑↓).
+// AFCD Apply form builder. One column of cards, edited in place (the simple editor, always where it opens). The detailed
+// view is not a mode to choose: it opens only from a question's "Logic" / "More settings" links, and "Back to the form"
+// returns. Detailed view, left: pages, questions and rules (drag to reorder, or use the arrow buttons / Alt+↑↓).
 // Centre: the live form on a desktop or phone canvas, with inline label editing; "Test" fills it in like an applicant,
 // running the same engine the server runs. Right: the inspector. Top: undo/redo, problems, save and publish.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -34,8 +35,8 @@ export function Builder({ initial, rev: rev0, locked, title, subtitle, back, sav
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [lang, setLang] = useState<Lng>('en');
   const [mode, setMode] = useState<'edit' | 'test'>('edit');
-  const [view, setViewState] = useState<'simple' | 'advanced'>(() => { try { return localStorage.getItem('studio:fb-view') === 'advanced' ? 'advanced' : 'simple'; } catch { return 'simple'; } });
-  const setView = (v: 'simple' | 'advanced') => { setViewState(v); setMode('edit'); try { localStorage.setItem('studio:fb-view', v); } catch { /* private window */ } };
+  const [view, setViewState] = useState<'simple' | 'advanced'>('simple');
+  const setView = (v: 'simple' | 'advanced') => { setViewState(v); setMode('edit'); };
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string[]>([]);
   const [showIssues, setShowIssues] = useState(false);
   const dirty = JSON.stringify(d) !== savedJson;
@@ -150,24 +151,23 @@ export function Builder({ initial, rev: rev0, locked, title, subtitle, back, sav
 
   return <div className="fb">
     <header className="fb-top">
-      <div className="fb-title">{back}<div className="min-w-0"><h1>{title}</h1>{subtitle && <small>{subtitle}</small>}</div></div>
+      <div className="fb-title">{back}<div className="min-w-0"><div className="fb-h1"><h1>{title}</h1>{status}</div>{subtitle && <small>{subtitle}</small>}</div></div>
       <div className="fb-tools">
-        <button type="button" className="btn btn-ghost icon-btn" onClick={undo} disabled={!hist.current.past.length} title="Undo (⌘Z)" aria-label="Undo"><Icon n="undo" /></button>
-        <button type="button" className="btn btn-ghost icon-btn" onClick={redo} disabled={!hist.current.future.length} title="Redo (⇧⌘Z)" aria-label="Redo"><Icon n="undo" style={{ transform: 'scaleX(-1)' }} /></button>
-        <div className="fb-issues-wrap">
+        {view === 'advanced' && <button type="button" className="btn btn-sm" onClick={() => setView('simple')}><Icon n="chev" width={14} height={14} style={{ transform: 'rotate(180deg)' }} />Back to the form</button>}
+        <span className="fb-undo"><button type="button" className="btn btn-ghost icon-btn" onClick={undo} disabled={!hist.current.past.length} title="Undo (⌘Z)" aria-label="Undo"><Icon n="undo" /></button>
+        <button type="button" className="btn btn-ghost icon-btn" onClick={redo} disabled={!hist.current.future.length} title="Redo (⇧⌘Z)" aria-label="Redo"><Icon n="undo" style={{ transform: 'scaleX(-1)' }} /></button></span>
+        {issues.length === 0 ? <span className="fb-ok" title="The form passes every check"><Icon n="check" width={14} height={14} />No problems</span> : <div className="fb-issues-wrap">
           <button type="button" className={`btn btn-sm fb-issues${errors.length ? ' bad' : warnings.length ? ' warn' : ' ok'}`} onClick={() => setShowIssues((v) => !v)} aria-expanded={showIssues}>
             {errors.length ? `${errors.length} problem${errors.length === 1 ? '' : 's'}` : 'No problems'}{warnings.length ? ` · ${warnings.length} note${warnings.length === 1 ? '' : 's'}` : ''}</button>
           {showIssues && <div className="fb-pop" role="dialog" aria-label="Form check">
-            {!issues.length && <p className="muted">The form passes every check: references, loops, reachable pages, conflicts.</p>}
             {[...errors, ...warnings].map((i, n) => <button type="button" key={n} className={`fb-issue ${i.level}`} onClick={() => pick(i)}><b>{i.level === 'error' ? 'Must fix' : 'Check'}</b><span>{i.message}</span></button>)}
           </div>}
-        </div>
-        <div className="seg" role="group" aria-label="View"><button type="button" className={view === 'simple' ? 'on' : ''} onClick={() => setView('simple')}>Simple</button><button type="button" className={view === 'advanced' ? 'on' : ''} onClick={() => setView('advanced')}>Advanced</button></div>
+        </div>}
         {view === 'simple' && <button type="button" className={`btn btn-sm${mode === 'test' ? ' btn-primary' : ''}`} onClick={() => setMode(mode === 'test' ? 'edit' : 'test')} aria-pressed={mode === 'test'}><Icon n="eye" />{mode === 'test' ? 'Back to editing' : 'Preview'}</button>}
-        {status}
         {menu}
-        <button type="button" className="btn" disabled={!dirty || busy} onClick={() => void doSave()} title="Save (⌘S)">{busy ? 'Saving…' : dirty ? 'Save' : 'Saved'}</button>
-        {onPublish && <button type="button" className="btn btn-primary" disabled={busy} onClick={async () => { let r: number | null = rev; if (dirty) r = await doSave(); if (r !== null) onPublish(dRef.current, r, false); }}><Icon n="rocket" />{publishLabel ?? 'Publish'}</button>}
+        {dirty || busy ? <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void doSave()} title="Save (⌘S)">{busy ? 'Saving…' : 'Save'}</button>
+          : <span className="fb-saved" role="status"><Icon n="check" width={13} height={13} />Saved</span>}
+        {onPublish && <button type="button" className="btn btn-sm btn-primary" disabled={busy} onClick={async () => { let r: number | null = rev; if (dirty) r = await doSave(); if (r !== null) onPublish(dRef.current, r, false); }}><Icon n="rocket" />{publishLabel ?? 'Publish'}</button>}
       </div>
     </header>
     {err.length > 0 && <div className="notice n-warn fb-err" role="alert"><div><ul style={{ margin: 0 }}>{err.map((x) => <li key={x}>{x}</li>)}</ul></div><button className="btn btn-ghost icon-btn btn-sm" onClick={() => setErr([])} aria-label="Dismiss"><Icon n="x" /></button></div>}

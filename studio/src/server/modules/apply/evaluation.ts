@@ -2,7 +2,7 @@
 // declarations, blind mode, draft and final reviews, and scores. Reviewers reach ONLY their own assignments (every query
 // filters on reviewer = me); a final review is locked; scores are integers computed on the server from the rubric
 // version the assignment uses, so the same review always gives the same score.
-import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
 import { applyAssignments, applyCalls, applyFiles, applyFormVersions, applyReviews, applyRubrics, applyRubricVersions, applySubmissionEvents, applySubmissions, users,
@@ -117,9 +117,11 @@ export async function assign(db: DB, me: Me, callId: string, raw: unknown) {
   const reviewers = await db.select({ id: users.id, role: users.role, active: users.active, name: users.name }).from(users).where(inArray(users.id, b.data.reviewerIds));
   const bad = reviewers.filter((u) => !u.active || !can(u.role as Role, 'apply.review') && !can(u.role as Role, 'apply.evaluation.manage'));
   if (reviewers.length !== b.data.reviewerIds.length || bad.length) throw new AppError(422, 'Every reviewer must be an active user whose role can review applications.');
-  const subs = await db.select({ id: applySubmissions.id, status: applySubmissions.status }).from(applySubmissions).where(and(eq(applySubmissions.callId, callId), inArray(applySubmissions.id, b.data.submissionIds)));
+  const subs = await db.select({ id: applySubmissions.id, reference: applySubmissions.reference, status: applySubmissions.status, deletedAt: applySubmissions.deletedAt }).from(applySubmissions).where(and(eq(applySubmissions.callId, callId), inArray(applySubmissions.id, b.data.submissionIds)));
   if (subs.length !== b.data.submissionIds.length) throw new AppError(422, 'Some applications do not belong to this call.');
   if (subs.some((s) => s.status === 'withdrawn')) throw new AppError(409, 'Withdrawn applications are not reviewed.');
+  const binned = subs.filter((s) => s.deletedAt);
+  if (binned.length) throw new AppError(409, `In the bin: ${binned.map((s) => s.reference).join(', ')}. Restore first.`);
   return db.transaction(async (tx) => {
     const t2 = tx as unknown as DB;
     const existing = await t2.select({ submissionId: applyAssignments.submissionId, reviewerId: applyAssignments.reviewerId, status: applyAssignments.status }).from(applyAssignments).where(eq(applyAssignments.callId, callId));
@@ -162,7 +164,7 @@ export async function progress(db: DB, callId: string) {
   await callOf(db, callId);
   const subs = await db.select({ id: applySubmissions.id, reference: applySubmissions.reference, applicantName: applySubmissions.applicantName, status: applySubmissions.status,
     eligibility: applySubmissions.eligibility, scoreBp: applySubmissions.scoreBp, scoreReviews: applySubmissions.scoreReviews, disagreement: applySubmissions.disagreement, submittedAt: applySubmissions.submittedAt })
-    .from(applySubmissions).where(eq(applySubmissions.callId, callId)).orderBy(asc(applySubmissions.submittedAt)).limit(2000);
+    .from(applySubmissions).where(and(eq(applySubmissions.callId, callId), isNull(applySubmissions.deletedAt))).orderBy(asc(applySubmissions.submittedAt)).limit(2000);
   const as = await db.select({ id: applyAssignments.id, submissionId: applyAssignments.submissionId, reviewerId: applyAssignments.reviewerId, status: applyAssignments.status, reviewer: users.name, totalBp: applyReviews.totalBp })
     .from(applyAssignments).innerJoin(users, eq(users.id, applyAssignments.reviewerId)).leftJoin(applyReviews, eq(applyReviews.assignmentId, applyAssignments.id)).where(eq(applyAssignments.callId, callId));
   const workload = new Map<string, { reviewerId: string; name: string; assigned: number; final: number; conflict: number }>();
@@ -192,7 +194,7 @@ async function mine(db: DB, me: Me, assignmentId: string) {
 export async function myAssignments(db: DB, me: Me) {
   return db.select({ id: applyAssignments.id, status: applyAssignments.status, reference: applySubmissions.reference, callTitle: applyCalls.title, callReference: applyCalls.reference, createdAt: applyAssignments.createdAt, reviewStatus: applyReviews.status })
     .from(applyAssignments).innerJoin(applySubmissions, eq(applySubmissions.id, applyAssignments.submissionId)).innerJoin(applyCalls, eq(applyCalls.id, applyAssignments.callId))
-    .leftJoin(applyReviews, eq(applyReviews.assignmentId, applyAssignments.id)).where(eq(applyAssignments.reviewerId, me.id)).orderBy(desc(applyAssignments.createdAt)).limit(500);
+    .leftJoin(applyReviews, eq(applyReviews.assignmentId, applyAssignments.id)).where(and(eq(applyAssignments.reviewerId, me.id), isNull(applySubmissions.deletedAt))).orderBy(desc(applyAssignments.createdAt)).limit(500);
 }
 
 /** Conflict of interest, declared before the application is shown. A conflict closes the assignment for this reviewer. */

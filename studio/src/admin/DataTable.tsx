@@ -360,20 +360,17 @@ export function useListActions<T extends Item>(o: {
   return { bulk, rowMenu, dialog, preview };
 }
 
-/** Permanent delete: lists the names, says it can't be undone, and asks for the name (one item) or DELETE (several). */
+/** Permanent delete: a plain confirmation. Names what goes, says it can't be undone; Cancel or Delete (no typing). */
 export function DeleteDialog({ names, noun, onClose, run }: { names: string[]; noun: [string, string]; onClose: () => void; run: () => Promise<void> }) {
-  const [typed, setTyped] = useState(''); const [busy, setBusy] = useState(false);
-  const one = names.length === 1; const want = one ? names[0].trim() : 'DELETE';
-  const match = one ? typed.trim().toLowerCase() === want.toLowerCase() : typed.trim() === want;
-  const go = async () => { if (!match || busy) return; setBusy(true); try { await run(); } finally { setBusy(false); } };
+  const [busy, setBusy] = useState(false);
+  const one = names.length === 1;
+  const go = async () => { if (busy) return; setBusy(true); try { await run(); } finally { setBusy(false); } };
   return <Modal title={one ? `Delete this ${noun[0]}?` : `Delete ${names.length} ${noun[1]}?`} size="sm" onClose={onClose}
-    footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-danger" disabled={!match || busy} onClick={go}>{busy ? 'Deleting…' : one ? `Delete ${noun[0]}` : `Delete ${names.length} ${noun[1]}`}</button></>}>
+    footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-danger" autoFocus disabled={busy} onClick={go}>{busy ? 'Deleting…' : 'Delete'}</button></>}>
     <div className="lt-del">
       <p>{one ? <>“<b>{names[0]}</b>” will be deleted permanently, with its versions and links. This can’t be undone.</> : <>These {noun[1]} will be deleted permanently, with their versions and links. This can’t be undone.</>}</p>
       {!one && <ul>{names.slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}{names.length > 8 && <li>and {names.length - 8} more</li>}</ul>}
       <p className="lt-keep"><Icon n="image" />Photos and files stay in the Media Library.</p>
-      <label style={{ display: 'grid', gap: 6 }}><span>{one ? <>Type the name, <b>{want}</b>, to confirm</> : <>Type <b>DELETE</b> to confirm</>}</span>
-        <input autoFocus className="input" value={typed} onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') go(); }} autoComplete="off" /></label>
     </div>
   </Modal>;
 }

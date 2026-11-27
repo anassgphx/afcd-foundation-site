@@ -155,6 +155,8 @@ export async function queueDecisionNotices(db: DB, me: Me, raw: unknown) {
     const todo = ds.filter((d) => !d.notifiedAt && !already.some((a) => a.d === d.id));
     if (!todo.length) throw new AppError(409, 'These decisions were already sent or are already in the outbox.');
     const subs = await t2.select().from(applySubmissions).where(inArray(applySubmissions.id, todo.map((d) => d.submissionId)));
+    const binned = subs.filter((s) => s.deletedAt);
+    if (binned.length) throw new AppError(409, `In the bin: ${binned.map((s) => s.reference).join(', ')}. Restore first.`);
     const [batch] = await t2.insert(applyMessageBatches).values({ callId: call.id, kind: 'decision', count: todo.length, queuedBy: me.id }).returning();
     let queued = 0, noEmail = 0;
     for (const d of todo) {
@@ -184,6 +186,8 @@ export async function queueCustom(db: DB, me: Me, raw: unknown) {
     if (!call) throw new AppError(404, 'Call not found.');
     const subs = await t2.select().from(applySubmissions).where(and(inArray(applySubmissions.id, ids), eq(applySubmissions.callId, call.id)));
     if (subs.length !== ids.length) throw new AppError(404, 'Some applications do not belong to this call.');
+    const binned = subs.filter((s) => s.deletedAt);
+    if (binned.length) throw new AppError(409, `In the bin: ${binned.map((s) => s.reference).join(', ')}. Restore first.`);
     const [batch] = await t2.insert(applyMessageBatches).values({ callId: call.id, kind: 'custom', count: ids.length, subject: b.data.subject, queuedBy: me.id }).returning();
     let queued = 0;
     for (const s of subs) if (await enqueue(t2, { call, sub: s, kind: 'custom', dedupeKey: `custom:${batch.id}:${s.id}`, subject: b.data.subject, body: b.data.body, batchId: batch.id, queuedBy: me.id })) queued++;

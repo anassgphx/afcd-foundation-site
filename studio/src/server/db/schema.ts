@@ -1042,6 +1042,9 @@ export const applySubmissions = pgTable('apply_submissions', {
   scoreReviews: integer('score_reviews').notNull().default(0),
   disagreement: boolean('disagreement').notNull().default(false),
   submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
+  // bin (0035): a deleted application is hidden from lists, counts, reviews and emails but nothing is erased; Restore clears these
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  deletedBy: uuid('deleted_by').references(() => users.id, { onDelete: 'set null' }),
   updatedAt: updatedAt(),
 }, (t) => [uniqueIndex('apply_submissions_reference_uq').on(t.reference), uniqueIndex('apply_submissions_draft_uq').on(t.draftId),
   uniqueIndex('apply_submissions_idem_uq').on(t.callId, t.idempotencyKey), index('apply_submissions_list_idx').on(t.callId, t.submittedAt, t.id),

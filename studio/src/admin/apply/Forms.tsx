@@ -62,7 +62,7 @@ export function CallFormBuilder({ callId }: { callId: string }) {
     try { const r = await post<{ version: number }>(`/apply/calls/${callId}/form/publish`, { rev: pending.current!.rev, note }); setDialog(null); setNote(''); await load(); toast(`Version ${r.version} published. New applications use it.`); }
     catch (e) { setErrs(e instanceof ApiError && e.details?.length ? e.details.map((d) => d.message) : [(e as Error).message]); } finally { setBusy(false); }
   }
-  const menu = <details className="fb-menu"><summary className="btn btn-ghost btn-sm">More</summary><div className="fb-pop">
+  const menu = <details className="fb-menu"><summary className="btn btn-ghost btn-sm" title="Templates, import, export, versions">More</summary><div className="fb-pop">
     {editable && <button type="button" onClick={() => setDialog('template')}>Replace with a template…</button>}
     {editable && <button type="button" onClick={() => fileRef.current?.click()}>Import JSON…</button>}
     <a href={`/studio/api/apply/calls/${callId}/form/export`} download>Export JSON</a>
@@ -72,7 +72,7 @@ export function CallFormBuilder({ callId }: { callId: string }) {
   return <>
     <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void importFile(file); }} />
     <Builder key={`${f.id}:${key}`} initial={f.definition} rev={f.rev} locked={locked} back={back} title={x.call.title}
-      subtitle={<><span className="mono">{x.call.reference}</span> · Application form{x.call.openedAt ? ' · call has opened: published questions keep their ID, type and options' : ''}</>}
+      subtitle={<><span className="mono">{x.call.reference}</span> · Application form{x.call.openedAt ? <span title="The call has opened, so questions already published keep their ID, type and options."> · published questions are locked</span> : ''}</>}
       status={<span className={`ap-fstate${!last ? ' none' : x.unpublishedChanges ? ' warn' : ' ok'}`}>{!last ? 'Not published' : x.unpublishedChanges ? `v${last.number} live · changes not published` : `v${last.number} published`}</span>}
       save={saveFn} menu={menu}
       onPublish={can('apply.call.publish') ? async (_def, rev) => { pending.current = { rev }; const fresh = await load(); setErrs((fresh.breaking ?? []).length ? fresh.breaking! : []); setDialog('publish'); } : undefined}

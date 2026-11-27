@@ -47,3 +47,7 @@
 .ap-check { display: flex; gap: 8px; align-items: center; font-size: 13px; min-height: 36px; }
 .ap-tr { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-sm); }
 .ap-tr b { font-size: 12.5px; color: var(--muted); }
+
+/* Calls list: plain Edit / Delete buttons on every row instead of the hover-only chevron */
+.ap-rowacts { display: inline-flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
+.ap-calls .dt-go svg { display: none; }

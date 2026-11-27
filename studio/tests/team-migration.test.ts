@@ -71,6 +71,7 @@ describe('0034_team migration', () => {
     expect((await pg.query(`select draft, status, published_revision_id from about_pages where key = 'team'`)).rows).toEqual(before);
 
     // rollback drops only the Team tables; migrating forward again copies the people again
+    await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0035_apply_submission_bin_down.sql'), 'utf8'));   // newer first
     await pg.exec(readFileSync(join(MIGRATIONS, 'recovery/0034_team_down.sql'), 'utf8'));
     expect((await pg.query(`select to_regclass('team_members') as t`)).rows).toEqual([{ t: null }]);
     expect((await pg.query(`select draft, status, published_revision_id from about_pages where key = 'team'`)).rows).toEqual(before);

@@ -170,3 +170,13 @@
   .fb-canvas { padding: 12px 8px 24px; }
   .fb-sheet { padding: 18px 14px; }
 }
+
+/* Top bar, simplified: title with the publish state beside it; then undo/redo, check, preview, More, Save state, Publish */
+.fb-top { padding: 10px 16px; gap: 16px; }
+.fb-h1 { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.fb-h1 .ap-fstate { flex: none; }
+.fb-tools { gap: 8px; }
+.fb-undo { display: inline-flex; gap: 2px; padding-right: 8px; border-right: 1px solid var(--line); }
+.fb-ok, .fb-saved { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; white-space: nowrap; padding: 0 4px; }
+.fb-ok { color: var(--ok); }
+.fb-saved { color: var(--muted); min-width: 58px; }

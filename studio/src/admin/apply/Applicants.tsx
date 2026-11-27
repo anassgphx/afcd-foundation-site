@@ -20,7 +20,7 @@ export const STAGES: { key: string; label: string; statuses: string[]; hint: str
   { key: 'decision', label: 'Decision', statuses: ['selected', 'waitlisted', 'not_selected'], hint: 'Results are proposed by one person and approved by another. Applicants are emailed only after approval.' },
   { key: 'withdrawn', label: 'Withdrawn', statuses: ['withdrawn'], hint: 'Withdrawn applications. Nothing to do here.' },
 ];
-type Counts = { status: Record<string, number>; total: number; drafts: number };
+type Counts = { status: Record<string, number>; total: number; drafts: number; deleted?: number };
 export const stageCount = (c: Counts | null, statuses: string[]) => (!c ? null : statuses.length ? statuses.reduce((n, s) => n + (c.status[s] ?? 0), 0) : c.total);
 
 type CallRow = { id: string; reference: string; title: string; status: string; closesAt: string | null; timeZone: string; projectName: string | null; pillarName: string | null };
@@ -70,11 +70,11 @@ export function ApplicantsPage() {
 
 /** A call's Applicants tab. */
 export function CallApplicants({ callId }: { callId: string }) {
-  const [st, set] = useUrlState({ stage: 'all', q: '', eligibility: '' });
-  return <Pipeline call={callId} fixed stage={st.stage} setStage={(v) => set('stage', v)} q={st.q} setQ={(v) => set('q', v)} eligibility={st.eligibility} setEligibility={(v) => set('eligibility', v)} />;
+  const [st, set] = useUrlState({ stage: 'all', q: '', eligibility: '', bin: '' });
+  return <Pipeline call={callId} fixed bin={st.bin === '1'} setBin={(v) => set('bin', v ? '1' : '')} stage={st.stage} setStage={(v) => set('stage', v)} q={st.q} setQ={(v) => set('q', v)} eligibility={st.eligibility} setEligibility={(v) => set('eligibility', v)} />;
 }
 
-function Pipeline({ call, fixed, stage: key, setStage, q, setQ, eligibility, setEligibility }: { call: string; fixed?: boolean; stage: string; setStage: (v: string) => void; q: string; setQ: (v: string) => void; eligibility: string; setEligibility: (v: string) => void }) {
+function Pipeline({ call, fixed, bin = false, setBin, stage: key, setStage, q, setQ, eligibility, setEligibility }: { call: string; fixed?: boolean; bin?: boolean; setBin?: (v: boolean) => void; stage: string; setStage: (v: string) => void; q: string; setQ: (v: string) => void; eligibility: string; setEligibility: (v: string) => void }) {
   const can = useCan();
   const [counts, setCounts] = useState<Counts | null>(null); const [search, setSearch] = useState(q); const [gen, setGen] = useState(0);
   // the application drawer: ?app=<id> in the address, so it can be linked to, and Back closes it
@@ -88,21 +88,24 @@ function Pipeline({ call, fixed, stage: key, setStage, q, setQ, eligibility, set
   useEffect(() => { const h = setTimeout(() => { if (search !== q) setQ(search); }, 350); return () => clearTimeout(h); }, [search]);
   const stage = STAGES.find((s) => s.key === key) ?? STAGES[0];
   // ranking and decisions belong to one call; across calls these stages are a plain list
-  const ranked = !!call && ['review', 'shortlist'].includes(stage.key);
-  const decisions = !!call && stage.key === 'decision';
+  const ranked = !bin && !!call && ['review', 'shortlist'].includes(stage.key);
+  const decisions = !bin && !!call && stage.key === 'decision';
   const changed = () => setGen((g) => g + 1);
   return <>
     <nav className="pl-stages" aria-label="Pipeline stages">
-      {STAGES.map((s, i) => { const n = stageCount(counts, s.statuses); const on = s.key === stage.key;
-        return <button key={s.key} type="button" className={`pl-stage s-${s.key}${on ? ' on' : ''}`} aria-current={on ? 'step' : undefined} onClick={() => setStage(s.key)}>
+      {STAGES.map((s, i) => { const n = stageCount(counts, s.statuses); const on = !bin && s.key === stage.key;
+        return <button key={s.key} type="button" className={`pl-stage s-${s.key}${on ? ' on' : ''}`} aria-current={on ? 'step' : undefined} onClick={() => { setBin?.(false); setStage(s.key); }}>
           <small>{s.key === 'all' ? 'Everything' : s.key === 'withdrawn' ? 'Finished' : `Step ${i}`}</small><span><b>{s.label}</b><em>{n ?? '·'}</em></span></button>; })}
     </nav>
     {!ranked && !decisions && <div className="pl-tools">
       <input className="input" type="search" placeholder="Reference, name or email" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search applications" />
       <select className="select" value={eligibility} onChange={(e) => setEligibility(e.target.value)} aria-label="Eligibility"><option value="">Any eligibility</option>{Object.entries(ELIG).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
       {counts && counts.drafts > 0 && <small className="muted">{counts.drafts} draft{counts.drafts === 1 ? '' : 's'} started, not submitted yet</small>}
+      {setBin && (bin || (counts?.deleted ?? 0) > 0) && <button type="button" className={`btn btn-sm pl-bin${bin ? ' on' : ''}`} aria-pressed={bin} onClick={() => setBin(!bin)}>{bin ? 'Back to applicants' : `Deleted (${counts?.deleted ?? 0})`}</button>}
     </div>}
-    {ranked || decisions ? <>
+    {bin ? <SubmissionsTable bin call={call} onChanged={changed} onOpen={openApp} onRows={setIds} reloadKey={gen} status="" eligibility={eligibility} q={q}
+      hint="Deleted applications. Nothing was erased: Restore puts one back where it was." />
+    : ranked || decisions ? <>
       <div className="pl-hint pl-hint-card">{stage.hint}{stage.key === 'review' && can('apply.evaluation.manage') && <> <Link to={`/studio/apply/calls/${call}/reviews`}>Assign reviewers</Link></>}</div>
       {decisions ? <DecisionStage key={call} callId={call} onChanged={changed} onOpen={openApp} onRows={setIds} reloadKey={gen} /> : <ShortlistStage key={`${call}:${stage.key}`} callId={call} stages={stage.statuses} onChanged={changed} onOpen={openApp} onRows={setIds} reloadKey={gen} />}
     </> : <SubmissionsTable call={call} onChanged={changed} onOpen={openApp} onRows={setIds} reloadKey={gen} status={stage.statuses.join(',')} eligibility={eligibility} q={q}

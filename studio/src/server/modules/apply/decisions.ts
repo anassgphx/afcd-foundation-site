@@ -2,7 +2,7 @@
 // rejected by someone else (four eyes; a Super Administrator may approve their own). Approval changes the application's
 // status and records who and why. Nothing here sends anything to applicants: notifying them is a separate, authorized
 // communications step (apply_decisions.notified_at stays empty until then).
-import { and, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
@@ -24,6 +24,8 @@ export async function propose(db: DB, me: Me, raw: unknown) {
     const t2 = tx as unknown as DB;
     const subs = await t2.select().from(applySubmissions).where(inArray(applySubmissions.id, ids)).for('update');
     if (subs.length !== ids.length) throw new AppError(404, 'Some applications no longer exist.');
+    const binned = subs.filter((s) => s.deletedAt);
+    if (binned.length) throw new AppError(409, `In the bin: ${binned.map((s) => s.reference).join(', ')}. Restore first.`);
     const bad = subs.filter((s) => !DECIDABLE.includes(s.status));
     if (bad.length) throw new AppError(409, `Only applications under evaluation, shortlisted or at interview can get a decision (${bad.map((s) => s.reference).join(', ')}).`);
     const open = await t2.select({ s: applyDecisions.submissionId }).from(applyDecisions).where(and(inArray(applyDecisions.submissionId, ids), eq(applyDecisions.status, 'proposed')));
@@ -53,7 +55,7 @@ export async function decide(db: DB, me: Me, role: Role, raw: unknown) {
       for (const callId of [...new Set(sel.map((d) => d.callId))]) {
         const [c] = await t2.select({ places: applyCalls.places }).from(applyCalls).where(eq(applyCalls.id, callId));
         if (!c?.places) continue;
-        const [{ n }] = await t2.select({ n: count() }).from(applySubmissions).where(and(eq(applySubmissions.callId, callId), eq(applySubmissions.status, 'selected')));
+        const [{ n }] = await t2.select({ n: count() }).from(applySubmissions).where(and(eq(applySubmissions.callId, callId), eq(applySubmissions.status, 'selected'), isNull(applySubmissions.deletedAt)));
         const adding = sel.filter((d) => d.callId === callId).length;
         if (n + adding > c.places && !(b.data.overCapacity && b.data.note.length >= 3)) throw new AppError(409, `This would select ${n + adding} people for ${c.places} place${c.places === 1 ? '' : 's'}. To go over, confirm it and say why.`);
       }
@@ -63,6 +65,7 @@ export async function decide(db: DB, me: Me, role: Role, raw: unknown) {
       await t2.update(applyDecisions).set({ status: b.data.approve ? 'approved' : 'rejected', decidedBy: me.id, decidedAt: now, decisionNote: b.data.note }).where(eq(applyDecisions.id, d.id));
       if (b.data.approve) {
         const [s] = await t2.select().from(applySubmissions).where(eq(applySubmissions.id, d.submissionId)).for('update');
+        if (s.deletedAt) throw new AppError(409, `${s.reference} is in the bin. Restore it first.`);
         await t2.update(applySubmissions).set({ status: d.outcome, updatedAt: now }).where(eq(applySubmissions.id, s.id));
         await t2.insert(applySubmissionEvents).values({ submissionId: s.id, actorId: me.id, kind: 'status', fromValue: s.status, toValue: d.outcome, body: `Decision approved: ${d.reason}`, meta: { decision: d.id } });
       } else await t2.insert(applySubmissionEvents).values({ submissionId: d.submissionId, actorId: me.id, kind: 'decision', toValue: `rejected:${d.outcome}`, body: b.data.note });

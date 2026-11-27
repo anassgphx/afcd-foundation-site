@@ -3,11 +3,11 @@
 // reason and a confirmed count) and eligibility corrections that keep the automatic result next to the staff one.
 import { readFileSync, existsSync } from 'node:fs';
 import { alias } from 'drizzle-orm/pg-core';
-import { and, asc, count, desc, eq, ilike, inArray, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { DB } from '../../db/client.ts';
 import type { Config } from '../../config.ts';
-import { APPLICATION_STATUSES, ELIGIBILITY, applyCalls, applyDecisions, applyDrafts, applyFiles, applyFormVersions, applySubmissionEvents, applySubmissions, users } from '../../db/schema.ts';
+import { APPLICATION_STATUSES, ELIGIBILITY, applyCalls, applyDecisions, applyDrafts, applyFiles, applyFormVersions, applyMessages, applySubmissionEvents, applySubmissions, users } from '../../db/schema.ts';
 import { AppError } from '../../http.ts';
 import { audit, type Actor } from '../../audit.ts';
 import { filePath } from './files.ts';
@@ -36,6 +36,7 @@ const listSchema = z.object({
   call: z.string().uuid().optional(),
   // one status, or several separated by commas (a pipeline stage such as shortlisted,interview)
   status: z.string().max(200).transform((v) => [...new Set(v.split(',').map((x) => x.trim()).filter(Boolean))]).pipe(z.array(z.enum(APPLICATION_STATUSES)).max(APPLICATION_STATUSES.length)).optional(), eligibility: z.enum(ELIGIBILITY).optional(),
+  bin: z.literal('1').optional(),   // 1 = only applications in the bin; otherwise the bin is left out
   q: z.string().trim().max(120).optional(), cursor: z.string().max(200).optional(), limit: z.coerce.number().int().min(10).max(100).default(50),
 });
 const enc = (d: Date, id: string) => Buffer.from(`${d.toISOString()}|${id}`).toString('base64url');
@@ -50,7 +51,7 @@ export async function listSubmissions(db: DB, raw: Record<string, string | undef
   const p = listSchema.safeParse(raw);
   if (!p.success) throw new AppError(422, 'Check the filters.');
   const f = p.data;
-  const where: SQL[] = [];
+  const where: SQL[] = [f.bin ? isNotNull(applySubmissions.deletedAt) : isNull(applySubmissions.deletedAt)];
   if (f.call) where.push(eq(applySubmissions.callId, f.call));
   if (f.status?.length) where.push(f.status.length === 1 ? eq(applySubmissions.status, f.status[0]) : inArray(applySubmissions.status, f.status));
   if (f.eligibility) where.push(eq(applySubmissions.eligibility, f.eligibility));
@@ -58,12 +59,12 @@ export async function listSubmissions(db: DB, raw: Record<string, string | undef
     const like = `%${f.q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
     where.push(or(ilike(applySubmissions.reference, like), ilike(applySubmissions.applicantName, like), ilike(applySubmissions.applicantEmail, like))!);
   }
-  const base = where.length ? and(...where) : undefined;
+  const base = and(...where);
   const page = f.cursor ? (() => { const c = dec(f.cursor!); return or(lt(applySubmissions.submittedAt, c.at), and(eq(applySubmissions.submittedAt, c.at), lt(applySubmissions.id, c.id))); })() : undefined;
   const rows = await db.select({
     id: applySubmissions.id, reference: applySubmissions.reference, applicantName: applySubmissions.applicantName, applicantEmail: applySubmissions.applicantEmail,
     status: applySubmissions.status, eligibility: applySubmissions.eligibility, overridden: sql<boolean>`${applySubmissions.eligibilityOverride} is not null`,
-    submittedAt: applySubmissions.submittedAt, lang: applySubmissions.lang, callId: applySubmissions.callId, callReference: applyCalls.reference, callTitle: applyCalls.title,
+    submittedAt: applySubmissions.submittedAt, deletedAt: applySubmissions.deletedAt, lang: applySubmissions.lang, callId: applySubmissions.callId, callReference: applyCalls.reference, callTitle: applyCalls.title,
   }).from(applySubmissions).innerJoin(applyCalls, eq(applyCalls.id, applySubmissions.callId))
     .where(page ? (base ? and(base, page) : page) : base).orderBy(desc(applySubmissions.submittedAt), desc(applySubmissions.id)).limit(f.limit + 1);
   const [{ total }] = await db.select({ total: count() }).from(applySubmissions).where(base);
@@ -74,16 +75,17 @@ export async function listSubmissions(db: DB, raw: Record<string, string | undef
 
 /** Counts per call for the filters and the overview (never personal data). */
 export async function submissionCounts(db: DB, callId?: string) {
-  const w = callId ? eq(applySubmissions.callId, callId) : undefined;
+  const w = and(isNull(applySubmissions.deletedAt), callId ? eq(applySubmissions.callId, callId) : undefined);
+  const [{ deleted }] = await db.select({ deleted: count() }).from(applySubmissions).where(and(isNotNull(applySubmissions.deletedAt), callId ? eq(applySubmissions.callId, callId) : undefined));
   const byStatus = await db.select({ k: applySubmissions.status, n: count() }).from(applySubmissions).where(w).groupBy(applySubmissions.status);
   const byElig = await db.select({ k: applySubmissions.eligibility, n: count() }).from(applySubmissions).where(w).groupBy(applySubmissions.eligibility);
   const [{ drafts }] = await db.select({ drafts: count() }).from(applyDrafts).where(callId ? and(eq(applyDrafts.status, 'active'), eq(applyDrafts.callId, callId)) : eq(applyDrafts.status, 'active'));
-  return { status: Object.fromEntries(byStatus.map((r) => [r.k, r.n])), eligibility: Object.fromEntries(byElig.map((r) => [r.k, r.n])), drafts, total: byStatus.reduce((s, r) => s + r.n, 0) };
+  return { status: Object.fromEntries(byStatus.map((r) => [r.k, r.n])), eligibility: Object.fromEntries(byElig.map((r) => [r.k, r.n])), drafts, deleted, total: byStatus.reduce((s, r) => s + r.n, 0) };
 }
 
 /** Applications per call and status, and drafts in progress per call: the Applicants table. Counts only, no personal data. */
 export async function countsByCall(db: DB) {
-  const rows = await db.select({ call: applySubmissions.callId, k: applySubmissions.status, n: count() }).from(applySubmissions).groupBy(applySubmissions.callId, applySubmissions.status);
+  const rows = await db.select({ call: applySubmissions.callId, k: applySubmissions.status, n: count() }).from(applySubmissions).where(isNull(applySubmissions.deletedAt)).groupBy(applySubmissions.callId, applySubmissions.status);
   const drafts = await db.select({ call: applyDrafts.callId, n: count() }).from(applyDrafts).where(eq(applyDrafts.status, 'active')).groupBy(applyDrafts.callId);
   const out: Record<string, { status: Record<string, number>; total: number; drafts: number }> = {};
   const of = (id: string) => (out[id] ??= { status: {}, total: 0, drafts: 0 });
@@ -97,6 +99,11 @@ async function load(db: DB, id: string) {
   if (!uuid.safeParse(id).success) throw new AppError(404, 'Application not found.');
   const [s] = await db.select().from(applySubmissions).where(eq(applySubmissions.id, id));
   if (!s) throw new AppError(404, 'Application not found.');
+  return s;
+}
+/** Applications in the bin are read-only until restored. */
+function live(s: typeof applySubmissions.$inferSelect) {
+  if (s.deletedAt) throw new AppError(409, `${s.reference} is in the bin. Restore it first.`);
   return s;
 }
 
@@ -115,7 +122,7 @@ export async function getSubmission(db: DB, id: string) {
     .from(applyDecisions).leftJoin(proposer, eq(proposer.id, applyDecisions.proposedBy)).leftJoin(decider, eq(decider.id, applyDecisions.decidedBy))
     .where(eq(applyDecisions.submissionId, s.id)).orderBy(desc(applyDecisions.createdAt));
   const [cx] = await db.select({ eligibility: applyCalls.eligibility, places: applyCalls.places }).from(applyCalls).where(eq(applyCalls.id, s.callId));
-  const [{ n: selected }] = await db.select({ n: count() }).from(applySubmissions).where(and(eq(applySubmissions.callId, s.callId), eq(applySubmissions.status, 'selected')));
+  const [{ n: selected }] = await db.select({ n: count() }).from(applySubmissions).where(and(eq(applySubmissions.callId, s.callId), eq(applySubmissions.status, 'selected'), isNull(applySubmissions.deletedAt)));
   const { ipHash: _ip, idempotencyKey: _k, ...rest } = s;
   return { ...rest, call: { ...c, eligibility: cx?.eligibility ?? [], places: cx?.places ?? null, selected }, version: v, files, events, decisions, moves: MOVES[s.status] ?? [] };
 }
@@ -136,6 +143,7 @@ const statusSchema = z.object({ to: z.enum(APPLICATION_STATUSES), reason: z.stri
 
 const FORWARD: Status[] = ['under_evaluation', 'shortlisted', 'interview'];
 async function move(tx: DB, me: Me, s: typeof applySubmissions.$inferSelect, to: Status, reason: string) {
+  live(s);
   if (!(MOVES[s.status] ?? []).includes(to)) throw new AppError(409, `${s.reference}: cannot move from ${STATUS_LABEL[s.status]} to ${STATUS_LABEL[to]}.`);
   // an application marked ineligible moves forward only with a recorded reason (an override); it never becomes eligible by moving
   if (s.eligibility === 'ineligible' && FORWARD.includes(to) && reason.trim().length < 3) throw new AppError(422, `${s.reference} is marked ineligible: give the reason for moving it forward anyway.`);
@@ -179,7 +187,7 @@ export async function bulkStatus(db: DB, me: Me, raw: unknown) {
 export async function setEligibility(db: DB, me: Me, id: string, raw: unknown) {
   const b = z.union([z.object({ result: z.enum(ELIGIBILITY), reason: z.string().trim().min(3, 'Explain the correction.').max(1000) }).strict(), z.object({ clear: z.literal(true) }).strict()]).safeParse(raw);
   if (!b.success) throw new AppError(422, b.error.issues[0]?.message ?? 'Choose a result and explain it.');
-  const s = await load(db, id);
+  const s = live(await load(db, id));
   const [u] = await db.select({ name: users.name }).from(users).where(eq(users.id, me.id));
   const before = s.eligibility;
   if ('clear' in b.data) {
@@ -205,6 +213,7 @@ export async function bulkEligibility(db: DB, me: Me, raw: unknown) {
     const t2 = tx as unknown as DB;
     const rows = await t2.select().from(applySubmissions).where(inArray(applySubmissions.id, ids)).for('update');
     if (rows.length !== ids.length) throw new AppError(404, 'Some applications no longer exist. Reload and try again.');
+    rows.forEach(live);
     const at = new Date();
     const o = { result: b.data.result, reason: b.data.reason, by: me.id, byName: u?.name ?? me.email, at: at.toISOString() };
     for (const s of rows) {
@@ -219,8 +228,41 @@ export async function bulkEligibility(db: DB, me: Me, raw: unknown) {
 export async function addNote(db: DB, me: Me, id: string, raw: unknown) {
   const b = z.object({ body: z.string().trim().min(1).max(5000) }).strict().safeParse(raw);
   if (!b.success) throw new AppError(422, 'Write the note.');
-  const s = await load(db, id);
+  const s = live(await load(db, id));
   await db.insert(applySubmissionEvents).values({ submissionId: s.id, actorId: me.id, kind: 'note', body: b.data.body });
   await audit(db, me, 'apply.submission.note', { type: 'apply_submission', id: s.id }, `Note on ${s.reference}`);   // never the note text
   return { ok: true };
+}
+
+// ---------------------------------------------------------------- Bin
+/** Delete = move to the bin. Nothing is erased: answers, files, reviews, decisions and history stay, and Restore puts the
+ *  application back where it was. While in the bin it is left out of lists, counts, reviews and emails, and emails still
+ *  waiting to go to this applicant are cancelled (they are not re-queued on restore). */
+export async function deleteSubmission(db: DB, me: Me, id: string, raw: unknown) {
+  const b = z.object({ reason: z.string().trim().max(1000).default('') }).strict().safeParse(raw ?? {});
+  if (!b.success) throw new AppError(422, 'Check the reason.');
+  return db.transaction(async (tx) => {
+    const t2 = tx as unknown as DB;
+    const [s] = await t2.select().from(applySubmissions).where(eq(applySubmissions.id, (await load(t2, id)).id)).for('update');
+    if (s.deletedAt) throw new AppError(409, `${s.reference} is already in the bin.`);
+    const at = new Date();
+    await t2.update(applySubmissions).set({ deletedAt: at, deletedBy: me.id, updatedAt: at }).where(eq(applySubmissions.id, s.id));
+    const cancelled = await t2.update(applyMessages).set({ status: 'cancelled', updatedAt: at })
+      .where(and(eq(applyMessages.submissionId, s.id), or(eq(applyMessages.status, 'queued'), eq(applyMessages.status, 'failed')))).returning({ id: applyMessages.id });
+    await t2.insert(applySubmissionEvents).values({ submissionId: s.id, actorId: me.id, kind: 'deleted', body: b.data.reason, meta: cancelled.length ? { cancelledEmails: cancelled.length } : null });
+    await audit(tx, me, 'apply.submission.delete', { type: 'apply_submission', id: s.id }, `${s.reference} moved to the bin`, { reason: b.data.reason || undefined, cancelledEmails: cancelled.length });
+    return { ok: true, cancelledEmails: cancelled.length };
+  });
+}
+
+export async function restoreSubmission(db: DB, me: Me, id: string) {
+  return db.transaction(async (tx) => {
+    const t2 = tx as unknown as DB;
+    const [s] = await t2.select().from(applySubmissions).where(eq(applySubmissions.id, (await load(t2, id)).id)).for('update');
+    if (!s.deletedAt) throw new AppError(409, `${s.reference} is not in the bin.`);
+    await t2.update(applySubmissions).set({ deletedAt: null, deletedBy: null, updatedAt: new Date() }).where(eq(applySubmissions.id, s.id));
+    await t2.insert(applySubmissionEvents).values({ submissionId: s.id, actorId: me.id, kind: 'restored' });
+    await audit(tx, me, 'apply.submission.restore', { type: 'apply_submission', id: s.id }, `${s.reference} restored from the bin`);
+    return { ok: true };
+  });
 }

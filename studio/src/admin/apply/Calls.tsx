@@ -27,6 +27,7 @@ export function CallsList() {
   const can = useCan(); const toast = useToast();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [st, set] = useUrlState({ status: 'all', q: '', new: '' });
+  const [gone, setGone] = useState<{ row: Row; restore: boolean } | null>(null);
   const load = () => api<Row[]>('/apply/calls').then(setRows).catch((e) => { setRows([]); toast(e.message, true); });
   useEffect(() => { load(); }, []);
   const tab = groupOf(st.status);
@@ -44,6 +45,13 @@ export function CallsList() {
     { key: 'closes', header: 'Deadline', sort: (r) => r.closesAt ?? '9999', render: (r) => <span className="ap-when"><b>{r.closesAt ? inZone(r.closesAt, r.timeZone, false) : '—'}</b>
       {r.closesAt && ['open', 'paused', 'scheduled'].includes(r.status) && <small>{relative(r.closesAt, now)}</small>}</span> },
     { key: 'updated', header: 'Updated', align: 'right', hideBelow: 1100, sort: (r) => -new Date(r.updatedAt).getTime(), render: (r) => <span className="dt-when"><b>{ago(r.updatedAt)}</b></span> },
+    // two plain buttons on every row (no hover-only menu)
+    { key: 'actions', header: '', align: 'right', render: (r) => <span className="ap-rowacts">
+      <Link className="btn btn-sm" to={`/studio/apply/calls/${r.id}/details`}>Edit</Link>
+      {can('apply.call.manage') && (r.status === 'archived'
+        ? <button type="button" className="btn btn-sm" onClick={() => setGone({ row: r, restore: true })}>Restore</button>
+        : <button type="button" className="btn btn-sm btn-danger" onClick={() => setGone({ row: r, restore: false })}>Delete</button>)}
+    </span> },
   ];
   return <>
     <div className="page-h"><div><h1>Calls</h1><p>Each call has a reference, its own dates and time zone, and a history of every change to its status and deadline.</p></div>
@@ -52,7 +60,7 @@ export function CallsList() {
         <Link className="btn" to="/studio/apply/calls/templates"><Icon n="book" />Form templates</Link>
         {can('apply.call.manage') && <button className="btn btn-primary" onClick={() => set('new', '1')}><Icon n="plus" />New call</button>}
       </div></div>
-    <section className="card">
+    <section className="card ap-calls">
       <ListToolbar tabs={tabs} value={tab} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search calls or references" />
       {!rows ? <TableSkeleton /> : <DataTable id="apply-calls" rows={shown} total={base.length} rowKey={(r) => r.id} columns={columns} initialSort={{ key: 'closes', dir: 'asc' }}
         onOpen={(r) => navigate(`/studio/apply/calls/${r.id}`)}
@@ -61,7 +69,40 @@ export function CallsList() {
           action={!rows.length && can('apply.call.manage') ? <button className="btn btn-sm btn-primary" onClick={() => set('new', '1')}><Icon n="plus" />New call</button> : undefined} />} />}
     </section>
     {st.new && can('apply.call.manage') && <NewCall onClose={() => set('new', '')} />}
+    {gone && <DeleteCall row={gone.row} restore={gone.restore} onClose={() => setGone(null)} onDone={() => { setGone(null); void load(); }} />}
   </>;
+}
+
+// Delete = Archive (the server's rule: drafts, approved and completed calls). Nothing is erased and Restore brings it back.
+export const DELETABLE = ['draft', 'changes_requested', 'approved', 'completed'];
+const NOT_YET: Record<string, string> = {
+  in_review: 'It is waiting for approval. Send it back to draft first (Edit → Back to draft).',
+  scheduled: 'It is scheduled to open. Unschedule it first (Edit → Unschedule).',
+  open: 'People can still apply. Close it and finish the evaluation first; then it can be deleted.',
+  paused: 'People can still apply once it resumes. Close it and finish the evaluation first; then it can be deleted.',
+  closed: 'Its applications are still being handled. Start and finish the evaluation (Edit → Mark completed) first.',
+  under_evaluation: 'Its applications are being evaluated. Mark it completed first (Edit → Mark completed).',
+};
+
+function DeleteCall({ row, restore, onClose, onDone }: { row: Row; restore: boolean; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const ok = restore || DELETABLE.includes(row.status);
+  const name = <><b>{row.title || 'Untitled call'}</b> <span className="mono">({row.reference})</span></>;
+  async function go() {
+    setBusy(true);
+    try { await post(`/apply/calls/${row.id}/transition`, { action: restore ? 'restore' : 'archive' }); toast(restore ? `${row.reference} restored` : `${row.reference} deleted. It is in Archived.`); onDone(); }
+    catch (e) { toast(e instanceof ApiError ? e.message : 'Could not save.', true); setBusy(false); }
+  }
+  if (!ok) return <Modal size="sm" title="This call can’t be deleted yet" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Close</button>
+    <Link className="btn btn-primary" to={`/studio/apply/calls/${row.id}/details`}>Edit call</Link></>}>
+    <div className="modal-b stack"><p style={{ margin: 0 }}>{name} is {(CALL_STATUS[row.status] ?? row.status).toLowerCase()}.</p><p style={{ margin: 0 }}>{NOT_YET[row.status] ?? 'Its status does not allow it.'}</p></div></Modal>;
+  return <Modal size="sm" title={restore ? 'Restore this call?' : 'Delete this call?'} onClose={() => !busy && onClose()} footer={<><button className="btn" disabled={busy} onClick={onClose}>Cancel</button>
+    <button className={`btn ${restore ? 'btn-primary' : 'btn-danger'}`} disabled={busy} onClick={() => void go()}>{busy ? 'Saving…' : restore ? 'Restore' : 'Delete'}</button></>}>
+    <div className="modal-b stack">{restore
+      ? <p style={{ margin: 0 }}>{name} comes back as a draft (or as completed, if it was completed when deleted).</p>
+      : <><p style={{ margin: 0 }}>{name} moves to the <b>Archived</b> tab.</p>
+        <p style={{ margin: 0 }} className="muted">Nothing is erased: its form, applications and history are kept. You can restore it from Archived.</p></>}</div></Modal>;
 }
 
 type Tpl = { id: string; builtIn: boolean; name: string; description: string; category: string; questions: number; pages: number };

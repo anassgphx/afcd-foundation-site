@@ -69,6 +69,9 @@ export function registerApplyRoutes(api: Hono<Env>) {
   api.post('/apply/submissions/bulk-status', perm('apply.submission.manage'), async (c) => c.json(await S.bulkStatus(c.var.db, actor(c), await c.req.json().catch(() => ({})))));
   api.post('/apply/submissions/:id/status', perm('apply.submission.manage'), async (c) => c.json(await S.setStatus(c.var.db, actor(c), c.req.param('id'), await c.req.json().catch(() => ({})))));
   api.post('/apply/submissions/:id/eligibility', perm('apply.submission.manage'), async (c) => c.json(await S.setEligibility(c.var.db, actor(c), c.req.param('id'), await c.req.json().catch(() => ({})))));
+  // Delete moves an application to the bin (nothing erased); Restore brings it back. Both are audited.
+  api.delete('/apply/submissions/:id', perm('apply.submission.manage'), async (c) => c.json(await S.deleteSubmission(c.var.db, actor(c), c.req.param('id'), await c.req.json().catch(() => ({})))));
+  api.post('/apply/submissions/:id/restore', perm('apply.submission.manage'), async (c) => c.json(await S.restoreSubmission(c.var.db, actor(c), c.req.param('id'))));
   api.post('/apply/submissions/:id/notes', perm('apply.submission.manage'), async (c) => c.json(await S.addNote(c.var.db, actor(c), c.req.param('id'), await c.req.json().catch(() => ({})))));
   api.get('/apply/calls', perm('apply.read'), async (c) => c.json(await C.listCalls(c.var.db)));
   api.get('/apply/calls/export.csv', perm('apply.export'), async (c) => {

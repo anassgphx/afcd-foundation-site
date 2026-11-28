@@ -1234,7 +1234,7 @@ def project_poster(name, slug, pname):
     pic = next((m for m in (d.get('poster'), d.get('hero'), next(iter(d.get('cover') or []), None)) if m and m.get('src') and m.get('srcset')), None)
     if pic:
         kind = ' is-poster' if pic is d.get('poster') else ''
-        return f'<div class="pj-card-pic{kind}">{media_img(pic, "h-full w-full", "(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw")}</div>'
+        return f'<div class="pj-card-pic{kind}">{media_img(pic, "h-full w-full", "(min-width:1280px) 25vw, (min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw")}</div>'
     return (f'<div class="pj-card-pic pj-poster" style="--c:{PILLAR_TONE.get(slug, "#E7E5E4")}">'
             f'<span class="pj-poster-k">{pname}</span><span class="pj-poster-t">{name}</span></div>')
 
@@ -1281,14 +1281,14 @@ def projects():
 
 <section id="featured" class="scroll-mt-28 py-14 lg:py-16">
   <div class="wrap">{sec_head('01 / Featured Projects', 'Selected <span class="sh-soft">case studies.</span>', desc='Three projects told in depth: the context, our approach, the activities and the results.')}
-    <ul class="mt-12 grid gap-x-6 gap-y-12 md:grid-cols-3 lg:mt-16">{feat_cards}</ul>
+    <ul class="mt-12 grid gap-x-5 gap-y-10 sm:grid-cols-2 lg:mt-16 lg:grid-cols-3 xl:grid-cols-4">{feat_cards}</ul>
   </div>
 </section>
 
 <section id="by-pillar" class="scroll-mt-28 py-14 lg:py-16">
   <div class="wrap">{sec_head('02 / Projects by Pillar', 'Browse by <span class="sh-soft">area of action.</span>', ('Our pillars', 'pillars.html'), desc='Filter AFCD projects by the pillar they belong to.')}
     <ul class="mt-10 flex flex-wrap gap-2" aria-label="Filter projects by pillar">{filters}</ul>
-    <ul id="proj-grid" class="mt-10 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite">{all_cards}</ul>
+    <ul id="proj-grid" class="mt-10 grid gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-live="polite">{all_cards}</ul>
     <p id="proj-empty" class="mt-10 hidden text-ink-mid">No projects under this pillar yet.</p>
     {placeholder_note('The current site lists 15 projects. The rest will be added from AFCD’s archive.')}
   </div>

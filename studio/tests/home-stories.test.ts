@@ -13,7 +13,7 @@ import { media } from '../src/server/db/schema.ts';
 const SITE = resolve(__dirname, '../..');
 const SOURCE = readFileSync(join(SITE, 'src/pages/index.html'), 'utf8');
 const BODY = SOURCE.replace(/^---\n[\s\S]*?\n---\n/, '').trim();
-const figure = (html: string) => html.slice(html.indexOf('<figure class="im-photo tm '), html.indexOf('</figure>', html.indexOf('<figure class="im-photo tm ')));
+const figure = (html: string) => html.slice(html.indexOf('<figure class="tm tm-simple '), html.indexOf('</figure>', html.indexOf('<figure class="tm tm-simple ')));
 const slides = (html: string) => figure(html).match(/<article class="tm-slide[\s\S]*?<\/article>/g) ?? [];
 
 describe('participant stories: field and build output', () => {
@@ -36,7 +36,7 @@ describe('participant stories: field and build output', () => {
 
   it('builds exactly today’s carousel until the list is edited, first photo included', () => {
     const out = renderPage(BODY, undefined);
-    expect(out).toBe(BODY.replace(/ data-sf(?:-type)?="[^"]*"/g, ''));
+    expect(out).toBe(BODY.replace(/ data-sf(?:-type|-sizes)?="[^"]*"/g, ''));   // every Studio marker is removed
     expect(slides(out)[0]).toContain('<img class="tm-img" src="assets/img/hero-slide-2.webp" alt="AFCD team member smiling while working at a laptop" width="2000" height="1435" loading="lazy" decoding="async" style="object-position:50% 30%">');
   });
 

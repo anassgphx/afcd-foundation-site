@@ -596,7 +596,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
   api.get('/notifications', async (c) => { const u = requireUser(c); return c.json(await WS.notifications(db, u)); });
 
   // ---------------------------------------------------------------- Homepage and contact page editing (marked text, review, publishing)
-  // Same endpoints for each page in HM.TEXT_PAGES: /home for the homepage (with its section layout), /page-text/contact.html.
+  // Same endpoints for each page in HM.TEXT_PAGES: /home for the homepage (with its section layout), /page-text/<file>.
   const textPageRoutes = (prefix: string, file: string) => {
     const page = HM.TEXT_PAGES[file];
     api.get(prefix, perm('page.read'), async (c) => {
@@ -610,7 +610,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
       const blockIds = layout.flatMap((e) => (e.kind === 'block' ? docMediaIds({ blocks: [e] }) : []));
       const extra = blockIds.length ? await db.select().from(t.media).where(inArray(t.media.id, blockIds)) : [];
       return c.json({ page: { file, ...page }, fields, sections: SECTION_LABEL, siteSections: sections, layout, content, media: [...mediaRows, ...extra].map(withUrl),
-        catalog: page.layout ? blockCatalog().filter((b) => HOME_BLOCKS.includes(b.type)) : [],
+        catalog: page.blocks ? blockCatalog().filter((b) => HOME_BLOCKS.includes(b.type)) : [],
         problems: content ? await HM.contentProblems(db, cfg, content.values, content.layout, file) : [],
         issues: content ? await HM.contentIssues(db, cfg, content.values, content.layout, file) : [], history: content ? await HM.contentHistory(db, content.id) : { revisions: [], comments: [] } });
     });
@@ -619,7 +619,7 @@ export function createApp(db: DB, cfg: Config, opts: { runner?: BuildRunner; goo
     api.post(`${prefix}/canvas`, perm('page.read'), bodyLimit({ maxSize: 512 * 1024 }), async (c) => {
       const b = await c.req.json().catch(() => ({})) as { values?: unknown; layout?: unknown };
       const values = HM.validateValues(readFields(cfg.siteRoot, file), b.values ?? {});
-      const layout = page.layout ? validateLayout(cfg.siteRoot, file, b.layout ?? currentLayout(cfg.siteRoot, file, null)).layout : null;
+      const layout = page.layout ? validateLayout(cfg.siteRoot, file, b.layout ?? currentLayout(cfg.siteRoot, file, null), page.blocks).layout : null;
       return c.json({ html: await homeCanvas(db, cfg, file, values, layout) });
     });
     api.post(`${prefix}/transition`, async (c) => {

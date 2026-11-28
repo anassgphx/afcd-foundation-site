@@ -53,6 +53,10 @@ export function PagesList() {
       <div className="card-h"><h2>Contact page</h2><Link className="btn btn-sm" to="/studio/contact"><Icon n="mail" />Edit the contact page</Link></div>
       <p className="muted" style={{ margin: 0, padding: '0 16px 14px', fontSize: 13 }}>The texts of the website’s contact page. The phone, emails and social links come from Website settings › Contact &amp; social.</p>
     </section>}
+    {can('page.read') && <section className="card" style={{ marginBottom: 16 }}>
+      <div className="card-h"><h2>Get Involved page</h2><Link className="btn btn-sm" to="/studio/get-involved"><Icon n="edit" />Edit the Get Involved page</Link></div>
+      <p className="muted" style={{ margin: 0, padding: '0 16px 14px', fontSize: 13 }}>The texts, buttons and links of the website’s Get Involved page. Its sections can be shown, hidden and reordered.</p>
+    </section>}
     <section className="card">
       <div className="card-h"><h2>Builder pages</h2></div>
       <ListToolbar tabs={tabs} value={st.status} onChange={(v) => set('status', v)} q={st.q} setQ={(v) => set('q', v)} placeholder="Search pages" />

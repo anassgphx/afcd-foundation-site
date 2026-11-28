@@ -5,4 +5,6 @@ export function applyFields(body: string, vals?: Record<string, unknown>, opts?:
 export function closeIndex(html: string, tag: string, from: number): number;
 export function splitSections(body: string): { parts: { id: string | null; html: string }[]; tail: string };
 export function composeSections(body: string, layout: LayoutItem[] | null | undefined, wrap?: ((id: string, html: string, kind: 'section' | 'block' | 'hidden-section' | 'hidden-block') => string) | null): string;
+export function tailStart(inner: string): number;
+export function stripSectionNames(html: string): string;
 export function renderPage(body: string, entry?: PageEntry | null): string;

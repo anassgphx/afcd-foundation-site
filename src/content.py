@@ -2508,7 +2508,7 @@ def involved():
              who='International, national and local organisations, institutions and companies.',
              items=['Fund a programme or a pillar', 'Co-design an initiative', 'Share expertise and mentoring'],
              steps=['Tell us about your organisation and goals', f'We explore fit with our {PILLARS_WORD} pillars together', 'Co-design, launch and report on the work'],
-             cta='Start a partnership'),
+             cta='Start a partnership', fixed_steps={2}),
         dict(id='alumni', n='04', tone='#FBE38A', t='Alumni Club', topic='Alumni club',
              d='Stay connected with fellow alumni of AFCD programmes and keep the change going.',
              who='Past participants of AFCD programmes.',
@@ -2516,9 +2516,12 @@ def involved():
              steps=['Tell us your programme and year', 'We reconnect you with the alumni network', 'Mentor, meet and take part'],
              cta='Join the alumni club'),
     ]
+    sf = lambda key, typ=None: f' data-sf="{key}"' + (f' data-sf-type="{typ}"' if typ else '')   # AFCD Studio field markers
+    psf = lambda w, f, typ=None: sf('paths.' + w['id'] + '.' + f, typ)
+    mirror = lambda i: None if i == 0 else 'plain'   # a label repeated in each panel is one field, edited in the first
     def ico(k):
         return f'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{GI_ICONS[k]}</svg>'
-    tabs = ''.join(f'''<button type="button" class="gi-tab" role="tab" id="tab-{w['id']}" aria-controls="{w['id']}" aria-selected="{'true' if i == 0 else 'false'}" style="--c:{w['tone']}"><span class="gi-tab-ico">{ico(w['id'])}</span><span class="min-w-0 flex-1 text-left"><span class="block text-[11px] font-medium tabular-nums text-ink-mid">{w['n']}</span><span class="block text-[17px] font-semibold tracking-[-0.02em]">{w['t']}</span></span><span class="gi-tab-arr" aria-hidden="true">→</span></button>''' for i, w in enumerate(ways))
+    tabs = ''.join(f'''<button type="button" class="gi-tab" role="tab" id="tab-{w['id']}" aria-controls="{w['id']}" aria-selected="{'true' if i == 0 else 'false'}" style="--c:{w['tone']}"><span class="gi-tab-ico">{ico(w['id'])}</span><span class="min-w-0 flex-1 text-left"><span class="block text-[11px] font-medium tabular-nums text-ink-mid">{w['n']}</span><span class="block text-[17px] font-semibold tracking-[-0.02em]"{psf(w, "title", "plain")}>{w['t']}</span></span><span class="gi-tab-arr" aria-hidden="true">→</span></button>''' for i, w in enumerate(ways))
     check = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10.5 3.2 3L15 6.5"/></svg>'
     panels = ''.join(f'''
       <article id="{w['id']}" class="gi-panel scroll-mt-32" role="tabpanel" aria-labelledby="tab-{w['id']}" style="--c:{w['tone']}">
@@ -2526,21 +2529,21 @@ def involved():
           <span class="gi-panel-ico">{ico(w['id'])}</span>
           <span class="pl-hero-n">{w['n']}<span class="text-black/40"> / 04</span></span>
         </div>
-        <h2 class="mt-6 text-[34px] font-semibold leading-[1.02] tracking-[-0.045em] md:text-[48px]">{w['t']}</h2>
-        <p class="mt-4 max-w-[52ch] text-[16.5px] leading-relaxed text-black/75">{w['d']}</p>
+        <h2 class="mt-6 text-[34px] font-semibold leading-[1.02] tracking-[-0.045em] md:text-[48px]"{psf(w, "title")}>{w['t']}</h2>
+        <p class="mt-4 max-w-[52ch] text-[16.5px] leading-relaxed text-black/75"{psf(w, "text")}>{w['d']}</p>
         <div class="mt-8 grid gap-3 md:grid-cols-2">
-          <div class="gi-box"><p class="label text-ink-mid">What you’ll do</p><ul class="mt-4 grid gap-2.5">{''.join(f'<li class="gi-check">{check}<span>{x}</span></li>' for x in w['items'])}</ul></div>
-          <div class="gi-box"><p class="label text-ink-mid">How it works</p><ol class="mt-4 grid gap-2.5">{''.join(f'<li class="gi-stepline"><span class="gi-stepline-n">{k}</span><span>{x}</span></li>' for k, x in enumerate(w['steps'], 1))}</ol></div>
+          <div class="gi-box"><p class="label text-ink-mid"{sf('paths.do', mirror(i))}>What you’ll do</p><ul class="mt-4 grid gap-2.5">{''.join(f'<li class="gi-check">{check}<span{psf(w, "item%d" % k)}>{x}</span></li>' for k, x in enumerate(w['items'], 1))}</ul></div>
+          <div class="gi-box"><p class="label text-ink-mid"{sf('paths.how', mirror(i))}>How it works</p><ol class="mt-4 grid gap-2.5">{''.join(f'<li class="gi-stepline"><span class="gi-stepline-n">{k}</span><span{"" if k in w.get("fixed_steps", ()) else psf(w, "step%d" % k)}>{x}</span></li>' for k, x in enumerate(w['steps'], 1))}</ol></div>
         </div>
         <div class="mt-6 flex flex-wrap items-center justify-between gap-4">
-          <p class="max-w-[46ch] text-[14px] leading-relaxed text-black/65"><b class="font-semibold text-black">Who it’s for:</b> {w['who']}</p>
-          <a href="contact.html?topic={w['topic'].replace(' ', '+')}#message" class="btn-dark btn-cta min-h-[50px] px-7">{w['cta']} {ARR}</a>
+          <p class="max-w-[46ch] text-[14px] leading-relaxed text-black/65"{psf(w, "who", "tail")}><b class="font-semibold text-black"{sf('paths.whofor', mirror(i))}>Who it’s for:</b> {w['who']}</p>
+          <a href="contact.html?topic={w['topic'].replace(' ', '+')}#message" class="btn-dark btn-cta min-h-[50px] px-7"{psf(w, "cta", "link")}>{w['cta']} {ARR}</a>
         </div>
-      </article>''' for w in ways)
+      </article>''' for i, w in enumerate(ways))
     journey = [('Choose your path', 'Volunteer, join a programme, partner with us or reconnect as an alumnus.'),
                ('Get in touch', 'Send us a message with the right topic, and it goes straight to the right team.'),
                ('Take part', 'We follow up with next steps, and you join AFCD’s community in action.')]
-    jhtml = ''.join(f'<li class="os-step"><span class="os-step-k">{i:02d}</span><span class="os-step-dot" aria-hidden="true"></span><span class="mt-5 block text-[20px] font-semibold tracking-[-0.025em]">{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark">{d}</span></li>' for i, (t, d) in enumerate(journey, 1))
+    jhtml = ''.join(f'<li class="os-step"><span class="os-step-k">{i:02d}</span><span class="os-step-dot" aria-hidden="true"></span><span class="mt-5 block text-[20px] font-semibold tracking-[-0.025em]"{sf(f"how.step{i}.title")}>{t}</span><span class="mt-2 block text-[14.5px] leading-relaxed text-ink-dark"{sf(f"how.step{i}.text")}>{d}</span></li>' for i, (t, d) in enumerate(journey, 1))
 
     body = page_header([('Get Involved', 'get-involved.html')], 'Get Involved',
                        'Let’s create change <span class="text-ink-mid">together.</span>',
@@ -2550,12 +2553,12 @@ def involved():
   <div class="wrap">
     <div class="gi-shell">
       <div class="gi-side">
-        <p class="label text-ink-mid">Choose your path</p>
+        <p class="label text-ink-mid" data-sf="paths.kicker">Choose your path</p>
         <div class="gi-tabs mt-4" role="tablist" aria-label="Ways to get involved">{tabs}</div>
         <div class="gi-side-note">
-          <p class="text-[14px] font-semibold">Not sure where you fit?</p>
-          <p class="mt-1 text-[13.5px] leading-relaxed text-ink-dark">Write to us and we’ll suggest the right way to take part.</p>
-          <a href="contact.html#message" class="link-arrow mt-3 text-[13.5px]">Send a message {ARR}</a>
+          <p class="text-[14px] font-semibold" data-sf="paths.note.title">Not sure where you fit?</p>
+          <p class="mt-1 text-[13.5px] leading-relaxed text-ink-dark" data-sf="paths.note.text">Write to us and we’ll suggest the right way to take part.</p>
+          <a href="contact.html#message" class="link-arrow mt-3 text-[13.5px]" data-sf="paths.note.link" data-sf-type="link">Send a message {ARR}</a>
         </div>
       </div>
       <div class="gi-panels">{panels}
@@ -2565,7 +2568,7 @@ def involved():
 </section>
 
 <section id="how" class="py-14 lg:py-16">
-  <div class="wrap">{sec_head('01 / How It Works', 'Three steps <span class="sh-soft">to take part.</span>', 'Simple and personal', desc='Whichever path you choose, getting started looks the same.')}
+  <div class="wrap">{studio_head_fields('how', sec_head('01 / How It Works', 'Three steps <span class="sh-soft">to take part.</span>', 'Simple and personal', desc='Whichever path you choose, getting started looks the same.'))}
     <ol class="os-steps gi-journey mt-8 lg:mt-10">{jhtml}
     </ol>
   </div>
@@ -2573,18 +2576,63 @@ def involved():
 
 <section id="calls" class="pb-6 lg:pb-8">
   <div class="wrap">
-    <a href="news.html" class="gi-calls group">
-      <span class="cta-kicker" style="background:#fff;color:#000"><span class="tb-dot" aria-hidden="true"></span>Open calls</span>
-      <span class="mt-6 block text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[44px]">Looking for the next call <span class="text-white/45">for applications?</span></span>
-      <span class="mt-4 block max-w-[52ch] text-[15.5px] leading-relaxed text-white/65">Calls for youth and women’s programmes are published on News &amp; Stories and in our newsletter.</span>
-      <span class="btn-light btn-cta mt-8 min-h-[48px] px-6 text-[14px]">See News &amp; Stories {ARR}</span>
+    <a href="news.html" class="gi-calls group" data-sf="calls.link" data-sf-type="href">
+      <span class="cta-kicker" style="background:#fff;color:#000" data-sf="calls.kicker" data-sf-type="tail"><span class="tb-dot" aria-hidden="true"></span>Open calls</span>
+      <span class="mt-6 block text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] md:text-[44px]" data-sf="calls.title" data-sf-type="split">Looking for the next call <span class="text-white/45">for applications?</span></span>
+      <span class="mt-4 block max-w-[52ch] text-[15.5px] leading-relaxed text-white/65" data-sf="calls.text">Calls for youth and women’s programmes are published on News &amp; Stories and in our newsletter.</span>
+      <span class="btn-light btn-cta mt-8 min-h-[48px] px-6 text-[14px]" data-sf="calls.button" data-sf-type="label">See News &amp; Stories {ARR}</span>
     </a>
   </div>
 </section>
 ''' + cta_band('Not sure where you fit?', 'Write to us and we’ll find the right way for you to take part.',
                ('Contact us', 'contact.html'), ('About AFCD', 'about.html'))
     page('get-involved.html', 'Volunteer with AFCD Foundation · Get Involved',
-         'Volunteer, join a programme, partner with us or join the alumni club at AFCD Foundation.', 'involved', body)
+         'Volunteer, join a programme, partner with us or join the alumni club at AFCD Foundation.', 'involved', studio_involved_fields(body))
+
+
+def studio_head_fields(key, s):
+    """Studio data-sf markers on a sec_head() header: number, label, right-hand caption, heading and description."""
+    for old, new in (('<span class="sh-num">', f'<span class="sh-num" data-sf="{key}.head.num">'), ('<span class="sh-label">', f'<span class="sh-label" data-sf="{key}.head.label">'),
+                     ('<span class="sh-meta">', f'<span class="sh-meta" data-sf="{key}.head.meta">'), ('<h2 class="sh-title reveal">', f'<h2 class="sh-title reveal" data-sf="{key}.title" data-sf-type="split">'),
+                     ('<p class="sh-desc">', f'<p class="sh-desc" data-sf="{key}.desc">')):
+        if s.count(old) != 1:
+            raise SystemExit(f'{key}: Studio field anchor not found once: {old}')
+        s = s.replace(old, new)
+    return s
+
+
+def studio_involved_fields(s):
+    """AFCD Studio edits the Get Involved page like the homepage (Website › Pages › Get Involved page): data-sf markers
+    on the text written above (see lib/page-fields.mjs), and data-sf-section names for the two sections written without
+    an id, so they can be selected, hidden and moved too. build.mjs always removes both, so the built page is unchanged
+    until an edit is reviewed and published. A missing anchor stops the run, so a wording change cannot drop a field."""
+    def r(old, new):
+        nonlocal s
+        if s.count(old) != 1:
+            raise SystemExit(f'get-involved.html: Studio field anchor not found once: {old[:70]}')
+        s = s.replace(old, new)
+    r('<section class="page-head phd">', '<section class="page-head phd" data-sf-section="header">')
+    r('<span class="phd-label">', '<span class="phd-label" data-sf="head.kicker" data-sf-type="tail">')
+    r('<h1 class="sh-title sh-xl phd-title">', '<h1 class="sh-title sh-xl phd-title" data-sf="head.title" data-sf-type="split">')
+    r('<p class="phd-lead">', '<p class="phd-lead" data-sf="head.lead">')
+    # the closing band (cta_band, shared with other pages; only this page's copy is marked)
+    r('<section class="cta-wrap py-10 lg:py-14">', '<section class="cta-wrap py-10 lg:py-14" data-sf-section="closing">')
+    r('<span class="cta-kicker"><span class="tb-dot"', '<span class="cta-kicker" data-sf="closing.kicker" data-sf-type="tail"><span class="tb-dot"')
+    r('lg:text-[64px]" style="text-wrap:balance">', 'lg:text-[64px]" style="text-wrap:balance" data-sf="closing.title">')
+    r('<p class="mt-5 max-w-[52ch] text-[16px] leading-relaxed text-ink-dark md:text-[17px]">', '<p class="mt-5 max-w-[52ch] text-[16px] leading-relaxed text-ink-dark md:text-[17px]" data-sf="closing.text">')
+    r('<a href="contact.html" class="btn-dark btn-cta min-h-[50px] px-7">', '<a href="contact.html" class="btn-dark btn-cta min-h-[50px] px-7" data-sf="closing.cta1" data-sf-type="link">')
+    r('<a href="about.html" class="link-arrow">', '<a href="about.html" class="link-arrow" data-sf="closing.cta2" data-sf-type="link">')
+    n = [0]
+    def way(m):
+        n[0] += 1; i = n[0]; x = m.group(0)
+        x = x.replace('class="cta-way">', f'class="cta-way" data-sf="closing.way{i}.link" data-sf-type="href">', 1)
+        x = x.replace('<span class="block text-[16px] font-semibold tracking-[-0.015em]">', f'<span class="block text-[16px] font-semibold tracking-[-0.015em]" data-sf="closing.way{i}.title">', 1)
+        return x.replace('<span class="mt-0.5 block text-[13.5px] leading-snug text-ink-mid">', f'<span class="mt-0.5 block text-[13.5px] leading-snug text-ink-mid" data-sf="closing.way{i}.text">', 1)
+    s = re.sub(r'<li><a href="[^"]*" class="cta-way">.*?</li>', way, s, flags=re.S)
+    if n[0] != 3:
+        raise SystemExit('get-involved.html: expected 3 ways in the closing band for Studio fields')
+    return s
+
 
 
 # ---------------------------------------------------------------- Careers (About › Careers)

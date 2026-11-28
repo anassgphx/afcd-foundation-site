@@ -1,4 +1,4 @@
-// Homepage editing: edited values for the data-sf fields of src/pages/index.html, with review, revisions and publishing.
+// Homepage editing (and the other TEXT_PAGES): edited values for the data-sf fields of src/pages/<file>, with review, revisions and publishing.
 // Only edited fields are stored; every other field keeps the text written in the page.
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -16,15 +16,19 @@ import { docMediaIds } from '../pages/render.ts';
 import { altProblem } from '../media/alt.ts';
 
 export const HOME = 'index.html';
-/** Hand-written pages whose marked text is edited in Studio. Only the homepage also has a section layout. */
-export const TEXT_PAGES: Record<string, { label: string; noun: string; api: string; href: string; layout: boolean }> = {
-  'index.html': { label: 'Homepage', noun: 'homepage', api: '/home', href: '/studio/home', layout: true },
-  'contact.html': { label: 'Contact page', noun: 'contact page', api: '/page-text/contact.html', href: '/studio/contact', layout: false },
+/** Pages whose marked text is edited in Studio. `layout`: its own sections can be shown, hidden and reordered;
+ *  `blocks`: sections from the block library can also be added (the homepage only). */
+export const TEXT_PAGES: Record<string, { label: string; noun: string; api: string; href: string; layout: boolean; blocks: boolean }> = {
+  'index.html': { label: 'Homepage', noun: 'homepage', api: '/home', href: '/studio/home', layout: true, blocks: true },
+  'contact.html': { label: 'Contact page', noun: 'contact page', api: '/page-text/contact.html', href: '/studio/contact', layout: false, blocks: false },
+  'get-involved.html': { label: 'Get Involved page', noun: 'Get Involved page', api: '/page-text/get-involved.html', href: '/studio/get-involved', layout: true, blocks: false },
 };
 const pageOf = (file: string) => { const p = TEXT_PAGES[file]; if (!p) throw new AppError(404, 'This page is not edited in Studio.'); return p; };
 type Status = typeof pageContents.$inferSelect['status'];
 const plain = (max: number, min = 0) => z.string().trim().max(max).min(min, 'This field cannot be empty.').refine((v) => !/[<>]/.test(v), 'Use plain text without < or >.');
-const HREF = /^(https:\/\/[^\s"'<>]+|mailto:[^\s"'<>]+|tel:\+?[0-9 ]+|#[a-z0-9-]+|[a-z0-9-]+\.html(#[a-z0-9-]+)?)$/i;
+// the same addresses lib/page-fields.mjs accepts (a page of this site may carry a short query: contact.html?topic=Partnership#message)
+const HREF = /^(https:\/\/[^\s"'<>]+|mailto:[^\s"'<>]+|tel:\+?[0-9 ]+|#[a-z0-9-]+|[a-z0-9-]+\.html(\?[a-z0-9=+&%_.-]+)?(#[a-z0-9-]+)?)$/i;
+const HREF_MSG = 'Use a page like about.html, a #section, https://…, mailto: or tel:.';
 
 /** Length limits of the numbered section headers (pill number, label, right-hand caption); the admin uses the same. */
 export const HEAD_MAX: Record<string, number> = { num: 4, label: 60, meta: 60 };
@@ -61,7 +65,9 @@ const schemaFor = (f: FieldDef): z.ZodTypeAny => {
   if (/^faq\.a\d+$/.test(f.key)) return plain(300, 1);
   switch (f.type) {
     case 'split': return z.object({ main: plain(90, 1), soft: plain(90) }).strict();
-    case 'link': return z.object({ label: plain(40, 1), href: z.string().trim().max(300).regex(HREF, 'Use a page like about.html, a #section, https://…, mailto: or tel:.') }).strict();
+    case 'link': return z.object({ label: plain(40, 1), href: z.string().trim().max(300).regex(HREF, HREF_MSG) }).strict();
+    case 'href': return z.string().trim().max(300).regex(HREF, HREF_MSG);
+    case 'label': return plain(60, 1);
     case 'image': return z.object({ mediaId: z.string().uuid() }).strict();
     case 'stories': return z.array(storySchema).min(1, 'Keep at least one story.').max(STORIES_MAX, `Use at most ${STORIES_MAX} stories.`);
     case 'rich': return plain(700, 1);
@@ -107,7 +113,7 @@ export async function contentIssues(db: DB, cfg: Config, values: Record<string, 
   }
   if (Array.isArray(layout) && page.layout) {
     try {
-      const v = validateLayout(cfg.siteRoot, file, currentLayout(cfg.siteRoot, file, layout));
+      const v = validateLayout(cfg.siteRoot, file, currentLayout(cfg.siteRoot, file, layout), page.blocks);
       const blocks = layoutBlocks(v.layout);
       for (const p of v.problems) {
         const m = p.path.match(/^blocks\.(\d+)(?:\.([^.]+))?/); const b = m ? blocks[Number(m[1])] : undefined;
@@ -156,7 +162,7 @@ export async function saveContent(db: DB, cfg: Config, actor: NonNullable<Actor>
   let problems: { path: string; message: string }[] = [];
   if (body.layout !== undefined && page.layout) {   // pages without a layout keep their sections as written
     if (body.layout === null) layout = null;
-    else { const v = validateLayout(cfg.siteRoot, file, body.layout); layout = v.layout; problems = v.problems; }
+    else { const v = validateLayout(cfg.siteRoot, file, body.layout, page.blocks); layout = v.layout; problems = v.problems; }
   }
   const ids = [...valueMediaIds(values), ...(layout ? docMediaIds({ blocks: layoutBlocks(layout) }) : [])];
   if (ids.length && (await db.select({ id: media.id }).from(media).where(inArray(media.id, [...new Set(ids)]))).length !== new Set(ids).size) throw new AppError(422, 'A chosen photo no longer exists in the media library.');

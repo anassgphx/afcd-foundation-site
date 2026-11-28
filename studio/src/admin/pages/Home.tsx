@@ -11,10 +11,10 @@ import { DesignFields, FieldEditor, type BlockDef, type Design } from './Builder
 const TEXT_MAX = 800;
 import { Loading } from './Dashboard.tsx';
 
-type FieldDef = { key: string; type: 'text' | 'split' | 'rich' | 'link' | 'tail' | 'image' | 'stories'; section: string; sectionId: string | null; label: string; default: any };
+type FieldDef = { key: string; type: 'text' | 'split' | 'rich' | 'link' | 'tail' | 'image' | 'stories' | 'href' | 'label'; section: string; sectionId: string | null; label: string; default: any };
 type Entry = { kind: 'section'; id: string; hidden: boolean } | { kind: 'block'; id: string; type: string; v: number; hidden: boolean; props: Record<string, any>; design?: Design };
-type PageInfo = { file: string; label: string; noun: string; layout: boolean };
-const HOME_PAGE: PageInfo = { file: 'index.html', label: 'Homepage', noun: 'homepage', layout: true };
+type PageInfo = { file: string; label: string; noun: string; layout: boolean; blocks?: boolean };
+const HOME_PAGE: PageInfo = { file: 'index.html', label: 'Homepage', noun: 'homepage', layout: true, blocks: true };
 type Data = { page?: PageInfo; fields: FieldDef[]; siteSections: { id: string; label: string }[]; layout: Entry[]; catalog: BlockDef[]; media: MediaItem[]; problems: string[]; issues?: Issue[];
   content: null | { id: string; status: string; values: Record<string, any>; layout: Entry[] | null; publishedRevisionId: string | null; publishedAt: string | null; updatedAt: string };
   history: { revisions: { id: string; number: number; reason: string; createdAt: string }[]; comments: { id: string; kind: string; body: string; createdAt: string }[] } };
@@ -23,7 +23,8 @@ const DEVICES = [[1280, 'monitor', 'Desktop'], [820, 'tablet', 'Tablet'], [390, 
 const GROUPS = ['Live', 'Text', 'Media', 'Content', 'Action', 'Structure'];
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const rid = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (x) => (x % 36).toString(36)).join('') + Date.now().toString(36).slice(-4);
-const SECTION_ICON: Record<string, string> = { hero: 'image', 'who-we-are': 'users', purpose: 'heart', pillars: 'layers', projects: 'folder', impact: 'dash', news: 'log', events: 'calendar', partners: 'partner', 'get-involved': 'send' };
+const SECTION_ICON: Record<string, string> = { hero: 'image', 'who-we-are': 'users', purpose: 'heart', pillars: 'layers', projects: 'folder', impact: 'dash', news: 'log', events: 'calendar', partners: 'partner', 'get-involved': 'send',
+  paths: 'users', how: 'layers', calls: 'send' };
 
 /** `path` is the page's API ('/home', '/page-text/contact.html'); pages without a layout only edit their marked text. */
 export function HomeEditor({ path = '/home' }: { path?: string }) {
@@ -61,7 +62,7 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
   }, [path]);
   useEffect(() => { load().catch((e) => toast(e.message, true)); }, [load]);
 
-  const P = d?.page ?? HOME_PAGE; const layoutOn = P.layout;
+  const P = d?.page ?? HOME_PAGE; const layoutOn = P.layout; const addOn = layoutOn && P.blocks !== false;   // pages without blocks only show, hide and reorder
   const status = d?.content?.status ?? 'draft'; const live = !!d?.content?.publishedRevisionId;
   const editable = !!d && can('page.update') && status !== 'in_review';
   const defs = useMemo(() => new Map((d?.catalog ?? []).map((b) => [b.type, b])), [d]);
@@ -91,12 +92,14 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
     if (!layoutOn) return [editAct];   // this page's sections stay as written: only their text is edited
     return [
       editAct,
-      { id: 'above', label: 'Add section above', icon: 'plus', off, run: () => setDialog({ kind: 'library', at: i }) },
-      { id: 'below', label: 'Add section below', icon: 'plus', off, run: () => setDialog({ kind: 'library', at: i + 1 }) },
-      { id: 'dup', label: 'Duplicate', icon: 'copy', kbd: '⌘D', off: off ?? (site ? 'Site sections are built from the page code and cannot be copied. Add a section from the library instead.' : undefined), run: () => duplicate(id) },
+      ...(addOn ? [
+        { id: 'above', label: 'Add section above', icon: 'plus', off, run: () => setDialog({ kind: 'library', at: i }) },
+        { id: 'below', label: 'Add section below', icon: 'plus', off, run: () => setDialog({ kind: 'library', at: i + 1 }) },
+        { id: 'dup', label: 'Duplicate', icon: 'copy', kbd: '⌘D', off: off ?? (site ? 'Site sections are built from the page code and cannot be copied. Add a section from the library instead.' : undefined), run: () => duplicate(id) },
+      ] as Act[] : []),
       { id: 'up', label: 'Move up', icon: 'up', kbd: '⌥↑', off: off ?? (i === 0 ? 'Already first.' : undefined), run: () => move(i, i - 1) },
       { id: 'down', label: 'Move down', icon: 'down', kbd: '⌥↓', off: off ?? (i === st.layout.length - 1 ? 'Already last.' : undefined), run: () => move(i, i + 1) },
-      { id: 'hide', label: e.hidden ? (site ? 'Restore on the homepage' : 'Show on the homepage') : 'Hide from the homepage', icon: e.hidden ? 'eye' : 'eyeoff', kbd: 'H', off, run: () => { toggle(id); toast(e.hidden ? `${label(e)} is back on the homepage draft` : `${label(e)} hidden in the draft. ⌘Z undoes it.`); } },
+      { id: 'hide', label: e.hidden ? (site ? `Restore on the ${P.noun}` : `Show on the ${P.noun}`) : `Hide from the ${P.noun}`, icon: e.hidden ? 'eye' : 'eyeoff', kbd: 'H', off, run: () => { toggle(id); toast(e.hidden ? `${label(e)} is back on the ${P.noun} draft` : `${label(e)} hidden in the draft. ⌘Z undoes it.`); } },
       site
         ? { id: 'del', label: e.hidden ? 'Already hidden' : 'Delete (hides it)', icon: 'trash', kbd: '⌫', danger: true, off: off ?? (e.hidden ? 'Site sections cannot be deleted; this one is already hidden. Use Restore to bring it back.' : undefined), run: () => { toggle(id); toast(`Site sections cannot be deleted, so ${label(e)} is hidden instead. Restore brings it back.`); } }
         : { id: 'del', label: 'Delete', icon: 'trash', kbd: '⌫', danger: true, off, run: () => remove(id) },
@@ -278,7 +281,7 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
     <div className="b-body">
       <aside className="b-left">
         <div className="between" style={{ padding: '10px 12px 6px' }}><b style={{ fontSize: 13 }}>Sections</b>
-          {editable && layoutOn && <button className="btn btn-sm btn-primary" onClick={() => setDialog({ kind: 'library' })}><Icon n="plus" /><span className="b-add-t">Add section</span></button>}</div>
+          {editable && addOn && <button className="btn btn-sm btn-primary" onClick={() => setDialog({ kind: 'library' })}><Icon n="plus" /><span className="b-add-t">Add section</span></button>}</div>
         <ol className="b-scroll b-layers" aria-label={`${P.label} sections`}>{st.layout.map((e, i) => (
           <li key={e.id} className={`b-layer${sel === e.id ? ' on' : ''}${e.hidden ? ' off' : ''}`} draggable={editable && layoutOn}
             onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', String(i)); ev.dataTransfer.effectAllowed = 'move'; }}
@@ -313,7 +316,7 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
         : <fieldset className="b-scroll b-insp stack" disabled={!editable}>
           <div><small className="muted">{selEntry.kind === 'section' ? `${P.label} section` : defs.get(selEntry.type)?.group}</small><h3 style={{ margin: '2px 0 0', fontSize: 16 }}>{label(selEntry)}</h3>
             {selEntry.kind === 'block' && <p className="muted" style={{ fontSize: 12.5, margin: '4px 0 0' }}>{defs.get(selEntry.type)?.description}</p>}</div>
-          {layoutOn && <label className="check"><input type="checkbox" checked={!selEntry.hidden} onChange={() => toggle(selEntry.id)} /><span>Show on the homepage</span></label>}
+          {layoutOn && <label className="check"><input type="checkbox" checked={!selEntry.hidden} onChange={() => toggle(selEntry.id)} /><span>Show on the {P.noun}</span></label>}
           {selEntry.kind === 'section'
             ? <SectionFields fields={d.fields.filter((f) => f.sectionId === selEntry.id)} values={st.values} media={media} editable={editable} onChange={setField} onPickImage={(key, story) => setDialog({ kind: 'image', key, story })} />
             : <>
@@ -342,7 +345,9 @@ export function HomeEditor({ path = '/home' }: { path?: string }) {
 }
 
 // panel sub-group headings (fields.ts gives these sections sub-groups)
-const GROUP_LABEL: Record<string, string> = { purpose: 'Section header', 'purpose.mission': 'Our mission', 'purpose.vision': 'Our vision', 'purpose.values': 'Our values' };
+const GROUP_LABEL: Record<string, string> = { purpose: 'Section header', 'purpose.mission': 'Our mission', 'purpose.vision': 'Our vision', 'purpose.values': 'Our values',
+  // Get Involved page: one group per path, plus the labels every path shares
+  paths: 'Labels shared by every path', 'paths.volunteer': 'Volunteer', 'paths.programs': 'Join a programme', 'paths.partner': 'Partner with us', 'paths.alumni': 'Alumni club', 'paths.note': '“Not sure where you fit?” note' };
 
 // same limits as the server (modules/home/service.ts HEAD_MAX) for the numbered section headers
 const HEAD_MAX: Record<string, number> = { num: 4, label: 60, meta: 60 };
@@ -358,6 +363,7 @@ function SectionFields({ fields, values, media, editable, onChange, onPickImage 
     let control: React.ReactNode;
     if (f.type === 'split') control = <><input className="input" maxLength={90} value={v.main} onChange={(e) => onChange(f, { ...v, main: e.target.value })} aria-label={`${f.label}, main part`} /><input className="input" maxLength={90} value={v.soft} onChange={(e) => onChange(f, { ...v, soft: e.target.value })} aria-label={`${f.label}, lighter part`} placeholder="Lighter second part (optional)" /></>;
     else if (f.type === 'link') control = <><input className="input" maxLength={40} value={v.label} onChange={(e) => onChange(f, { ...v, label: e.target.value })} aria-label={`${f.label} text`} /><input className="input mono" maxLength={300} value={v.href} onChange={(e) => onChange(f, { ...v, href: e.target.value.trim() })} aria-label={`${f.label} link`} /></>;
+    else if (f.type === 'href') control = <input className="input mono" maxLength={300} value={v} onChange={(e) => onChange(f, e.target.value.trim())} aria-label={f.label} />;
     else if (f.type === 'image') { const m = v?.mediaId ? media[v.mediaId] : null; const src = m ? m.url : v?.src ? '/studio/site/' + v.src : null;   // a placeholder tile has no photo yet
       control = <>{src ? <div className="thumb" style={{ width: '100%' }}><img src={src} alt={m ? m.alt : v.alt} /></div>
         : <div className="thumb" style={{ width: '100%', aspectRatio: '4 / 3', display: 'grid', placeItems: 'center', color: 'var(--muted, #78716C)', fontSize: 13 }}>No photo yet</div>}

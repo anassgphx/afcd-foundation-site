@@ -2,9 +2,10 @@
 // The page source is the single source of the default values: when the website team changes a text, Studio shows it.
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { splitSections } from '../../../../../lib/page-fields.mjs';
+import { splitSections, tailStart } from '../../../../../lib/page-fields.mjs';
 
-export type FieldType = 'text' | 'split' | 'rich' | 'link' | 'tail' | 'image' | 'stories';
+/** href: only the address of a link that holds other fields (a card); label: a button's text before its arrow. */
+export type FieldType = 'text' | 'split' | 'rich' | 'link' | 'tail' | 'image' | 'stories' | 'href' | 'label';
 /** A story's photo: chosen in the Media Library ({ mediaId }), or the photo written in the page (src under assets/). */
 export type StoryImage = { mediaId: string } | { src: string; alt: string; w: number; h: number; fx: number; fy: number };
 export type Story = { quote: string; name: string; role: string; caption: string; image?: StoryImage; sample?: boolean };
@@ -44,6 +45,18 @@ const FIELD_LABEL: Record<string, string> = {
   label: 'Card label', tag1: 'Tag 1', tag2: 'Tag 2', tag3: 'Tag 3', link: 'Link (“Read our story”)', meta: 'Caption on the right',
   '1.name': 'Value 1 · name', '1.text': 'Value 1 · description', '2.name': 'Value 2 · name', '2.text': 'Value 2 · description',
   '3.name': 'Value 3 · name', '3.text': 'Value 3 · description', '4.name': 'Value 4 · name', '4.text': 'Value 4 · description',
+  // Get Involved page (paths.<path>.* fields are grouped per path)
+  item1: 'What you’ll do · 1', item2: 'What you’ll do · 2', item3: 'What you’ll do · 3', step1: 'How it works · 1', step2: 'How it works · 2', step3: 'How it works · 3',
+  who: 'Who it’s for', cta: 'Button', do: '“What you’ll do” label (every path)', how: '“How it works” label (every path)', whofor: '“Who it’s for” label (every path)',
+  'step1.title': 'Step 1 · title', 'step1.text': 'Step 1 · text', 'step2.title': 'Step 2 · title', 'step2.text': 'Step 2 · text', 'step3.title': 'Step 3 · title', 'step3.text': 'Step 3 · text',
+  button: 'Button text',
+  'way1.title': 'Way 1 · title', 'way1.text': 'Way 1 · text', 'way1.link': 'Way 1 · link', 'way2.title': 'Way 2 · title', 'way2.text': 'Way 2 · text', 'way2.link': 'Way 2 · link',
+  'way3.title': 'Way 3 · title', 'way3.text': 'Way 3 · text', 'way3.link': 'Way 3 · link',
+};
+/** Labels for one field by its whole key, where the shared label of its last part would mislead. */
+const KEY_LABEL: Record<string, string> = {
+  'head.kicker': 'Small label next to the breadcrumb', 'paths.kicker': 'Label above the paths', 'paths.note.title': 'Title', 'paths.note.text': 'Text', 'paths.note.link': 'Link',
+  'calls.link': 'Where the card goes', 'calls.kicker': 'Small label', 'closing.kicker': 'Small label',
 };
 
 /** The stories of a participant-stories carousel as written in the page (see "stories" in lib/page-fields.mjs). */
@@ -83,19 +96,21 @@ export function readFields(siteRoot: string, file: string): FieldDef[] {
     if (type === 'plain' && new RegExp(`data-sf="${key.replace(/\./g, '\\.')}"(?![^>]*data-sf-type="plain")`).test(html)) continue;
     let def: unknown = '';
     if (tag === 'img') def = { src: attr(raw, 'src'), alt: decode(attr(raw, 'alt')), w: Number(attr(raw, 'width')), h: Number(attr(raw, 'height')) };
+    else if (type === 'href') def = decode(attr(raw, 'href'));
     else {
       const end = closeIndex(html, tag, m.index + raw.length); const inner = end < 0 ? '' : html.slice(m.index + raw.length, end);
       if (type === 'split') { const i = inner.indexOf('<span'); def = { main: strip(i >= 0 ? inner.slice(0, i) : inner), soft: i >= 0 ? strip(inner.slice(i)) : '' }; }
       else if (type === 'link') def = { label: strip(inner.replace(/<span[\s\S]*$/, '')), href: decode(attr(raw, 'href')) };
       else if (type === 'rich') def = decode(inner.replace(/<span[^>]*>([\s\S]*?)<\/span>/g, '**$1**').replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
-      else if (type === 'tail') def = strip(inner.slice(inner.lastIndexOf('</span>') + 7));
+      else if (type === 'tail') def = strip(inner.slice(tailStart(inner)));
+      else if (type === 'label') def = strip(inner.replace(/<span[\s\S]*$/, ''));
       else if (type === 'stories') def = readStories(inner);
       else def = strip(inner);
     }
     // hero slides and the purpose cards get their own sub-groups in the editor panel
-    const dot = key.indexOf('.'); const section = key.startsWith('hero.') || /^purpose\.(mission|vision|values)\./.test(key) ? key.split('.').slice(0, 2).join('.') : key.slice(0, dot);
+    const dot = key.indexOf('.'); const section = key.startsWith('hero.') || /^(purpose\.(mission|vision|values)|paths\.(volunteer|programs|partner|alumni|note))\./.test(key) ? key.split('.').slice(0, 2).join('.') : key.slice(0, dot);
     const rest = key.slice(section.length + 1);
-    out.set(key, { key, type: (type === 'plain' || type === 'email' ? 'text' : type) as FieldType, section, sectionId: sectionAt(m.index), label: FIELD_LABEL[rest] ?? rest, default: def, tag });
+    out.set(key, { key, type: (type === 'plain' || type === 'email' ? 'text' : type) as FieldType, section, sectionId: sectionAt(m.index), label: KEY_LABEL[key] ?? FIELD_LABEL[rest] ?? rest, default: def, tag });
   }
   return [...out.values()];
 }
@@ -108,6 +123,8 @@ export const partId = (part: { id: string | null }, i: number) => part.id ?? `se
 export const SITE_SECTION_LABEL: Record<string, string> = {
   hero: 'Hero slider', 'who-we-are': 'Who we are', purpose: 'Our purpose', pillars: 'Strategic pillars', projects: 'Featured projects', impact: 'Our impact',
   news: 'News & stories', events: 'Upcoming events', partners: 'Partners', 'get-involved': 'Get involved', opportunities: 'Opportunities',
+  // Get Involved page (header and closing are data-sf-section names: those sections have no id on the site)
+  header: 'Page header', paths: 'Ways to take part', how: 'How it works', calls: 'Open calls', closing: 'Closing call to action',
 };
 /** Sections of the pages edited as text only (no layout), by field prefix. */
 export const TEXT_SECTION_LABEL: Record<string, string> = { head: 'Page header', reach: 'Contact details', message: 'Message and office', faq: 'Questions', policy: 'Privacy and accessibility' };

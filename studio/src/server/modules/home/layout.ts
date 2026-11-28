@@ -35,8 +35,9 @@ export function currentLayout(siteRoot: string, file: string, stored: unknown): 
   return list;
 }
 
-/** Strict structure check for a save; returns the layout plus field problems in blocks (reported, not refused). */
-export function validateLayout(siteRoot: string, file: string, raw: unknown) {
+/** Strict structure check for a save; returns the layout plus field problems in blocks (reported, not refused).
+ *  `allowBlocks` false: the page only shows, hides and reorders its own sections (no library sections). */
+export function validateLayout(siteRoot: string, file: string, raw: unknown, allowBlocks = true) {
   const r = z.array(entrySchema).max(MAX_ITEMS, `Use at most ${MAX_ITEMS} sections.`).safeParse(raw);
   if (!r.success) throw new AppError(422, 'The section list is not valid.', r.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })));
   const src = new Set(siteSections(siteRoot, file).map((s) => s.id));
@@ -44,7 +45,8 @@ export function validateLayout(siteRoot: string, file: string, raw: unknown) {
   for (const e of r.data) {
     if (seen.has(e.id)) throw new AppError(422, 'A section appears twice.');
     seen.add(e.id);
-    if (e.kind === 'section' && !src.has(e.id)) throw new AppError(422, `The section “${e.id}” is no longer on the homepage.`);
+    if (e.kind === 'section' && !src.has(e.id)) throw new AppError(422, `The section “${e.id}” is no longer on ${file === 'index.html' ? 'the homepage' : 'this page'}.`);
+    if (e.kind === 'block' && !allowBlocks) throw new AppError(422, 'This page’s sections come from the website; new sections cannot be added to it.');
     if (e.kind === 'block' && !HOME_BLOCKS.includes(e.type)) throw new AppError(422, `Unknown section type “${e.type}”.`);
   }
   const blocks = r.data.filter((e) => e.kind === 'block') as Extract<LayoutEntry, { kind: 'block' }>[];

@@ -78,9 +78,9 @@ export function fakeRunner(opts: { fail?: () => boolean } = {}): BuildRunner {
     // Stand-in for build.mjs's page fields (src/data/page-fields.json): revision marker on each page it lists, markers removed.
     const fieldsFile = mode.kind === 'live' ? join(cfg.siteRoot, 'src/data/page-fields.json') : mode.fieldsFile;
     const fieldPages = fieldsFile && existsSync(fieldsFile) ? JSON.parse(readFileSync(fieldsFile, 'utf8')).pages ?? {} : {};
-    for (const file of ['index.html', 'contact.html']) {
+    for (const file of ['index.html', 'contact.html', 'get-involved.html']) {
       if (!existsSync(join(out, file))) continue;
-      let html = readFileSync(join(out, file), 'utf8').replace(/\sdata-sf(?:-type)?="[^"]*"/g, '');
+      let html = readFileSync(join(out, file), 'utf8').replace(/\sdata-sf(?:-type|-section)?="[^"]*"/g, '');
       const f = fieldPages[file];
       if (f) html = `<meta name="studio-fields-rev" content="${f.revision}">` + (file === 'index.html' ? html.replace('>Old title<', `>${f.fields['hero.1.kicker'] ?? 'Old title'}<`) : html);
       writeFileSync(join(out, file), html);

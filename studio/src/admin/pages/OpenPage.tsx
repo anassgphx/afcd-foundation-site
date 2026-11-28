@@ -7,7 +7,7 @@ import { Icon, Link, useCan } from '../ui.tsx';
 type Found = { to: string } | { none: true; file: string; reason: string; links: { to: string; label: string }[] };
 const LISTS: Record<string, string> = {   // listing pages → their Studio list
   'projects.html': '/studio/projects', 'news.html': '/studio/news', 'events.html': '/studio/events', 'partners.html': '/studio/partners',
-  'pillars.html': '/studio/pillars', 'index.html': '/studio/home', 'contact.html': '/studio/contact',
+  'pillars.html': '/studio/pillars', 'index.html': '/studio/home', 'contact.html': '/studio/contact', 'get-involved.html': '/studio/get-involved',
 };
 
 async function resolve(file: string, can: (p: string) => boolean): Promise<Found> {

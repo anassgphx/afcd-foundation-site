@@ -1509,7 +1509,7 @@ def project_details():
         def act_photos(x, j):
             imgs = [m for m in (x.get('images') or ([x['image']] if x.get('image') else [])) if m]
             if not imgs:
-                return '<div class="pja-ph n1">' + ph(_esc(x['title']) + ' · photo', 'h-full w-full rounded-[14px]', '#E6E6E5') + '</div>'
+                return ''   # no photos uploaded: the activity is shown as text only (see act_row)
             k = min(len(imgs), 3)
             full = lambda m: (m.get('srcset') or '').split(',')[-1].strip().split(' ')[0] or m['src']
             n = len(imgs)
@@ -1533,13 +1533,20 @@ def project_details():
                 f'<span class="pja-pub-t">{p["title"]}</span></span><span aria-hidden="true">↗</span></a>{dl(p)}</li>' for p in pubs) + '</ul>'
         if acts:
             nn = sec('activities', 'Activities')
-            act_block = '<ol class="pja-list mt-8 lg:mt-10">' + ''.join(
-                f'<li class="pja-row"><div class="pja-text"><span class="pjo-n">{j:02d}</span><span class="pja-t">{_esc(x["title"])}</span>'
-                + (f'<p class="pja-d">{x["text"] if x.get("title") == "Programme activities" and not d.get("activities") else _esc(x.get("text") or "")}</p>' if (x.get('text') or '').strip() else '')
-                + act_pubs(x) + f'</div>{act_photos(x, j)}</li>' for j, x in enumerate(acts, 1)) + '</ol>'
+            def act_row(j, x):
+                desc = (f'<p class="pja-d">{x["text"] if x.get("title") == "Programme activities" and not d.get("activities") else _esc(x.get("text") or "")}</p>' if (x.get('text') or '').strip() else '')
+                photos = act_photos(x, j)
+                if photos:
+                    return (f'<li class="pja-row"><div class="pja-text"><span class="pjo-n">{j:02d}</span><span class="pja-t">{_esc(x["title"])}</span>'
+                            + desc + act_pubs(x) + f'</div>{photos}</li>')
+                # no photos: a text row, number and title on one side, the description and publications on the other
+                return (f'<li class="pja-row is-text"><div class="pja-head"><span class="pjo-n">{j:02d}</span><span class="pja-t">{_esc(x["title"])}</span></div>'
+                        + (f'<div class="pja-body">{desc}{act_pubs(x)}</div>' if desc or act_pubs(x) else '') + '</li>')
+            act_block = '<ol class="pja-list mt-8 lg:mt-10">' + ''.join(act_row(j, x) for j, x in enumerate(acts, 1)) + '</ol>'
+            any_photos = any(act_photos(x, 0) for x in acts)
             act_sec = f"""
 <section id="activities" class="pl-sec py-8 lg:py-10">
-  <div class="wrap">{sec_head(f'{nn} / Program Activities', 'The programme <span class="sh-soft">in action.</span>', (f'{len(acts)} activit' + ('ies' if len(acts) != 1 else 'y')) if d.get('activities') else 'Photos to come', desc='What participants do, each activity with its own photos.')}
+  <div class="wrap">{sec_head(f'{nn} / Program Activities', 'The programme <span class="sh-soft">in action.</span>', f'{len(acts)} activit' + ('ies' if len(acts) != 1 else 'y'), desc='What participants do, each activity with its own photos.' if any_photos else 'What participants do in the programme.')}
     {act_block}
   </div>
 </section>"""

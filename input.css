@@ -1811,6 +1811,19 @@ button[type="submit"][aria-busy="true"] { opacity: .6; cursor: progress; }
 .pja-ph .ph { height: 100%; }
 .pja-more { position: absolute; right: 12px; bottom: 12px; padding: 4px 10px; border-radius: 9999px; background: rgba(0,0,0,.75); color: #fff; font-size: 12px; font-weight: 600; }
 [dir="rtl"] .pja-more { right: auto; left: 12px; }
+/* an activity without photos: a text row (number and title, then the description), no empty photo box */
+.pja-row.is-text { gap: 12px; padding: 24px 22px; background: #FAFAF9; }
+.pja-row.is-text .pja-head { display: flex; align-items: flex-start; gap: 14px; }
+.pja-row.is-text .pjo-n { flex-shrink: 0; }
+.pja-row.is-text .pja-t { margin-top: 0; padding: 6px 0 0; font-size: 21px; line-height: 1.3; letter-spacing: -.03em; }
+@media (max-width: 1023px) { .pja-row.is-text .pja-body { padding-inline-start: 54px; } }   /* under the title, not under the number */
+.pja-row.is-text .pja-d { margin-top: 0; padding: 0; font-size: 16px; line-height: 1.65; color: #44403C; max-width: 62ch; }
+.pja-row.is-text .pja-pubs { margin-top: 16px; }
+@media (min-width: 1024px) {
+  .pja-row.is-text { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 32px; padding: 30px 32px; align-items: start; }
+  .pja-row.is-text .pja-t { font-size: 22px; }
+  .pja-row.is-text .pja-body { padding-top: 8px; }
+}
 
 /* Photos inside story text (Studio: the Image button in the story editor; rendered by news/render.ts articleBody) */
 .st-body::after, .na-prose::after { content: ""; display: table; clear: both; }

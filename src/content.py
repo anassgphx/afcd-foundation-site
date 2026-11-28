@@ -1712,7 +1712,7 @@ def home_pillars():
 
     def related(name):
         x = proj.get(name)
-        return f'<li><a href="{x["file"]}" class="hover:underline">{name}</a></li>' if x and x.get('file') and x.get('detail') else f'<li>{name}</li>'
+        return f'<li><a href="{x["file"]}" class="pl-rel-i is-link">{name}</a></li>' if x and x.get('file') and x.get('detail') else f'<li><span class="pl-rel-i">{name}</span></li>'
 
     step = ('<button type="button" class="pl-step" data-step="-1" aria-label="Previous pillar"><svg class="h-4 w-4 rtl:-scale-x-100" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>'
             '<button type="button" class="pl-step" data-step="1" aria-label="Next pillar"><svg class="h-4 w-4 rtl:-scale-x-100" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg></button>')
@@ -1724,20 +1724,23 @@ def home_pillars():
         chips = '<li class="pl-chip">Pillar</li>' + (f'<li class="pl-chip">{count} project{"s" if count != 1 else ""}</li>' if count else '')
         rel_html = ''
         if rel:
-            rel_html = ('\n              <div class="mt-6 lg:mt-4 border-l-2 border-black/15 pl-5 rtl:border-l-0 rtl:border-r-2 rtl:pl-0 rtl:pr-5">'
+            rel_html = ('\n              <div class="pl-rel mt-6 lg:mt-5">'
                         '\n                <p class="text-[11px] font-medium uppercase tracking-[0.16em] text-black/55">Related projects</p>'
-                        f'\n                <ul class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[14px]">{"".join(related(r) for r in rel)}</ul>'
+                        f'\n                <ul class="mt-2.5 flex flex-wrap gap-2">{"".join(related(r) for r in rel)}</ul>'
                         '\n              </div>')
         img = PILLAR_IMAGE.get(slug)
         if img:
-            photo = f'<div class="pl-photo relative h-full min-h-[240px] w-full overflow-hidden rounded-2xl">{media_img(img, "absolute inset-0 h-full w-full", "(min-width: 1024px) 40vw, 100vw")}<span class="pl-tag">{t}</span></div>'
+            # a square (1:1) photo, without a caption: the pillar's name is already the card's title
+            photo = f'<div class="pl-photo relative aspect-square w-full overflow-hidden rounded-[22px]">{media_img(img, "absolute inset-0 h-full w-full", "(min-width: 1024px) 560px, 100vw")}</div>'
         else:
-            photo = f'<div class="ph pl-photo relative h-full min-h-[240px] w-full rounded-2xl" style="--ph-line:rgba(0,0,0,.08)"><span class="ph-cap"><b>Photo</b> · {t}</span><span class="pl-tag">{t}</span></div>'
+            photo = f'<div class="ph pl-photo relative aspect-square w-full rounded-[22px]" style="--ph-line:rgba(0,0,0,.08)"><span class="ph-cap"><b>Photo</b> · {t}</span></div>'
         file = PILLAR_FILE.get(slug, f'pillars.html#{slug}')
         # long names (set in Studio) get a smaller title so the card's buttons stay inside the open panel
         plain_len = len(_html.unescape(re.sub(r'<[^>]+>', '', t)))
         size = 'md:text-[44px]' if plain_len <= 22 else 'md:text-[38px]' if plain_len <= 30 else 'md:text-[32px]'
-        explore = f'Explore {t}' if plain_len <= 26 else 'Explore this pillar'
+        explore = 'Explore this pillar'
+        m1 = re.match(r'(.{30,}?[.!?])(\s|$)', ' '.join(_html.unescape(re.sub(r'<[^>]+>', '', d or '')).split()))
+        lead = _esc(m1.group(1)) if m1 else d   # the first sentence only; the pillar page has the rest
         is_open = ' is-open' if i == 0 else ''
         expanded = 'true' if i == 0 else 'false'
         panels.append(
@@ -1751,19 +1754,17 @@ def home_pillars():
             '\n          </button>'
             '\n        </h3>'
             f'\n        <div class="pl-body" id="pl-body-{i}" role="region" aria-labelledby="pl-head-{i}">'
-            '\n          <div class="pl-content grid h-full gap-6 p-5 pt-0 md:p-8 lg:grid-cols-12 lg:gap-8 lg:p-10">'
-            '\n            <div class="flex min-w-0 flex-col lg:col-span-6">'
-            f'\n              <div class="hidden items-center justify-between lg:flex"><span class="flex items-center gap-3"><span class="text-[26px] font-medium tabular-nums">{num}</span>{ico(slug, True)}</span>'
-            f'<span class="flex items-center gap-2"><span class="mr-1 text-[13px] font-medium tabular-nums text-black/60">{num} / {total:02d}</span>{step}</span></div>'
-            f'\n              <ul class="flex flex-wrap gap-2 lg:mt-6">{chips}</ul>'
-            f'\n              <p class="mt-6 text-[32px] font-semibold leading-[1.02] tracking-tightest {size} lg:mt-auto">{t}</p>'
-            f'\n              <p class="pl-sum mt-4 max-w-[44ch] text-[15px] leading-relaxed text-black/75 md:text-base">{d}</p>{rel_html}'
-            '\n              <div class="mt-8 lg:mt-5 flex flex-wrap items-center gap-x-6 gap-y-3">'
+            # the open card says one thing: the pillar, one sentence, one way in, and a square photo
+            '\n          <div class="pl-content grid h-full gap-6 p-5 pt-0 md:p-8 lg:grid-cols-12 lg:gap-10 lg:p-10">'
+            '\n            <div class="flex min-w-0 flex-col lg:col-span-6 xl:col-span-5">'
+            f'\n              <div class="hidden items-center gap-3 lg:flex"><span class="text-[26px] font-medium tabular-nums">{num}</span>{ico(slug, True)}</div>'
+            f'\n              <p class="pl-big{" is-long" if plain_len > 22 else ""} lg:mt-auto">{t}</p>'
+            f'\n              <p class="pl-one">{lead}</p>'
+            '\n              <div class="mt-7 lg:mt-8">'
             f'\n                <a href="{file}" class="pc-btn">{explore} <span class="pc-arr" aria-hidden="true">→</span></a>'
-            f'\n                <a href="projects.html?pillar={slug}#by-pillar" class="link-arrow">See projects <span class="arr" aria-hidden="true">↗</span></a>'
             '\n              </div>'
             '\n            </div>'
-            '\n            <div class="pl-inner rounded-[22px] p-4 lg:col-span-6 lg:p-5">'
+            '\n            <div class="pl-media lg:col-span-6 xl:col-span-7">'
             f'\n              {photo}'
             '\n            </div>'
             '\n          </div>'

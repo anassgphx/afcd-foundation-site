@@ -279,13 +279,12 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .nav-cta:hover { background: #262626; }
 .nav-cta-ico { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9999px; background: #fff; color: #000; font-size: 14px; transition: transform .3s ease; }
 .nav-cta:hover .nav-cta-ico { transform: rotate(45deg); }
-/* "Get Involved": a white button with a thin ring in the brand's colours (the same six as .brand-line), and the arrow in a
-   circle of the same colours */
-.nav-cta, .mainbar-dark .nav-cta { --cta-fill: #fff; color: #0B0B0B; border: 1.5px solid transparent;
-  background: linear-gradient(var(--cta-fill), var(--cta-fill)) padding-box,
-              conic-gradient(from 210deg, #4F7DF3, #B35AE6, #F0507A, #F7913D, #F2C744, #5CC26E, #4F7DF3) border-box; }
-.nav-cta:hover, .mainbar-dark .nav-cta:hover { --cta-fill: #F6F6F4; }
-.nav-cta .nav-cta-ico, .mainbar-dark .nav-cta .nav-cta-ico { background: conic-gradient(from 210deg, #4F7DF3, #B35AE6, #F0507A, #F7913D, #F2C744, #5CC26E, #4F7DF3); color: #fff; }
+/* "Get Involved": simple, like the staff (lock) button beside it: white, a light grey border, the arrow in a grey circle;
+   on hover the border and the arrow circle turn black */
+.nav-cta, .mainbar-dark .nav-cta { border: 1px solid #E7E5E4; background: #fff; color: #1C1917; transition: border-color .25s ease, box-shadow .25s ease, height .35s cubic-bezier(.2,.7,.2,1); }
+.nav-cta:hover, .mainbar-dark .nav-cta:hover { border-color: #1C1917; background: #fff; box-shadow: 0 10px 24px -16px rgba(0,0,0,.45); }
+.nav-cta .nav-cta-ico, .mainbar-dark .nav-cta .nav-cta-ico { background: #F4F4F3; color: #1C1917; transition: background-color .25s ease, color .25s ease, transform .3s ease; }
+.nav-cta:hover .nav-cta-ico, .mainbar-dark .nav-cta:hover .nav-cta-ico { background: #000; color: #fff; }
 #site-header.is-scrolled .mainbar:not(.mainbar-dark) { background: rgba(255,255,255,.82); -webkit-backdrop-filter: saturate(1.4) blur(16px); backdrop-filter: saturate(1.4) blur(16px); }
 /* An open menu panel is clipped (clip-path) inside the blurred bar of the moved-up header; Chrome then paints the panel as an
    empty white box. While a menu is open the bar is solid, without the blur, so the panel's links always show. */
@@ -3277,3 +3276,9 @@ ol.abx-tl .abx-tl-d { margin-top: 8px; max-width: none; font-size: 15px; color: 
 .abx-p .abx-p-l a:hover { border-color: #000; background: #000; color: #fff; }
 @media (max-width: 480px) { .abx-p .abx-p-ini { width: 56px; height: 56px; font-size: 19px; } .abx-p .abx-p-n { font-size: 15.5px; } .abx-p .abx-p-d { font-size: 13.5px; } }
 @media (prefers-reduced-motion: reduce) { .abx-p, .abx-p:hover { transition: none; transform: none; } }
+
+/* Photos fill their frame edge to edge: a cover photo is zoomed 2% (about 3px a side on a 300px card) so a thin line from
+   the photo's own edge, or from sub-pixel rounding at a rounded corner, never shows at the top or bottom of the frame.
+   "scale" is separate from "transform", so the hover and slideshow zooms still work on top of it. */
+img.object-cover, .tm-img, .hx-img { scale: 1.02; }
+.ev-poster img, .evd-ov-poster img { scale: none; }   /* event posters are drawn as their own bordered card, not cropped in a frame */

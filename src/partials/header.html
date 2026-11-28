@@ -109,6 +109,14 @@
       </ul>
 
       <div class="flex items-center gap-2">
+        <details class="nav-lang hidden sm:block">
+          <summary class="nav-lang-btn" aria-label="Language"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M1.8 8h12.4M8 1.8c1.7 1.8 2.5 3.8 2.5 6.2S9.7 12.4 8 14.2M8 1.8C6.3 3.6 5.5 5.6 5.5 8s.8 4.4 2.5 6.2"/></svg><span class="nav-lang-cur" aria-hidden="true"></span><svg class="nav-lang-chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg></summary>
+          <div class="nav-lang-menu" role="group" aria-label="Language">
+            <button class="lang-btn nav-lang-i" type="button" data-lang="en">EN</button>
+            <button class="lang-btn nav-lang-i" type="button" data-lang="fr">FR</button>
+            <button class="lang-btn nav-lang-i" type="button" data-lang="ar">AR</button>
+          </div>
+        </details>
         <span class="nav-staff-slot hidden sm:block"><a href="#" class="nav-staff" data-studio-login hidden title="Staff login · AFCD Studio"><span class="nav-staff-ico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.6"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/><circle cx="8" cy="10.5" r=".6" fill="currentColor"/></svg></span><span class="nav-staff-t">Staff login</span></a></span>
         <a href="get-involved.html" class="nav-cta hidden sm:inline-flex">Get Involved <span class="nav-cta-ico" aria-hidden="true">↗</span></a>
         <button id="menu-open" class="grid h-11 w-11 place-items-center rounded-full border border-ink-light text-ink-pure hover:border-ink-pure xl:hidden" aria-label="Open menu" aria-expanded="false" aria-controls="drawer">

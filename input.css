@@ -3282,3 +3282,26 @@ ol.abx-tl .abx-tl-d { margin-top: 8px; max-width: none; font-size: 15px; color: 
    "scale" is separate from "transform", so the hover and slideshow zooms still work on top of it. */
 img.object-cover, .tm-img, .hx-img { scale: 1.02; }
 .ev-poster img, .evd-ov-poster img { scale: none; }   /* event posters are drawn as their own bordered card, not cropped in a frame */
+
+/* Language: a dropdown in the main header (globe + current language), styled like the staff button beside it; the
+   top bar's EN / FR / AR pills give way to it. lib/i18n.mjs turns each .lang-btn into a link to that language. */
+.tb-lang, .tb-sep:has(+ .tb-lang) { display: none !important; }
+.nav-lang { position: relative; }
+.nav-lang-btn { display: inline-flex; align-items: center; gap: 6px; height: 48px; padding: 0 14px 0 14px; border-radius: 9999px; border: 1px solid #E7E5E4; background: #fff; color: #1C1917; font-size: 13.5px; font-weight: 600; cursor: pointer; list-style: none; transition: border-color .25s ease, box-shadow .25s ease, height .35s cubic-bezier(.2,.7,.2,1); }
+.nav-lang-btn::-webkit-details-marker { display: none; }
+.nav-lang-btn > svg:first-child { width: 17px; height: 17px; }
+.nav-lang-chev { width: 12px; height: 12px; transition: transform .2s ease; }
+.nav-lang[open] .nav-lang-chev { transform: rotate(180deg); }
+.nav-lang-btn:hover, .nav-lang[open] .nav-lang-btn { border-color: #1C1917; box-shadow: 0 10px 24px -16px rgba(0,0,0,.45); }
+#site-header.is-scrolled .nav-lang-btn { height: 42px; }
+html[lang="en"] .nav-lang-cur::before { content: "EN"; } html[lang="fr"] .nav-lang-cur::before { content: "FR"; } html[lang="ar"] .nav-lang-cur::before { content: "AR"; }
+.nav-lang-menu { position: absolute; z-index: 70; top: calc(100% + 8px); right: 0; display: grid; min-width: 168px; padding: 6px; border-radius: 16px; border: 1px solid #ECECEA; background: #fff; box-shadow: 0 24px 48px -24px rgba(0,0,0,.35); }
+[dir="rtl"] .nav-lang-menu { right: auto; left: 0; }
+.nav-lang-i { display: flex !important; justify-content: flex-start !important; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px; border-radius: 10px; font-size: 13px; font-weight: 600; color: #78716C; text-align: start; }
+.nav-lang-i::after { font-size: 14px; font-weight: 500; color: #1C1917; }
+.nav-lang-i[hreflang="en"]::after, .nav-lang-i[data-lang="en"]::after { content: "English"; }
+.nav-lang-i[hreflang="fr"]::after, .nav-lang-i[data-lang="fr"]::after { content: "Français"; }
+.nav-lang-i[hreflang="ar"]::after, .nav-lang-i[data-lang="ar"]::after { content: "العربية"; }
+.nav-lang-i:hover { background: #F4F4F3; }
+.nav-lang-i[aria-current="true"] { background: #000; color: rgba(255,255,255,.6); }
+.nav-lang-i[aria-current="true"]::after { color: #fff; }

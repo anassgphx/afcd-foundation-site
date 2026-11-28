@@ -1041,3 +1041,10 @@
     var t; track.addEventListener('scroll', function () { clearTimeout(t); t = setTimeout(function () { var c = cur(); dots.forEach(function (d, i) { d.classList.toggle('is-on', i === c); if (i === c) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current'); }); }, 60); }, { passive: true });
   });
 })();
+
+/* Language menu in the header (<details class="nav-lang">): closes on a click outside it or on Escape */
+(function () {
+  var menu = document.querySelector('.nav-lang'); if (!menu) return;
+  document.addEventListener('click', function (e) { if (menu.open && !menu.contains(e.target)) menu.open = false; });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && menu.open) { menu.open = false; menu.querySelector('summary').focus(); } });
+})();

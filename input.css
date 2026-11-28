@@ -279,13 +279,13 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .nav-cta:hover { background: #262626; }
 .nav-cta-ico { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9999px; background: #fff; color: #000; font-size: 14px; transition: transform .3s ease; }
 .nav-cta:hover .nav-cta-ico { transform: rotate(45deg); }
-/* "Get Involved": a ring in the brand's colours (the same six as .brand-line) around the black button */
-.nav-cta, .mainbar-dark .nav-cta { --cta-fill: #000; border: 2px solid transparent;
+/* "Get Involved": a white button with a thin ring in the brand's colours (the same six as .brand-line), and the arrow in a
+   circle of the same colours */
+.nav-cta, .mainbar-dark .nav-cta { --cta-fill: #fff; color: #0B0B0B; border: 1.5px solid transparent;
   background: linear-gradient(var(--cta-fill), var(--cta-fill)) padding-box,
               conic-gradient(from 210deg, #4F7DF3, #B35AE6, #F0507A, #F7913D, #F2C744, #5CC26E, #4F7DF3) border-box; }
-.nav-cta:hover { --cta-fill: #262626; }
-.mainbar-dark .nav-cta { --cta-fill: #fff; }
-.mainbar-dark .nav-cta:hover { --cta-fill: #E8E8E8; }
+.nav-cta:hover, .mainbar-dark .nav-cta:hover { --cta-fill: #F6F6F4; }
+.nav-cta .nav-cta-ico, .mainbar-dark .nav-cta .nav-cta-ico { background: conic-gradient(from 210deg, #4F7DF3, #B35AE6, #F0507A, #F7913D, #F2C744, #5CC26E, #4F7DF3); color: #fff; }
 #site-header.is-scrolled .mainbar:not(.mainbar-dark) { background: rgba(255,255,255,.82); -webkit-backdrop-filter: saturate(1.4) blur(16px); backdrop-filter: saturate(1.4) blur(16px); }
 /* An open menu panel is clipped (clip-path) inside the blurred bar of the moved-up header; Chrome then paints the panel as an
    empty white box. While a menu is open the bar is solid, without the blur, so the panel's links always show. */
